@@ -53,10 +53,13 @@ Requisitos:
 - Se o Codex estiver instalado em outro caminho (ex: outro usuário, outra
   distro), sobrescreva via variáveis de ambiente antes do `docker compose up`:
   `CODEX_NPM_DIR=/caminho/pro/@openai/codex CODEX_HOME=/caminho/pro/.codex docker compose up -d --build`.
-- Não usa esse provedor? Pode remover as duas linhas de volume — elas não
-  atrapalham se o Codex não existir no host (o container só fica sem o
-  binário e a transcrição via `codex` falha com aviso no log, como qualquer
-  outro provedor mal configurado).
+- Não usa esse provedor? **Remova as duas linhas de volume do
+  `docker-compose.yml`** — diferente do `run.sh`/`run.ps1` (que só montam se
+  acharem o Codex de verdade no host), o compose não checa antes: se o Codex
+  não estiver instalado, ele cria diretórios vazios nos dois caminhos do host
+  (`.../node_modules/@openai/codex` e `~/.codex/auth.json`) em vez de avisar.
+  Quem sobe via `run.sh`/`run.ps1`/`update.sh` não precisa se preocupar com
+  isso — a checagem já é automática.
 
 ⚠️ **Isso compartilha sua sessão do ChatGPT/Codex com o container** — trate
 `auth.json` com o mesmo cuidado que uma API key. Só o `auth.json` é montado

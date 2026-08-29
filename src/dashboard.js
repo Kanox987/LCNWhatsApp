@@ -256,20 +256,29 @@ async function escolherNumeros (atuais) {
 }
 
 // ————— Configurações por tópicos —————
+// Item de menu com valor alinhado numa coluna fixa e colorido pelo estado
+// (verde = ligado/ativo, apagado = desligado/off, ciano = informativo neutro).
+function itemCfg (num, label, valor) {
+  const ligado = /^(ligado|on|sim)$/i.test(valor)
+  const desligado = /^(desligado|off|não)$/i.test(valor) || /^0 (na lista|contato|conversa)/i.test(valor)
+  const cor = ligado ? G : desligado ? D : C
+  console.log(` ${B}${num}${Z}  ${label.padEnd(28)} ${D}(${Z}${cor}${valor}${Z}${D})${Z}`)
+}
+
 async function telaConfig () {
   for (;;) {
     cabecalho()
     const c = cfgMod.carregar()
     console.log(`${B}Configurações${Z}\n`)
-    console.log(` 1  Destino das mídias        (${c.destino.tipo}${c.destino.jid ? ': ' + c.destino.jid : ''})`)
-    console.log(` 2  Contatos que disparam      (${Array.isArray(c.captura.contatos) ? c.captura.contatos.length + ' na lista' : 'todos'})`)
-    console.log(` 3  Grupos                     (${c.captura.grupos.ativo ? 'ligado' : 'desligado'})`)
-    console.log(` 4  Transcrição                (${c.transcricao.provedor})`)
-    console.log(` 5  Hardware / baixo consumo`)
-    console.log(` 6  Atualização                (auto-baileys: ${c.atualizacao.autoUpdateBaileys ? 'on' : 'off'})`)
-    console.log(` 7  Destino próprio por contato (${(c.captura.destinoProprioContatos || []).length} contato(s))`)
-    console.log(` 8  Transcrição por conversa    (${(c.transcricao.conversas || []).length} conversa(s))`)
-    console.log(` 0  Voltar`)
+    itemCfg(1, 'Destino das mídias', `${c.destino.tipo}${c.destino.jid ? ': ' + c.destino.jid : ''}`)
+    itemCfg(2, 'Contatos que disparam', Array.isArray(c.captura.contatos) ? `${c.captura.contatos.length} na lista` : 'todos')
+    itemCfg(3, 'Grupos', c.captura.grupos.ativo ? 'ligado' : 'desligado')
+    itemCfg(4, 'Transcrição', c.transcricao.provedor)
+    console.log(` ${B}5${Z}  Hardware / baixo consumo`)
+    itemCfg(6, 'Atualização (auto-baileys)', c.atualizacao.autoUpdateBaileys ? 'on' : 'off')
+    itemCfg(7, 'Destino próprio por contato', `${(c.captura.destinoProprioContatos || []).length} contato(s)`)
+    itemCfg(8, 'Transcrição por conversa', `${(c.transcricao.conversas || []).length} conversa(s)`)
+    console.log(` ${B}0${Z}  Voltar`)
     const op = (await ask('\n> ')).trim()
     if (op === '1') await cfgDestino(c)
     else if (op === '2') await cfgContatos(c)
@@ -476,9 +485,26 @@ async function apagarDadosNumero () {
 }
 
 // ————— Atualizar —————
+// `lcn` em modo docker roda DENTRO do container (bin/lcn faz `docker exec`);
+// dali não dá pra reconstruir a própria imagem — o container não enxerga o
+// Docker/Podman do host. Detecta isso (marcador do container + LCN_MODE) pra
+// avisar em vez de tentar (e falhar) o rebuild de dentro.
+function dentroDeContainer () {
+  return fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv') || process.env.LCN_MODE === 'docker'
+}
+
 async function telaAtualizar () {
   cabecalho()
   console.log(`${B}Atualizar sistema${Z}\n`)
+  const rt = runtime.lerRuntime()
+  if (rt.mode === 'docker' && dentroDeContainer()) {
+    console.log(`${Y}Este painel está rodando DENTRO do container${Z} — daqui não dá pra`)
+    console.log(`reconstruir a própria imagem (sem acesso ao Docker/Podman do host).\n`)
+    console.log('Rode a atualização no HOST (fora do container), na pasta do projeto:')
+    console.log(`  ${B}sh update.sh${Z}                    (Linux/macOS)`)
+    console.log(`  ${B}powershell -File update.ps1${Z}      (Windows)`)
+    return pausar()
+  }
   console.log('Isto roda o script de atualização (git pull + rebuild/npm install + restart).')
   if (!await confirmar('Continuar?')) return
   const win = process.platform === 'win32'

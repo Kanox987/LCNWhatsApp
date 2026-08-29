@@ -19,7 +19,8 @@ echo ">> build ($DOCKERFILE) com $ENGINE"
 
 echo ">> (re)subindo container $NOME"
 "$ENGINE" rm -f "$NOME" >/dev/null 2>&1 || true
-"$ENGINE" run -d \
+
+set -- run -d \
   --name "$NOME" \
   --restart unless-stopped \
   -it \
@@ -27,8 +28,23 @@ echo ">> (re)subindo container $NOME"
   -v "$(pwd)/sessao:/app/sessao" \
   -v "$(pwd)/midia:/app/midia" \
   -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/config.json:/app/config.json" \
-  lcnwhatsapp:latest
+  -v "$(pwd)/config.json:/app/config.json"
+
+# Provedor "codex" da transcrição: só monta se o Codex CLI já estiver
+# instalado e logado no host (evita criar diretório vazio no lugar de
+# auth.json quando ninguém usa esse provedor). CODEX_NPM_DIR/CODEX_HOME
+# sobrepõem os caminhos padrão se o Codex estiver em outro lugar.
+CODEX_NPM_DIR=${CODEX_NPM_DIR:-/usr/local/lib/node_modules/@openai/codex}
+CODEX_HOME_DIR=${CODEX_HOME:-$HOME/.codex}
+if [ -d "$CODEX_NPM_DIR" ] && [ -f "$CODEX_HOME_DIR/auth.json" ]; then
+  echo ">> Codex CLI achado no host — montando pro provedor 'codex' da transcrição"
+  set -- "$@" \
+    -v "$CODEX_NPM_DIR:/usr/local/lib/node_modules/@openai/codex:ro" \
+    -v "$CODEX_HOME_DIR/auth.json:/root/.codex/auth.json:ro"
+fi
+
+set -- "$@" lcnwhatsapp:latest
+"$ENGINE" "$@"
 
 echo ">> pronto. Login (QR/código):  $ENGINE logs -f $NOME"
 echo ">> painel:  lcn"
