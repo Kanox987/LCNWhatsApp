@@ -9,6 +9,13 @@ limpeza e transcrição de áudio opcional. Roda em **Docker/Podman** ou **no se
 
 O comando **`lcn`** abre o painel (dashboard) da aplicação.
 
+> ⚠️ **O comando `/recover` é necessário.** Na grande maioria dos casos o
+> WhatsApp não entrega o conteúdo da visualização única direto pro bot — ele só
+> chega se você **responder a mensagem ainda não aberta com `/recover`** (de
+> qualquer dispositivo logado na sua conta). Sem isso, a automação não consegue
+> capturar o arquivo. Ver item 3 de [Como funciona](#como-funciona-resumo) e
+> [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md).
+
 ---
 
 ## Instalação rápida
@@ -26,11 +33,18 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 O instalador **detecta** se há Docker/Podman e pergunta se você quer rodar em
 container (recomendado) ou no seco. Se não houver engine, oferece instalar o
-Docker ou seguir no seco. No fim, instala o comando `lcn`.
+Docker ou seguir no seco. No fim, instala o comando `lcn` (em qualquer sistema,
+funciona independente de onde você clonou o projeto — só evite mover/renomear
+a pasta depois de instalado, senão precisa reinstalar o comando).
 
-Depois, faça o login lendo o QR / código de pareamento:
-- **Container:** `docker logs -f LCNWhatsApp` (ou `podman logs -f ...`)
-- **Seco:** `npm start` (QR) ou `npm run code` (código de pareamento)
+Depois de instalar, conecte pelo próprio painel — é o jeito padrão, funciona
+igual em container ou no seco:
+```bash
+lcn
+```
+Escolha **5 Serviço** > **1 Conectar / mostrar QR** e escaneie no WhatsApp
+(Aparelhos conectados > Conectar aparelho). O painel atualiza a tela sozinho
+até conectar.
 
 ## O painel: `lcn`
 Abre um menu de terminal com:
@@ -38,18 +52,30 @@ Abre um menu de terminal com:
 - **Dados de uso e conexões** (uptime, quedas, capturas, memória).
 - **Galeria** dos arquivos locais (abre no visualizador do SO, revela a pasta).
 - **Limpeza** por seleção ou em lote (por remetente, período, ou tudo).
-- **Configurações** por tópicos (destino, contatos, grupos, transcrição,
-  hardware, atualização).
-- **Serviço** (iniciar/parar/logs) e **Atualizar**.
+- **Configurações** por tópicos (destino, destino próprio por contato,
+  contatos, grupos, transcrição — geral e por conversa —, hardware,
+  atualização), com seleção por lista em vez de digitar JID/número de cabeça.
+- **Serviço** — é por aqui que você **conecta** (QR/código de pareamento),
+  reinicia, vê logs ou desconecta pra trocar de número. **Atualizar** puxa
+  updates do app/Baileys.
 
 ## Como funciona (resumo)
 1. `shouldIgnoreJid` descarta grupos/status/canais **antes de descriptografar** —
    é o que evita processar milhares de msgs de grupo só pra pegar visu única de PV.
    Ver [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
-2. Ao chegar uma visu única de um contato permitido, o bot baixa a mídia
-   (`downloadContentFromMessage`), salva em `midia/`, arquiva o metadado e
-   **reenvia como mídia normal** (payload sem `viewOnce`).
-3. Se for áudio e a transcrição estiver ligada, anexa o texto.
+2. Quando a visu única chega **inline** (nem sempre acontece — depende do
+   WhatsApp), o bot baixa a mídia (`downloadContentFromMessage`), salva em
+   `midia/`, arquiva o metadado e **reenvia como mídia normal** (payload sem
+   `viewOnce`) pro destino configurado.
+3. Quando não chega inline (o caso mais comum), **responda a mensagem ainda não
+   aberta com `/recover`** — o bot recupera a mídia pela citação e segue o
+   mesmo fluxo do item 2. Contatos marcados em "destino próprio" recebem a
+   mídia de volta na própria conversa, em vez do destino padrão. Ver
+   [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md).
+4. Se for áudio e a transcrição estiver ligada, anexa o texto — também dá pra
+   transcrever áudio comum (não visu única), automaticamente numa conversa
+   configurada ou sob demanda com `/transcrever`. Ver
+   [docs/TRANSCRICAO.md](docs/TRANSCRICAO.md).
 
 ## Documentação
 - [INSTALACAO.md](docs/INSTALACAO.md) — instalador e modos
