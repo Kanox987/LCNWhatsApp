@@ -2,12 +2,18 @@
 # Subir:   docker compose up -d --build
 # Logs/QR: docker compose logs -f
 # Painel:  lcn      (ou: docker compose exec lcnwhatsapp node src/dashboard.js)
+#
+# Dockerfile, limites de recurso (memory/cpus) e o volume de modelos vêm do
+# docker-compose.override.yml — gerado automaticamente por install.sh/
+# update.sh a partir das suas respostas (perfil de recursos + transcrição
+# local), sempre com as MESMAS escolhas usadas pelo run.sh. Não edite esse
+# override à mão; rode o instalador/atualizador de novo pra mudar.
 services:
   lcnwhatsapp:
     container_name: LCNWhatsApp
     build:
       context: .
-      dockerfile: Dockerfile          # troque por Dockerfile.whisper p/ transcrição local
+      dockerfile: Dockerfile
     restart: unless-stopped
     stdin_open: true                  # permite login por QR/código nos logs
     tty: true
@@ -16,9 +22,3 @@ services:
       - ./midia:/app/midia
       - ./data:/app/data
       - ./config.json:/app/config.json
-    # Limites pra segurar o consumo de hardware (ajuste no dashboard/aqui):
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: "1.0"
