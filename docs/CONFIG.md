@@ -26,6 +26,7 @@ uma reconexão leve quando mudam.
   "transcricao": {
     "provedor": "off",               // off | faster-whisper | openai | custom | codex
     "modelo": "base", "idioma": "pt",
+    "pythonBin": "",                 // faster-whisper: caminho do python do venv (gravado pelo instalador); vazio = usa LCN_PYTHON ou "python3" do PATH
     "openaiApiKey": "", "openaiModelo": "whisper-1",
     "codexModelo": "",               // codex: modelo opcional (vazio = padrão do CLI), usa `codex exec` já logado (sem API key)
     "comando": "",                   // custom: usa {file} como caminho do áudio

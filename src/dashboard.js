@@ -59,6 +59,11 @@ function cabecalho () {
   console.log(` Serviço : ${servBadge}   modo: ${B}${rt.mode}${Z}${rt.engine ? ` (${rt.engine})` : ''}`)
   console.log(` Mídias  : ${B}${archive.total()}${Z} no total, de ${B}${numeros.length}${Z} remetente(s)`)
   if (st?.conectado && st?.desde) console.log(` Online há: ${duracao(Date.now() - st.desde)}`)
+  const t = cfgMod.carregar().transcricao
+  if (t.provedor === 'faster-whisper' && (!t.pythonBin || !fs.existsSync(t.pythonBin))) {
+    console.log(`${Y}⚠ faster-whisper configurado mas o ambiente Python não foi encontrado.${Z}`)
+    console.log(`${D}   Rode o instalador (venv + pip install faster-whisper) — no 1º uso baixa o modelo (Hugging Face, pode demorar).${Z}`)
+  }
   console.log(`${D}────────────────────────────────────────────────────${Z}`)
 }
 

@@ -73,9 +73,28 @@ else
   read w
   case "$w" in
     s|S)
-      python3 -m venv .venv && ./.venv/bin/pip install --upgrade pip faster-whisper \
-        && echo "LCN_PYTHON=$(pwd)/.venv/bin/python" \
-        && echo ">> configure o provedor 'faster-whisper' no painel (lcn > Configurações > Transcrição)." ;;
+      if ! command -v python3 >/dev/null 2>&1; then
+        echo ">> python3 não encontrado — tentando instalar..."
+        if command -v apt-get >/dev/null 2>&1; then
+          sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip || true
+        elif command -v dnf >/dev/null 2>&1; then
+          sudo dnf install -y python3 python3-pip || true
+        elif command -v pacman >/dev/null 2>&1; then
+          sudo pacman -Sy --noconfirm python python-pip || true
+        elif command -v brew >/dev/null 2>&1; then
+          brew install python3 || true
+        fi
+      fi
+      if ! command -v python3 >/dev/null 2>&1; then
+        echo ">> Não consegui garantir o python3. Instale manualmente (ex.: sudo apt install python3 python3-venv python3-pip) e prepare o venv depois."
+      elif python3 -m venv .venv && ./.venv/bin/pip install --upgrade pip faster-whisper; then
+        PYBIN="$(pwd)/.venv/bin/python"
+        node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('config.json','utf8'));c.transcricao=c.transcricao||{};c.transcricao.pythonBin='$PYBIN';fs.writeFileSync('config.json',JSON.stringify(c,null,2)+'\n')" 2>/dev/null \
+          || echo ">> não consegui gravar 'transcricao.pythonBin' no config.json — configure manualmente."
+        echo ">> configure o provedor 'faster-whisper' no painel (lcn > Configurações > Transcrição)."
+      else
+        echo ">> falha preparando o venv/faster-whisper — configure manualmente depois."
+      fi ;;
     *) echo ">> pulei o venv (pode preparar depois)." ;;
   esac
   echo ">> rode o bot com:  npm start   (ou 'npm run code' pra login por código)"

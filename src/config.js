@@ -24,6 +24,7 @@ export const PADRAO = {
     provedor: 'off',
     modelo: 'base',
     idioma: 'pt',
+    pythonBin: '',
     openaiApiKey: '',
     openaiModelo: 'whisper-1',
     codexModelo: '',

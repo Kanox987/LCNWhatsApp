@@ -29,7 +29,7 @@ function rodar (cmd, args, opts = {}) {
 }
 
 async function viaFasterWhisper (arquivo, cfg) {
-  const py = process.env.LCN_PYTHON || 'python3'
+  const py = cfg.pythonBin || process.env.LCN_PYTHON || 'python3'
   const script = path.join(__dirname, 'faster_whisper.py')
   return rodar(py, [script, arquivo, cfg.modelo || 'base', cfg.idioma || 'pt'])
 }

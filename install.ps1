@@ -60,9 +60,32 @@ if ($mode -eq "docker") {
   npm install --no-audit --no-fund
   $w = Read-Host "Preparar venv Python com faster-whisper agora? [s/N]"
   if ($w -match '^[sS]') {
-    python -m venv .venv
-    & .\.venv\Scripts\pip install --upgrade pip faster-whisper
-    Write-Host ">> configure 'faster-whisper' no painel (lcn > Configuracoes > Transcricao)."
+    $pyCmd = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } elseif (Get-Command py -ErrorAction SilentlyContinue) { "py" } else { $null }
+    if (-not $pyCmd) {
+      Write-Host "Python nao encontrado."
+      if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host ">> tentando instalar via winget (Python.Python.3.12)..."
+        winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+      }
+      $pyCmd = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } elseif (Get-Command py -ErrorAction SilentlyContinue) { "py" } else { $null }
+    }
+    if (-not $pyCmd) {
+      Write-Host ">> Nao consegui garantir o Python. Instale manualmente: https://www.python.org/downloads/ e prepare o venv depois."
+    } else {
+      try {
+        & $pyCmd -m venv .venv
+        & .\.venv\Scripts\pip install --upgrade pip faster-whisper
+        $pyBin = (Resolve-Path .\.venv\Scripts\python.exe).Path
+        $cfg = Get-Content config.json -Raw | ConvertFrom-Json
+        if (-not $cfg.transcricao) { $cfg | Add-Member -NotePropertyName transcricao -NotePropertyValue ([PSCustomObject]@{}) -Force }
+        $cfg.transcricao | Add-Member -NotePropertyName pythonBin -NotePropertyValue $pyBin -Force
+        $cfg | ConvertTo-Json -Depth 10 | Set-Content config.json
+        Write-Host ">> configure 'faster-whisper' no painel (lcn > Configuracoes > Transcricao)."
+      } catch {
+        Write-Host ">> falha preparando o venv/faster-whisper -- configure manualmente depois."
+      }
+    }
   }
   Write-Host ">> rode o bot com:  npm start   (ou 'npm run code')"
 }
