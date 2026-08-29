@@ -18,11 +18,19 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 RAIZ=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$RAIZ"
 
+# Lê "campo": "valor" de runtime.json sem depender de Node (é um JSON plano
+# de strings simples — sed puro basta, e assim o modo container não exige
+# Node no host só pra descobrir o modo).
+campo_runtime () {
+  sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" runtime.json 2>/dev/null | head -n1
+}
+
 MODE="bare"
 ENGINE=""
 if [ -f runtime.json ]; then
-  MODE=$(node -e "try{console.log(require('./runtime.json').mode||'bare')}catch(e){console.log('bare')}" 2>/dev/null || echo bare)
-  ENGINE=$(node -e "try{console.log(require('./runtime.json').engine||'')}catch(e){console.log('')}" 2>/dev/null || echo "")
+  M=$(campo_runtime mode)
+  [ -n "$M" ] && MODE="$M"
+  ENGINE=$(campo_runtime engine)
 fi
 
 if [ "$MODE" = "docker" ]; then
