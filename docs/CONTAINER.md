@@ -31,6 +31,38 @@ Recomendado o **código de pareamento**: troque o `CMD` do Dockerfile por
 No `docker-compose.yml` (`memory`, `cpus`) ou nas flags do `run.sh`
 (`--memory`, `--cpus`).
 
+### Provedor "codex" da transcrição
+O `docker-compose.yml` já vem com os dois bind mounts (read-only) que
+reaproveitam o Codex CLI **do host** dentro do container — nada é instalado
+na imagem:
+```yaml
+- ${CODEX_NPM_DIR:-/usr/local/lib/node_modules/@openai/codex}:/usr/local/lib/node_modules/@openai/codex:ro
+- ${CODEX_HOME:-~/.codex}/auth.json:/root/.codex/auth.json:ro
+```
+Funciona porque o binário nativo do Codex CLI é estático (musl, sem libs
+dinâmicas) — roda em qualquer container Linux da mesma arquitetura (x86_64/
+arm64) sem precisar instalar nada extra na imagem, só montar o pacote.
+
+Requisitos:
+- Ter feito `codex login` **no host** antes de subir o container (o
+  `auth.json` precisa existir). **Se você subir o container antes de logar,
+  o Docker cria um diretório vazio no lugar de `~/.codex/auth.json`** — isso
+  quebra um `codex login` futuro no host até você apagar esse diretório
+  (`rm -rf ~/.codex/auth.json` só se virar diretório, não se for o arquivo
+  de verdade).
+- Se o Codex estiver instalado em outro caminho (ex: outro usuário, outra
+  distro), sobrescreva via variáveis de ambiente antes do `docker compose up`:
+  `CODEX_NPM_DIR=/caminho/pro/@openai/codex CODEX_HOME=/caminho/pro/.codex docker compose up -d --build`.
+- Não usa esse provedor? Pode remover as duas linhas de volume — elas não
+  atrapalham se o Codex não existir no host (o container só fica sem o
+  binário e a transcrição via `codex` falha com aviso no log, como qualquer
+  outro provedor mal configurado).
+
+⚠️ **Isso compartilha sua sessão do ChatGPT/Codex com o container** — trate
+`auth.json` com o mesmo cuidado que uma API key. Só o `auth.json` é montado
+(não o `~/.codex` inteiro), então histórico, sessões e memórias do Codex no
+host não vazam pro container.
+
 ## Modo seco (nativo)
 ```bash
 npm install

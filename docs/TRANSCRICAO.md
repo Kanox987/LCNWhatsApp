@@ -44,3 +44,7 @@ conhecido antes de confiar em produção**: se o ambiente não suportar
 transcrição de fato, a resposta pode ser um texto inventado (alucinado) em vez
 de um erro. Se o binário `codex` não estiver instalado, a transcrição falha
 com um aviso no log (a captura continua normalmente, sem transcrição).
+
+No container, o Codex CLI **não vem na imagem** — o `docker-compose.yml` já
+monta o do host por bind mount (veja "Provedor codex da transcrição" em
+`docs/CONTAINER.md`).
