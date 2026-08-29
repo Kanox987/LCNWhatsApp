@@ -167,9 +167,9 @@ case "$PROVIDER" in
     KEY=$(field_json config.json openaiApiKey || true)
     [ -n "$KEY" ] && ok 'OpenAI API key configurada (valor oculto)' || fail 'provedor openai ativo, mas openaiApiKey está vazia.'
     ;;
-  comando)
+  custom)
     CMD=$(field_json config.json comando || true)
-    [ -n "$CMD" ] && ok 'comando externo de transcrição configurado' || fail 'provedor comando ativo, mas o comando está vazio.'
+    [ -n "$CMD" ] && ok 'comando externo de transcrição configurado' || fail 'provedor custom ativo, mas o comando está vazio.'
     ;;
   *) warn "provedor de transcrição desconhecido: $PROVIDER" ;;
 esac

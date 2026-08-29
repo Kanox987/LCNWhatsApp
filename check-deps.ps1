@@ -210,8 +210,8 @@ switch ($provider) {
   "openai" {
     if ($config.transcricao.openaiApiKey) { Add-Ok "OpenAI API key configurada (valor oculto)" } else { Add-Fail "provedor openai ativo, mas openaiApiKey esta vazia" }
   }
-  "comando" {
-    if ($config.transcricao.comando) { Add-Ok "comando externo de transcricao configurado" } else { Add-Fail "provedor comando ativo, mas o comando esta vazio" }
+  "custom" {
+    if ($config.transcricao.comando) { Add-Ok "comando externo de transcricao configurado" } else { Add-Fail "provedor custom ativo, mas o comando esta vazio" }
   }
   default {
     Add-Warn "provedor de transcricao desconhecido: $provider"
