@@ -20,11 +20,23 @@ O comando **`lcn`** abre o painel (dashboard) da aplicação.
 
 ## Instalação rápida
 
-**Linux/macOS**
+**Linux**
+```bash
+cd LCNWhatsApp
+sudo sh install.sh
+```
+
+> ⚠️ No Linux, execute o instalador com **`sudo`**. O instalador pode precisar
+> criar arquivos, instalar dependências e configurar comandos em diretórios do
+> sistema; executá-lo sem privilégios elevados pode causar erros de permissão ou
+> deixar arquivos com permissões incorretas.
+
+**macOS**
 ```bash
 cd LCNWhatsApp
 sh install.sh
 ```
+
 **Windows (PowerShell)**
 ```powershell
 cd LCNWhatsApp
