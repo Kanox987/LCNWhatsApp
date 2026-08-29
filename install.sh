@@ -7,6 +7,18 @@ set -e
 cd "$(dirname "$0")"
 RAIZ=$(pwd)
 
+# Nunca rodar via sudo de um usuário normal — cria runtime.json, config.json,
+# sessao/, midia/, data/, node_modules e o venv do faster-whisper com dono
+# root à toa (nenhum desses precisa de privilégio). Só a instalação opcional
+# em /usr/local/bin pede sudo, à parte, mais abaixo. Root "de verdade" (sem
+# sudo, ex.: sistema só-root) passa normal.
+if [ "$(id -u)" = "0" ] && [ -n "$SUDO_USER" ]; then
+  echo "Não rode este instalador com sudo — ele não precisa, e isso deixaria"
+  echo "config.json, sessao/, midia/, data/ e node_modules com dono root."
+  echo "Rode como usuário normal:  sh install.sh"
+  exit 1
+fi
+
 echo "==================================================="
 echo "  LCNWhatsApp — instalador"
 echo "==================================================="
@@ -69,18 +81,27 @@ else
   echo ">> rode o bot com:  npm start   (ou 'npm run code' pra login por código)"
 fi
 
-# --- instala o comando `lcn` no PATH ---
+# --- instala o comando `lcn` no PATH (sempre na pasta do usuário, sem sudo) ---
 chmod +x bin/lcn 2>/dev/null || true
-TARGET=""
-for d in "$HOME/.local/bin" /usr/local/bin; do
-  if [ -d "$d" ] && printf '%s' "$PATH" | grep -q "$d"; then TARGET="$d"; break; fi
-done
-if [ -z "$TARGET" ]; then
-  mkdir -p "$HOME/.local/bin"; TARGET="$HOME/.local/bin"
-  echo ">> Adicione ao PATH:  export PATH=\"\$HOME/.local/bin:\$PATH\""
+mkdir -p "$HOME/.local/bin"
+ln -sf "$RAIZ/bin/lcn" "$HOME/.local/bin/lcn"
+echo ">> comando instalado: $HOME/.local/bin/lcn  (rode: lcn)"
+if ! printf '%s' "$PATH" | grep -q "$HOME/.local/bin"; then
+  echo ">> Adicione ao PATH (e no seu ~/.bashrc ou ~/.zshrc):  export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
-ln -sf "$RAIZ/bin/lcn" "$TARGET/lcn"
-echo ">> comando instalado: $TARGET/lcn  (rode: lcn)"
+
+printf "Também instalar em /usr/local/bin (todos os usuários deste sistema)? Pode pedir sua senha. [s/N] "
+read sysw
+case "$sysw" in
+  s|S)
+    if [ "$(id -u)" = "0" ]; then
+      ln -sf "$RAIZ/bin/lcn" /usr/local/bin/lcn
+    else
+      sudo ln -sf "$RAIZ/bin/lcn" /usr/local/bin/lcn
+    fi
+    echo ">> também instalado: /usr/local/bin/lcn" ;;
+  *) : ;;
+esac
 echo "==================================================="
 echo "  Pronto! Abra o painel com:  lcn"
 echo "==================================================="
