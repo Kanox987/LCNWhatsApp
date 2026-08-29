@@ -4,8 +4,28 @@
 set -e
 cd "$(dirname "$0")"
 
+# Ordem: engine já gravado em runtime.json -> detecta de verdade (nunca
+# assume podman sem checar) -> se nenhum existir, tenta instalar Docker.
 ENGINE=$(node -e "try{console.log(require('./runtime.json').engine||'')}catch(e){console.log('')}" 2>/dev/null || echo "")
-[ -z "$ENGINE" ] && { command -v docker >/dev/null 2>&1 && ENGINE=docker || ENGINE=podman; }
+if [ -z "$ENGINE" ]; then
+  for e in docker podman nerdctl; do
+    if command -v "$e" >/dev/null 2>&1; then ENGINE="$e"; break; fi
+  done
+fi
+if [ -z "$ENGINE" ]; then
+  echo "Nenhum engine de container encontrado (docker/podman/nerdctl)."
+  echo ">> tentando instalar o Docker..."
+  curl -fsSL https://get.docker.com | sh || true
+  for e in docker podman nerdctl; do
+    if command -v "$e" >/dev/null 2>&1; then ENGINE="$e"; break; fi
+  done
+  if [ -z "$ENGINE" ]; then
+    echo ">> Não consegui instalar/encontrar um engine de container. Instale manualmente e rode de novo:"
+    echo "   Linux:  curl -fsSL https://get.docker.com | sh"
+    echo "   macOS:  baixe o Docker Desktop em https://www.docker.com/products/docker-desktop/"
+    exit 1
+  fi
+fi
 
 DOCKERFILE=${1:-Dockerfile}   # passe Dockerfile.whisper p/ transcrição local
 NOME=LCNWhatsApp
