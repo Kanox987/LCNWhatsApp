@@ -17,12 +17,22 @@ import {
 } from './visu.js'
 import { PASTA_MIDIA, garantirPastas } from './paths.js'
 import * as archive from './archive.js'
+import * as directoryMod from './directory.js'
 import * as state from './state.js'
 import { transcrever } from './transcription/index.js'
 import { emitirCaptura } from './api/output.js'
 import { soDigitos } from './util.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
+
+// Resolve um nome de exibição pro contato a partir do diretório conhecido
+// (data/contatos.json). Usado no /recover, que não tem pushName disponível
+// (a mensagem citada recuperada não carrega esse metadado — só o comando em
+// si) — sem isso, o arquivado ficava com o nome do comando em vez do contato.
+export function resolverNomeContato (numero) {
+  const contato = directoryMod.listarContatos().find((c) => c.numero === numero)
+  return contato?.nome || 'sem nome'
+}
 
 // Limitador de concorrência bem simples, pra um burst não estourar CPU/RAM.
 function criarLimite (max) {
@@ -255,6 +265,7 @@ export function criarHandler ({ sock, getConfig }) {
 
         const jidReal = comandoRecover.participant || from
         const numero = soDigitos(jidReal)
+        const nome = resolverNomeContato(numero)
         const origemKey = {
           remoteJid: from,
           fromMe: false,
@@ -269,7 +280,7 @@ export function criarHandler ({ sock, getConfig }) {
           from,
           ehGrupo,
           numero,
-          nome: 'recuperado via /recover',
+          nome,
           origemKey
         })
         return
