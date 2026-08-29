@@ -14,9 +14,14 @@ fi
 rm -f data/precisa-update.flag 2>/dev/null || true
 
 if [ "$MODE" = "docker" ]; then
-  ENG=${ENGINE:-docker}
+  ENGINE=${ENGINE:-docker}
+  if command -v node >/dev/null 2>&1; then
+    UPDATE=1
+    . ./perfil-container.sh
+    configurar_perfil_container
+  fi
   echo ">> rebuild da imagem (reinstala Baileys do GitHub, isolada)"
-  sh run.sh Dockerfile
+  sh run.sh
   echo ">> atualizado e reiniciado (container)."
 else
   echo ">> npm install (reinstala Baileys do GitHub)"

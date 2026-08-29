@@ -263,18 +263,27 @@ else
   esac
 fi
 
-node -e "require('fs').writeFileSync('runtime.json', JSON.stringify({mode:'$MODE',engine:'$ENGINE'||null},null,2)+'\n')" 2>/dev/null \
-  || printf '{\n  "mode": "%s",\n  "engine": "%s"\n}\n' "$MODE" "$ENGINE" > runtime.json
-echo ">> runtime.json: modo=$MODE engine=${ENGINE:-nenhum}"
-
 [ -f config.json ] || cp config.example.json config.json
-mkdir -p sessao midia data
+mkdir -p sessao midia data modelos
 
 if [ "$MODE" = "docker" ]; then
+  if command -v node >/dev/null 2>&1; then
+    . "$RAIZ/perfil-container.sh"
+    configurar_perfil_container
+  else
+    echo ">> Node não encontrado no host — usando perfil econômico padrão (512m/1 CPU,"
+    echo "   sem transcrição local). Instale Node depois e rode 'node src/runtime.js save"
+    echo "   ...' (ou o instalador de novo) pra escolher recursos/modelo."
+    printf '{\n  "mode": "docker",\n  "engine": "%s"\n}\n' "$ENGINE" > runtime.json
+  fi
+  echo ">> runtime.json: modo=$MODE engine=${ENGINE:-nenhum}"
   echo ">> subindo em container..."
-  sh run.sh Dockerfile
+  sh run.sh
   echo ">> login: $ENGINE logs -f LCNWhatsApp"
 else
+  node -e "require('fs').writeFileSync('runtime.json', JSON.stringify({mode:'bare',engine:null},null,2)+'\n')" 2>/dev/null \
+    || printf '{\n  "mode": "bare",\n  "engine": ""\n}\n' > runtime.json
+  echo ">> runtime.json: modo=$MODE engine=${ENGINE:-nenhum}"
   ensure_node_runtime
   echo ">> instalando dependências (npm install)..."
   npm install --no-audit --no-fund
