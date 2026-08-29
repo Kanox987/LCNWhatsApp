@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+# Launcher do LCNWhatsApp (comando `lcn`). Abre o dashboard no modo certo:
+# - docker/podman: executa o painel DENTRO do container (não exige Node no host)
+# - seco: roda o painel direto com o Node do host
+set -e
+
+# Descobre a raiz do projeto a partir deste script, SEGUINDO symlinks (o
+# instalador cria um symlink `lcn` no PATH apontando pra bin/lcn).
+SELF="$0"
+while [ -L "$SELF" ]; do
+  LINK=$(readlink "$SELF")
+  case "$LINK" in
+    /*) SELF="$LINK" ;;
+    *) SELF="$(dirname -- "$SELF")/$LINK" ;;
+  esac
+done
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
+RAIZ=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+cd "$RAIZ"
+
+MODE="bare"
+ENGINE=""
+if [ -f runtime.json ]; then
+  MODE=$(node -e "try{console.log(require('./runtime.json').mode||'bare')}catch(e){console.log('bare')}" 2>/dev/null || echo bare)
+  ENGINE=$(node -e "try{console.log(require('./runtime.json').engine||'')}catch(e){console.log('')}" 2>/dev/null || echo "")
+fi
+
+if [ "$MODE" = "docker" ]; then
+  ENG=${ENGINE:-docker}
+  # -it só quando há terminal (evita travar em pipes/scripts).
+  if [ -t 0 ] && [ -t 1 ]; then TTY=-it; else TTY=-i; fi
+  if ! "$ENG" ps --filter "name=LCNWhatsApp" --format '{{.Names}}' 2>/dev/null | grep -q LCNWhatsApp; then
+    echo "Container LCNWhatsApp não está rodando. Iniciando..."
+    "$ENG" start LCNWhatsApp >/dev/null 2>&1 || true
+  fi
+  exec "$ENG" exec $TTY -e LCN_MODE=docker -e LCN_ENGINE="$ENG" LCNWhatsApp node src/dashboard.js
+else
+  exec node src/dashboard.js
+fi

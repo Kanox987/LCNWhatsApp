@@ -1,0 +1,44 @@
+{
+  "destino": {
+    "tipo": "self",
+    "jid": ""
+  },
+  "captura": {
+    "contatos": "todos",
+    "blocklist": [],
+    "grupos": {
+      "ativo": false,
+      "allowlist": []
+    },
+    "destinoProprioContatos": []
+  },
+  "hardware": {
+    "markOnline": true,
+    "logLevel": "silent",
+    "maxMidiaMB": 60,
+    "downloadConcorrencia": 2,
+    "modoEconomia": true,
+    "debug": false,
+    "placeholderResend": false
+  },
+  "transcricao": {
+    "provedor": "off",
+    "modelo": "base",
+    "idioma": "pt",
+    "openaiApiKey": "",
+    "openaiModelo": "whisper-1",
+    "comando": "",
+    "comandoTerceiros": false,
+    "conversas": []
+  },
+  "atualizacao": {
+    "autoUpdateBaileys": false,
+    "falhasParaUpdate": 5
+  },
+  "outputApi": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "porta": 8787,
+    "token": ""
+  }
+}

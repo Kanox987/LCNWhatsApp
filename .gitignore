@@ -1,0 +1,7 @@
+node_modules/
+sessao/
+midia/
+data/
+config.json
+runtime.json
+*.log

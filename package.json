@@ -1,0 +1,25 @@
+{
+  "name": "lcnwhatsapp",
+  "version": "2.0.0",
+  "description": "LCNWhatsApp — captura visualização única do WhatsApp e reenvia como mídia normal. Cross-platform, com dashboard de terminal (lcn).",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "lcn": "bin/lcn"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "code": "node index.js --code",
+    "config": "node src/dashboard.js",
+    "dashboard": "node src/dashboard.js",
+    "test": "node tests/detect.test.mjs && node tests/ignore.test.mjs && node tests/filtro.test.mjs && node tests/payload.test.mjs && node tests/recover.test.mjs && node tests/transcrever-comando.test.mjs && node tests/destino.test.mjs",
+    "update": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys",
+    "pino": "^9.5.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "license": "MIT"
+}

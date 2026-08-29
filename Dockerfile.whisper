@@ -1,0 +1,24 @@
+# Variante COM transcrição local (faster-whisper). Mais pesada — use só se for
+# ligar a transcrição no provedor "faster-whisper". Para a maioria, o Dockerfile
+# base já basta.
+FROM node:20-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg git ca-certificates python3 python3-pip python3-venv build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev --no-audit --no-fund
+
+# venv isolado com faster-whisper.
+RUN python3 -m venv /opt/whisper && \
+    /opt/whisper/bin/pip install --no-cache-dir faster-whisper
+ENV LCN_PYTHON=/opt/whisper/bin/python
+
+COPY . .
+
+VOLUME ["/app/sessao", "/app/midia", "/app/data"]
+ENV NODE_ENV=production
+CMD ["node", "index.js"]

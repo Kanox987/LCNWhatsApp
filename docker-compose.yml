@@ -1,0 +1,24 @@
+# Compose do LCNWhatsApp. Funciona com Docker e com Podman (podman compose).
+# Subir:   docker compose up -d --build
+# Logs/QR: docker compose logs -f
+# Painel:  lcn      (ou: docker compose exec lcnwhatsapp node src/dashboard.js)
+services:
+  lcnwhatsapp:
+    container_name: LCNWhatsApp
+    build:
+      context: .
+      dockerfile: Dockerfile          # troque por Dockerfile.whisper p/ transcrição local
+    restart: unless-stopped
+    stdin_open: true                  # permite login por QR/código nos logs
+    tty: true
+    volumes:
+      - ./sessao:/app/sessao
+      - ./midia:/app/midia
+      - ./data:/app/data
+      - ./config.json:/app/config.json
+    # Limites pra segurar o consumo de hardware (ajuste no dashboard/aqui):
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
