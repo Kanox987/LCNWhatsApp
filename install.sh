@@ -12,9 +12,7 @@ TARGET_NODE_MAJOR=24
 
 # Nunca rodar via sudo de um usuário normal — cria runtime.json, config.json,
 # sessao/, midia/, data/, node_modules e o venv do faster-whisper com dono
-# root à toa (nenhum desses precisa de privilégio). Só operações pontuais de
-# sistema usam sudo/doas. Root "de verdade" (sem sudo, ex.: sistema só-root)
-# passa normal.
+# root à toa. Só operações pontuais do sistema usam sudo/doas.
 if [ "$(id -u)" = "0" ] && [ -n "$SUDO_USER" ]; then
   echo "Não rode este instalador com sudo — ele não precisa, e isso deixaria"
   echo "config.json, sessao/, midia/, data/ e node_modules com dono root."
@@ -38,6 +36,14 @@ as_root() {
   fi
 }
 
+user_profile() {
+  case "${SHELL##*/}" in
+    zsh) printf '%s\n' "$HOME/.zshrc" ;;
+    bash) printf '%s\n' "$HOME/.bashrc" ;;
+    *) printf '%s\n' "$HOME/.profile" ;;
+  esac
+}
+
 node_major() {
   command -v node >/dev/null 2>&1 || return 1
   node -p 'process.versions.node.split(".")[0]' 2>/dev/null
@@ -57,7 +63,6 @@ detect_platform() {
   DISTRO_LIKE=""
   DISTRO_VERSION=""
   if [ "$PLATFORM" = "Linux" ] && [ -r /etc/os-release ]; then
-    # /etc/os-release usa sintaxe compatível com shell.
     . /etc/os-release
     DISTRO_ID=${ID:-unknown}
     DISTRO_LIKE=${ID_LIKE:-}
@@ -78,6 +83,10 @@ download_file() {
 }
 
 install_node_debian() {
+  printf "Node.js adequado não foi encontrado. Para usar Node.js %s LTS, o instalador pode adicionar o repositório NodeSource ao sistema. Continuar? [S/n] " "$TARGET_NODE_MAJOR"
+  read ns
+  case "$ns" in n|N|nao|não|Nao|Não) return 1 ;; esac
+
   info "Preparando Node.js $TARGET_NODE_MAJOR LTS via NodeSource..."
   as_root apt-get update || return 1
   as_root apt-get install -y ca-certificates curl bash || return 1
@@ -134,6 +143,11 @@ install_node_macos() {
   prefix=$(brew --prefix node@24 2>/dev/null) || return 1
   PATH="$prefix/bin:$PATH"
   export PATH
+
+  profile=$(user_profile)
+  line="export PATH=\"$prefix/bin:\$PATH\""
+  touch "$profile"
+  grep -F "$prefix/bin" "$profile" >/dev/null 2>&1 || printf '\n%s\n' "$line" >> "$profile"
 }
 
 install_node_system() {
@@ -168,12 +182,14 @@ install_node_nvm() {
   command -v bash >/dev/null 2>&1 || return 1
   NVM_DIR=${NVM_DIR:-$HOME/.nvm}
   export NVM_DIR
+  profile=$(user_profile)
+  touch "$profile"
   installer=$(mktemp "${TMPDIR:-/tmp}/lcn-nvm.XXXXXX") || return 1
   if ! download_file "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh" "$installer"; then
     rm -f "$installer"
     return 1
   fi
-  PROFILE=/dev/null bash "$installer" || { rm -f "$installer"; return 1; }
+  PROFILE="$profile" bash "$installer" || { rm -f "$installer"; return 1; }
   rm -f "$installer"
   [ -s "$NVM_DIR/nvm.sh" ] || return 1
   . "$NVM_DIR/nvm.sh"
@@ -192,8 +208,9 @@ ensure_node_runtime() {
   if command -v node >/dev/null 2>&1; then info "Node atual: $(node --version 2>/dev/null || echo desconhecido)"; else info "Node atual: ausente"; fi
   if command -v npm >/dev/null 2>&1; then info "npm atual: $(npm --version 2>/dev/null || echo desconhecido)"; else info "npm atual: ausente"; fi
 
-  if ! install_node_system; then
-    warn "a instalação pelo gerenciador do sistema não funcionou. Tentando nvm no usuário atual..."
+  install_node_system || true
+  if ! node_runtime_ok; then
+    warn "o runtime ainda não ficou compatível após a tentativa pelo sistema. Tentando nvm no usuário atual..."
     install_node_nvm || true
   fi
 
@@ -218,7 +235,6 @@ echo "==================================================="
 echo "  LCNWhatsApp — instalador"
 echo "==================================================="
 
-# --- detecta engine de container ---
 ENGINE=""
 for e in docker podman nerdctl; do
   if command -v "$e" >/dev/null 2>&1; then ENGINE="$e"; break; fi
@@ -247,12 +263,10 @@ else
   esac
 fi
 
-# --- grava runtime.json ---
 node -e "require('fs').writeFileSync('runtime.json', JSON.stringify({mode:'$MODE',engine:'$ENGINE'||null},null,2)+'\n')" 2>/dev/null \
   || printf '{\n  "mode": "%s",\n  "engine": "%s"\n}\n' "$MODE" "$ENGINE" > runtime.json
 echo ">> runtime.json: modo=$MODE engine=${ENGINE:-nenhum}"
 
-# --- config inicial ---
 [ -f config.json ] || cp config.example.json config.json
 mkdir -p sessao midia data
 
@@ -300,7 +314,6 @@ else
   echo ">> rode o bot com:  npm start   (ou 'npm run code' pra login por código)"
 fi
 
-# --- instala o comando `lcn` no PATH (sempre na pasta do usuário, sem sudo) ---
 chmod +x bin/lcn 2>/dev/null || true
 mkdir -p "$HOME/.local/bin"
 ln -sf "$RAIZ/bin/lcn" "$HOME/.local/bin/lcn"
