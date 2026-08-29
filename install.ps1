@@ -39,6 +39,23 @@ if ($mode -eq "docker") {
   Write-Host ">> subindo em container..."
   & powershell -ExecutionPolicy Bypass -File run.ps1 Dockerfile
 } else {
+  if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    Write-Host "Node.js/npm nao encontrado."
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+      Write-Host ">> tentando instalar via winget (OpenJS.NodeJS.LTS)..."
+      winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+      # Winget grava o PATH no registro, mas esta sessao ja abriu com o PATH
+      # antigo -- reler das duas origens (Machine/User) pra nao precisar
+      # reabrir o terminal.
+      $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    }
+    if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm -ErrorAction SilentlyContinue)) {
+      Write-Host ">> Nao consegui garantir Node.js/npm nesta sessao."
+      Write-Host ">> Instale manualmente: https://nodejs.org/ (LTS), reabra o terminal e rode este instalador de novo."
+      exit 1
+    }
+    Write-Host ">> Node.js/npm prontos."
+  }
   Write-Host ">> instalando dependencias (npm install)..."
   npm install --no-audit --no-fund
   $w = Read-Host "Preparar venv Python com faster-whisper agora? [s/N]"
