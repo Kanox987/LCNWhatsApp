@@ -25,7 +25,11 @@ Nos dois casos, o áudio baixado é temporário: existe só durante a transcriç
 - **off** (padrão) — sem transcrição.
 - **faster-whisper** — local, sem nuvem. Sidecar Python (`src/transcription/faster_whisper.py`)
   num venv. Modelo `tiny`/`base` = leve na CPU (int8). No container, use
-  `Dockerfile.whisper`. No seco, o instalador pode criar o venv.
+  `Dockerfile.whisper`. No seco, o instalador (`install.sh`/`install.ps1`)
+  pode criar o venv e tenta instalar Python sozinho se faltar — o caminho do
+  Python do venv fica gravado em `transcricao.pythonBin`. Se o ambiente não
+  for encontrado, o `lcn` avisa no topo do painel (o primeiro uso baixa o
+  modelo da Hugging Face, o que pode demorar).
 - **openai** — API de transcrição da OpenAI (`whisper-1` / `gpt-4o-transcribe`).
   Precisa de `openaiApiKey`.
 - **custom** — um comando shell qualquer; `{file}` vira o caminho do áudio e o
@@ -45,6 +49,7 @@ transcrição de fato, a resposta pode ser um texto inventado (alucinado) em vez
 de um erro. Se o binário `codex` não estiver instalado, a transcrição falha
 com um aviso no log (a captura continua normalmente, sem transcrição).
 
-No container, o Codex CLI **não vem na imagem** — o `docker-compose.yml` já
-monta o do host por bind mount (veja "Provedor codex da transcrição" em
-`docs/CONTAINER.md`).
+No container, o Codex CLI **não vem na imagem** — `docker-compose.yml`,
+`run.sh` e `run.ps1` já montam o do host por bind mount (só se acharem o
+Codex de verdade — senão avisam e recomendam instalar; veja "Provedor codex
+da transcrição" em `docs/CONTAINER.md`).

@@ -20,22 +20,18 @@ O comando **`lcn`** abre o painel (dashboard) da aplicação.
 
 ## Instalação rápida
 
-**Linux**
-```bash
-cd LCNWhatsApp
-sudo sh install.sh
-```
-
-> ⚠️ No Linux, execute o instalador com **`sudo`**. O instalador pode precisar
-> criar arquivos, instalar dependências e configurar comandos em diretórios do
-> sistema; executá-lo sem privilégios elevados pode causar erros de permissão ou
-> deixar arquivos com permissões incorretas.
-
-**macOS**
+**Linux / macOS**
 ```bash
 cd LCNWhatsApp
 sh install.sh
 ```
+
+> ⚠️ **Não rode com `sudo`.** O instalador roda como o seu usuário normal —
+> `config.json`, `sessao/`, `midia/`, `data/`, `node_modules` e o venv do
+> faster-whisper ficam com o seu dono, não root. O comando `lcn` é instalado
+> em `~/.local/bin` (sem privilégio). Só se você quiser também disponibilizar
+> `lcn` pra todos os usuários do sistema (`/usr/local/bin`) o instalador pede
+> sua senha — só nesse passo, opcional, no fim.
 
 **Windows (PowerShell)**
 ```powershell
