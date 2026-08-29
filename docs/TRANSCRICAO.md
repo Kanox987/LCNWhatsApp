@@ -23,13 +23,20 @@ Nos dois casos, o áudio baixado é temporário: existe só durante a transcriç
 
 ## Provedores
 - **off** (padrão) — sem transcrição.
-- **faster-whisper** — local, sem nuvem. Sidecar Python (`src/transcription/faster_whisper.py`)
-  num venv. Modelo `tiny`/`base` = leve na CPU (int8). No container, use
-  `Dockerfile.whisper`. No seco, o instalador (`install.sh`/`install.ps1`)
-  pode criar o venv e tenta instalar Python sozinho se faltar — o caminho do
-  Python do venv fica gravado em `transcricao.pythonBin`. Se o ambiente não
-  for encontrado, o `lcn` avisa no topo do painel (o primeiro uso baixa o
-  modelo da Hugging Face, o que pode demorar).
+- **faster-whisper** — local, sem nuvem. Sidecar Python
+  (`src/transcription/whisper_sidecar.py`) num venv, CPU/`int8`. Modelos:
+  `tiny` (mínima RAM), `base` (recomendado, equilíbrio) ou `small` (melhor
+  qualidade, pede perfil de container "Recomendado" — 2GB/2 CPUs — ou mais).
+  No container, use `Dockerfile.whisper` — o `install.sh`/`update.sh`
+  perguntam se quer instalar a transcrição local e qual modelo, e
+  pré-baixam/validam o modelo num container temporário logo após o build,
+  gravando em `./modelos` (montado em `/opt/lcn-modelos`) — persistente entre
+  rebuilds/updates, nunca baixa de novo à toa. No seco, o instalador
+  (`install.sh`/`install.ps1`) pode criar o venv e tenta instalar Python
+  sozinho se faltar — o caminho do Python do venv fica gravado em
+  `transcricao.pythonBin`. Se o ambiente não for encontrado, o `lcn` avisa no
+  topo do painel. Concorrência de transcrição é sempre 1 (nunca duas ao mesmo
+  tempo, pra não competir por CPU/memória com modelos maiores como `small`).
 - **openai** — API de transcrição da OpenAI (`whisper-1` / `gpt-4o-transcribe`).
   Precisa de `openaiApiKey`.
 - **custom** — um comando shell qualquer; `{file}` vira o caminho do áudio e o

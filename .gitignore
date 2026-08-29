@@ -2,6 +2,11 @@ node_modules/
 sessao/
 midia/
 data/
+modelos/
 config.json
 runtime.json
+docker-compose.override.yml
 *.log
+.venv/
+__pycache__/
+*.pyc

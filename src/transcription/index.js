@@ -28,7 +28,7 @@ function rodar (cmd, args, opts = {}) {
 
 async function viaFasterWhisper (arquivo, cfg) {
   const py = cfg.pythonBin || process.env.LCN_PYTHON || 'python3'
-  const script = path.join(__dirname, 'faster_whisper.py')
+  const script = path.join(__dirname, 'whisper_sidecar.py')
   return rodar(py, [script, arquivo, cfg.modelo || 'base', cfg.idioma || 'pt'])
 }
 
@@ -41,7 +41,7 @@ async function viaCustom (arquivo, cfg) {
   return rodar(shell, [flag, linha])
 }
 
-export async function transcrever (arquivo, cfg) {
+async function transcreverInterno (arquivo, cfg) {
   const provedor = cfg?.provedor || 'off'
   if (provedor === 'off') return null
   if (!fs.existsSync(arquivo)) return null
@@ -54,4 +54,17 @@ export async function transcrever (arquivo, cfg) {
     return null
   }
   return null
+}
+
+// Concorrência de transcrição = 1: encadeia cada chamada na fila em vez de
+// rodar em paralelo (faster-whisper com modelo small é pesado o bastante pra
+// duas transcrições simultâneas competirem por CPU/memória e derrubarem o
+// hardware.modoEconomia). A fila nunca propaga rejeição — cada chamada
+// resolve com seu próprio try/catch em transcreverInterno.
+let fila = Promise.resolve()
+
+export function transcrever (arquivo, cfg) {
+  const vez = fila.then(() => transcreverInterno(arquivo, cfg))
+  fila = vez.catch(() => {})
+  return vez
 }

@@ -17,8 +17,12 @@ RUN python3 -m venv /opt/whisper && \
     /opt/whisper/bin/pip install --no-cache-dir faster-whisper
 ENV LCN_PYTHON=/opt/whisper/bin/python
 
+# Modelo baixado num volume persistente (montado pelo run.sh/compose), não
+# durante o build — senão todo rebuild/update baixaria de novo.
+ENV LCN_WHISPER_MODELS_DIR=/opt/lcn-modelos
+
 COPY . .
 
-VOLUME ["/app/sessao", "/app/midia", "/app/data"]
+VOLUME ["/app/sessao", "/app/midia", "/app/data", "/opt/lcn-modelos"]
 ENV NODE_ENV=production
 CMD ["node", "index.js"]
