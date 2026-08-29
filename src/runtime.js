@@ -190,7 +190,12 @@ function cliPrincipal () {
     return
   }
 
-  process.stderr.write('uso: node src/runtime.js <docker-args|compose-override|save|show>\n')
+  if (sub === 'modelo') {
+    process.stdout.write((lerRuntime().transcricaoLocal.modelo || 'base') + '\n')
+    return
+  }
+
+  process.stderr.write('uso: node src/runtime.js <docker-args|compose-override|save|show|modelo>\n')
   process.exitCode = 1
 }
 

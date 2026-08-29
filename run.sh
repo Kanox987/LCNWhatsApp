@@ -27,15 +27,34 @@ if [ -z "$ENGINE" ]; then
   fi
 fi
 
-DOCKERFILE=${1:-Dockerfile}   # passe Dockerfile.whisper p/ transcrição local
 NOME=LCNWhatsApp
 
 # garante config e pastas locais pros binds
 [ -f config.json ] || cp config.example.json config.json
-mkdir -p sessao midia data
+mkdir -p sessao midia data modelos
+
+# Lê runtime.json (Dockerfile, --memory/--cpus, mount de ./modelos) via o
+# helper Node — shell não tem parser JSON confiável, e o projeto já assume
+# Node no fluxo docker. 1ª linha = Dockerfile; resto = args extras pro run.
+DOCKER_ARGS_TMP=$(mktemp "${TMPDIR:-/tmp}/lcn-docker-args.XXXXXX")
+node src/runtime.js docker-args > "$DOCKER_ARGS_TMP" 2>/dev/null || true
+DOCKERFILE_AUTO=$(head -n1 "$DOCKER_ARGS_TMP")
+DOCKERFILE=${1:-$DOCKERFILE_AUTO}   # passar um Dockerfile explícito ainda funciona (override manual)
+[ -n "$DOCKERFILE" ] || DOCKERFILE=Dockerfile
 
 echo ">> build ($DOCKERFILE) com $ENGINE"
 "$ENGINE" build -f "$DOCKERFILE" -t lcnwhatsapp:latest .
+
+# Transcrição local: pré-baixa/valida o modelo num container descartável
+# ANTES de subir o bot de verdade — assim rebuild/update reaproveita
+# ./modelos e o 1º áudio real não fica lento esperando o download.
+if [ "$DOCKERFILE" = "Dockerfile.whisper" ]; then
+  MODELO=$(node src/runtime.js modelo)
+  echo ">> preparando modelo faster-whisper '$MODELO' em ./modelos (só baixa se ainda não tiver)..."
+  "$ENGINE" run --rm -v "$(pwd)/modelos:/opt/lcn-modelos" lcnwhatsapp:latest \
+    /opt/whisper/bin/python /app/src/transcription/preload.py "$MODELO" \
+    || echo ">> aviso: não consegui preparar o modelo agora — a 1ª transcrição real tenta de novo (pode demorar)."
+fi
 
 echo ">> (re)subindo container $NOME"
 "$ENGINE" rm -f "$NOME" >/dev/null 2>&1 || true
@@ -43,8 +62,20 @@ echo ">> (re)subindo container $NOME"
 set -- run -d \
   --name "$NOME" \
   --restart unless-stopped \
-  -it \
-  --memory 512m --cpus 1.0 \
+  -it
+
+# args de recurso (--memory/--cpus, se definidos) e mount de ./modelos (se a
+# transcrição local estiver instalada) — linhas 2+ do arquivo temporário.
+# Brace group (não subshell) pra `set --` valer no shell principal.
+{
+  read -r _dockerfile_ja_usado
+  while IFS= read -r linha; do
+    set -- "$@" "$linha"
+  done
+} < "$DOCKER_ARGS_TMP"
+rm -f "$DOCKER_ARGS_TMP"
+
+set -- "$@" \
   -v "$(pwd)/sessao:/app/sessao" \
   -v "$(pwd)/midia:/app/midia" \
   -v "$(pwd)/data:/app/data" \
