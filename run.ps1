@@ -40,6 +40,10 @@ if ((Test-Path $codexNpmDir) -and (Test-Path "$codexHomeDir/auth.json")) {
     "-v", "${codexNpmDir}:/usr/local/lib/node_modules/@openai/codex:ro",
     "-v", "${codexHomeDir}/auth.json:/root/.codex/auth.json:ro"
   )
+} else {
+  Write-Host ">> Codex CLI nao encontrado no host -- provedor 'codex' da transcricao ficara indisponivel no container."
+  Write-Host "   Pra usar: instale (npm install -g @openai/codex), faca 'codex login' no host e rode este script de novo."
+  Write-Host "   (ou ajuste `$env:CODEX_NPM_DIR/`$env:CODEX_HOME se o Codex estiver em outro caminho)"
 }
 
 $dockerArgs += "lcnwhatsapp:latest"

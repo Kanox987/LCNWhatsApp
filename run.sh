@@ -41,6 +41,10 @@ if [ -d "$CODEX_NPM_DIR" ] && [ -f "$CODEX_HOME_DIR/auth.json" ]; then
   set -- "$@" \
     -v "$CODEX_NPM_DIR:/usr/local/lib/node_modules/@openai/codex:ro" \
     -v "$CODEX_HOME_DIR/auth.json:/root/.codex/auth.json:ro"
+else
+  echo ">> Codex CLI não encontrado no host — provedor 'codex' da transcrição ficará indisponível no container."
+  echo "   Pra usar: instale (npm install -g @openai/codex), faça 'codex login' no host e rode este script de novo."
+  echo "   (ou ajuste CODEX_NPM_DIR/CODEX_HOME se o Codex estiver em outro caminho)"
 fi
 
 set -- "$@" lcnwhatsapp:latest
