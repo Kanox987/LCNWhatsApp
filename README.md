@@ -54,6 +54,31 @@ Docker ou seguir no seco. No fim, instala o comando `lcn` (em qualquer sistema,
 funciona independente de onde você clonou o projeto — só evite mover/renomear
 a pasta depois de instalado, senão precisa reinstalar o comando).
 
+### Verificar dependências
+
+Depois da instalação (ou ao diagnosticar outra máquina), rode o verificador do
+sistema. Ele **não instala nem altera dependências**: só testa o ambiente e
+retorna erro (`exit 1`) quando encontra falha crítica.
+
+Linux/macOS:
+```bash
+sh check-deps.sh
+```
+
+Windows:
+```powershell
+powershell -ExecutionPolicy Bypass -File check-deps.ps1
+```
+
+O diagnóstico respeita o modo salvo em `runtime.json`: em modo nativo verifica
+Node.js 22+, npm e os módulos principais; em modo container verifica o engine,
+o daemon, o container e o Node dentro dele. Também checa o comando `lcn`,
+permissões de `sessao/`, `midia/`, `data/` e `config.json`, além das dependências
+do provedor de transcrição configurado (`faster-whisper`, `codex`, OpenAI ou
+comando externo). No Windows, o verificador recarrega o PATH persistente antes
+dos testes, o que ajuda a diagnosticar instalações feitas por `winget` em uma
+sessão de PowerShell que já estava aberta.
+
 Depois de instalar, conecte pelo próprio painel — é o jeito padrão, funciona
 igual em container ou no seco:
 ```bash
@@ -95,7 +120,7 @@ Abre um menu de terminal com:
    [docs/TRANSCRICAO.md](docs/TRANSCRICAO.md).
 
 ## Documentação
-- [INSTALACAO.md](docs/INSTALACAO.md) — instalador e modos
+- [INSTALACAO.md](docs/INSTALACAO.md) — instalador, requisitos e diagnóstico
 - [CONTAINER.md](docs/CONTAINER.md) — Docker/Podman e rodar no seco
 - [DASHBOARD.md](docs/DASHBOARD.md) — o painel `lcn`
 - [CONFIG.md](docs/CONFIG.md) — todas as opções do `config.json`
