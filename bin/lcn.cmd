@@ -6,9 +6,11 @@ pushd "%RAIZ%"
 
 set "MODE=bare"
 set "ENGINE="
+REM Le mode/engine do runtime.json via PowerShell (sem depender de Node no
+REM host) -- PowerShell ja e' dependencia assumida em install.ps1/run.ps1.
 if exist runtime.json (
-  for /f "usebackq delims=" %%i in (`node -e "try{console.log(require('./runtime.json').mode||'bare')}catch(e){console.log('bare')}"`) do set "MODE=%%i"
-  for /f "usebackq delims=" %%i in (`node -e "try{console.log(require('./runtime.json').engine||'')}catch(e){console.log('')}"`) do set "ENGINE=%%i"
+  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content runtime.json | ConvertFrom-Json).mode } catch { 'bare' }"`) do set "MODE=%%i"
+  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content runtime.json | ConvertFrom-Json).engine } catch { '' }"`) do set "ENGINE=%%i"
 )
 
 if "%MODE%"=="docker" (
