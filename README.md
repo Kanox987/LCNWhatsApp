@@ -29,9 +29,18 @@ sh install.sh
 > ⚠️ **Não rode com `sudo`.** O instalador roda como o seu usuário normal —
 > `config.json`, `sessao/`, `midia/`, `data/`, `node_modules` e o venv do
 > faster-whisper ficam com o seu dono, não root. O comando `lcn` é instalado
-> em `~/.local/bin` (sem privilégio). Só se você quiser também disponibilizar
-> `lcn` pra todos os usuários do sistema (`/usr/local/bin`) o instalador pede
-> sua senha — só nesse passo, opcional, no fim.
+> em `~/.local/bin` (sem privilégio). Só operações que realmente alteram o
+> sistema, como instalar um pacote ou criar o link opcional em `/usr/local/bin`,
+> usam `sudo`/`doas` pontualmente.
+
+No modo **nativo**, o instalador valida `node` e `npm` antes de rodar
+`npm install`. A versão recomendada é **Node.js 24 LTS** e o mínimo aceito pelo
+instalador é **Node.js 22**. Se necessário, ele tenta preparar uma versão LTS
+compatível usando a estratégia apropriada para Debian/Ubuntu, Fedora,
+RHEL/CentOS e derivados, Arch/Manjaro, openSUSE, Alpine, Amazon Linux ou macOS
+(Homebrew), com `nvm` como fallback por usuário. Em Debian/Ubuntu, adicionar o
+repositório NodeSource exige confirmação. No modo **Docker/Podman**, Node.js
+continua não sendo necessário no host.
 
 **Windows (PowerShell)**
 ```powershell
