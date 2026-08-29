@@ -26,6 +26,7 @@ export const PADRAO = {
     idioma: 'pt',
     openaiApiKey: '',
     openaiModelo: 'whisper-1',
+    codexModelo: '',
     comando: '',
     comandoTerceiros: false,
     conversas: []

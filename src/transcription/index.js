@@ -6,14 +6,13 @@
 //   faster-whisper -> sidecar Python local (venv), modelo tiny/base (leve)
 //   openai         -> API de transcrição da OpenAI (whisper-1 / gpt-4o-transcribe)
 //   custom         -> comando shell configurável (encaixa qualquer CLI)
-//
-// Nota: Claude/Anthropic NÃO transcreve áudio direto; só entra via "custom" se o
-// usuário montar um wrapper que receba o arquivo e devolva texto no stdout.
+//   codex          -> Codex CLI local (codex exec), autenticado via ChatGPT, sem API key
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
 import { fileURLToPath } from 'url'
 import { transcreverOpenAI } from './openai.js'
+import { transcreverCodex } from './codex.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -52,6 +51,7 @@ export async function transcrever (arquivo, cfg) {
     if (provedor === 'faster-whisper') return await viaFasterWhisper(arquivo, cfg)
     if (provedor === 'openai') return await transcreverOpenAI(arquivo, cfg)
     if (provedor === 'custom') return await viaCustom(arquivo, cfg)
+    if (provedor === 'codex') return await transcreverCodex(arquivo, cfg)
   } catch (e) {
     console.error(`transcrição (${provedor}) falhou:`, e.message)
     return null

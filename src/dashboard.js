@@ -326,14 +326,22 @@ async function cfgDestinoProprio (c) {
 }
 
 async function cfgTranscricao (c) {
-  console.log('\n1 off  2 faster-whisper  3 openai  4 custom')
+  console.log('\n1 off  2 faster-whisper  3 openai  4 custom  5 codex')
   const op = (await ask('> ')).trim()
   const t = c.transcricao
   if (op === '1') t.provedor = 'off'
   else if (op === '2') { t.provedor = 'faster-whisper'; t.modelo = (await ask('Modelo (tiny/base/small) [base]: ')).trim() || 'base' }
   else if (op === '3') { t.provedor = 'openai'; t.openaiApiKey = (await ask('OpenAI API key: ')).trim(); t.openaiModelo = (await ask('Modelo [whisper-1]: ')).trim() || 'whisper-1' }
   else if (op === '4') { t.provedor = 'custom'; t.comando = (await ask('Comando ({file} = caminho do áudio): ')).trim() }
-  if (['2', '3', '4'].includes(op)) t.idioma = (await ask('Idioma [pt]: ')).trim() || 'pt'
+  else if (op === '5') {
+    t.provedor = 'codex'
+    t.codexModelo = (await ask('Modelo Codex (vazio = padrão do CLI): ')).trim()
+    const achou = spawnSync('codex', ['--version'], { stdio: 'ignore' })
+    if (achou.error) {
+      console.log(`${R}⚠ Codex CLI não encontrado no PATH. Instale com \`npm install -g @openai/codex\` e faça \`codex login\` antes de usar este provedor.${Z}`)
+    }
+  }
+  if (['2', '3', '4', '5'].includes(op)) t.idioma = (await ask('Idioma [pt]: ')).trim() || 'pt'
   t.comandoTerceiros = await confirmar(`Por padrão, qualquer participante pode usar /transcrever (respondendo um áudio)? (atual: ${!!t.comandoTerceiros})`)
   cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
 }

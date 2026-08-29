@@ -30,9 +30,17 @@ Nos dois casos, o áudio baixado é temporário: existe só durante a transcriç
   Precisa de `openaiApiKey`.
 - **custom** — um comando shell qualquer; `{file}` vira o caminho do áudio e o
   **stdout** é usado como texto. Ex: `meu-transcritor --in {file}`.
+- **codex** — usa o Codex CLI (OpenAI) já instalado e logado na máquina
+  (`codex exec`), autenticado pela sessão do `codex login` (ChatGPT) — **sem
+  precisar de `openaiApiKey`**. Requer o Codex CLI instalado
+  (`npm install -g @openai/codex`) e logado (`codex login`). Modelo opcional
+  em `codexModelo` (vazio = padrão do CLI).
 
-## Sobre Claude/OpenAI Codex
-Claude (Anthropic) **não transcreve áudio** diretamente — a API não recebe áudio.
-Se você quiser usar um CLI (Codex, um wrapper próprio, etc.), plugue via provedor
-**custom**: seu comando recebe o arquivo e devolve o texto. Claude pode entrar
-como *pós-processamento* do texto já transcrito, não como transcritor.
+## Aviso sobre o provedor `codex`
+O Codex CLI **não tem entrada nativa de áudio** — só aceita texto e imagem
+(`-i/--image`). Este provedor pede pro próprio Codex produzir a transcrição a
+partir do caminho do arquivo, então **teste com um áudio curto de conteúdo
+conhecido antes de confiar em produção**: se o ambiente não suportar
+transcrição de fato, a resposta pode ser um texto inventado (alucinado) em vez
+de um erro. Se o binário `codex` não estiver instalado, a transcrição falha
+com um aviso no log (a captura continua normalmente, sem transcrição).

@@ -24,9 +24,10 @@ uma reconexão leve quando mudam.
     "placeholderResend": false       // retry automático de visu única indisponível (raramente funciona — use /recover)
   },
   "transcricao": {
-    "provedor": "off",               // off | faster-whisper | openai | custom
+    "provedor": "off",               // off | faster-whisper | openai | custom | codex
     "modelo": "base", "idioma": "pt",
     "openaiApiKey": "", "openaiModelo": "whisper-1",
+    "codexModelo": "",               // codex: modelo opcional (vazio = padrão do CLI), usa `codex exec` já logado (sem API key)
     "comando": "",                   // custom: usa {file} como caminho do áudio
     "comandoTerceiros": false,       // padrão geral: só o dono pode usar /transcrever
     "conversas": [                   // overrides por conversa (número ou ID de grupo)
