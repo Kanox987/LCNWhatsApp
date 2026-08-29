@@ -32,8 +32,63 @@ usuário normal.
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
-Cria `lcn.cmd` em `%LOCALAPPDATA%\LCNWhatsApp\bin` e adiciona ao PATH do usuário
-(reabra o terminal depois).
+Cria `lcn.cmd` em `%LOCALAPPDATA%\LCNWhatsApp\bin` e adiciona ao PATH do usuário.
+O instalador recarrega o PATH da própria sessão depois de instalar Node/Python ou
+o comando `lcn`. Se ele tiver sido iniciado a partir de outro PowerShell usando
+`powershell -File`, o processo pai continua com o PATH antigo; nesse caso,
+reabra o terminal pai antes de usar os comandos recém-instalados.
+
+## Verificar dependências do sistema
+
+Há dois verificadores somente de diagnóstico. Eles não instalam, removem ou
+atualizam dependências.
+
+Linux/macOS:
+```bash
+sh check-deps.sh
+```
+
+Windows:
+```powershell
+powershell -ExecutionPolicy Bypass -File check-deps.ps1
+```
+
+O script usa `runtime.json` para adaptar o teste ao modo instalado:
+
+- **Modo nativo:** verifica Node.js 22+, npm e se os módulos principais do
+  projeto podem ser resolvidos (`@hapi/boom`, Baileys, `pino` e
+  `qrcode-terminal`).
+- **Modo container:** verifica o engine configurado, acesso ao daemon/serviço,
+  existência/estado do container `LCNWhatsApp` e se o Node responde dentro do
+  container. Node no host não é exigido nesse modo.
+- **Ambos:** verifica se `lcn` está no PATH, existência e permissão de escrita
+  de `sessao/`, `midia/`, `data/` e `config.json`, além das dependências do
+  provedor de transcrição efetivamente configurado.
+
+Para transcrição, o diagnóstico testa apenas o que estiver ativo:
+
+- `faster-whisper`: Python configurado/disponível e import do módulo
+  `faster_whisper`;
+- `codex`: Codex CLI e, quando possível, `auth.json` no host/container;
+- `openai`: presença da chave configurada, sem imprimir seu valor;
+- `comando`: presença de um comando externo configurado.
+
+No Windows, `check-deps.ps1` começa recarregando o PATH persistente de
+**Machine + User**. Isso é útil logo após instalações feitas via `winget`, já
+que uma janela do PowerShell aberta antes da instalação pode continuar com uma
+cópia antiga do PATH.
+
+Os verificadores imprimem `[OK]`, `[AVISO]` e `[ERRO]`, mostram um resumo no fim
+e retornam:
+
+```text
+exit 0  -> nenhuma falha crítica encontrada
+exit 1  -> uma ou mais falhas críticas encontradas
+```
+
+Avisos não tornam o diagnóstico inválido sozinhos; por exemplo, um container
+instalado mas parado pode aparecer como aviso quando o restante do ambiente
+está íntegro.
 
 ## Requisitos
 
