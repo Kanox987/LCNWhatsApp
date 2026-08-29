@@ -207,29 +207,6 @@ switch ($provider) {
       Add-Fail "provedor faster-whisper ativo, mas Python configurado/instalado nao foi encontrado"
     }
   }
-  "codex" {
-    if ($mode -eq "docker" -and $engine -and (Get-Command $engine -ErrorAction SilentlyContinue)) {
-      $running = @(& $engine ps --format "{{.Names}}" 2>$null)
-      if ($running -contains "LCNWhatsApp") {
-        & $engine exec LCNWhatsApp codex --version *> $null
-        if ($LASTEXITCODE -eq 0) { Add-Ok "Codex CLI responde dentro do container" } else { Add-Fail "provedor codex ativo, mas Codex CLI nao responde dentro do container" }
-        & $engine exec LCNWhatsApp test -f /root/.codex/auth.json *> $null
-        if ($LASTEXITCODE -eq 0) { Add-Ok "auth.json do Codex esta montado no container" } else { Add-Warn "auth.json do Codex nao foi encontrado no container" }
-      } else {
-        Add-Warn "nao foi possivel testar Codex porque o container nao esta rodando"
-      }
-    } else {
-      $codex = Get-Command codex -ErrorAction SilentlyContinue
-      if ($codex) {
-        $codexVersion = (& codex --version 2>$null | Select-Object -First 1)
-        if ($LASTEXITCODE -eq 0) { Add-Ok "Codex CLI: $codexVersion" } else { Add-Fail "comando codex existe, mas nao respondeu corretamente" }
-      } else {
-        Add-Fail "provedor codex ativo, mas comando codex nao esta no PATH"
-      }
-      $auth = Join-Path $HOME ".codex\auth.json"
-      if (Test-Path $auth -PathType Leaf) { Add-Ok "auth.json do Codex encontrado" } else { Add-Warn "auth.json do Codex nao encontrado em ~/.codex" }
-    }
-  }
   "openai" {
     if ($config.transcricao.openaiApiKey) { Add-Ok "OpenAI API key configurada (valor oculto)" } else { Add-Fail "provedor openai ativo, mas openaiApiKey esta vazia" }
   }

@@ -163,15 +163,6 @@ case "$PROVIDER" in
       fail 'provedor faster-whisper ativo, mas Python/faster_whisper não está funcional.'
     fi
     ;;
-  codex)
-    if [ "$MODE" = "docker" ] && [ -n "$ENGINE" ] && command -v "$ENGINE" >/dev/null 2>&1 && "$ENGINE" ps --format '{{.Names}}' 2>/dev/null | grep -qx 'LCNWhatsApp'; then
-      if "$ENGINE" exec LCNWhatsApp codex --version >/dev/null 2>&1; then ok 'Codex CLI responde dentro do container'; else fail 'provedor codex ativo, mas Codex CLI não responde dentro do container.'; fi
-      if "$ENGINE" exec LCNWhatsApp test -f /root/.codex/auth.json >/dev/null 2>&1; then ok 'auth.json do Codex está montado no container'; else warn 'auth.json do Codex não foi encontrado no container.'; fi
-    else
-      if command -v codex >/dev/null 2>&1 && codex --version >/dev/null 2>&1; then ok "Codex CLI: $(codex --version 2>/dev/null | head -n1)"; else fail 'provedor codex ativo, mas comando codex não está funcional no host.'; fi
-      [ -f "$HOME/.codex/auth.json" ] && ok 'auth.json do Codex encontrado' || warn 'auth.json do Codex não encontrado em ~/.codex.'
-    fi
-    ;;
   openai)
     KEY=$(field_json config.json openaiApiKey || true)
     [ -n "$KEY" ] && ok 'OpenAI API key configurada (valor oculto)' || fail 'provedor openai ativo, mas openaiApiKey está vazia.'

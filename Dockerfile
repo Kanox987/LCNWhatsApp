@@ -18,11 +18,6 @@ RUN npm install --omit=dev --no-audit --no-fund
 # Copia o código.
 COPY . .
 
-# Ponto de montagem pro Codex CLI do host (provedor "codex" da transcrição).
-# O binário em si não vai na imagem — é montado por bind mount no compose/run;
-# aqui só criamos o link que o `codex exec` (spawn) espera achar no PATH.
-RUN ln -s ../lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex
-
 # Volumes de dados persistentes (montados pelo compose/run).
 VOLUME ["/app/sessao", "/app/midia", "/app/data"]
 

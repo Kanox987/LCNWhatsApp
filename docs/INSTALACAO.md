@@ -69,7 +69,6 @@ Para transcrição, o diagnóstico testa apenas o que estiver ativo:
 
 - `faster-whisper`: Python configurado/disponível e import do módulo
   `faster_whisper`;
-- `codex`: Codex CLI e, quando possível, `auth.json` no host/container;
 - `openai`: presença da chave configurada, sem imprimir seu valor;
 - `comando`: presença de um comando externo configurado.
 
@@ -259,9 +258,3 @@ o painel roda dentro do container (`bin/lcn`/`bin/lcn.cmd` não dependem de Node
 para descobrir o modo). Se nenhum engine existir na hora de subir o container
 (`run.sh`/`run.ps1`), eles tentam preparar o Docker antes de abortar com uma
 mensagem clara.
-
-### Provedor `codex` da transcrição
-
-Exige Codex CLI instalado e logado no host (`codex login`) — ver
-[TRANSCRICAO.md](TRANSCRICAO.md) e, em modo container,
-[CONTAINER.md](CONTAINER.md).

@@ -74,8 +74,8 @@ O diagnóstico respeita o modo salvo em `runtime.json`: em modo nativo verifica
 Node.js 22+, npm e os módulos principais; em modo container verifica o engine,
 o daemon, o container e o Node dentro dele. Também checa o comando `lcn`,
 permissões de `sessao/`, `midia/`, `data/` e `config.json`, além das dependências
-do provedor de transcrição configurado (`faster-whisper`, `codex`, OpenAI ou
-comando externo). No Windows, o verificador recarrega o PATH persistente antes
+do provedor de transcrição configurado (`faster-whisper`, OpenAI ou comando
+externo). No Windows, o verificador recarrega o PATH persistente antes
 dos testes, o que ajuda a diagnosticar instalações feitas por `winget` em uma
 sessão de PowerShell que já estava aberta.
 

@@ -12,7 +12,7 @@
     "code": "node index.js --code",
     "config": "node src/dashboard.js",
     "dashboard": "node src/dashboard.js",
-    "test": "node tests/detect.test.mjs && node tests/ignore.test.mjs && node tests/filtro.test.mjs && node tests/payload.test.mjs && node tests/recover.test.mjs && node tests/transcrever-comando.test.mjs && node tests/transcrever-codex.test.mjs && node tests/destino.test.mjs",
+    "test": "node tests/detect.test.mjs && node tests/ignore.test.mjs && node tests/filtro.test.mjs && node tests/payload.test.mjs && node tests/recover.test.mjs && node tests/transcrever-comando.test.mjs && node tests/destino.test.mjs",
     "update": "node -e \"process.exit(0)\""
   },
   "dependencies": {

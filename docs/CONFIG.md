@@ -24,11 +24,10 @@ uma reconexão leve quando mudam.
     "placeholderResend": false       // retry automático de visu única indisponível (raramente funciona — use /recover)
   },
   "transcricao": {
-    "provedor": "off",               // off | faster-whisper | openai | custom | codex
+    "provedor": "off",               // off | faster-whisper | openai | custom
     "modelo": "base", "idioma": "pt",
     "pythonBin": "",                 // faster-whisper: caminho do python do venv (gravado pelo instalador); vazio = usa LCN_PYTHON ou "python3" do PATH
     "openaiApiKey": "", "openaiModelo": "whisper-1",
-    "codexModelo": "",               // codex: modelo opcional (vazio = padrão do CLI), usa `codex exec` já logado (sem API key)
     "comando": "",                   // custom: usa {file} como caminho do áudio
     "comandoTerceiros": false,       // padrão geral: só o dono pode usar /transcrever
     "conversas": [                   // overrides por conversa (número ou ID de grupo)

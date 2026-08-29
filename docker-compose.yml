@@ -16,16 +16,6 @@ services:
       - ./midia:/app/midia
       - ./data:/app/data
       - ./config.json:/app/config.json
-      # Só necessário se for usar o provedor "codex" da transcrição — reaproveita
-      # o Codex CLI e o login (ChatGPT) já feitos no host, sem instalar nada na
-      # imagem nem repetir o `codex login` dentro do container. Ajuste os
-      # caminhos (CODEX_NPM_DIR/CODEX_HOME) se o Codex estiver instalado em
-      # outro lugar. Remova as duas linhas se não for usar esse provedor.
-      # Atenção: faça `codex login` no host ANTES do primeiro `up` — se
-      # auth.json ainda não existir, o Docker cria um diretório vazio no
-      # lugar dele (ver docs/CONTAINER.md).
-      - ${CODEX_NPM_DIR:-/usr/local/lib/node_modules/@openai/codex}:/usr/local/lib/node_modules/@openai/codex:ro
-      - ${CODEX_HOME:-~/.codex}/auth.json:/root/.codex/auth.json:ro
     # Limites pra segurar o consumo de hardware (ajuste no dashboard/aqui):
     deploy:
       resources:

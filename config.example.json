@@ -28,7 +28,6 @@
     "pythonBin": "",
     "openaiApiKey": "",
     "openaiModelo": "whisper-1",
-    "codexModelo": "",
     "comando": "",
     "comandoTerceiros": false,
     "conversas": []

@@ -49,26 +49,6 @@ $dockerArgs = @(
   "-v", "${PWD}\config.json:/app/config.json"
 )
 
-# Provedor "codex" da transcrição: só monta se o Codex CLI já estiver
-# instalado e logado no host (evita criar pasta vazia no lugar de auth.json
-# quando ninguém usa esse provedor). Funciona só se o Codex for da mesma
-# plataforma do container Linux (ex: instalado dentro do WSL2, não o Codex
-# nativo do Windows). $env:CODEX_NPM_DIR/$env:CODEX_HOME sobrepõem os
-# caminhos padrão.
-$codexNpmDir = if ($env:CODEX_NPM_DIR) { $env:CODEX_NPM_DIR } else { "/usr/local/lib/node_modules/@openai/codex" }
-$codexHomeDir = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { "$HOME/.codex" }
-if ((Test-Path $codexNpmDir) -and (Test-Path "$codexHomeDir/auth.json")) {
-  Write-Host ">> Codex CLI achado no host — montando pro provedor 'codex' da transcrição"
-  $dockerArgs += @(
-    "-v", "${codexNpmDir}:/usr/local/lib/node_modules/@openai/codex:ro",
-    "-v", "${codexHomeDir}/auth.json:/root/.codex/auth.json:ro"
-  )
-} else {
-  Write-Host ">> Codex CLI nao encontrado no host -- provedor 'codex' da transcricao ficara indisponivel no container."
-  Write-Host "   Pra usar: instale (npm install -g @openai/codex), faca 'codex login' no host e rode este script de novo."
-  Write-Host "   (ou ajuste `$env:CODEX_NPM_DIR/`$env:CODEX_HOME se o Codex estiver em outro caminho)"
-}
-
 $dockerArgs += "lcnwhatsapp:latest"
 & $engine @dockerArgs
 

@@ -27,7 +27,6 @@ export const PADRAO = {
     pythonBin: '',
     openaiApiKey: '',
     openaiModelo: 'whisper-1',
-    codexModelo: '',
     comando: '',
     comandoTerceiros: false,
     conversas: []
@@ -49,6 +48,25 @@ function mesclar (base, extra) {
   return extra === undefined ? base : extra
 }
 
+// Migração: o provedor "codex" (e o campo codexModelo) foram removidos do
+// LCNWhatsApp. Config antigo com transcricao.provedor === 'codex' vira "off"
+// automaticamente, com um aviso curto — sem apagar o resto da configuração.
+function migrarCodex (cfg) {
+  const t = cfg.transcricao
+  if (!t) return false
+  let alterado = false
+  if (t.provedor === 'codex') {
+    console.warn('config.json: provedor de transcrição "codex" foi removido — migrado para "off". Reconfigure em lcn > Configurações > Transcrição, se quiser.')
+    t.provedor = 'off'
+    alterado = true
+  }
+  if ('codexModelo' in t) {
+    delete t.codexModelo
+    alterado = true
+  }
+  return alterado
+}
+
 export function carregar () {
   let bruto = {}
   try {
@@ -58,7 +76,11 @@ export function carregar () {
   } catch (e) {
     console.error('config.json inválido, usando padrão:', e.message)
   }
-  return mesclar(PADRAO, bruto)
+  const cfg = mesclar(PADRAO, bruto)
+  if (migrarCodex(cfg)) {
+    try { fs.writeFileSync(ARQ_CONFIG, JSON.stringify(cfg, null, 2) + '\n') } catch {}
+  }
+  return cfg
 }
 
 export function salvar (cfg) {
@@ -94,7 +116,11 @@ export function observar (onChange) {
         } catch {
           return // escrita ainda em andamento / JSON inválido — ignora este evento
         }
-        try { onChange(mesclar(PADRAO, bruto)) } catch (e) { console.error('reload config:', e.message) }
+        const cfg = mesclar(PADRAO, bruto)
+        if (migrarCodex(cfg)) {
+          try { fs.writeFileSync(ARQ_CONFIG, JSON.stringify(cfg, null, 2) + '\n') } catch {}
+        }
+        try { onChange(cfg) } catch (e) { console.error('reload config:', e.message) }
       }, 400)
     })
   } catch {

@@ -34,22 +34,3 @@ Nos dois casos, o áudio baixado é temporário: existe só durante a transcriç
   Precisa de `openaiApiKey`.
 - **custom** — um comando shell qualquer; `{file}` vira o caminho do áudio e o
   **stdout** é usado como texto. Ex: `meu-transcritor --in {file}`.
-- **codex** — usa o Codex CLI (OpenAI) já instalado e logado na máquina
-  (`codex exec`), autenticado pela sessão do `codex login` (ChatGPT) — **sem
-  precisar de `openaiApiKey`**. Requer o Codex CLI instalado
-  (`npm install -g @openai/codex`) e logado (`codex login`). Modelo opcional
-  em `codexModelo` (vazio = padrão do CLI).
-
-## Aviso sobre o provedor `codex`
-O Codex CLI **não tem entrada nativa de áudio** — só aceita texto e imagem
-(`-i/--image`). Este provedor pede pro próprio Codex produzir a transcrição a
-partir do caminho do arquivo, então **teste com um áudio curto de conteúdo
-conhecido antes de confiar em produção**: se o ambiente não suportar
-transcrição de fato, a resposta pode ser um texto inventado (alucinado) em vez
-de um erro. Se o binário `codex` não estiver instalado, a transcrição falha
-com um aviso no log (a captura continua normalmente, sem transcrição).
-
-No container, o Codex CLI **não vem na imagem** — `docker-compose.yml`,
-`run.sh` e `run.ps1` já montam o do host por bind mount (só se acharem o
-Codex de verdade — senão avisam e recomendam instalar; veja "Provedor codex
-da transcrição" em `docs/CONTAINER.md`).
