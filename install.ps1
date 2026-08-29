@@ -3,6 +3,15 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 $raiz = $PSScriptRoot
 
+function Refresh-SessionPath {
+  $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+  $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+  $parts = @()
+  if ($machinePath) { $parts += $machinePath }
+  if ($userPath) { $parts += $userPath }
+  $env:Path = $parts -join ";"
+}
+
 Write-Host "==================================================="
 Write-Host "  LCNWhatsApp - instalador"
 Write-Host "==================================================="
@@ -44,10 +53,9 @@ if ($mode -eq "docker") {
     if (Get-Command winget -ErrorAction SilentlyContinue) {
       Write-Host ">> tentando instalar via winget (OpenJS.NodeJS.LTS)..."
       winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-      # Winget grava o PATH no registro, mas esta sessao ja abriu com o PATH
-      # antigo -- reler das duas origens (Machine/User) pra nao precisar
-      # reabrir o terminal.
-      $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+      # Winget grava o PATH no registro, mas a sessao atual pode ter aberto
+      # antes da instalacao. Recarrega Machine/User imediatamente.
+      Refresh-SessionPath
     }
     if (-not (Get-Command node -ErrorAction SilentlyContinue) -or -not (Get-Command npm -ErrorAction SilentlyContinue)) {
       Write-Host ">> Nao consegui garantir Node.js/npm nesta sessao."
@@ -66,7 +74,7 @@ if ($mode -eq "docker") {
       if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host ">> tentando instalar via winget (Python.Python.3.12)..."
         winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        Refresh-SessionPath
       }
       $pyCmd = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } elseif (Get-Command py -ErrorAction SilentlyContinue) { "py" } else { $null }
     }
@@ -97,9 +105,20 @@ $wrapper = "@echo off`r`ncall `"$raiz\bin\lcn.cmd`" %*"
 Set-Content -Path (Join-Path $binDir "lcn.cmd") -Value $wrapper -Encoding Ascii
 $userPath = [Environment]::GetEnvironmentVariable("Path","User")
 if ($userPath -notlike "*$binDir*") {
-  [Environment]::SetEnvironmentVariable("Path", "$userPath;$binDir", "User")
-  Write-Host ">> adicionei $binDir ao PATH (reabra o terminal)."
+  $newUserPath = if ($userPath) { "$userPath;$binDir" } else { $binDir }
+  [Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
+  Write-Host ">> adicionei $binDir ao PATH do usuario."
 }
+
+# Atualiza o PATH desta sessao do instalador imediatamente para que Node/npm,
+# Python e o comando lcn recém-instalados fiquem visiveis sem novo processo.
+Refresh-SessionPath
+if (Get-Command lcn -ErrorAction SilentlyContinue) {
+  Write-Host ">> PATH da sessao atualizado; comando 'lcn' ja esta disponivel aqui."
+} else {
+  Write-Host ">> PATH persistente atualizado. Se este script foi chamado por outro PowerShell, reabra o terminal pai antes de usar 'lcn'."
+}
+
 Write-Host ">> comando instalado: lcn"
 Write-Host "==================================================="
 Write-Host "  Pronto! Abra o painel com:  lcn"
