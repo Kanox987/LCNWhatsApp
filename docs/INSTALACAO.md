@@ -8,7 +8,8 @@ O instalador é interativo e decide o modo de execução.
 3. **Se não houver:** pergunta se quer *instalar o Docker* (dá o link/comando) ou
    *seguir no seco*.
 4. Grava `runtime.json` com `{ mode, engine }`.
-5. Prepara o app (build da imagem, ou `npm install`) e instala o comando `lcn`.
+5. Prepara o app (build da imagem, ou valida Node/npm e executa `npm install`) e
+   instala o comando `lcn`.
 
 ## Linux/macOS
 ```bash
@@ -22,8 +23,10 @@ adicione:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 No fim, o instalador pergunta se você também quer linkar `lcn` em
-`/usr/local/bin` (todos os usuários do sistema) — só esse passo, opcional,
-pede sua senha.
+`/usr/local/bin` (todos os usuários do sistema). Operações que realmente
+alteram o sistema usam `sudo` ou `doas` pontualmente; os arquivos do projeto,
+`node_modules`, sessão, mídias, configurações e venv continuam pertencendo ao
+usuário normal.
 
 ## Windows
 ```powershell
@@ -33,15 +36,177 @@ Cria `lcn.cmd` em `%LOCALAPPDATA%\LCNWhatsApp\bin` e adiciona ao PATH do usuári
 (reabra o terminal depois).
 
 ## Requisitos
-- **Modo seco:** Node.js 20+ (e Python 3 se for usar faster-whisper). Se
-  faltar algum na hora de instalar, o instalador tenta instalar sozinho
-  (winget no Windows; apt/dnf/pacman/brew no Linux/macOS) antes de desistir
-  e pedir pra você instalar manualmente.
-- **Modo container:** Docker ou Podman (ou nerdctl). Nada de Node no host é
-  necessário — o painel roda dentro do container (`bin/lcn`/`bin/lcn.cmd` não
-  dependem de Node pra isso). Se nenhum engine existir na hora de subir o
-  container (`run.sh`/`run.ps1`), eles também tentam instalar o Docker antes
-  de abortar com erro.
-- **Provedor `codex` da transcrição:** exige Codex CLI instalado e logado no
-  host (`codex login`) — ver [TRANSCRICAO.md](TRANSCRICAO.md) e, em modo
-  container, [CONTAINER.md](CONTAINER.md).
+
+### Modo nativo
+
+- **Recomendado:** Node.js 24 LTS.
+- **Mínimo aceito pelo instalador Linux/macOS:** Node.js 22 com npm disponível.
+- Python 3 só é necessário para o provedor `faster-whisper`.
+
+Antes de executar `npm install`, `install.sh` verifica `node`, `npm` e a major
+do Node. Se o runtime estiver ausente ou abaixo do mínimo, tenta preparar uma
+versão compatível e valida novamente antes de continuar.
+
+A estratégia automática depende da plataforma:
+
+| Sistema/família | Estratégia usada |
+| --- | --- |
+| Debian, Ubuntu, Mint, Pop!_OS e derivados | Node.js 24 LTS via NodeSource, com confirmação antes de adicionar o repositório; depois valida e pode cair para `nvm` |
+| Fedora | tenta os pacotes versionados de Node.js 24; fallback para os aliases `nodejs`/`npm` da distro |
+| RHEL, CentOS, Rocky, AlmaLinux, Oracle Linux | tenta Node.js 24 quando disponível, depois stream Node.js 22/AppStream e por fim pacotes genéricos |
+| Arch, Manjaro, EndeavourOS | `nodejs-lts-krypton` + `npm`; não usa `pacman -Sy` isolado |
+| openSUSE/SLES | tenta `nodejs24` + `npm24`; se a release não oferecer, a validação falha e o instalador tenta `nvm` |
+| Alpine | `apk add --no-cache nodejs npm` |
+| Amazon Linux | `nodejs24` + `nodejs24-npm`, com tentativa de ajustar `alternatives` quando aplicável |
+| macOS | Homebrew `node@24`, adicionando o prefixo ao PATH; se Homebrew não estiver disponível ou a instalação falhar, tenta `nvm` |
+| distro desconhecida | não inventa comando de package manager; tenta `nvm` como fallback por usuário |
+
+O fallback `nvm` é instalado no usuário atual, nunca via `sudo`, e o instalador
+carrega `nvm.sh` na própria execução para não depender de abrir outro terminal
+antes de continuar.
+
+> O modo Docker/Podman continua sem exigir Node.js no host. Node só é necessário
+> dentro do container.
+
+### Por que Node.js 24/22?
+
+Em agosto de 2026, Node.js 24 e Node.js 22 estão em LTS, enquanto Node.js 20 já
+está EOL. Algumas distribuições estáveis ainda entregam Node 20 nos repositórios
+padrão — Debian 13/Trixie, por exemplo — então simplesmente fazer
+`apt install nodejs` não garante uma versão adequada para uma instalação nova.
+Por isso o instalador recomenda Node 24 LTS e só aceita Node 22+ no fluxo nativo.
+
+### Privilégios
+
+Use:
+```bash
+sh install.sh
+```
+
+Não use:
+```bash
+sudo sh install.sh
+```
+
+A elevação é restrita a operações do sistema (`apt-get`, `dnf`, `pacman`,
+`zypper`, `apk` ou o link opcional em `/usr/local/bin`). Homebrew e `nvm` nunca
+são executados com `sudo`.
+
+### Arch/Manjaro e `pacman`
+
+O instalador não usa mais `pacman -Sy` para instalar dependências, porque Arch
+não suporta *partial upgrades*. O fluxo usa:
+```bash
+sudo pacman -S --needed nodejs-lts-krypton npm
+```
+Se o banco local de pacotes estiver antigo e a instalação falhar, atualize o
+sistema normalmente e tente de novo:
+```bash
+sudo pacman -Syu
+sh install.sh
+```
+A mesma regra vale para a instalação opcional de Python/faster-whisper.
+
+### Debian/Ubuntu e NodeSource
+
+Quando Node/npm estão ausentes ou inadequados, o instalador pode oferecer
+Node.js 24 LTS via NodeSource. Como isso adiciona um repositório de terceiros ao
+sistema, a ação pede confirmação antes de continuar.
+
+Fluxo manual equivalente:
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl bash
+curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource_setup.sh
+sudo bash /tmp/nodesource_setup.sh
+rm -f /tmp/nodesource_setup.sh
+sudo apt-get install -y nodejs
+```
+O instalador baixa o script para um arquivo temporário em vez de executar um
+`curl | sudo bash` diretamente.
+
+### Fedora
+
+Em Fedora recente, o instalador tenta primeiro:
+```bash
+sudo dnf install -y nodejs24-bin nodejs24-npm-bin
+```
+Se esses nomes não existirem naquela release, tenta:
+```bash
+sudo dnf install -y nodejs npm
+```
+Depois disso, `node` e `npm` são validados de novo; sucesso do `dnf` sozinho não
+é considerado suficiente.
+
+### RHEL/CentOS e derivados
+
+O catálogo varia bastante entre releases. O instalador tenta, nesta ordem:
+```bash
+sudo dnf install -y nodejs24
+sudo dnf module install -y nodejs:22
+sudo dnf install -y nodejs npm
+```
+Cada tentativa é seguida pela validação global do runtime; se ainda não houver
+Node 22+ com npm, o fallback por `nvm` pode assumir.
+
+### openSUSE
+
+Em releases que oferecem os pacotes versionados:
+```bash
+sudo zypper --non-interactive install nodejs24 npm24
+```
+Leap e Tumbleweed podem ter catálogos diferentes. O instalador não adiciona
+repositórios comunitários do OBS automaticamente; se os pacotes não existirem,
+segue para o fallback por usuário.
+
+### Alpine
+
+```bash
+apk add --no-cache nodejs npm
+```
+O `npm` é tratado como pacote separado.
+
+### Amazon Linux 2023
+
+```bash
+sudo dnf install -y nodejs24 nodejs24-npm
+```
+Como majors diferentes podem coexistir, o instalador tenta ajustar
+`alternatives` para Node 24 quando o mecanismo e o executável versionado estão
+disponíveis.
+
+### macOS com Homebrew
+
+```bash
+brew install node@24
+export PATH="$(brew --prefix node@24)/bin:$PATH"
+```
+`node@24` é uma fórmula versionada (*keg-only*), então o instalador adiciona o
+prefixo ao PATH da sessão atual e ao arquivo de perfil do usuário quando ainda
+não estiver presente. Não use `sudo brew`.
+
+### Erros de módulos nativos
+
+O instalador não instala compiladores antecipadamente em toda máquina. Se
+`npm install` falhar mencionando `node-gyp`, compilador, `make`, Python ou
+headers, pode ser necessário instalar uma toolchain nativa. Em Unix,
+`node-gyp` normalmente precisa de Python, `make` e compilador C/C++; no macOS,
+as Xcode Command Line Tools podem ser instaladas com:
+```bash
+xcode-select --install
+```
+Não tente resolver esse tipo de erro com `sudo npm install`.
+
+### Modo container
+
+Docker, Podman ou nerdctl podem ser usados. Nada de Node no host é necessário —
+o painel roda dentro do container (`bin/lcn`/`bin/lcn.cmd` não dependem de Node
+para descobrir o modo). Se nenhum engine existir na hora de subir o container
+(`run.sh`/`run.ps1`), eles tentam preparar o Docker antes de abortar com uma
+mensagem clara.
+
+### Provedor `codex` da transcrição
+
+Exige Codex CLI instalado e logado no host (`codex login`) — ver
+[TRANSCRICAO.md](TRANSCRICAO.md) e, em modo container,
+[CONTAINER.md](CONTAINER.md).
