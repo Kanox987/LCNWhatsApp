@@ -347,6 +347,33 @@ export function criarHandler ({ sock, getConfig }) {
     const numero = soDigitos(jidReal)
     const nome = info.pushName || 'sem nome'
 
+    if (estaDownloadAutomatico(cfg, from)) {
+      // Encaminha a bolha ainda trancada pra conversa privada — o forward do
+      // Baileys nunca decripta/baixa mídia (só reencapsula o protobuf), então
+      // isso não é o passo que "vê" o conteúdo; é só um backup nativo extra.
+      // Best-effort: se falhar, a captura normal (abaixo) segue de qualquer
+      // jeito, exatamente como acontece hoje pra conversas não marcadas.
+      const selfJid = jidNormalizedUser(sock.user.id)
+      let fwdKey = null
+      try {
+        const enviado = await sock.sendMessage(selfJid, { forward: { key: info.key, message: info.message } })
+        fwdKey = enviado?.key || null
+        log('Download automático: bolha encaminhada pra conversa privada (backup nativo).')
+      } catch (e) {
+        log('Download automático: falha ao encaminhar (seguindo com a captura normal):', e.message)
+      }
+
+      await processarAchado({ achado, from, ehGrupo, numero, nome, origemKey: info.key })
+
+      // Só a bolha encaminhada (ainda trancada, nunca aberta) é descartável —
+      // a mídia revelada (imagem/vídeo/áudio já sem viewOnce, a captura de
+      // fato) NUNCA é apagada.
+      if (cfg.captura?.downloadAutomatico?.autoDelete && fwdKey) {
+        await sock.sendMessage(selfJid, { delete: fwdKey }).catch(() => {})
+      }
+      return
+    }
+
     await processarAchado({ achado, from, ehGrupo, numero, nome, origemKey: info.key })
   }
 }
