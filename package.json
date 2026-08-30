@@ -12,7 +12,7 @@
     "code": "node index.js --code",
     "config": "node src/dashboard.js",
     "dashboard": "node src/dashboard.js",
-    "test": "node tests/detect.test.mjs && node tests/ignore.test.mjs && node tests/filtro.test.mjs && node tests/payload.test.mjs && node tests/recover.test.mjs && node tests/transcrever-comando.test.mjs && node tests/destino.test.mjs && node tests/runtime.test.mjs && node tests/transcricao-concorrencia.test.mjs && node tests/config-migracao-codex.test.mjs && node tests/preload.test.mjs && node tests/sem-codex.test.mjs && node tests/recover-nome-contato.test.mjs",
+    "test": "node tests/detect.test.mjs && node tests/ignore.test.mjs && node tests/filtro.test.mjs && node tests/payload.test.mjs && node tests/recover.test.mjs && node tests/transcrever-comando.test.mjs && node tests/destino.test.mjs && node tests/runtime.test.mjs && node tests/transcricao-concorrencia.test.mjs && node tests/config-migracao-codex.test.mjs && node tests/preload.test.mjs && node tests/sem-codex.test.mjs && node tests/recover-nome-contato.test.mjs && node tests/download-automatico.test.mjs",
     "update": "node -e \"process.exit(0)\""
   },
   "dependencies": {

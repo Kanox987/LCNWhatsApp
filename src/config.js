@@ -9,7 +9,8 @@ export const PADRAO = {
     contatos: 'todos',
     blocklist: [],
     grupos: { ativo: false, allowlist: [] },
-    destinoProprioContatos: []
+    destinoProprioContatos: [],
+    downloadAutomatico: { conversas: [], autoDelete: false }
   },
   hardware: {
     markOnline: true,

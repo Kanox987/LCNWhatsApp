@@ -94,6 +94,17 @@ export function estaAutoTranscricao (cfg, jid) {
   return !!buscarConversa(cfg, jid)?.auto
 }
 
+// Conversas marcadas em captura.downloadAutomatico.conversas: visu única que
+// chega com conteúdo é encaminhada sozinha pra conversa privada e revelada
+// automaticamente, sem precisar de /recover manual. soDigitos cobre contatos
+// (número); a comparação crua (id === jid) cobre grupo, caso a normalização
+// por dígitos misture os dois pedaços do JID legado.
+export function estaDownloadAutomatico (cfg, jid) {
+  const num = soDigitos(jid)
+  const lista = cfg.captura?.downloadAutomatico?.conversas || []
+  return lista.some((id) => soDigitos(id) === num || id === jid)
+}
+
 // Segundo filtro (pós-crypto), com o número real de telefone já disponível.
 // Única linha de defesa pra "não quero capturar disso" (grupo desligado, contato
 // fora da allowlist, grupo fora da allowlist de grupos, contato bloqueado) — roda
