@@ -4,10 +4,9 @@
 
 Na maioria dos casos, o WhatsApp **não entrega** o conteúdo da visualização única
 diretamente ao bot (é o cenário `view_once_unavailable_fanout`, comum em contas
-multi-device) — a Baileys nem chega a emitir o evento pro bot processar. A tentativa
-automática de reenvio (`requestPlaceholderResend`, config `hardware.placeholderResend`)
-é **desligada por padrão**: evidência real de produção (horas de tráfego real, várias
-tentativas) mostrou 0% de sucesso — ela só fica ligada pra quem quiser testar de novo.
+multi-device) — a Baileys nem chega a emitir o evento pro bot processar, e não existe
+nenhuma tentativa automática que recupere isso sozinha (evidência real de produção:
+0% de sucesso em qualquer automação testada). Só o `/recover` manual funciona.
 
 O jeito confiável de recuperar é:
 

@@ -68,7 +68,7 @@ export function acharVisuUnica (message, marcadaNaChave = false) {
  * resposta/citação a outra mensagem. Quando você cita uma mensagem, o
  * WhatsApp inclui em contextInfo.quotedMessage uma cópia do conteúdo — pra
  * visualização única ainda não aberta, isso "vaza" a mídia original mesmo
- * quando ela nunca chegou inline nem via placeholder resend.
+ * quando ela nunca chegou inline pro bot.
  *
  * Retorna { quotedMessage, stanzaId, participant } ou null se o texto não
  * bater com `palavraChave` (ou não houver mensagem citada).

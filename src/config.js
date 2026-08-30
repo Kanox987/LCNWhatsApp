@@ -17,8 +17,7 @@ export const PADRAO = {
     maxMidiaMB: 60,
     downloadConcorrencia: 2,
     modoEconomia: true,
-    debug: false,
-    placeholderResend: false
+    debug: false
   },
   transcricao: {
     provedor: 'off',

@@ -52,9 +52,9 @@ decriptar. Removido; `syncFullHistory:false` já dá o sync leve sem isso.
 e `receipt` também, bloquear `@g.us` cortava sync de participantes de grupo
 (`w:gp2`) e recibos — bookkeeping que a Baileys usa pra manter sessão/LID
 saudáveis, inclusive pra contatos de PV. Resultado: visu única chegava sempre
-com `message: null` ("view_once_unavailable_fanout"), mesmo com
-`sock.requestPlaceholderResend` implementado corretamente. Corrigido movendo
-todo o filtro de grupo/contato pra `passaFiltro` (pós-decrypt).
+com `message: null` ("view_once_unavailable_fanout"), mesmo com o pedido de
+reenvio ao telefone implementado corretamente. Corrigido movendo todo o
+filtro de grupo/contato pra `passaFiltro` (pós-decrypt).
 
 **Moral:** otimização de performance pré-crypto só é segura pra tráfego que
 **nunca** carrega bookkeeping de protocolo (broadcast, newsletter). Qualquer

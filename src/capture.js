@@ -116,24 +116,6 @@ export function passaFiltro (cfg, numero, ehGrupo, from) {
   return true
 }
 
-const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
-
-// Tenta pedir o conteúdo da visu única de novo, algumas vezes, espaçado — a
-// Baileys já dá timeout sozinha em 8s por tentativa; aqui só repetimos o pedido
-// caso a primeira (ou segunda) não seja respondida a tempo. Roda em background,
-// não bloqueia o processamento de outras mensagens.
-async function tentarPlaceholderResend (sock, key, log, tentativas = 4, esperaMs = 20000) {
-  for (let i = 1; i <= tentativas; i++) {
-    try {
-      await sock.requestPlaceholderResend(key)
-      log?.(`   visu única indisponível — solicitado reenvio ao telefone (tentativa ${i}/${tentativas})`)
-    } catch (e) {
-      log?.(`   falha ao solicitar reenvio (tentativa ${i}/${tentativas}):`, e.message)
-    }
-    if (i < tentativas) await sleepMs(esperaMs)
-  }
-}
-
 export function criarHandler ({ sock, getConfig }) {
   let cfg = getConfig()
   const limite = criarLimite(Math.max(1, cfg.hardware?.downloadConcorrencia || 2))
@@ -246,10 +228,10 @@ export function criarHandler ({ sock, getConfig }) {
     if (info.key.fromMe) {
       // Mensagens próprias só interessam pra dois comandos, respondidos pelo
       // dono da conta a uma mensagem citada: /recover (visu única ainda não
-      // aberta) e /transcrever (áudio). O /recover é o caminho que de fato
-      // recupera visu única — a entrega automática (placeholder resend
-      // abaixo) não é confiável; o WhatsApp "vaza" uma cópia decriptável da
-      // mídia original em contextInfo.quotedMessage da própria citação.
+      // aberta) e /transcrever (áudio). O /recover é o único caminho manual
+      // que de fato recupera visu única indisponível — o WhatsApp "vaza" uma
+      // cópia decriptável da mídia original em contextInfo.quotedMessage da
+      // própria citação.
       if (!info.message) return
       const from = info.key.remoteJid
       if (!from) return
@@ -302,23 +284,12 @@ export function criarHandler ({ sock, getConfig }) {
     }
 
     // Visu única chega pra dispositivos vinculados como "view_once_unavailable_fanout":
-    // o conteúdo NÃO vem inline e a Baileys oficial (rc) pula a requisição dele. Aqui
-    // fazemos o que o fork faz: pedir o conteúdo ao telefone (placeholder resend). Ele
-    // volta decifrado num próximo upsert (type:'notify') e aí a captura acontece normal.
-    //
-    // Uma única tentativa costuma dar timeout em 8s (visto em testes ao vivo, com PV e
-    // grupo, remetentes diferentes, sessão/LID saudáveis) — o app do remetente parece só
-    // responder quando está em primeiro plano no momento exato do pedido. Por isso
-    // repetimos o pedido algumas vezes, espaçado, em background (sem travar o handler).
-    // Best-effort apenas, e desligado por padrão (evidência real: 0 sucessos
-    // em produção) — ligue captura.hardware.placeholderResend se quiser
-    // reativar. Quando isso não recuperar a mídia, use o comando /recover.
+    // o conteúdo NÃO vem inline e não há nada que a automação possa baixar aqui —
+    // evidência real de produção mostrou 0% de sucesso em qualquer tentativa
+    // automática de recuperar isso sozinha. Use o comando /recover (o dono responde
+    // a mídia ainda não aberta, de qualquer dispositivo logado na conta).
     if (info.key.isViewOnce && !info.message) {
-      if (cfg.hardware?.placeholderResend === true) {
-        tentarPlaceholderResend(sock, info.key, debug ? log : null)
-      } else if (debug) {
-        log('   visu única indisponível — placeholder resend desligado (use /recover)')
-      }
+      if (debug) log('   visu única indisponível — use /recover')
       return
     }
 

@@ -409,7 +409,6 @@ async function cfgHardware (c) {
   const lv = (await ask(`Log level (silent/error/info) [${h.logLevel}]: `)).trim()
   if (lv) h.logLevel = lv
   h.debug = await confirmar(`Modo debug (loga cada mensagem recebida)? (atual: ${!!h.debug})`)
-  h.placeholderResend = await confirmar(`Tentar reenvio automático de visu única indisponível? (evidência real: 0% de sucesso — prefira /recover) (atual: ${!!h.placeholderResend})`)
   cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
 }
 

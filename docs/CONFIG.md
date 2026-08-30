@@ -20,8 +20,7 @@ uma reconexão leve quando mudam.
     "maxMidiaMB": 60,                // ignora mídia acima disso
     "downloadConcorrencia": 2,       // downloads simultâneos
     "modoEconomia": true,
-    "debug": false,                  // loga cada mensagem recebida (diagnóstico)
-    "placeholderResend": false       // retry automático de visu única indisponível (raramente funciona — use /recover)
+    "debug": false                   // loga cada mensagem recebida (diagnóstico)
   },
   "transcricao": {
     "provedor": "off",               // off | faster-whisper | openai | custom
@@ -52,10 +51,6 @@ uma reconexão leve quando mudam.
   diagnosticar "mandei e não capturou". Ver [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).
 - **hardware.logLevel**: nível de log da Baileys (`silent` em produção; `warn`/`error`
   ajuda a ver falhas de descriptografia). Mudança exige reconexão.
-- **hardware.placeholderResend**: tentativa automática de recuperar visu única
-  indisponível (4 tentativas, 20s cada). Desligado por padrão — evidência real de
-  produção mostrou 0% de sucesso; prefira o comando `/recover`. Ver
-  [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).
 - **transcricao.conversas**: lista de overrides por conversa. `auto: true` liga
   transcrição automática de todo áudio normal ali (responde na própria conversa).
   `comandoTerceiros: true/false` sobrepõe o padrão geral só pra essa conversa;
