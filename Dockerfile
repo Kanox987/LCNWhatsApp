@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Imagem base do LCNWhatsApp — enxuta.
 # O bot só baixa e reenvia mídia (não transcodifica), então NÃO precisa de ffmpeg
 # nem build tools: a Baileys usa WASM (whatsapp-rust-bridge) e o sharp vem com
@@ -11,9 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Instala dependências primeiro (aproveita cache de camada).
+# Instala dependências primeiro (aproveita cache de camada). O --mount=type=cache
+# persiste o cache do npm (inclusive o clone/build da Baileys, que vem do GitHub
+# sem tag fixa) ENTRE builds separados — mesmo quando qualquer edição em
+# package.json (ex.: mexer só no script de teste) invalida a camada e força
+# reinstalar do zero, o npm reaproveita o que já baixou/compilou antes em vez de
+# ir na rede de novo.
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm install --omit=dev --no-audit --no-fund
 
 # Copia o código.
 COPY . .
