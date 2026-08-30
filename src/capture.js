@@ -347,7 +347,14 @@ export function criarHandler ({ sock, getConfig }) {
     const numero = soDigitos(jidReal)
     const nome = info.pushName || 'sem nome'
 
-    if (estaDownloadAutomatico(cfg, from)) {
+    // `from` é o remoteJid cru — com addressingMode "lid" (comum hoje em dia)
+    // ele é o LID, não o número de telefone salvo em downloadAutomatico.conversas,
+    // então a comparação sempre falhava em silêncio (confirmado em produção:
+    // "Download automático" nunca apareceu no log nem uma vez). Em grupo, `from`
+    // continua certo (é o próprio JID do grupo); em PV, usa `jidReal` (já
+    // resolvido pra número de telefone, com preferência sobre LID).
+    const alvoDownloadAutomatico = ehGrupo ? from : jidReal
+    if (estaDownloadAutomatico(cfg, alvoDownloadAutomatico)) {
       // Encaminha a bolha ainda trancada pra conversa privada — o forward do
       // Baileys nunca decripta/baixa mídia (só reencapsula o protobuf), então
       // isso não é o passo que "vê" o conteúdo; é só um backup nativo extra.
