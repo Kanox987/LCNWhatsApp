@@ -207,40 +207,54 @@ function nomeDoId (id) {
 }
 
 // Checklist: itens numerados com [x]/[ ], números separados por vírgula pra
-// alternar, 'a'=todos, 'n'=nenhum, 'm'=digitar manualmente, Enter confirma.
-// `itens` é [{id, nome}]. Retorna array de ids, ou null (chame o fallback
-// manual) quando `itens` vier vazio ou o usuário escolher 'm'.
+// alternar, 'a'=todos, 'n'=nenhum, 'b'=buscar por nome, 'm'=digitar
+// manualmente, Enter confirma. `itens` é [{id, nome}]. Retorna array de ids,
+// ou null (chame o fallback manual) quando `itens` vier vazio ou 'm'.
 async function selecionarLista (itens, atuais, titulo) {
   if (!itens.length) return null
   const sel = new Set(atuais)
+  let filtro = ''
   for (;;) {
+    const visiveis = filtro ? itens.filter((i) => i.nome.toLowerCase().includes(filtro)) : itens
     cabecalho()
-    console.log(`${B}${titulo}${Z}\n`)
-    itens.forEach((item, idx) => {
+    console.log(`${B}${titulo}${Z}${filtro ? `  ${D}(filtro: "${filtro}")${Z}` : ''}\n`)
+    if (!visiveis.length) console.log(` ${D}nenhum resultado pro filtro${Z}`)
+    visiveis.forEach((item, idx) => {
       const marca = sel.has(item.id) ? `${G}[x]${Z}` : '[ ]'
       console.log(` ${marca} ${String(idx + 1).padStart(2)}  ${item.nome}`)
     })
-    console.log(`\n Números separados por vírgula alternam | ${B}a${Z}=todos ${B}n${Z}=nenhum ${B}m${Z}=manual | Enter confirma`)
+    console.log(`\n Números separados por vírgula alternam | ${B}a${Z}=todos ${B}n${Z}=nenhum ${B}b${Z}=buscar${filtro ? ` ${B}t${Z}=tirar filtro` : ''} ${B}m${Z}=manual | Enter confirma`)
     const op = (await ask('\n> ')).trim().toLowerCase()
     if (op === '') return [...sel]
     if (op === 'm') return null
-    if (op === 'a') { itens.forEach((i) => sel.add(i.id)); continue }
-    if (op === 'n') { sel.clear(); continue }
-    const idxs = op.split(',').map((s) => parseInt(s.trim(), 10) - 1).filter((n) => n >= 0 && n < itens.length)
-    for (const i of idxs) { const id = itens[i].id; sel.has(id) ? sel.delete(id) : sel.add(id) }
+    if (op === 'b') { filtro = (await ask('Buscar por nome: ')).trim().toLowerCase(); continue }
+    if (op === 't') { filtro = ''; continue }
+    if (op === 'a') { visiveis.forEach((i) => sel.add(i.id)); continue }
+    if (op === 'n') { visiveis.forEach((i) => sel.delete(i.id)); continue }
+    const idxs = op.split(',').map((s) => parseInt(s.trim(), 10) - 1).filter((n) => n >= 0 && n < visiveis.length)
+    for (const i of idxs) { const id = visiveis[i].id; sel.has(id) ? sel.delete(id) : sel.add(id) }
   }
 }
 
 // Igual ao de cima, mas escolhe só UM item (pra destino, que é singular).
 async function selecionarUm (itens, titulo) {
   if (!itens.length) return null
-  cabecalho()
-  console.log(`${B}${titulo}${Z}\n`)
-  itens.forEach((item, idx) => console.log(` ${String(idx + 1).padStart(2)}  ${item.nome}`))
-  console.log(`\n Número do item | ${B}m${Z}=digitar manualmente | Enter cancela`)
-  const op = (await ask('\n> ')).trim().toLowerCase()
-  if (!op || op === 'm') return null
-  return itens[parseInt(op, 10) - 1]?.id || null
+  let filtro = ''
+  for (;;) {
+    const visiveis = filtro ? itens.filter((i) => i.nome.toLowerCase().includes(filtro)) : itens
+    cabecalho()
+    console.log(`${B}${titulo}${Z}${filtro ? `  ${D}(filtro: "${filtro}")${Z}` : ''}\n`)
+    if (!visiveis.length) console.log(` ${D}nenhum resultado pro filtro${Z}`)
+    visiveis.forEach((item, idx) => console.log(` ${String(idx + 1).padStart(2)}  ${item.nome}`))
+    console.log(`\n Número do item | ${B}b${Z}=buscar${filtro ? ` ${B}t${Z}=tirar filtro` : ''} | ${B}m${Z}=manual | Enter cancela`)
+    const op = (await ask('\n> ')).trim().toLowerCase()
+    if (!op || op === 'm') return null
+    if (op === 'b') { filtro = (await ask('Buscar por nome: ')).trim().toLowerCase(); continue }
+    if (op === 't') { filtro = ''; continue }
+    const escolhido = visiveis[parseInt(op, 10) - 1]
+    if (escolhido) return escolhido.id
+    return null
+  }
 }
 
 function itensContatos () {
