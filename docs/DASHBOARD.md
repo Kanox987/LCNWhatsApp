@@ -34,7 +34,9 @@ por arquivos: `config.json`, `data/state.json`, `data/archive.json`, `midia/`).
    > Não há "iniciar/parar" aqui: no modo container o painel roda dentro do próprio
    > container e não controla o Docker do host. Pra parar de vez, use no host
    > `docker stop LCNWhatsApp`; o serviço em si vive pelo restart policy.
-6. **Atualizar** — roda `update.sh`/`update.ps1`.
+6. **Atualizar** — roda `update.sh`/`update.ps1`. Em modo container, só funciona
+   rodado no host (fora do `docker exec`) — o painel avisa se detectar que está
+   rodando de dentro do container. Ver [ATUALIZACAO.md](ATUALIZACAO.md).
 
 > Recuperar visu única "já vista": como o WhatsApp apaga a mídia após a
 > visualização, a recuperação é a releitura do **arquivo local** que o bot já
