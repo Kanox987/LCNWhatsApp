@@ -60,9 +60,19 @@ function cabecalho () {
   console.log(` Mídias  : ${B}${archive.total()}${Z} no total, de ${B}${numeros.length}${Z} remetente(s)`)
   if (st?.conectado && st?.desde) console.log(` Online há: ${duracao(Date.now() - st.desde)}`)
   const t = cfgMod.carregar().transcricao
-  if (t.provedor === 'faster-whisper' && (!t.pythonBin || !fs.existsSync(t.pythonBin))) {
+  // pythonBin só é gravado pelo install.sh no modo nativo; no container o
+  // ambiente vem de LCN_PYTHON (ENV do Dockerfile.whisper) — checar só
+  // pythonBin dava falso positivo mesmo com a imagem certa já rodando.
+  const pyOk = t.pythonBin ? fs.existsSync(t.pythonBin) : !!process.env.LCN_PYTHON
+  if (t.provedor === 'faster-whisper' && !pyOk) {
     console.log(`${Y}⚠ faster-whisper configurado mas o ambiente Python não foi encontrado.${Z}`)
-    console.log(`${D}   Rode o instalador (venv + pip install faster-whisper) — no 1º uso baixa o modelo (Hugging Face, pode demorar).${Z}`)
+    if (dentroDeContainer()) {
+      console.log(`${D}   Esta imagem não tem o ambiente do faster-whisper (foi construída com o Dockerfile${Z}`)
+      console.log(`${D}   simples). No HOST, rode "sh update.sh" (ou update.ps1) e ative a transcrição${Z}`)
+      console.log(`${D}   local — isso reconstrói com Dockerfile.whisper e baixa o modelo.${Z}`)
+    } else {
+      console.log(`${D}   Rode o instalador (venv + pip install faster-whisper) — no 1º uso baixa o modelo (Hugging Face, pode demorar).${Z}`)
+    }
   }
   console.log(`${D}────────────────────────────────────────────────────${Z}`)
 }

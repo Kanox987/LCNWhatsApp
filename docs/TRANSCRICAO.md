@@ -34,9 +34,16 @@ Nos dois casos, o áudio baixado é temporário: existe só durante a transcriç
   rebuilds/updates, nunca baixa de novo à toa. No seco, o instalador
   (`install.sh`/`install.ps1`) pode criar o venv e tenta instalar Python
   sozinho se faltar — o caminho do Python do venv fica gravado em
-  `transcricao.pythonBin`. Se o ambiente não for encontrado, o `lcn` avisa no
-  topo do painel. Concorrência de transcrição é sempre 1 (nunca duas ao mesmo
-  tempo, pra não competir por CPU/memória com modelos maiores como `small`).
+  `transcricao.pythonBin`. No container, `pythonBin` fica vazio de propósito
+  (é o `Dockerfile.whisper` quem define `LCN_PYTHON`, via `ENV`); o painel
+  checa os dois. Se nenhum dos dois existir — por exemplo, se você escolheu
+  `faster-whisper` mas a imagem em uso foi construída a partir do `Dockerfile`
+  simples (a etapa de transcrição local em `install.sh`/`update.sh` foi
+  recusada ou pulada) —, o `lcn` avisa no topo do painel; a correção é rodar
+  `update.sh`/`update.ps1` no HOST e aceitar a transcrição local, o que
+  reconstrói com `Dockerfile.whisper`. Concorrência de transcrição é sempre 1
+  (nunca duas ao mesmo tempo, pra não competir por CPU/memória com modelos
+  maiores como `small`).
 - **openai** — API de transcrição da OpenAI (`whisper-1` / `gpt-4o-transcribe`).
   Precisa de `openaiApiKey`.
 - **custom** — um comando shell qualquer; `{file}` vira o caminho do áudio e o
