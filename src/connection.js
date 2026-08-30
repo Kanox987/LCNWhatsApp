@@ -38,6 +38,21 @@ function registrarContatoConhecido (info) {
   try { registrarContato(jidReal, info.pushName) } catch {}
 }
 
+// `info.pushName` é só o nome que a própria pessoa escolheu pro perfil dela
+// (às vezes vazio) — não é o nome salvo na agenda. O nome salvo de verdade
+// (agenda do celular) chega via 'contacts.upsert'/'contacts.update' (evento
+// de app-state sync da Baileys, `name`/`notify`), inclusive pra gente que
+// nunca mandou mensagem pro bot. Confirmado lendo
+// node_modules/@whiskeysockets/baileys/lib/Utils/sync-action-utils.js.
+export function registrarNomesDoDiretorio (contatos) {
+  for (const c of contatos || []) {
+    const numero = c.phoneNumber || c.id
+    const nome = c.name || c.notify
+    if (!numero || !nome) continue
+    try { registrarContato(numero, nome) } catch {}
+  }
+}
+
 const pergunta = (texto) => new Promise((resolve) => {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   rl.question(texto, (r) => { rl.close(); resolve(r) })
@@ -149,10 +164,9 @@ export async function iniciar () {
 
     const handler = criarHandler({ sock, getConfig: () => cfg })
 
-    // A resposta do placeholder resend (visu única) chega como um novo
-    // messages.upsert (type: 'notify'), não como messages.update — confirmado
-    // lendo Utils/process-message.js da Baileys. O listener de upsert abaixo já
-    // cobre esse caso; não precisa de listener separado pra messages.update.
+    sock.ev.on('contacts.upsert', registrarNomesDoDiretorio)
+    sock.ev.on('contacts.update', registrarNomesDoDiretorio)
+
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (cfg.hardware?.debug) log(`messages.upsert type=${type} n=${messages.length}`)
       // 'notify' = tempo real; 'append' = mensagens recentes sincronizadas (também
