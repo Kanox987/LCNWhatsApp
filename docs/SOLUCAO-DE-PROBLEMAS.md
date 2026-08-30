@@ -6,7 +6,12 @@ Na maioria dos casos, o WhatsApp **não entrega** o conteúdo da visualização 
 diretamente ao bot (é o cenário `view_once_unavailable_fanout`, comum em contas
 multi-device) — a Baileys nem chega a emitir o evento pro bot processar, e não existe
 nenhuma tentativa automática que recupere isso sozinha (evidência real de produção:
-0% de sucesso em qualquer automação testada). Só o `/recover` manual funciona.
+0% de sucesso em qualquer automação testada) — é sempre preciso você responder
+citando a mensagem, de algum dispositivo logado na conta. O comando `/recover`
+faz isso manualmente, em qualquer conversa; conversas marcadas em "Download
+automático" (ver [DOWNLOAD-AUTOMATICO.md](DOWNLOAD-AUTOMATICO.md)) dispensam o
+texto exato do comando — qualquer resposta sua já revela — mas o gesto de
+responder continua sendo obrigatório.
 
 O jeito confiável de recuperar é:
 
@@ -30,7 +35,9 @@ messages.upsert type=notify n=1
 Interprete assim:
 - **Nenhuma linha `upsert`** ao enviar → a mensagem não chega ao bot (entrega/conexão).
 - **`fromMe=true`** → mensagem enviada pela própria conta do bot. É ignorada, exceto
-  quando é o comando `/recover` citando uma visu única (ver seção acima).
+  quando é o comando `/recover` citando uma visu única, ou (em conversas marcadas em
+  "Download automático") qualquer citação enquanto houver uma visu única pendente
+  nessa conversa (ver seção acima).
 - **`tipo=null`** (sem conteúdo) → a mensagem chegou mas **não descriptografou**.
   Quase sempre é problema de **mapeamento LID** — veja abaixo.
 - **`tipo` diferente do esperado** → formato novo; abra uma issue com o DUMP.

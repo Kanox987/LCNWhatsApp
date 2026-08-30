@@ -14,8 +14,7 @@ uma reconexão leve quando mudam.
     "grupos": { "ativo": false, "allowlist": [] },  // captar em grupos?
     "destinoProprioContatos": [],    // números que recebem a mídia de volta na própria conversa
     "downloadAutomatico": {          // ver docs/DOWNLOAD-AUTOMATICO.md
-      "conversas": [],               // números ou JIDs de grupo marcados
-      "autoDelete": false            // apaga a mensagem encaminhada após capturar (nunca a mídia revelada)
+      "conversas": []                // números ou JIDs de grupo marcados
     }
   },
   "hardware": {
@@ -51,8 +50,9 @@ uma reconexão leve quando mudam.
   contato, em vez de ir pro destino global. Editável em `lcn` > Configurações >
   Destino próprio por contato.
 - **grupos.ativo**: por padrão desligado (performance). Ver PERFORMANCE.md.
-- **captura.downloadAutomatico**: conversas marcadas têm a visu única (que chega com
-  conteúdo) encaminhada e revelada sozinha, sem `/recover` manual. Ver
+- **captura.downloadAutomatico**: conversas marcadas não precisam mais digitar
+  `/recover` quando a visu única chegar travada — a próxima resposta sua nessa
+  conversa (qualquer citação) já revela sozinha. Ver
   [DOWNLOAD-AUTOMATICO.md](DOWNLOAD-AUTOMATICO.md). Editável em `lcn` > Configurações
   > Download automático.
 - **hardware.debug**: liga logs detalhados de cada mensagem recebida — útil pra

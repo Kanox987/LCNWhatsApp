@@ -9,6 +9,7 @@ import {
 } from '@whiskeysockets/baileys'
 import {
   acharAudioDireto,
+  acharCitacaoGenerica,
   acharComandoRecover,
   acharComandoTranscrever,
   acharVisuUnica,
@@ -94,15 +95,58 @@ export function estaAutoTranscricao (cfg, jid) {
   return !!buscarConversa(cfg, jid)?.auto
 }
 
-// Conversas marcadas em captura.downloadAutomatico.conversas: visu única que
-// chega com conteúdo é encaminhada sozinha pra conversa privada e revelada
-// automaticamente, sem precisar de /recover manual. soDigitos cobre contatos
-// (número); a comparação crua (id === jid) cobre grupo, caso a normalização
-// por dígitos misture os dois pedaços do JID legado.
+// Conversas marcadas em captura.downloadAutomatico.conversas: quando a visu
+// única chega travada (sem conteúdo), o bot aguarda a próxima resposta do
+// dono nessa conversa (qualquer citação, sem precisar de /recover) — ver
+// criarRegistroPendentes. soDigitos cobre contatos (número); a comparação
+// crua (id === jid) cobre grupo, caso a normalização por dígitos misture os
+// dois pedaços do JID legado.
 export function estaDownloadAutomatico (cfg, jid) {
   const num = soDigitos(jid)
   const lista = cfg.captura?.downloadAutomatico?.conversas || []
   return lista.some((id) => soDigitos(id) === num || id === jid)
+}
+
+// Resolve o identificador usado por estaDownloadAutomatico: em grupo é o
+// próprio JID do grupo; em PV é o número de telefone real — participantAlt/
+// remoteJidAlt têm prioridade sobre o LID cru (key.remoteJid/participant),
+// que com addressingMode "lid" nunca bate com o número salvo em conversas[].
+export function resolverAlvoDownloadAutomatico (key, from, ehGrupo) {
+  const jidReal = key.participantAlt || key.remoteJidAlt || key.participant || from
+  return ehGrupo ? from : jidReal
+}
+
+// TTL de uma pendência "visu única travada, aguardando resposta do dono".
+// Passado esse tempo, uma citação nova nessa conversa não conta mais como
+// recuperação implícita — evita que uma resposta não relacionada, muito
+// depois, dispare um /recover implícito indesejado.
+const TTL_PENDENTE_MS = 15 * 60 * 1000
+
+// Registra conversas com visu única travada esperando que o dono responda
+// citando qualquer coisa — ver recuperarCitacao, dentro de criarHandler.
+// Exportada (função pura, sem I/O) pra ser testável isoladamente. `agora` é
+// injetável só pra teste simular passagem de tempo sem sleep real.
+export function criarRegistroPendentes (ttlMs = TTL_PENDENTE_MS, agora = Date.now) {
+  const pendentes = new Map() // jid -> timestamp de quando foi marcado
+
+  function expirou (jid) {
+    const ts = pendentes.get(jid)
+    if (ts === undefined) return true
+    if (agora() - ts > ttlMs) { pendentes.delete(jid); return true }
+    return false
+  }
+
+  return {
+    marcar (jid) { pendentes.set(jid, agora()) },
+    temPendente (jid) { return !expirou(jid) },
+    // Só remove (e retorna true) se ainda havia pendência válida — uma
+    // citação que não bate com a visu única não deve consumir a pendência.
+    consumir (jid) {
+      if (expirou(jid)) return false
+      pendentes.delete(jid)
+      return true
+    }
+  }
 }
 
 // Segundo filtro (pós-crypto), com o número real de telefone já disponível.
@@ -130,6 +174,7 @@ export function passaFiltro (cfg, numero, ehGrupo, from) {
 export function criarHandler ({ sock, getConfig }) {
   let cfg = getConfig()
   const limite = criarLimite(Math.max(1, cfg.hardware?.downloadConcorrencia || 2))
+  const pendentes = criarRegistroPendentes()
 
   // Baixa, salva, arquiva, transcreve (se áudio) e reenvia como mídia normal.
   // Compartilhado pelos dois caminhos de captura: mensagem recebida normalmente
@@ -224,6 +269,33 @@ export function criarHandler ({ sock, getConfig }) {
     }).catch((e) => console.error('Erro ao transcrever áudio:', e))
   }
 
+  // Compartilhada pelo /recover explícito e pela recuperação implícita
+  // (qualquer citação do dono enquanto a conversa está em `pendentes`). Extrai
+  // a visu única da mensagem citada; se achar, processa como uma captura
+  // normal e libera a pendência dessa conversa (se houver). Retorna
+  // true/false conforme achou ou não visu única na citação.
+  async function recuperarCitacao ({ quotedMessage, stanzaId, participant, from, origem }) {
+    const achado = acharVisuUnica(quotedMessage, true)
+    if (!achado) return false
+
+    const ehGrupo = from.endsWith('@g.us')
+    const jidReal = participant || from
+    const numero = soDigitos(jidReal)
+    const nome = resolverNomeContato(numero)
+    const origemKey = {
+      remoteJid: from,
+      fromMe: false,
+      id: stanzaId,
+      isViewOnce: true,
+      ...(participant ? { participant } : {})
+    }
+
+    log(`${origem} — recuperando visu única de ${numero}...`)
+    await processarAchado({ achado, from, ehGrupo, numero, nome, origemKey })
+    pendentes.consumir(from)
+    return true
+  }
+
   return async function aoReceber (info) {
     cfg = getConfig()
     const debug = cfg.hardware?.debug === true
@@ -249,33 +321,8 @@ export function criarHandler ({ sock, getConfig }) {
 
       const comandoRecover = acharComandoRecover(info.message)
       if (comandoRecover) {
-        const ehGrupo = from.endsWith('@g.us')
-        const achado = acharVisuUnica(comandoRecover.quotedMessage, true)
-        if (!achado) {
-          if (debug) log('   /recover: mensagem citada não contém mídia de visualização única')
-          return
-        }
-
-        const jidReal = comandoRecover.participant || from
-        const numero = soDigitos(jidReal)
-        const nome = resolverNomeContato(numero)
-        const origemKey = {
-          remoteJid: from,
-          fromMe: false,
-          id: comandoRecover.stanzaId,
-          isViewOnce: true,
-          ...(comandoRecover.participant ? { participant: comandoRecover.participant } : {})
-        }
-
-        log(`/recover recebido — recuperando visu única de ${numero}...`)
-        await processarAchado({
-          achado,
-          from,
-          ehGrupo,
-          numero,
-          nome,
-          origemKey
-        })
+        const ok = await recuperarCitacao({ ...comandoRecover, from, origem: '/recover recebido' })
+        if (!ok && debug) log('   /recover: mensagem citada não contém mídia de visualização única')
         return
       }
 
@@ -291,15 +338,40 @@ export function criarHandler ({ sock, getConfig }) {
         return
       }
 
+      // Recuperação implícita do download automático: só entra se a conversa
+      // tem pendência marcada (visu única chegou travada com a conversa
+      // marcada em downloadAutomatico) e o texto não bateu com /recover nem
+      // /transcrever acima — não exige nenhum comando, só uma citação
+      // qualquer (texto ou mídia respondendo a algo).
+      if (pendentes.temPendente(from)) {
+        const citacao = acharCitacaoGenerica(info.message)
+        if (citacao) {
+          const ok = await recuperarCitacao({ ...citacao, from, origem: 'Download automático: citação do dono' })
+          if (!ok && debug) log('   citação do dono não é a visu única pendente — aguardando outra')
+        }
+      }
+
       return
     }
 
     // Visu única chega pra dispositivos vinculados como "view_once_unavailable_fanout":
     // o conteúdo NÃO vem inline e não há nada que a automação possa baixar aqui —
-    // evidência real de produção mostrou 0% de sucesso em qualquer tentativa
-    // automática de recuperar isso sozinha. Use o comando /recover (o dono responde
-    // a mídia ainda não aberta, de qualquer dispositivo logado na conta).
+    // a única forma de obter o conteúdo é o dono responder citando a mensagem
+    // (contextInfo.quotedMessage "vaza" uma cópia decriptável). Em conversas
+    // marcadas em downloadAutomatico, marca a pendência: a PRÓXIMA resposta do
+    // dono nessa conversa (qualquer citação, sem precisar digitar /recover) já
+    // revela sozinha — ver recuperarCitacao, mais abaixo no bloco fromMe.
     if (info.key.isViewOnce && !info.message) {
+      const from = info.key.remoteJid
+      if (from) {
+        const ehGrupo = from.endsWith('@g.us')
+        const alvo = resolverAlvoDownloadAutomatico(info.key, from, ehGrupo)
+        if (estaDownloadAutomatico(cfg, alvo)) {
+          pendentes.marcar(from)
+          if (debug) log('   visu única indisponível — download automático ativo, aguardando resposta do dono')
+          return
+        }
+      }
       if (debug) log('   visu única indisponível — use /recover')
       return
     }
@@ -346,40 +418,6 @@ export function criarHandler ({ sock, getConfig }) {
     const jidReal = info.key.participantAlt || info.key.remoteJidAlt || info.key.participant || from
     const numero = soDigitos(jidReal)
     const nome = info.pushName || 'sem nome'
-
-    // `from` é o remoteJid cru — com addressingMode "lid" (comum hoje em dia)
-    // ele é o LID, não o número de telefone salvo em downloadAutomatico.conversas,
-    // então a comparação sempre falhava em silêncio (confirmado em produção:
-    // "Download automático" nunca apareceu no log nem uma vez). Em grupo, `from`
-    // continua certo (é o próprio JID do grupo); em PV, usa `jidReal` (já
-    // resolvido pra número de telefone, com preferência sobre LID).
-    const alvoDownloadAutomatico = ehGrupo ? from : jidReal
-    if (estaDownloadAutomatico(cfg, alvoDownloadAutomatico)) {
-      // Encaminha a bolha ainda trancada pra conversa privada — o forward do
-      // Baileys nunca decripta/baixa mídia (só reencapsula o protobuf), então
-      // isso não é o passo que "vê" o conteúdo; é só um backup nativo extra.
-      // Best-effort: se falhar, a captura normal (abaixo) segue de qualquer
-      // jeito, exatamente como acontece hoje pra conversas não marcadas.
-      const selfJid = jidNormalizedUser(sock.user.id)
-      let fwdKey = null
-      try {
-        const enviado = await sock.sendMessage(selfJid, { forward: { key: info.key, message: info.message } })
-        fwdKey = enviado?.key || null
-        log('Download automático: bolha encaminhada pra conversa privada (backup nativo).')
-      } catch (e) {
-        log('Download automático: falha ao encaminhar (seguindo com a captura normal):', e.message)
-      }
-
-      await processarAchado({ achado, from, ehGrupo, numero, nome, origemKey: info.key })
-
-      // Só a bolha encaminhada (ainda trancada, nunca aberta) é descartável —
-      // a mídia revelada (imagem/vídeo/áudio já sem viewOnce, a captura de
-      // fato) NUNCA é apagada.
-      if (cfg.captura?.downloadAutomatico?.autoDelete && fwdKey) {
-        await sock.sendMessage(selfJid, { delete: fwdKey }).catch(() => {})
-      }
-      return
-    }
 
     await processarAchado({ achado, from, ehGrupo, numero, nome, origemKey: info.key })
   }

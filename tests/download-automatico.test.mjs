@@ -1,6 +1,6 @@
 // Testa o helper puro estaDownloadAutomatico: contato marcado por número,
 // grupo marcado por JID, e conversa não marcada.
-import { estaDownloadAutomatico } from '../src/capture.js'
+import { estaDownloadAutomatico, resolverAlvoDownloadAutomatico } from '../src/capture.js'
 
 let falhas = 0
 const check = (nome, ok) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}`) }
@@ -8,8 +8,7 @@ const check = (nome, ok) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '�
 const cfg = {
   captura: {
     downloadAutomatico: {
-      conversas: ['5511999999999', '120363043973693733@g.us'],
-      autoDelete: false
+      conversas: ['5511999999999', '120363043973693733@g.us']
     }
   }
 }
@@ -31,9 +30,10 @@ check('config totalmente vazia não quebra (retorna false)', estaDownloadAutomat
 // mesma resolução com o shape real visto em produção pra travar o
 // comportamento esperado.
 const keyLid = { remoteJid: '207082099871978@lid', remoteJidAlt: '5522981126942@s.whatsapp.net', participant: '', addressingMode: 'lid' }
-const jidRealLid = keyLid.participantAlt || keyLid.remoteJidAlt || keyLid.participant || keyLid.remoteJid
+const jidRealLid = resolverAlvoDownloadAutomatico(keyLid, keyLid.remoteJid, false)
 check('LID cru (remoteJid) NÃO bate com número salvo — por isso o fix não pode usar `from` puro', estaDownloadAutomatico(cfg, keyLid.remoteJid) === false)
 check('resolvendo pro número real (remoteJidAlt) antes, o contato marcado é reconhecido', estaDownloadAutomatico({ captura: { downloadAutomatico: { conversas: ['5522981126942'] } } }, jidRealLid) === true)
+check('resolverAlvoDownloadAutomatico em grupo usa o JID do grupo, não jidReal', resolverAlvoDownloadAutomatico(keyLid, '120363043973693733@g.us', true) === '120363043973693733@g.us')
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nDOWNLOAD AUTOMÁTICO OK')
 process.exit(falhas ? 1 : 0)

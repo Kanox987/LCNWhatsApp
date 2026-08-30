@@ -365,20 +365,20 @@ async function cfgDestinoProprio (c) {
   cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
 }
 
-// Nova: download automático — nas conversas marcadas aqui, visu única que
-// chega com conteúdo é encaminhada sozinha pra conversa privada e revelada
-// sem precisar de /recover. Não cobre o caso em que o conteúdo nunca chega
-// ao bot (view_once_unavailable_fanout) — aí só o /recover manual funciona.
+// Nova: download automático — nas conversas marcadas aqui, quando a visu
+// única chegar travada (view_once_unavailable_fanout, sem /recover), a
+// próxima resposta sua nessa conversa — qualquer citação, não precisa ser
+// exatamente /recover — já revela a mídia sozinha.
 async function cfgDownloadAutomatico (c) {
   cabecalho()
   console.log(`${B}Download automático${Z}`)
-  console.log(`${D}Nas conversas marcadas aqui, visu única chegando com conteúdo é encaminhada`)
-  console.log(`sozinha pra sua conversa privada e revelada automaticamente — sem /recover.${Z}\n`)
-  const dl = c.captura.downloadAutomatico || (c.captura.downloadAutomatico = { conversas: [], autoDelete: false })
+  console.log(`${D}Nas conversas marcadas aqui, quando a visu única chegar travada`)
+  console.log(`(sem /recover), a próxima resposta sua nessa conversa — qualquer`)
+  console.log(`citação, não precisa ser exatamente /recover — já revela sozinha.${Z}\n`)
+  const dl = c.captura.downloadAutomatico || (c.captura.downloadAutomatico = { conversas: [] })
   const itens = [...itensContatos(), ...itensGrupos()]
   const sel = await selecionarLista(itens, dl.conversas || [], 'Conversas com download automático')
   dl.conversas = sel ?? (await ask('IDs separados por vírgula (número ou ...@g.us): ')).split(',').map((s) => s.trim()).filter(Boolean)
-  dl.autoDelete = await confirmar(`Apagar a mensagem encaminhada da conversa privada depois de capturar (a mídia revelada nunca é apagada)? (atual: ${!!dl.autoDelete})`)
   cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
 }
 

@@ -10,7 +10,7 @@ export const PADRAO = {
     blocklist: [],
     grupos: { ativo: false, allowlist: [] },
     destinoProprioContatos: [],
-    downloadAutomatico: { conversas: [], autoDelete: false }
+    downloadAutomatico: { conversas: [] }
   },
   hardware: {
     markOnline: true,

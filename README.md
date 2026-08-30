@@ -9,11 +9,14 @@ limpeza e transcrição de áudio opcional. Roda em **Docker/Podman** ou **no se
 
 O comando **`lcn`** abre o painel (dashboard) da aplicação.
 
-> ⚠️ **O comando `/recover` é necessário.** Na grande maioria dos casos o
+> ⚠️ **É necessário responder a mensagem.** Na grande maioria dos casos o
 > WhatsApp não entrega o conteúdo da visualização única direto pro bot — ele só
 > chega se você **responder a mensagem ainda não aberta com `/recover`** (de
 > qualquer dispositivo logado na sua conta). Sem isso, a automação não consegue
-> capturar o arquivo. Ver item 3 de [Como funciona](#como-funciona-resumo) e
+> capturar o arquivo. Em conversas marcadas em "Download automático", nem
+> precisa digitar `/recover` — qualquer resposta sua já revela (ver
+> [docs/DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md)). Ver item 3 de
+> [Como funciona](#como-funciona-resumo) e
 > [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md).
 
 ---
@@ -128,7 +131,7 @@ Abre um menu de terminal com:
 - [PERFORMANCE.md](docs/PERFORMANCE.md) — descarte pré-crypto e baixo consumo
 - [HARDWARE.md](docs/HARDWARE.md) — ajustes de consumo
 - [TRANSCRICAO.md](docs/TRANSCRICAO.md) — provedores de transcrição
-- [DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md) — captura sem `/recover` manual, por conversa
+- [DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md) — dispensa digitar `/recover`, por conversa
 - [ATUALIZACAO.md](docs/ATUALIZACAO.md) — atualizar app + Baileys
 - [API.md](docs/API.md) — ponto de extensão da API de saída (desligado)
 - [SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md) — visu única não capturada, LID, reconectar, debug
