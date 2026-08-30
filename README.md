@@ -95,8 +95,9 @@ Abre um menu de terminal com:
 - **Galeria** dos arquivos locais (abre no visualizador do SO, revela a pasta).
 - **Limpeza** por seleção ou em lote (por remetente, período, ou tudo).
 - **Configurações** por tópicos (destino, destino próprio por contato,
-  contatos, grupos, transcrição — geral e por conversa —, hardware,
-  atualização), com seleção por lista em vez de digitar JID/número de cabeça.
+  contatos, grupos, transcrição — geral e por conversa —, download automático,
+  hardware, atualização), com seleção por lista (e busca por nome) em vez de
+  digitar JID/número de cabeça.
 - **Serviço** — é por aqui que você **conecta** (QR/código de pareamento),
   reinicia, vê logs ou desconecta pra trocar de número. **Atualizar** puxa
   updates do app/Baileys.
@@ -127,6 +128,7 @@ Abre um menu de terminal com:
 - [PERFORMANCE.md](docs/PERFORMANCE.md) — descarte pré-crypto e baixo consumo
 - [HARDWARE.md](docs/HARDWARE.md) — ajustes de consumo
 - [TRANSCRICAO.md](docs/TRANSCRICAO.md) — provedores de transcrição
+- [DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md) — captura sem `/recover` manual, por conversa
 - [ATUALIZACAO.md](docs/ATUALIZACAO.md) — atualizar app + Baileys
 - [API.md](docs/API.md) — ponto de extensão da API de saída (desligado)
 - [SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md) — visu única não capturada, LID, reconectar, debug

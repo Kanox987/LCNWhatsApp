@@ -12,7 +12,11 @@ uma reconexão leve quando mudam.
     "contatos": "todos",            // ou ["5511999...", ...] (allowlist)
     "blocklist": [],                 // números sempre ignorados
     "grupos": { "ativo": false, "allowlist": [] },  // captar em grupos?
-    "destinoProprioContatos": []     // números que recebem a mídia de volta na própria conversa
+    "destinoProprioContatos": [],    // números que recebem a mídia de volta na própria conversa
+    "downloadAutomatico": {          // ver docs/DOWNLOAD-AUTOMATICO.md
+      "conversas": [],               // números ou JIDs de grupo marcados
+      "autoDelete": false            // apaga a mensagem encaminhada após capturar (nunca a mídia revelada)
+    }
   },
   "hardware": {
     "markOnline": false,             // não aparecer "online" p/ quem envia
@@ -47,6 +51,10 @@ uma reconexão leve quando mudam.
   contato, em vez de ir pro destino global. Editável em `lcn` > Configurações >
   Destino próprio por contato.
 - **grupos.ativo**: por padrão desligado (performance). Ver PERFORMANCE.md.
+- **captura.downloadAutomatico**: conversas marcadas têm a visu única (que chega com
+  conteúdo) encaminhada e revelada sozinha, sem `/recover` manual. Ver
+  [DOWNLOAD-AUTOMATICO.md](DOWNLOAD-AUTOMATICO.md). Editável em `lcn` > Configurações
+  > Download automático.
 - **hardware.debug**: liga logs detalhados de cada mensagem recebida — útil pra
   diagnosticar "mandei e não capturou". Ver [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).
 - **hardware.logLevel**: nível de log da Baileys (`silent` em produção; `warn`/`error`
