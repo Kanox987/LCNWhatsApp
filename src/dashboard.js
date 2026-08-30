@@ -297,6 +297,7 @@ async function telaConfig () {
     itemCfg(6, 'Atualização (auto-baileys)', c.atualizacao.autoUpdateBaileys ? 'on' : 'off')
     itemCfg(7, 'Destino próprio por contato', `${(c.captura.destinoProprioContatos || []).length} contato(s)`)
     itemCfg(8, 'Transcrição por conversa', `${(c.transcricao.conversas || []).length} conversa(s)`)
+    itemCfg(9, 'Download automático', `${(c.captura.downloadAutomatico?.conversas || []).length} conversa(s)`)
     console.log(` ${B}0${Z}  Voltar`)
     const op = (await ask('\n> ')).trim()
     if (op === '1') await cfgDestino(c)
@@ -307,6 +308,7 @@ async function telaConfig () {
     else if (op === '6') await cfgAtualizacao(c)
     else if (op === '7') await cfgDestinoProprio(c)
     else if (op === '8') await cfgTranscricaoConversas(c)
+    else if (op === '9') await cfgDownloadAutomatico(c)
     else if (op === '0') return
   }
 }
@@ -350,6 +352,23 @@ async function cfgDestinoProprio (c) {
   console.log(`${B}Destino próprio por contato${Z}`)
   console.log(`${D}Contatos marcados aqui recebem a mídia de volta na própria conversa (ex: /recover), em vez do destino padrão configurado.${Z}\n`)
   c.captura.destinoProprioContatos = await escolherNumeros(c.captura.destinoProprioContatos || [])
+  cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
+}
+
+// Nova: download automático — nas conversas marcadas aqui, visu única que
+// chega com conteúdo é encaminhada sozinha pra conversa privada e revelada
+// sem precisar de /recover. Não cobre o caso em que o conteúdo nunca chega
+// ao bot (view_once_unavailable_fanout) — aí só o /recover manual funciona.
+async function cfgDownloadAutomatico (c) {
+  cabecalho()
+  console.log(`${B}Download automático${Z}`)
+  console.log(`${D}Nas conversas marcadas aqui, visu única chegando com conteúdo é encaminhada`)
+  console.log(`sozinha pra sua conversa privada e revelada automaticamente — sem /recover.${Z}\n`)
+  const dl = c.captura.downloadAutomatico || (c.captura.downloadAutomatico = { conversas: [], autoDelete: false })
+  const itens = [...itensContatos(), ...itensGrupos()]
+  const sel = await selecionarLista(itens, dl.conversas || [], 'Conversas com download automático')
+  dl.conversas = sel ?? (await ask('IDs separados por vírgula (número ou ...@g.us): ')).split(',').map((s) => s.trim()).filter(Boolean)
+  dl.autoDelete = await confirmar(`Apagar a mensagem encaminhada da conversa privada depois de capturar (a mídia revelada nunca é apagada)? (atual: ${!!dl.autoDelete})`)
   cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
 }
 
