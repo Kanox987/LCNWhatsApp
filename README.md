@@ -46,6 +46,17 @@ repositório NodeSource exige confirmação. No modo **Docker/Podman**, Node.js
 continua não sendo necessário no host.
 
 **Windows (PowerShell)**
+
+> ⚠️ **Experimental.** No modo "no seco", o instalador agora empacota o
+> próprio app num `lcn.exe` standalone (Node.js Single Executable
+> Applications) — depois de instalado, não precisa mais de Node/npm pra usar
+> o bot no dia a dia. Isso foi validado de ponta a ponta (bundle, geração do
+> blob SEA, injeção via `postject`, execução real) num ambiente Linux com um
+> Node oficial, mas **ainda não foi testado numa máquina Windows de
+> verdade** — se algo falhar, o painel/bot continuam funcionando do jeito de
+> sempre com `npm run dashboard` / `npm start`. Reporte problemas abrindo uma
+> issue no repositório.
+
 ```powershell
 cd LCNWhatsApp
 powershell -ExecutionPolicy Bypass -File install.ps1

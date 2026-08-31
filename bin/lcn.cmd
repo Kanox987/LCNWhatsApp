@@ -18,7 +18,14 @@ if "%MODE%"=="docker" (
   %ENGINE% start LCNWhatsApp >nul 2>&1
   %ENGINE% exec -it -e LCN_MODE=docker -e LCN_ENGINE=%ENGINE% LCNWhatsApp node src/dashboard.js
 ) else (
-  node src/dashboard.js
+  REM lcn.exe (gerado por build-exe.ps1) dispensa Node instalado -- usa ele
+  REM quando existir; sem ele (instalacao antiga, ou dev de proposito), cai
+  REM pro node src/dashboard.js de sempre.
+  if exist "%RAIZ%\lcn.exe" (
+    "%RAIZ%\lcn.exe"
+  ) else (
+    node src/dashboard.js
+  )
 )
 
 popd

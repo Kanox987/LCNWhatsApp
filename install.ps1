@@ -95,7 +95,17 @@ if ($mode -eq "docker") {
       }
     }
   }
-  Write-Host ">> rode o bot com:  npm start   (ou 'npm run code')"
+  Write-Host ">> empacotando lcn.exe (assim voce nao precisa mais de Node instalado pra usar o bot)..."
+  Write-Host ">> AVISO: empacotamento em .exe (Node SEA) ainda e experimental -- sem teste de campo"
+  Write-Host ">>        numa maquina Windows real. Se algo der errado, o painel/bot continuam"
+  Write-Host ">>        funcionando com:  npm run dashboard  /  npm start"
+  & powershell -ExecutionPolicy Bypass -File build-exe.ps1
+  if (Test-Path (Join-Path $raiz "lcn.exe")) {
+    Write-Host ">> lcn.exe pronto -- o comando 'lcn' ja usa ele."
+  } else {
+    Write-Host ">> Nao consegui gerar o lcn.exe -- o painel ainda funciona com:  npm run dashboard"
+    Write-Host ">> (ou rode o bot com:  npm start   /  'npm run code')"
+  }
 }
 
 # --- instala o comando `lcn` (cria lcn.cmd numa pasta do PATH) ---

@@ -29,6 +29,17 @@ alteram o sistema usam `sudo` ou `doas` pontualmente; os arquivos do projeto,
 usuário normal.
 
 ## Windows
+
+> ⚠️ **Empacotamento em `.exe` ainda é experimental.** No modo "no seco",
+> depois do `npm install`, o instalador roda `build-exe.ps1` e gera um
+> `lcn.exe` standalone (Node SEA) na raiz do projeto — sem ele, o dia a dia
+> continua exigindo Node instalado. Validado de ponta a ponta (bundle,
+> blob SEA, injeção via `postject`, execução real) num ambiente Linux com um
+> Node oficial equivalente ao que o `winget` instala, mas **sem teste de
+> campo numa máquina Windows real ainda**. Se a geração falhar ou o
+> `lcn.exe` não funcionar direito, o painel/bot continuam disponíveis do
+> jeito de sempre: `npm run dashboard` e `npm start` (ou `npm run code`).
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```

@@ -15,6 +15,18 @@ import * as state from './src/state.js'
 
 garantirPastas()
 
+// Grava o próprio PID — é como o painel (src/runtime.js: statusServico/
+// iniciarBot/pararBot) sabe se o bot está de pé sem depender de PM2 (que por
+// sua vez exige Node/npm globais, contradizendo o .exe standalone do
+// Windows). Cobre tanto "iniciado pelo painel" quanto o .exe/`node index.js`
+// rodado direto. A limpeza aqui no 'exit' é só um reforço pra saída graciosa
+// (crash tratado, SIGTERM em Linux/macOS onde é entregue de verdade) — quem
+// para o bot pelo painel (runtime.js: pararBot) já remove o arquivo direto,
+// porque no Windows um process.kill() não roda handler nenhum no alvo.
+const ARQ_PID = path.join(PASTA_DADOS, 'bot.pid')
+fs.writeFileSync(ARQ_PID, String(process.pid))
+process.on('exit', () => { try { fs.rmSync(ARQ_PID) } catch {} })
+
 // Espelha os logs num arquivo (data/bot.log) pra o painel poder mostrá-los mesmo
 // rodando dentro do container (onde não há `docker logs`). Cap de tamanho simples.
 const ARQ_LOG = path.join(PASTA_DADOS, 'bot.log')

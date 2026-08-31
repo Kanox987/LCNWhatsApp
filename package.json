@@ -12,14 +12,19 @@
     "code": "node index.js --code",
     "config": "node src/dashboard.js",
     "dashboard": "node src/dashboard.js",
-    "test": "node tests/detect.test.mjs && node tests/ignore.test.mjs && node tests/filtro.test.mjs && node tests/payload.test.mjs && node tests/recover.test.mjs && node tests/transcrever-comando.test.mjs && node tests/destino.test.mjs && node tests/runtime.test.mjs && node tests/transcricao-concorrencia.test.mjs && node tests/config-migracao-codex.test.mjs && node tests/preload.test.mjs && node tests/sem-codex.test.mjs && node tests/recover-nome-contato.test.mjs && node tests/download-automatico.test.mjs && node tests/directory-nomes.test.mjs && node tests/pendentes.test.mjs && node tests/citacao-generica.test.mjs",
+    "test": "node tests/detect.test.mjs && node tests/ignore.test.mjs && node tests/filtro.test.mjs && node tests/payload.test.mjs && node tests/recover.test.mjs && node tests/transcrever-comando.test.mjs && node tests/destino.test.mjs && node tests/runtime.test.mjs && node tests/transcricao-concorrencia.test.mjs && node tests/config-migracao-codex.test.mjs && node tests/preload.test.mjs && node tests/sem-codex.test.mjs && node tests/recover-nome-contato.test.mjs && node tests/download-automatico.test.mjs && node tests/directory-nomes.test.mjs && node tests/pendentes.test.mjs && node tests/citacao-generica.test.mjs && node tests/servico-pidfile.test.mjs",
     "update": "node -e \"process.exit(0)\""
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys",
+    "jimp": "^1.6.1",
     "pino": "^9.5.0",
     "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "postject": "^1.0.0-alpha.6"
   },
   "license": "MIT"
 }

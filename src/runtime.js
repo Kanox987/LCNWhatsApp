@@ -3,8 +3,26 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { spawnSync } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import { ARQ_RUNTIME, RAIZ, PASTA_DADOS } from './paths.js'
+
+const ARQ_PID_BOT = path.join(PASTA_DADOS, 'bot.pid')
+
+function pidVivo (pid) {
+  try { process.kill(pid, 0); return true } catch { return false }
+}
+
+// Lê data/bot.pid (escrito pelo próprio index.js ao iniciar — ver lá) e
+// confere se o processo ainda existe. Só passa a existir depois que o bot
+// roda pelo menos uma vez com essa gravação — em qualquer outro caso (Linux
+// de antes desta mudança, Docker, PM2) o arquivo simplesmente não existe e
+// os caminhos abaixo caem no comportamento de sempre.
+function statusPeloPid () {
+  if (!fs.existsSync(ARQ_PID_BOT)) return null
+  const pid = parseInt(fs.readFileSync(ARQ_PID_BOT, 'utf8').trim(), 10)
+  if (!pid) return null
+  return pidVivo(pid) ? 'rodando' : 'parado'
+}
 
 export const NOME_CONTAINER = 'LCNWhatsApp'
 
@@ -122,10 +140,50 @@ export function statusServico () {
     if (!r.ok) return 'desconhecido'
     return r.out.includes(NOME_CONTAINER) ? 'rodando' : 'parado'
   }
-  // Modo seco: tenta PM2, senão desconhecido (pode estar rodando via node direto).
+  // Modo seco: primeiro tenta o pid-file próprio (gravado pelo index.js —
+  // cobre o .exe standalone do Windows, sem depender de PM2/Node globais).
+  // Sem esse arquivo, tenta PM2; sem os dois, desconhecido (pode estar
+  // rodando via node direto, sem nenhum dos dois mecanismos).
+  const peloPid = statusPeloPid()
+  if (peloPid) return peloPid
   const r = roda('pm2', ['jlist'])
   if (r.ok) return r.out.includes('LCNWhatsApp') ? 'rodando' : 'parado'
   return 'desconhecido'
+}
+
+// Inicia o bot re-executando o próprio processo atual (process.execPath) com
+// a flag --bot — dentro do .exe standalone (SEA) isso É o próprio lcn.exe;
+// rodando via `node`, é o binário do node instalado (equivalente a `node
+// index.js`, já que bin/lcn-sea.js despacha por essa mesma flag).
+export function iniciarBot () {
+  if (statusServico() === 'rodando') return { ok: false, out: 'Bot já está rodando.' }
+  const filho = spawn(process.execPath, ['--bot'], { detached: true, stdio: 'ignore', cwd: RAIZ })
+  filho.unref()
+  return { ok: true, out: `Bot iniciado (pid ${filho.pid}).` }
+}
+
+// Encerra o bot pelo pid gravado em data/bot.pid. Só funciona quando esse
+// arquivo existe (ver statusPeloPid) — outros modos (Docker/PM2) continuam
+// usando reiniciarBot()/o restart.request de sempre.
+//
+// Remove o pid-file aqui mesmo, não só no `process.on('exit', ...)` do
+// index.js: process.kill() manda SIGTERM (no Windows, TerminateProcess) sem
+// handler algum instalado no alvo, então o encerramento é imediato e NENHUM
+// código do processo morto roda depois — o exit handler dele é só um reforço
+// pra saída graciosa (crash tratado, process.exit() interno), não pra este
+// caminho. Sem remover aqui, um reiniciarBot() logo em seguida veria o
+// pid-file antigo e poderia achar (por uma corrida) que o bot ainda está de
+// pé.
+export function pararBot () {
+  try {
+    const pid = parseInt(fs.readFileSync(ARQ_PID_BOT, 'utf8').trim(), 10)
+    if (!pid) return { ok: false, out: 'Nenhum bot rodando (pid-file ausente/inválido).' }
+    process.kill(pid)
+    try { fs.rmSync(ARQ_PID_BOT) } catch {}
+    return { ok: true, out: 'Bot parado.' }
+  } catch (e) {
+    return { ok: false, out: e.message }
+  }
 }
 
 // Últimas linhas de log. Lê data/bot.log (disponível nos dois modos, inclusive
@@ -141,9 +199,17 @@ export function logsServico (linhas = 40) {
   return roda('pm2', ['logs', 'LCNWhatsApp', '--lines', String(linhas), '--nostream'])
 }
 
-// Pede ao bot pra reiniciar (sem apagar sessão). O bot detecta o flag, sai, e o
-// restart policy do container / PM2 recolocam de pé. Funciona nos dois modos.
+// Pede ao bot pra reiniciar (sem apagar sessão). Com pid-file (.exe
+// standalone), para e reinicia direto, já que não há PM2/restart policy de
+// container pra recolocar o processo de pé sozinho. Nos outros modos, só
+// grava o flag: o bot detecta, sai, e o restart policy do container / PM2
+// recolocam de pé.
 export function reiniciarBot () {
+  if (fs.existsSync(ARQ_PID_BOT)) {
+    const r = pararBot()
+    if (!r.ok) return r
+    return iniciarBot()
+  }
   try {
     if (!fs.existsSync(PASTA_DADOS)) fs.mkdirSync(PASTA_DADOS, { recursive: true })
     fs.writeFileSync(path.join(PASTA_DADOS, 'restart.request'), String(Date.now()))

@@ -1,12 +1,35 @@
 // Caminhos centrais do LCNWhatsApp. Tudo relativo à raiz do projeto, pra
-// funcionar igual no container (volumes montados) e no seco.
+// funcionar igual no container (volumes montados), no seco e empacotado
+// como .exe standalone (Node SEA, Windows).
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { createRequire } from 'module'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+// createRequire só precisa de uma string/URL válida como âncora de resolução
+// pra achar módulos — não precisa ser o arquivo real, e node:sea resolve por
+// nome (builtin) independente da âncora. process.execPath serve bem e,
+// diferente de import.meta.url, continua válido mesmo depois do esbuild
+// bundlar isto pra CJS (exigência do SEA) — o esbuild ESVAZIA import.meta.url
+// nesse processo, o que quebraria exatamente a detecção que este código
+// precisa fazer. isSea() é builtin do Node (node:sea) e retorna false fora
+// de um SEA — o catch cobre só Node antigo sem esse módulo.
+function estaEmpacotadoComoSea () {
+  try { return createRequire(process.execPath)('node:sea').isSea() } catch { return false }
+}
 
-export const RAIZ = path.resolve(__dirname, '..')
+// Calculado sob demanda (não no top-level do módulo): dentro do bundle CJS
+// injetado no .exe, import.meta.url vem vazio (mesmo motivo do comentário
+// acima) — chamar fileURLToPath nele lançaria ANTES de sequer chegar a
+// checar estaEmpacotadoComoSea(). Como só entra nessa branch quando NÃO é
+// SEA, o valor vazio nunca chega a ser avaliado nesse cenário.
+function raizViaImportMetaUrl () {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+}
+
+export const RAIZ = estaEmpacotadoComoSea()
+  ? path.dirname(process.execPath) // .exe standalone: RAIZ = pasta onde o lcn.exe está
+  : raizViaImportMetaUrl()         // node index.js / node src/dashboard.js: comportamento de sempre
 export const PASTA_SESSAO = path.join(RAIZ, 'sessao')
 export const PASTA_MIDIA = path.join(RAIZ, 'midia')
 export const PASTA_DADOS = path.join(RAIZ, 'data')

@@ -9,10 +9,8 @@
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
-import { fileURLToPath } from 'url'
 import { transcreverOpenAI } from './openai.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
+import { RAIZ } from '../paths.js'
 
 function rodar (cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -28,7 +26,10 @@ function rodar (cmd, args, opts = {}) {
 
 async function viaFasterWhisper (arquivo, cfg) {
   const py = cfg.pythonBin || process.env.LCN_PYTHON || 'python3'
-  const script = path.join(__dirname, 'whisper_sidecar.py')
+  // Via RAIZ (não __dirname/import.meta.url) — empacotado como .exe (SEA), o
+  // código deste arquivo vive num blob injetado, mas whisper_sidecar.py é um
+  // .py de verdade, que não pode ir junto: continua solto ao lado do .exe.
+  const script = path.join(RAIZ, 'src', 'transcription', 'whisper_sidecar.py')
   return rodar(py, [script, arquivo, cfg.modelo || 'base', cfg.idioma || 'pt'])
 }
 
