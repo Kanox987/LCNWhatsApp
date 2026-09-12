@@ -1,49 +1,55 @@
-// Conexão com o WhatsApp: cria o socket com config enxuta, aplica a barreira
-// shouldIgnoreJid (só broadcast/newsletter — ver src/ignore.js), cuida de
+// Conexão com o WhatsApp: cria o WaClient (Zapo) com config enxuta, cuida de
 // reconexão/backoff, login (QR ou código) e escreve o estado pro dashboard.
 // Recarrega o config a quente; só reconecta quando muda algo preso à criação
-// do socket (logLevel, markOnline).
-import makeWASocket, {
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-  jidNormalizedUser,
-  DisconnectReason,
-  Browsers
-} from '@whiskeysockets/baileys'
-import { Boom } from '@hapi/boom'
+// do client (logLevel, markOnline).
+//
+// Migrado de @whiskeysockets/baileys pra zapo-js — ver
+// /home/kanox/.claude/plans/agora-o-que-eu-recursive-knuth.md pro plano
+// completo. Pontos abaixo marcados "VALIDAR" dependem de comportamento real
+// (não documentado com detalhe suficiente) e precisam ser confirmados no
+// primeiro teste de conexão real, não presumidos.
+import { WaClient, createStore, ConsoleLogger, fetchLatestWaWebVersion } from 'zapo-js'
+import { createSqliteStore } from '@zapo-js/store-sqlite'
 import qrcode from 'qrcode-terminal'
-import pino from 'pino'
 import fs from 'fs'
 import readline from 'readline'
 import path from 'path'
 import { PASTA_SESSAO, PASTA_DADOS, ARQ_GRUPOS_REFRESH, garantirPastas } from './paths.js'
 import { carregar, observar } from './config.js'
-import { montarShouldIgnore } from './ignore.js'
 import { criarHandler } from './capture.js'
 import { atualizarGrupos, registrarContato } from './directory.js'
 import * as state from './state.js'
+import * as bandwidth from './bandwidth.js'
+import { classificarFechamento, mensagemParaClasse, codigoParaClasse } from './connectionReasons.js'
+import { EXIT_QUARANTINED } from './exitCodes.js'
+import { resolverAccountId } from './engine/instanceIdentity.js'
+import { construirEventoDeMensagem, construirEventoDeIndisponivel } from './engine/zapoAdapter.js'
+import { emitirEventoDebug } from './engine/eventSink.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
 const USAR_CODIGO = process.argv.includes('--code')
+const SESSION_ID = 'default'
 
 // Alimenta o diretório de contatos conhecidos (usado pelas telas de seleção
 // do dashboard) com quem já mandou mensagem — sem sync extra, orgânico.
-function registrarContatoConhecido (info) {
-  const from = info.key?.remoteJid
-  if (!from || info.key.fromMe) return
+function registrarContatoConhecido (event) {
+  const from = event.key?.remoteJid
+  if (!from || event.key.fromMe) return
   if (from.endsWith('@g.us') || from.endsWith('@broadcast') || from.endsWith('@newsletter')) return
-  const jidReal = info.key.participantAlt || info.key.remoteJidAlt || info.key.participant || from
-  try { registrarContato(jidReal, info.pushName) } catch {}
+  const jidReal = event.key.participantAlt || event.key.remoteJidAlt || event.key.participant || from
+  try { registrarContato(jidReal, event.pushName) } catch {}
 }
 
-// `info.pushName` é só o nome que a própria pessoa escolheu pro perfil dela
-// (às vezes vazio) — não é o nome salvo na agenda. O nome salvo de verdade
-// (agenda do celular) chega via 'contacts.upsert'/'contacts.update' (evento
-// de app-state sync da Baileys, `name`/`notify`), inclusive pra gente que
-// nunca mandou mensagem pro bot. Confirmado lendo
-// node_modules/@whiskeysockets/baileys/lib/Utils/sync-action-utils.js.
+// `event.pushName` é só o nome que a própria pessoa escolheu pro perfil dela
+// (às vezes vazio) — não é o nome salvo na agenda. Na Baileys, o nome salvo
+// de verdade (agenda do celular) chegava via 'contacts.upsert'/'contacts.update'
+// (app-state sync). VALIDAR: o Zapo não documenta um evento equivalente — o
+// candidato mais próximo é 'mutation' (app-state sync genérico). Mantido
+// como função pura testável; a chamada real (mutationParaContato) tenta
+// mapear o evento e loga a forma bruta em debug pra fechar essa lacuna no
+// primeiro teste real. Se não houver equivalente, o diretório regride pra
+// só pushName — decisão a confirmar, não a assumir.
 export function registrarNomesDoDiretorio (contatos) {
   for (const c of contatos || []) {
     const numero = c.phoneNumber || c.id
@@ -58,7 +64,7 @@ const pergunta = (texto) => new Promise((resolve) => {
   rl.question(texto, (r) => { rl.close(); resolve(r) })
 })
 
-// Assinatura só do que é passado pro makeWASocket na criação (logLevel,
+// Assinatura só do que é passado pro WaClient na criação (logLevel,
 // markOnline) — o resto (contatos/blocklist/grupos) é lido ao vivo por
 // passaFiltro() a cada mensagem, sem precisar reconectar.
 function assinaturaSocket (cfg) {
@@ -68,26 +74,81 @@ function assinaturaSocket (cfg) {
   })
 }
 
+// SQLite local (better-sqlite3, addon nativo) — equivalente mais próximo do
+// useMultiFileAuthState em arquivos da Baileys. NOTA: addon nativo quebra o
+// empacotamento .exe (SEA) do jeito que build-exe.ps1 funciona hoje (mesmo
+// motivo pelo qual sharp é excluído do bundle) — fora de escopo por ora,
+// tratado só pra Docker/`npm start` nesta validação (ver plano).
+function criarStore () {
+  const caminho = path.join(PASTA_SESSAO, 'zapo.sqlite')
+  return createStore({
+    backends: { sqlite: createSqliteStore({ path: caminho, driver: 'auto' }) },
+    providers: {
+      auth: 'sqlite',
+      signal: 'sqlite',
+      preKey: 'sqlite',
+      session: 'sqlite',
+      identity: 'sqlite',
+      senderKey: 'sqlite',
+      appState: 'sqlite',
+      privacyToken: 'sqlite',
+      messages: 'none',
+      threads: 'none',
+      contacts: 'none'
+    }
+  })
+}
+
 export async function iniciar () {
   garantirPastas()
   let cfg = carregar()
   let assinatura = assinaturaSocket(cfg)
   let falhas = 0
-  let socketAtual = null
+  let clienteAtual = null
   let reiniciando = false
+  // Handle do setTimeout(conectar, espera) do retry transiente — guardado
+  // pra poder cancelar se um fechamento TERMINAL (logout/conflito/
+  // fatal_account/quarentena) chegar logo depois de um retry já agendado.
+  // Sem isso, o timer antigo dispararia mesmo assim e reconectaria — quebra
+  // a garantia de "nunca reconecta sozinho" nesses casos (achado real na
+  // revisão de código).
+  let handleRetry = null
+  const store = criarStore()
+  // Etapa 1 do motor de automação (Parte B do plano): identidade estável
+  // deste gateway, usada só pra rotular o evento canônico de debug por
+  // enquanto (emitirEventoDebug) — nenhum consumidor real ainda. Recalculado
+  // no hot-reload porque cfg.instancia.id pode ser editado ao vivo.
+  let accountId = resolverAccountId({ cfg, pastaDados: PASTA_DADOS })
 
   // Hot-reload: a maioria do config (captura, transcrição, atualização) é lida ao
   // vivo pelos handlers via closure em `cfg`. Só reconecta quando muda algo que
-  // precisa recriar o socket (logLevel, markOnline).
+  // precisa recriar o client (logLevel, markOnline).
   observar((novo) => {
     cfg = novo
+    accountId = resolverAccountId({ cfg, pastaDados: PASTA_DADOS })
+    bandwidth.configurar(cfg.hardware?.bandwidthLimit)
     const nova = assinaturaSocket(novo)
     if (nova !== assinatura) {
       assinatura = nova
       log('Config de conexão mudou — reconectando pra aplicar...')
-      try { socketAtual?.end(new Error('reload')) } catch {}
+      try { clienteAtual?.disconnect() } catch {}
     }
   })
+
+  // Desligamento gracioso: matar o processo sem desconectar (ex.: SIGTERM
+  // abrupto) já causou, na prática, o WhatsApp invalidar a sessão recém-
+  // pareada na próxima tentativa de resume (failure_not_authorized/401,
+  // credenciais limpas pelo próprio Zapo) — visto num teste real durante a
+  // migração. disconnect() fecha a conexão preservando as credenciais.
+  let desligando = false
+  async function desligarGracioso () {
+    if (desligando) return
+    desligando = true
+    try { await clienteAtual?.disconnect() } catch {}
+    process.exit(0)
+  }
+  process.on('SIGINT', desligarGracioso)
+  process.on('SIGTERM', desligarGracioso)
 
   // Comando "apagar dados do número" (vindo do painel > Serviço): o painel cria
   // data/logout.request; aqui deslogamos, limpamos a sessão e saímos pra reiniciar
@@ -98,8 +159,8 @@ export async function iniciar () {
     // Painel pediu refresh da lista de grupos (sem precisar reiniciar o bot).
     if (fs.existsSync(ARQ_GRUPOS_REFRESH)) {
       try { fs.unlinkSync(ARQ_GRUPOS_REFRESH) } catch {}
-      if (socketAtual) {
-        try { await atualizarGrupos(socketAtual) } catch (e) { log('erro atualizando grupos:', e.message) }
+      if (clienteAtual) {
+        try { await atualizarGrupos(clienteAtual) } catch (e) { log('erro atualizando grupos:', e.message) }
       }
     }
     // Reiniciar sem apagar sessão (restart policy do container / PM2 recolocam de pé).
@@ -112,7 +173,7 @@ export async function iniciar () {
     if (!fs.existsSync(reqLogout)) return
     try { fs.unlinkSync(reqLogout) } catch {}
     log('🔌 Comando recebido: apagando dados do número e reiniciando...')
-    try { await socketAtual?.logout() } catch {}
+    try { await clienteAtual?.logout() } catch {}
     await sleepMs(800)
     try {
       for (const f of fs.readdirSync(PASTA_SESSAO)) {
@@ -128,114 +189,213 @@ export async function iniciar () {
 
   async function conectar () {
     if (reiniciando) return
-    const { state: authState, saveCreds } = await useMultiFileAuthState(PASTA_SESSAO)
-    const { version, isLatest } = await fetchLatestBaileysVersion()
-    log(`Baileys WA v${version.join('.')} (mais recente: ${isLatest})`)
+    bandwidth.configurar(cfg.hardware?.bandwidthLimit)
+    const nivel = cfg.hardware?.logLevel
+    const logger = nivel && nivel !== 'silent' ? new ConsoleLogger(nivel) : undefined
 
-    const logger = pino({ level: cfg.hardware?.logLevel || 'silent' })
-    const sock = makeWASocket({
-      version,
-      logger,
-      auth: {
-        creds: authState.creds,
-        keys: makeCacheableSignalKeyStore(authState.keys, logger)
-      },
-      browser: USAR_CODIGO ? Browsers.ubuntu('Chrome') : Browsers.macOS('Desktop'),
+    const client = new WaClient({
+      store,
+      sessionId: SESSION_ID,
+      deviceBrowser: 'chrome',
+      deviceOsDisplayName: USAR_CODIGO ? 'Ubuntu' : 'macOS',
       markOnlineOnConnect: cfg.hardware?.markOnline === true,
-      // NÃO desabilitar o history sync: no WhatsApp atual os remetentes vêm como
-      // @lid e a Baileys precisa do sync inicial pra obter os mapeamentos LID —
-      // sem eles a descriptografia das mensagens de PV falha (message = null).
-      // syncFullHistory:false já mantém o sync leve (só o recente, não o arquivo todo).
-      syncFullHistory: false,
-      emitOwnEvents: false,
-      generateHighQualityLinkPreview: false,
-      shouldIgnoreJid: montarShouldIgnore(cfg),
-      getMessage: async () => undefined
-    })
-    socketAtual = sock
+      // Equivalente a syncFullHistory:false da Baileys: sync leve (só o
+      // recente), não o histórico completo.
+      history: { enabled: true, requireFullSync: false },
+      version: async () => (await fetchLatestWaWebVersion()).version
+    }, logger)
+    clienteAtual = client
 
-    if (USAR_CODIGO && !sock.authState.creds.registered) {
-      const numero = (await pergunta('Digite seu número com DDI (ex: 5511999999999): ')).replace(/\D/g, '')
-      const codigo = await sock.requestPairingCode(numero)
-      log('Código de pareamento:', codigo.match(/.{1,4}/g)?.join('-') || codigo)
-    }
-
-    sock.ev.on('creds.update', saveCreds)
-
-    const handler = criarHandler({ sock, getConfig: () => cfg })
-
-    sock.ev.on('contacts.upsert', registrarNomesDoDiretorio)
-    sock.ev.on('contacts.update', registrarNomesDoDiretorio)
-
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (cfg.hardware?.debug) log(`messages.upsert type=${type} n=${messages.length}`)
-      // 'notify' = tempo real; 'append' = mensagens recentes sincronizadas (também
-      // podem trazer visu única que chegou enquanto reconectava).
-      if (type !== 'notify' && type !== 'append') return
-      for (const info of messages) {
-        registrarContatoConhecido(info)
-        await handler(info)
-      }
-    })
-
-    sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-      if (qr && !USAR_CODIGO) {
+    if (!USAR_CODIGO) {
+      client.on('auth_qr', ({ qr }) => {
         qrcode.generate(qr, { small: true })   // pros logs (docker logs -f)
         state.definirQR(qr)                     // pro painel renderizar
         log('QR gerado — escaneie pelo painel (lcn > Serviço > Conectar) ou nos logs.')
-      }
+      })
+    }
 
-      if (connection === 'open') {
+    const handler = criarHandler({ client, getConfig: () => cfg })
+
+    // VALIDAR: candidato a equivalente de contacts.upsert/contacts.update
+    // (agenda do telefone) — ver comentário de registrarNomesDoDiretorio.
+    client.on('mutation', (event) => {
+      if (cfg.hardware?.debug) log('mutation:', JSON.stringify(event).slice(0, 500))
+    })
+
+    client.on('message', async (event) => {
+      if (cfg.hardware?.debug) log(`message key.id=${event.key?.id} fromMe=${event.key?.fromMe}`)
+      registrarContatoConhecido(event)
+      // Etapa 1 do motor de automação (Parte B) — puramente aditivo e
+      // isolado em try/catch: aoReceber() continua sendo o único consumidor
+      // de verdade. Um bug aqui NUNCA pode derrubar a captura real.
+      try { emitirEventoDebug(construirEventoDeMensagem(event, { accountId }), cfg, log) } catch (e) { if (cfg.hardware?.debug) log('evento canônico (debug) falhou:', e.message) }
+      await handler.aoReceber(event)
+    })
+
+    client.on('message_unavailable', async (event) => {
+      if (cfg.hardware?.debug) log(`message_unavailable kind=${event.kind} resendRequested=${event.resendRequested}`)
+      try { emitirEventoDebug(construirEventoDeIndisponivel(event, { accountId }), cfg, log) } catch (e) { if (cfg.hardware?.debug) log('evento canônico (debug) falhou:', e.message) }
+      await handler.aoIndisponivel(event)
+    })
+
+    client.on('connection', ({ status, reason, isLogout }) => {
+      if (status === 'open') {
         falhas = 0
+        state.registrarSucessoConexao()
         state.limparQR()
-        const jid = jidNormalizedUser(sock.user.id)
-        log('Conectado como', jid, '-', sock.user?.name || 'sem nome')
-        // Marca o dispositivo como ativo — igual aos bots de exemplo. Sem isso, o
-        // dispositivo fica "offline" e remetentes podem não encriptar as mensagens
-        // pra ele (erro "Message absent from node" na descriptografia).
-        sock.sendPresenceUpdate('available').catch(() => {})
-        atualizarGrupos(sock).catch((e) => log('erro atualizando grupos:', e.message))
+        const creds = client.getCredentials?.()
+        const jid = creds?.meJid
+        log('Conectado como', jid || '(jid não disponível)')
+        // Marca o dispositivo como ativo — igual ao comportamento anterior. Sem
+        // isso, o dispositivo pode ficar "offline" e remetentes podem não
+        // encriptar as mensagens pra ele.
+        client.presence?.send?.('available').catch(() => {})
+        atualizarGrupos(client).catch((e) => log('erro atualizando grupos:', e.message))
         state.definirConexao({
           conectado: true,
-          numero: jid.split('@')[0].split(':')[0],
-          nome: sock.user?.name || null,
+          numero: jid ? jid.split('@')[0].split(':')[0] : null,
+          nome: null,
           desde: Date.now()
         })
       }
 
-      if (connection === 'close') {
+      // VALIDADO em teste real: o valor do evento é 'close', não 'closed'
+      // como a doc do Zapo descreve em prosa.
+      if (status === 'close') {
         state.definirConexao({ conectado: false })
-        const motivo = new Boom(lastDisconnect?.error)?.output?.statusCode
-        if (motivo === DisconnectReason.loggedOut) {
-          log('Sessão encerrada no celular. Apague a pasta ./sessao e reconecte.')
+        const classe = classificarFechamento({ reason, isLogout })
+
+        if (classe === 'auto_gerenciado') {
+          // stream_error_force_login: o Zapo já reconecta o MESMO client
+          // sozinho (ver connectionReasons.js). NÃO agendar setTimeout(conectar)
+          // aqui é o ponto principal — fazer isso criaria um segundo WaClient
+          // pro mesmo sessionId enquanto o Zapo ainda está se recuperando,
+          // recriando o incidente de disputa de sessão. Só loga e espera o
+          // próximo evento do client atual.
           state.incr('quedas')
+          log(`Conexão caiu (motivo ${reason}) — o Zapo reconecta sozinho aqui, não vou interferir.`)
           return
         }
-        falhas++
+
+        if (classe === 'transiente') {
+          falhas++
+          // Usa o valor retornado, não state.ler() — o flush em disco é
+          // debounced (250ms), reler o arquivo aqui sempre pegaria o valor
+          // ANTERIOR (bug real encontrado em revisão de código).
+          const falhasConsecutivas = state.registrarFalhaConexao()
+          state.incr('quedas')
+          avaliarAutoUpdate(falhas, cfg)
+          const limiteQuarentena = cfg.confiabilidade?.falhasConsecutivasParaQuarentena || 15
+          if (falhasConsecutivas >= limiteQuarentena) {
+            // Mesma trava do bloco terminal abaixo: quarentena também nunca
+            // deve reconectar sozinho.
+            clearTimeout(handleRetry)
+            reiniciando = true
+            entrarEmQuarentena(reason)
+            return
+          }
+          const espera = Math.min(30000, 2000 * falhas)
+          log(`Conexão caiu (motivo ${reason}), reconectando em ${espera / 1000}s (falha ${falhas})...`)
+          state.incr('reconexoes')
+          handleRetry = setTimeout(conectar, espera)
+          return
+        }
+
+        // logout / conflito / fatal_account: nunca reconecta sozinho — motivo
+        // exato do incidente que causou este pedaço do plano (duas instâncias
+        // da mesma sessão brigando porque o retry era genérico pra qualquer
+        // motivo de fechamento, inclusive conflito de sessão). Cancela
+        // qualquer retry transiente já agendado e trava conectar() via
+        // `reiniciando` — sem isso um timer residual (ou o próprio Zapo
+        // reconectando internamente em alguns motivos) poderia reconectar
+        // mesmo assim (achado real em revisão de código).
+        clearTimeout(handleRetry)
+        reiniciando = true
         state.incr('quedas')
-        avaliarAutoUpdate(falhas, cfg)
-        const espera = Math.min(30000, 2000 * falhas)
-        log(`Conexão caiu (código ${motivo}), reconectando em ${espera / 1000}s (falha ${falhas})...`)
-        state.incr('reconexoes')
-        setTimeout(conectar, espera)
+        state.definirSaude({ status: classe, motivo: reason, desde: Date.now() })
+        log(mensagemParaClasse(classe, reason))
+        if (process.env.LCN_SUPERVISED === 'systemd') {
+          state.gravar()
+          setTimeout(() => process.exit(codigoParaClasse(classe)), 300)
+        }
       }
     })
 
-    return sock
+    const conexao = client.connect()
+
+    // A hipótese anterior de que connect() aguardava o pareamento estava errada:
+    // no Zapo 1.8.2 ele resolve quando o transporte sobe, mesmo sem meJid.
+    // auth_pairing_required nasce só de refresh_code e serve para renovar o código.
+    await conexao
+
+    if (USAR_CODIGO) {
+      if (!client.getState().registered) {
+        const numero = (await pergunta('Digite seu número com DDI (ex: 5511999999999): ')).replace(/\D/g, '')
+        let pedidoCodigo = null
+
+        const solicitarCodigo = () => {
+          if (pedidoCodigo) return pedidoCodigo
+          pedidoCodigo = client.auth.requestPairingCode(numero)
+            .then((codigo) => {
+              log('Código de pareamento:', codigo.match(/.{1,4}/g)?.join('-') || codigo)
+            })
+            .finally(() => { pedidoCodigo = null })
+          return pedidoCodigo
+        }
+        const renovarCodigo = () => {
+          if (client.getState().registered) return
+          void solicitarCodigo().catch((e) => log('Erro renovando código de pareamento:', e.message))
+        }
+        const encerrarRenovacao = () => {
+          client.off('auth_pairing_required', renovarCodigo)
+          client.off('auth_paired', encerrarRenovacao)
+          client.off('connection', aoMudarConexao)
+        }
+        const aoMudarConexao = ({ status }) => {
+          if (status === 'close') encerrarRenovacao()
+        }
+
+        client.on('auth_pairing_required', renovarCodigo)
+        client.on('connection', aoMudarConexao)
+        client.once('auth_paired', encerrarRenovacao)
+        try {
+          await solicitarCodigo()
+        } catch (e) {
+          encerrarRenovacao()
+          throw e
+        }
+      }
+    }
+
+    return client
   }
 
   await conectar()
 }
 
-// Em queda persistente, sinaliza que a Baileys pode precisar de atualização.
+// Em queda persistente, sinaliza que o Zapo pode precisar de atualização.
+// Última instância antes de desistir de reconectar sozinho: N falhas
+// consecutivas (persistidas em state.saude, sobrevivem a restart do
+// processo — ver state.js) sem NENHUM sucesso no meio. Nunca apaga a sessão
+// — só para de tentar; o usuário decide (via painel/lcn instances retry) se
+// quer só tentar de novo ou limpar a sessão e parear do zero.
+function entrarEmQuarentena (motivo) {
+  state.definirSaude({ status: 'quarentena', motivo, desde: Date.now() })
+  log(`⚠️  Muitas falhas de conexão seguidas sem sucesso — entrando em quarentena (motivo mais recente: ${motivo}). Não vou mais tentar reconectar sozinho.`)
+  if (process.env.LCN_SUPERVISED === 'systemd') {
+    state.gravar()
+    setTimeout(() => process.exit(EXIT_QUARANTINED), 300)
+  }
+}
+
 function avaliarAutoUpdate (falhas, cfg) {
   const limite = cfg.atualizacao?.falhasParaUpdate || 5
-  if (!cfg.atualizacao?.autoUpdateBaileys) return
+  if (!cfg.atualizacao?.autoUpdateLib) return
   if (falhas < limite) return
   try {
     garantirPastas()
     const flag = path.join(PASTA_DADOS, 'precisa-update.flag')
     fs.writeFileSync(flag, `Quedas consecutivas: ${falhas}. Rode a atualização (update.sh/update.ps1) ou "lcn" > Atualizar.\n`)
-    log('⚠️  Muitas quedas seguidas — pode ser mudança de protocolo do WhatsApp. Sinalizado update da Baileys.')
+    log('⚠️  Muitas quedas seguidas — pode ser mudança de protocolo do WhatsApp. Sinalizado update do zapo-js.')
   } catch {}
 }

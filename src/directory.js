@@ -42,10 +42,20 @@ export function listarContatos () {
   return lerJson(ARQ_CONTATOS)
 }
 
+// Normaliza o retorno de queryAllGroups(): a doc do Zapo só diz "retorna uma
+// coleção completa", sem confirmar se é array, Map ou objeto {jid: metadata}
+// (o formato antigo da Baileys). Cobre os três até validar em teste real.
+function normalizarGrupos (grupos) {
+  if (Array.isArray(grupos)) return grupos
+  if (grupos instanceof Map) return Array.from(grupos.values())
+  if (grupos && typeof grupos === 'object') return Object.values(grupos)
+  return []
+}
+
 // Busca a lista de grupos que a conta participa e grava em disco.
-export async function atualizarGrupos (sock) {
-  const mapa = await sock.groupFetchAllParticipating()
-  const lista = Object.values(mapa).map((g) => ({ id: g.id, nome: g.subject || g.id }))
+export async function atualizarGrupos (client) {
+  const grupos = await client.group.queryAllGroups()
+  const lista = normalizarGrupos(grupos).map((g) => ({ id: g.id, nome: g.subject || g.id }))
   escreverJson(ARQ_GRUPOS, lista)
   return lista
 }

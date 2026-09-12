@@ -1,7 +1,7 @@
 // Testes das funções puras de destino/permissão por contato.
 import { estaAutoTranscricao, podeComandoTerceiros, resolverDestino } from '../src/capture.js'
 
-const sockFake = { user: { id: '5599999999999@s.whatsapp.net' } }
+const clienteFake = { getCredentials: () => ({ meJid: '5599999999999@s.whatsapp.net' }) }
 
 let falhas = 0
 function checar (nome, got, esperado) {
@@ -13,19 +13,19 @@ function checar (nome, got, esperado) {
 // ————— resolverDestino —————
 checar(
   'self-chat padrão',
-  resolverDestino({ destino: { tipo: 'self' }, captura: {} }, sockFake, '5511888888888@s.whatsapp.net', '5511888888888'),
+  resolverDestino({ destino: { tipo: 'self' }, captura: {} }, clienteFake, '5511888888888@s.whatsapp.net', '5511888888888'),
   '5599999999999@s.whatsapp.net'
 )
 checar(
   'destino número configurado',
-  resolverDestino({ destino: { tipo: 'numero', jid: '5511777777777' }, captura: {} }, sockFake, '5511888888888@s.whatsapp.net', '5511888888888'),
+  resolverDestino({ destino: { tipo: 'numero', jid: '5511777777777' }, captura: {} }, clienteFake, '5511888888888@s.whatsapp.net', '5511888888888'),
   '5511777777777@s.whatsapp.net'
 )
 checar(
   'contato com destino próprio fura o destino global',
   resolverDestino(
     { destino: { tipo: 'numero', jid: '5511777777777' }, captura: { destinoProprioContatos: ['5511888888888'] } },
-    sockFake,
+    clienteFake,
     '5511888888888@s.whatsapp.net',
     '5511888888888'
   ),
@@ -35,7 +35,7 @@ checar(
   'contato fora da lista de destino próprio cai no destino global',
   resolverDestino(
     { destino: { tipo: 'self' }, captura: { destinoProprioContatos: ['5511000000000'] } },
-    sockFake,
+    clienteFake,
     '5511888888888@s.whatsapp.net',
     '5511888888888'
   ),

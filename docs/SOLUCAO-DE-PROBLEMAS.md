@@ -15,12 +15,11 @@ responder continua sendo obrigatório.
 
 O jeito confiável de recuperar é:
 
-1. **Não abra** a mídia de visualização única recebida (abrir consome/revoga ela).
-2. Na mesma conversa, **responda/cite** essa mensagem com o texto `/recover`, a
+1. Na mesma conversa, **responda/cite** essa mensagem com o texto `/recover`, a
    partir de qualquer dispositivo logado na conta conectada (celular ou WhatsApp Web).
-3. O bot reconhece o comando, extrai o conteúdo que veio embutido na citação
-   (`contextInfo.quotedMessage` — o WhatsApp inclui uma cópia decriptável da mídia
-   original ali, já que ela ainda não foi "aberta") e captura normalmente.
+2. O bot reconhece o comando, extrai o conteúdo que veio embutido na citação
+   (`contextInfo.quotedMessage` — o WhatsApp inclui uma cópia decriptável da
+   mídia original ali) e captura normalmente.
 
 ## Mandei uma visu única e nada aconteceu (nem no log)
 

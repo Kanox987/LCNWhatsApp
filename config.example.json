@@ -20,6 +20,10 @@
     "logLevel": "silent",
     "maxMidiaMB": 60,
     "downloadConcorrencia": 2,
+    "bandwidthLimit": {
+      "downloadBytesPerSecond": 0,
+      "uploadBytesPerSecond": 0
+    },
     "modoEconomia": true,
     "debug": false
   },
@@ -30,13 +34,18 @@
     "pythonBin": "",
     "openaiApiKey": "",
     "openaiModelo": "whisper-1",
+    "groqApiKey": "",
+    "groqModelo": "whisper-large-v3-turbo",
     "comando": "",
     "comandoTerceiros": false,
     "conversas": []
   },
   "atualizacao": {
-    "autoUpdateBaileys": false,
+    "autoUpdateLib": false,
     "falhasParaUpdate": 5
+  },
+  "confiabilidade": {
+    "falhasConsecutivasParaQuarentena": 15
   },
   "outputApi": {
     "enabled": false,

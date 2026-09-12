@@ -11,7 +11,7 @@ O comando **`lcn`** abre o painel (dashboard) da aplicação.
 
 > ⚠️ **É necessário responder a mensagem.** Na grande maioria dos casos o
 > WhatsApp não entrega o conteúdo da visualização única direto pro bot — ele só
-> chega se você **responder a mensagem ainda não aberta com `/recover`** (de
+> chega se você **responder a mensagem com `/recover`** (de
 > qualquer dispositivo logado na sua conta). Sem isso, a automação não consegue
 > capturar o arquivo. Em conversas marcadas em "Download automático", nem
 > precisa digitar `/recover` — qualquer resposta sua já revela (ver
@@ -124,8 +124,8 @@ Abre um menu de terminal com:
    WhatsApp), o bot baixa a mídia (`downloadContentFromMessage`), salva em
    `midia/`, arquiva o metadado e **reenvia como mídia normal** (payload sem
    `viewOnce`) pro destino configurado.
-3. Quando não chega inline (o caso mais comum), **responda a mensagem ainda não
-   aberta com `/recover`** — o bot recupera a mídia pela citação e segue o
+3. Quando não chega inline (o caso mais comum), **responda a mensagem com
+   `/recover`** — o bot recupera a mídia pela citação e segue o
    mesmo fluxo do item 2. Contatos marcados em "destino próprio" recebem a
    mídia de volta na própria conversa, em vez do destino padrão. Ver
    [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md).

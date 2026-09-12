@@ -17,6 +17,10 @@ export const PADRAO = {
     logLevel: 'silent',
     maxMidiaMB: 60,
     downloadConcorrencia: 2,
+    bandwidthLimit: {
+      downloadBytesPerSecond: 0,
+      uploadBytesPerSecond: 0
+    },
     modoEconomia: true,
     debug: false
   },
@@ -31,7 +35,11 @@ export const PADRAO = {
     comandoTerceiros: false,
     conversas: []
   },
-  atualizacao: { autoUpdateBaileys: false, falhasParaUpdate: 5 },
+  atualizacao: { autoUpdateLib: false, falhasParaUpdate: 5 },
+  // Limiar bem mais alto que atualizacao.falhasParaUpdate de propósito:
+  // "marcar pra atualizar" é um sinal leve, quarentena é a última instância
+  // (para de tentar reconectar sozinho) — não fazem sentido no mesmo limiar.
+  confiabilidade: { falhasConsecutivasParaQuarentena: 15 },
   outputApi: { enabled: false, host: '127.0.0.1', porta: 8787, token: '' }
 }
 

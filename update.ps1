@@ -1,4 +1,4 @@
-# Atualiza o LCNWhatsApp (Windows): codigo (git) + Baileys, reinicia no modo certo.
+# Atualiza o LCNWhatsApp (Windows): codigo (git) + deps npm (zapo-js), reinicia no modo certo.
 $ErrorActionPreference = "Continue"
 Set-Location $PSScriptRoot
 
@@ -14,10 +14,10 @@ if (Test-Path .git) {
 Remove-Item -ErrorAction SilentlyContinue data\precisa-update.flag
 
 if ($mode -eq "docker") {
-  Write-Host ">> rebuild da imagem (reinstala Baileys, isolada)"
+  Write-Host ">> rebuild da imagem (reinstala deps npm, isolada)"
   & powershell -ExecutionPolicy Bypass -File run.ps1 Dockerfile
 } else {
-  Write-Host ">> npm install (reinstala Baileys do GitHub)"
+  Write-Host ">> npm install (reinstala deps npm)"
   npm install --no-audit --no-fund
 
   Write-Host ">> reconstruindo lcn.exe"

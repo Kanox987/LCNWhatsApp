@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Atualiza o LCNWhatsApp: código (git) + Baileys, e reinicia no modo certo.
+# Atualiza o LCNWhatsApp: código (git) + deps npm (zapo-js), e reinicia no modo certo.
 set -e
 cd "$(dirname "$0")"
 
@@ -20,11 +20,11 @@ if [ "$MODE" = "docker" ]; then
     . ./perfil-container.sh
     configurar_perfil_container
   fi
-  echo ">> rebuild da imagem (reinstala Baileys do GitHub, isolada)"
+  echo ">> rebuild da imagem (reinstala deps npm, isolada)"
   sh run.sh
   echo ">> atualizado e reiniciado (container)."
 else
-  echo ">> npm install (reinstala Baileys do GitHub)"
+  echo ">> npm install (reinstala deps npm)"
   npm install --no-audit --no-fund
   if command -v pm2 >/dev/null 2>&1; then
     pm2 restart LCNWhatsApp 2>/dev/null || pm2 start ecosystem.config.cjs

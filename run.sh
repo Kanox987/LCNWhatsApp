@@ -42,8 +42,8 @@ DOCKERFILE_AUTO=$(head -n1 "$DOCKER_ARGS_TMP")
 DOCKERFILE=${1:-$DOCKERFILE_AUTO}   # passar um Dockerfile explícito ainda funciona (override manual)
 [ -n "$DOCKERFILE" ] || DOCKERFILE=Dockerfile
 
-echo ">> build ($DOCKERFILE) com $ENGINE"
-"$ENGINE" build -f "$DOCKERFILE" -t lcnwhatsapp:latest .
+IMAGE_TAG=$(LCN_CONTAINER_ENGINE="$ENGINE" ./build-image.sh --print-tag "$DOCKERFILE")
+LCN_CONTAINER_ENGINE="$ENGINE" ./build-image.sh "$DOCKERFILE"
 
 # Transcrição local: pré-baixa/valida o modelo num container descartável
 # ANTES de subir o bot de verdade — assim rebuild/update reaproveita
@@ -51,7 +51,7 @@ echo ">> build ($DOCKERFILE) com $ENGINE"
 if [ "$DOCKERFILE" = "Dockerfile.whisper" ]; then
   MODELO=$(node src/runtime.js modelo)
   echo ">> preparando modelo faster-whisper '$MODELO' em ./modelos (só baixa se ainda não tiver)..."
-  "$ENGINE" run --rm -v "$(pwd)/modelos:/opt/lcn-modelos" lcnwhatsapp:latest \
+  "$ENGINE" run --rm -v "$(pwd)/modelos:/opt/lcn-modelos" "$IMAGE_TAG" \
     /opt/whisper/bin/python /app/src/transcription/preload.py "$MODELO" \
     || echo ">> aviso: não consegui preparar o modelo agora — a 1ª transcrição real tenta de novo (pode demorar)."
 fi
@@ -81,7 +81,7 @@ set -- "$@" \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/config.json:/app/config.json"
 
-set -- "$@" lcnwhatsapp:latest
+set -- "$@" "$IMAGE_TAG"
 "$ENGINE" "$@"
 
 echo ">> pronto. Login (QR/código):  $ENGINE logs -f $NOME"

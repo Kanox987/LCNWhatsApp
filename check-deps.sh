@@ -122,7 +122,7 @@ else
   fi
 
   if command -v node >/dev/null 2>&1 && [ -f package.json ]; then
-    if node -e "for (const p of ['@hapi/boom','@whiskeysockets/baileys','pino','qrcode-terminal']) require.resolve(p)" >/dev/null 2>&1; then
+    if node -e "for (const p of ['zapo-js','@zapo-js/store-sqlite','better-sqlite3','qrcode-terminal']) require.resolve(p)" >/dev/null 2>&1; then
       ok 'dependências npm principais resolvem corretamente'
     else
       fail 'dependências npm incompletas; rode: npm install'

@@ -5,11 +5,13 @@
 //   off            -> não transcreve
 //   faster-whisper -> sidecar Python local (venv), modelo tiny/base/small (CPU, int8)
 //   openai         -> API de transcrição da OpenAI (whisper-1 / gpt-4o-transcribe)
+//   groq           -> API de transcrição da Groq (whisper-large-v3[-turbo]), free tier
 //   custom         -> comando shell configurável (encaixa qualquer CLI)
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
 import { transcreverOpenAI } from './openai.js'
+import { transcreverGroq } from './groq.js'
 import { RAIZ } from '../paths.js'
 
 function rodar (cmd, args, opts = {}) {
@@ -49,6 +51,7 @@ async function transcreverInterno (arquivo, cfg) {
   try {
     if (provedor === 'faster-whisper') return await viaFasterWhisper(arquivo, cfg)
     if (provedor === 'openai') return await transcreverOpenAI(arquivo, cfg)
+    if (provedor === 'groq') return await transcreverGroq(arquivo, cfg)
     if (provedor === 'custom') return await viaCustom(arquivo, cfg)
   } catch (e) {
     console.error(`transcrição (${provedor}) falhou:`, e.message)

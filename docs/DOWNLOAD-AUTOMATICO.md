@@ -11,7 +11,7 @@ Quando a visualização única chega como `view_once_unavailable_fanout` (o caso
 mais comum em contas multi-device — o WhatsApp entrega só o marcador, sem
 conteúdo), não existe nenhuma forma automática de obter a mídia sozinha. A
 única forma conhecida é você (o dono da conta) **responder citando** a
-mensagem ainda não aberta, de qualquer dispositivo logado — o WhatsApp inclui
+mensagem, de qualquer dispositivo logado — o WhatsApp inclui
 em `contextInfo.quotedMessage` da sua resposta uma cópia decriptável do
 conteúdo original. É uma limitação real de protocolo, não de implementação:
 ver [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).

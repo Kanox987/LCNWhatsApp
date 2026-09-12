@@ -18,6 +18,16 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$SELF")" && pwd)
 RAIZ=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$RAIZ"
 
+if [ "${1:-}" = "instances" ]; then
+  shift
+  exec node "$RAIZ/src/instances/cli.js" "$@"
+fi
+
+if [ "${1:-}" = "engine" ]; then
+  shift
+  exec node "$RAIZ/src/engine/cli.js" "$@"
+fi
+
 # Lê "campo": "valor" de runtime.json sem depender de Node (é um JSON plano
 # de strings simples — sed puro basta, e assim o modo container não exige
 # Node no host só pra descobrir o modo).

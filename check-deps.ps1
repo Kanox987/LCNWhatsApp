@@ -143,7 +143,7 @@ if ($mode -eq "docker") {
   }
 
   if ($node -and (Test-Path package.json -PathType Leaf)) {
-    & node -e "for (const p of ['@hapi/boom','@whiskeysockets/baileys','pino','qrcode-terminal']) require.resolve(p)" *> $null
+    & node -e "for (const p of ['zapo-js','@zapo-js/store-sqlite','better-sqlite3','qrcode-terminal']) require.resolve(p)" *> $null
     if ($LASTEXITCODE -eq 0) {
       Add-Ok "dependencias npm principais resolvem corretamente"
     } else {

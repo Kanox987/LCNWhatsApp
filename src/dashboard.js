@@ -116,7 +116,7 @@ async function telaUso () {
   const linhas = Object.entries(contagem).sort((a, b) => b[1] - a[1])
   if (!linhas.length) console.log(` ${D}nenhuma mídia arquivada${Z}`)
   for (const [num, qtd] of linhas) console.log(`  ${num.padEnd(16)} ${qtd}`)
-  if (fs.existsSync(caminhoFlag())) console.log(`\n${Y}⚠️  Sinalizado update da Baileys (quedas seguidas). Ver menu Atualizar.${Z}`)
+  if (fs.existsSync(caminhoFlag())) console.log(`\n${Y}⚠️  Sinalizado update do zapo-js (quedas seguidas). Ver menu Atualizar.${Z}`)
   await pausar()
 }
 
@@ -304,7 +304,7 @@ async function telaConfig () {
     itemCfg(3, 'Grupos', c.captura.grupos.ativo ? 'ligado' : 'desligado')
     itemCfg(4, 'Transcrição', c.transcricao.provedor)
     console.log(` ${B}5${Z}  Hardware / baixo consumo`)
-    itemCfg(6, 'Atualização (auto-baileys)', c.atualizacao.autoUpdateBaileys ? 'on' : 'off')
+    itemCfg(6, 'Atualização (auto-update lib)', c.atualizacao.autoUpdateLib ? 'on' : 'off')
     itemCfg(7, 'Destino próprio por contato', `${(c.captura.destinoProprioContatos || []).length} contato(s)`)
     itemCfg(8, 'Transcrição por conversa', `${(c.transcricao.conversas || []).length} conversa(s)`)
     itemCfg(9, 'Download automático', `${(c.captura.downloadAutomatico?.conversas || []).length} conversa(s)`)
@@ -383,14 +383,15 @@ async function cfgDownloadAutomatico (c) {
 }
 
 async function cfgTranscricao (c) {
-  console.log('\n1 off  2 faster-whisper  3 openai  4 custom')
+  console.log('\n1 off  2 faster-whisper  3 openai  4 groq  5 custom')
   const op = (await ask('> ')).trim()
   const t = c.transcricao
   if (op === '1') t.provedor = 'off'
   else if (op === '2') { t.provedor = 'faster-whisper'; t.modelo = (await ask('Modelo (tiny/base/small) [base]: ')).trim() || 'base' }
   else if (op === '3') { t.provedor = 'openai'; t.openaiApiKey = (await ask('OpenAI API key: ')).trim(); t.openaiModelo = (await ask('Modelo [whisper-1]: ')).trim() || 'whisper-1' }
-  else if (op === '4') { t.provedor = 'custom'; t.comando = (await ask('Comando ({file} = caminho do áudio): ')).trim() }
-  if (['2', '3', '4'].includes(op)) t.idioma = (await ask('Idioma [pt]: ')).trim() || 'pt'
+  else if (op === '4') { t.provedor = 'groq'; t.groqApiKey = (await ask('Groq API key: ')).trim(); t.groqModelo = (await ask('Modelo [whisper-large-v3-turbo]: ')).trim() || 'whisper-large-v3-turbo' }
+  else if (op === '5') { t.provedor = 'custom'; t.comando = (await ask('Comando ({file} = caminho do áudio): ')).trim() }
+  if (['2', '3', '4', '5'].includes(op)) t.idioma = (await ask('Idioma [pt]: ')).trim() || 'pt'
   t.comandoTerceiros = await confirmar(`Por padrão, qualquer participante pode usar /transcrever (respondendo um áudio)? (atual: ${!!t.comandoTerceiros})`)
   cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
 }
@@ -442,6 +443,16 @@ async function editarConversaTranscricao () {
   return { auto, comandoTerceiros }
 }
 
+function parseTaxaBytes (valor) {
+  const texto = valor.trim().toLowerCase().replace(',', '.')
+  if (texto === 'null') return 0
+  const match = texto.match(/^(\d+(?:\.\d+)?)\s*([km]?)$/)
+  if (!match) return null
+  const multiplicador = match[2] === 'k' ? 1000 : match[2] === 'm' ? 1000000 : 1
+  const bytes = Math.round(Number(match[1]) * multiplicador)
+  return Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : null
+}
+
 async function cfgHardware (c) {
   const h = c.hardware
   h.markOnline = await confirmar(`Marcar bot como "online" ao conectar? (atual: ${h.markOnline})`)
@@ -449,6 +460,19 @@ async function cfgHardware (c) {
   if (mx) h.maxMidiaMB = parseInt(mx, 10) || h.maxMidiaMB
   const cc = (await ask(`Downloads simultâneos [${h.downloadConcorrencia}]: `)).trim()
   if (cc) h.downloadConcorrencia = parseInt(cc, 10) || h.downloadConcorrencia
+  const banda = h.bandwidthLimit || (h.bandwidthLimit = { downloadBytesPerSecond: 0, uploadBytesPerSecond: 0 })
+  const down = (await ask(`Banda de download em bytes/s (500k/2m; 0=sem limite) [${banda.downloadBytesPerSecond || 0}]: `)).trim()
+  if (down) {
+    const taxa = parseTaxaBytes(down)
+    if (taxa === null) console.log(`${Y}Valor de download inválido; mantido.${Z}`)
+    else banda.downloadBytesPerSecond = taxa
+  }
+  const up = (await ask(`Banda de upload em bytes/s (500k/2m; 0=sem limite) [${banda.uploadBytesPerSecond || 0}]: `)).trim()
+  if (up) {
+    const taxa = parseTaxaBytes(up)
+    if (taxa === null) console.log(`${Y}Valor de upload inválido; mantido.${Z}`)
+    else banda.uploadBytesPerSecond = taxa
+  }
   const lv = (await ask(`Log level (silent/error/info) [${h.logLevel}]: `)).trim()
   if (lv) h.logLevel = lv
   h.debug = await confirmar(`Modo debug (loga cada mensagem recebida)? (atual: ${!!h.debug})`)
@@ -456,8 +480,8 @@ async function cfgHardware (c) {
 }
 
 async function cfgAtualizacao (c) {
-  c.atualizacao.autoUpdateBaileys = await confirmar(`Auto-sinalizar update da Baileys em quedas persistentes? (atual: ${c.atualizacao.autoUpdateBaileys})`)
-  if (c.atualizacao.autoUpdateBaileys) {
+  c.atualizacao.autoUpdateLib = await confirmar(`Auto-sinalizar update do zapo-js em quedas persistentes? (atual: ${c.atualizacao.autoUpdateLib})`)
+  if (c.atualizacao.autoUpdateLib) {
     const n = (await ask(`Após quantas quedas seguidas? [${c.atualizacao.falhasParaUpdate}]: `)).trim()
     if (n) c.atualizacao.falhasParaUpdate = parseInt(n, 10) || c.atualizacao.falhasParaUpdate
   }

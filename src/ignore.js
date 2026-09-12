@@ -1,27 +1,30 @@
-// Monta a função shouldIgnoreJid da Baileys.
+// Filtro de jid "genuinamente inerte" (status broadcast e canais) — usado
+// dentro do handler de mensagem, DEPOIS que o Zapo já descriptografou.
 //
-// A Baileys avalia essa função no nó CRU, antes de descriptografar — mas não só
-// para mensagens de chat: ela gate-keia TODO tráfego de protocolo endereçado a um
-// jid (message, call, receipt E notification — ver processNode em
-// lib/Socket/messages-recv.js). Retornar true descarta o nó inteiro, sem chegar
-// nem em handleNotification/handleReceipt.
+// CORREÇÃO (achado em revisão de código, Parte B do plano de automação): a
+// afirmação de que "o Zapo não expõe hook equivalente" ao shouldIgnoreJid da
+// Baileys está desatualizada. A versão instalada (zapo-js@1.8.2) TEM
+// client.ignoreKey(...) — descarta stanzas ANTES de qualquer handler, por
+// remoteJid/participant/fromMe/id, com `only` filtrando por classe de
+// stanza (message/receipt/notification/presence/chatstate/call); o servidor
+// ainda recebe o ack (ver node_modules/zapo-js/dist/client/WaClient.d.ts).
+// A limitação real é outra: isso filtra por CLASSE de stanza, não por tipo
+// de mídia — não dá pra saber se uma mensagem é áudio ou foto antes de
+// decriptar o payload, então "ignore foto mas deixe passar áudio" não tem
+// equivalente pré-decrypt. Ainda não é usado neste arquivo (ver Parte B,
+// "Processamento seletivo por grupo/contato" no plano, pra quando isso for
+// ligado de verdade) — continua só uma checagem pós-decrypt, redundante com
+// a que já existe em passaFiltro()/aoReceber (src/capture.js), mantida por
+// clareza e porque os testes (ignore.test.mjs) continuam valendo como está.
 //
-// Isso importa porque notificações de grupo (w:gp2 — sync de participantes) e
-// recibos endereçados a @g.us são uma das formas da Baileys manter o mapeamento
-// PN↔LID e a saúde da sessão em dia — inclusive pra contatos que só "aparecem"
-// pra ela via grupo. Bloquear @g.us genericamente aqui (como fizemos numa versão
-// anterior, pensando só em "não processar CONTEÚDO de grupo") também corta esse
-// bookkeeping, e isso já causou falha silenciosa na captura de visu única de PV
-// (sessão/LID nunca ficava saudável o suficiente). Por isso este filtro só
-// descarta tráfego GENUINAMENTE inerte, que não carrega bookkeeping nenhum:
-// status broadcast e canais. A filtragem "não quero capturar disso" (grupo
-// desligado, contato fora da allowlist) vive inteiramente em passaFiltro(),
-// em src/capture.js — DEPOIS da Baileys já ter processado o protocolo direito.
-const ehBroadcast = (jid) => typeof jid === 'string' && jid.endsWith('@broadcast')
-const ehNewsletter = (jid) => typeof jid === 'string' && jid.endsWith('@newsletter')
+// Ponto de atenção herdado da versão Baileys: bloquear @g.us genericamente
+// aqui já causou, no passado, falha silenciosa na captura de PV (a lib
+// depende de processar notificações/recibos de grupo pra manter o
+// mapeamento PN↔LID e a sessão saudável) — por isso @g.us nunca entra
+// nesse filtro. Validar isso de novo com o Zapo durante os testes manuais.
+export const ehBroadcast = (jid) => typeof jid === 'string' && jid.endsWith('@broadcast')
+export const ehNewsletter = (jid) => typeof jid === 'string' && jid.endsWith('@newsletter')
 
-export function montarShouldIgnore (_cfg) {
-  return function shouldIgnoreJid (jid) {
-    return ehBroadcast(jid) || ehNewsletter(jid)
-  }
+export function deveIgnorarJid (jid) {
+  return ehBroadcast(jid) || ehNewsletter(jid)
 }

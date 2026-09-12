@@ -4,10 +4,6 @@
 import fs from 'fs'
 import path from 'path'
 import {
-  downloadMediaMessage,
-  jidNormalizedUser
-} from '@whiskeysockets/baileys'
-import {
   acharAudioDireto,
   acharCitacaoGenerica,
   acharComandoRecover,
@@ -23,8 +19,18 @@ import * as state from './state.js'
 import { transcrever } from './transcription/index.js'
 import { emitirCaptura } from './api/output.js'
 import { soDigitos } from './util.js'
+import { deveIgnorarJid } from './ignore.js'
+import * as bandwidth from './bandwidth.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
+
+// jid do próprio dispositivo conectado, sem o sufixo de device (":N") — o
+// jidNormalizedUser da Baileys fazia isso; o Zapo não documenta um helper
+// dedicado pra credentials.meJid, então normaliza aqui mesmo.
+function jidProprio (client) {
+  const meJid = client.getCredentials?.()?.meJid
+  return meJid ? meJid.replace(/:\d+@/, '@') : null
+}
 
 // Resolve um nome de exibição pro contato a partir do diretório conhecido
 // (data/contatos.json). Usado no /recover, que não tem pushName disponível
@@ -54,26 +60,27 @@ function criarLimite (max) {
   })
 }
 
-// Monta o payload de saída DO ZERO — só buffer/mimetype/caption. Nunca reaproveita
-// o node original (que traz viewOnce/mediaKey). É o que garante que a mídia sai
-// como normal, não como visualização única. Exportado pra ser testável.
+// Monta o payload de saída DO ZERO — só buffer/mimetype/caption, no formato de
+// união discriminada do Zapo (client.message.send). Nunca reaproveita o node
+// original (que traz viewOnce/mediaKey). É o que garante que a mídia sai como
+// normal, não como visualização única. Exportado pra ser testável.
 export function montarConteudo (tipo, buffer, legenda, node = {}) {
-  if (tipo === 'image') return { image: buffer, caption: legenda, mimetype: node.mimetype || 'image/jpeg' }
-  if (tipo === 'video') return { video: buffer, caption: legenda, mimetype: node.mimetype || 'video/mp4' }
-  return { audio: buffer, mimetype: node.mimetype || 'audio/ogg; codecs=opus', ptt: !!node.ptt }
+  if (tipo === 'image') return { type: 'image', media: buffer, caption: legenda, mimetype: node.mimetype || 'image/jpeg' }
+  if (tipo === 'video') return { type: 'video', media: buffer, caption: legenda, mimetype: node.mimetype || 'video/mp4' }
+  return { type: 'audio', media: buffer, mimetype: node.mimetype || 'audio/ogg; codecs=opus', ptt: !!node.ptt }
 }
 
 // Resolve o JID de destino conforme o config. Contatos em
 // captura.destinoProprioContatos furam o destino global: a mídia volta na
 // própria conversa (`from`) em vez de ir pro self-chat/número/grupo configurado.
-export function resolverDestino (cfg, sock, from, numero) {
+export function resolverDestino (cfg, client, from, numero) {
   const proprios = (cfg.captura?.destinoProprioContatos || []).map(soDigitos)
   if (numero && from && proprios.includes(soDigitos(numero))) return from
 
   const d = cfg.destino || {}
   if (d.tipo === 'numero' && d.jid) return `${soDigitos(d.jid)}@s.whatsapp.net`
   if (d.tipo === 'grupo' && d.jid) return d.jid
-  return jidNormalizedUser(sock.user.id) // self-chat (padrão)
+  return jidProprio(client) // self-chat (padrão)
 }
 
 // Uma conversa pode sobrepor o padrão geral de transcricao.comandoTerceiros
@@ -171,7 +178,7 @@ export function passaFiltro (cfg, numero, ehGrupo, from) {
   return true
 }
 
-export function criarHandler ({ sock, getConfig }) {
+export function criarHandler ({ client, getConfig }) {
   let cfg = getConfig()
   const limite = criarLimite(Math.max(1, cfg.hardware?.downloadConcorrencia || 2))
   const pendentes = criarRegistroPendentes()
@@ -187,7 +194,8 @@ export function criarHandler ({ sock, getConfig }) {
       return
     }
 
-    // Teto de tamanho, quando o nó informa o tamanho.
+    // Teto de tamanho — passado direto pro downloadBytes (obrigatório na API do
+    // Zapo), além de servir de corte antecipado quando o nó já informa o tamanho.
     // fileLength pode vir como Long (protobuf); toString() normaliza.
     const maxBytes = (cfg.hardware?.maxMidiaMB || 60) * 1048576
     const tam = node.fileLength ? Number(node.fileLength.toString()) || 0 : 0
@@ -201,15 +209,23 @@ export function criarHandler ({ sock, getConfig }) {
       log(`Visu única (${tipo}) de ${nome} (${numero}) — baixando...`)
       let buffer
       try {
-        buffer = await baixarBuffer(node, tipo)
+        buffer = await baixarBuffer(client, node, tipo, maxBytes)
       } catch (e) {
+        // requestMediaReupload resolve o caso de blob de CDN expirado — NÃO
+        // resolve o fan-out pra dispositivo vinculado (esse é tratado antes,
+        // via /recover). Fallback mantido pro caso "download normal falhou
+        // por mídia expirada", equivalente ao reuploadRequest da Baileys.
+        // result !== 'success' (not_found/decryption_error/general_error) é
+        // resposta normal da API, não exceção — precisa ser checado (doc de
+        // requestMediaReupload). Só o directPath muda; media key/hash/length
+        // do node original continuam válidos, por isso o retry usa
+        // { ...node, directPath } em vez do node cru.
         log('Download direto falhou, tentando reupload:', e.message)
-        buffer = await downloadMediaMessage(
-          { key: origemKey, message: interno },
-          'buffer',
-          {},
-          { reuploadRequest: sock.updateMediaMessage }
-        )
+        const retry = await client.message.requestMediaReupload({ key: origemKey, message: interno })
+        // directPath é opcional no tipo mesmo com result 'success' — sem ele
+        // não há o que aplicar, então trata como falha de reupload também.
+        if (retry.result !== 'success' || !retry.directPath) throw new Error(`reupload ${retry.result}`)
+        buffer = await baixarBuffer(client, { ...node, directPath: retry.directPath }, tipo, maxBytes)
       }
 
       garantirPastas()
@@ -236,11 +252,12 @@ export function criarHandler ({ sock, getConfig }) {
       ].filter(Boolean).join('\n')
 
       // Payload montado do zero: SEM viewOnce. Sai como mídia normal.
-      const destino = resolverDestino(cfg, sock, from, numero)
+      const destino = resolverDestino(cfg, client, from, numero)
       const conteudo = montarConteudo(tipo, buffer, legenda, node)
 
-      await sock.sendMessage(destino, conteudo)
-      if (tipo === 'audio') await sock.sendMessage(destino, { text: legenda })
+      await bandwidth.aguardarUpload(buffer.length)
+      await client.message.send(destino, conteudo)
+      if (tipo === 'audio') await client.message.send(destino, legenda)
 
       state.marcarCaptura()
       log(`Enviado como mídia normal ✅  (arquivado: ${path.basename(arquivo)})`)
@@ -256,13 +273,14 @@ export function criarHandler ({ sock, getConfig }) {
     await limite(async () => {
       let arquivoTmp = null
       try {
-        const buffer = await baixarBuffer(node, 'audio')
+        const maxBytes = (cfg.hardware?.maxMidiaMB || 60) * 1048576
+        const buffer = await baixarBuffer(client, node, 'audio', maxBytes)
         garantirPastas()
         arquivoTmp = path.join(PASTA_MIDIA, `.tmp-transcricao-${Date.now()}${extensaoDe('audio', node.mimetype)}`)
         fs.writeFileSync(arquivoTmp, buffer)
         const texto = await transcrever(arquivoTmp, cfg.transcricao || {})
         const resposta = texto ? `📝 ${texto}` : '⚠️ Não consegui transcrever esse áudio.'
-        await sock.sendMessage(from, { text: resposta }, { quoted: mensagemCitada })
+        await client.message.send(from, resposta, { quote: mensagemCitada })
       } finally {
         if (arquivoTmp) { try { fs.unlinkSync(arquivoTmp) } catch {} }
       }
@@ -296,37 +314,39 @@ export function criarHandler ({ sock, getConfig }) {
     return true
   }
 
-  return async function aoReceber (info) {
+  // Evento 'message' — mensagem já descriptografada (texto, mídia inline,
+  // visu única inline, comandos citados). O caso de visu única indisponível
+  // por fan-out pra dispositivo vinculado NÃO chega mais aqui — o Zapo tem
+  // um evento dedicado pra isso (ver aoIndisponivel, abaixo).
+  async function aoReceber (event) {
     cfg = getConfig()
     const debug = cfg.hardware?.debug === true
 
     if (debug) {
-      const t = info.message ? Object.keys(info.message).filter((k) => k !== 'messageContextInfo')[0] : 'null'
-      log(`↳ msg de=${info.key.remoteJid} fromMe=${info.key.fromMe} tipo=${t} isViewOnce=${info.key.isViewOnce} stub=${info.messageStubType}`)
-      if (!info.message || info.key.isViewOnce) {
-        log('   DUMP:', JSON.stringify(info, (k, v) => (v && v.type === 'Buffer' ? '<buffer>' : v)).slice(0, 1500))
-      }
+      const t = event.message ? Object.keys(event.message).filter((k) => k !== 'messageContextInfo')[0] : 'null'
+      log(`↳ msg de=${event.key.remoteJid} fromMe=${event.key.fromMe} tipo=${t}`)
+      if (!event.message) log('   DUMP:', JSON.stringify(event, (k, v) => (v && v.type === 'Buffer' ? '<buffer>' : v)).slice(0, 1500))
     }
 
-    if (info.key.fromMe) {
+    if (event.key.fromMe) {
       // Mensagens próprias só interessam pra dois comandos, respondidos pelo
       // dono da conta a uma mensagem citada: /recover (visu única ainda não
       // aberta) e /transcrever (áudio). O /recover é o único caminho manual
       // que de fato recupera visu única indisponível — o WhatsApp "vaza" uma
       // cópia decriptável da mídia original em contextInfo.quotedMessage da
       // própria citação.
-      if (!info.message) return
-      const from = info.key.remoteJid
+      if (!event.message) return
+      const from = event.key.remoteJid
       if (!from) return
 
-      const comandoRecover = acharComandoRecover(info.message)
+      const comandoRecover = acharComandoRecover(event.message)
       if (comandoRecover) {
         const ok = await recuperarCitacao({ ...comandoRecover, from, origem: '/recover recebido' })
         if (!ok && debug) log('   /recover: mensagem citada não contém mídia de visualização única')
         return
       }
 
-      const comandoTranscrever = acharComandoTranscrever(info.message)
+      const comandoTranscrever = acharComandoTranscrever(event.message)
       if (comandoTranscrever) {
         const audio = acharAudioDireto(comandoTranscrever.quotedMessage)
         if (!audio) {
@@ -334,7 +354,7 @@ export function criarHandler ({ sock, getConfig }) {
           return
         }
         log('/transcrever recebido — transcrevendo áudio...')
-        await processarTranscricao({ node: audio, from, mensagemCitada: info })
+        await processarTranscricao({ node: audio, from, mensagemCitada: event })
         return
       }
 
@@ -344,7 +364,7 @@ export function criarHandler ({ sock, getConfig }) {
       // /transcrever acima — não exige nenhum comando, só uma citação
       // qualquer (texto ou mídia respondendo a algo).
       if (pendentes.temPendente(from)) {
-        const citacao = acharCitacaoGenerica(info.message)
+        const citacao = acharCitacaoGenerica(event.message)
         if (citacao) {
           const ok = await recuperarCitacao({ ...citacao, from, origem: 'Download automático: citação do dono' })
           if (!ok && debug) log('   citação do dono não é a visu única pendente — aguardando outra')
@@ -354,37 +374,15 @@ export function criarHandler ({ sock, getConfig }) {
       return
     }
 
-    // Visu única chega pra dispositivos vinculados como "view_once_unavailable_fanout":
-    // o conteúdo NÃO vem inline e não há nada que a automação possa baixar aqui —
-    // a única forma de obter o conteúdo é o dono responder citando a mensagem
-    // (contextInfo.quotedMessage "vaza" uma cópia decriptável). Em conversas
-    // marcadas em downloadAutomatico, marca a pendência: a PRÓXIMA resposta do
-    // dono nessa conversa (qualquer citação, sem precisar digitar /recover) já
-    // revela sozinha — ver recuperarCitacao, mais abaixo no bloco fromMe.
-    if (info.key.isViewOnce && !info.message) {
-      const from = info.key.remoteJid
-      if (from) {
-        const ehGrupo = from.endsWith('@g.us')
-        const alvo = resolverAlvoDownloadAutomatico(info.key, from, ehGrupo)
-        if (estaDownloadAutomatico(cfg, alvo)) {
-          pendentes.marcar(from)
-          if (debug) log('   visu única indisponível — download automático ativo, aguardando resposta do dono')
-          return
-        }
-      }
-      if (debug) log('   visu única indisponível — use /recover')
-      return
-    }
+    if (!event.message) return
 
-    if (!info.message) return
-
-    const from = info.key.remoteJid
-    if (!from || from === 'status@broadcast' || from.endsWith('@broadcast') || from.endsWith('@newsletter')) return
+    const from = event.key.remoteJid
+    if (!from || deveIgnorarJid(from)) return
     const ehGrupo = from.endsWith('@g.us')
 
     // Comando /transcrever de terceiros — só roda se a conversa (ou o padrão
     // geral) autorizar (podeComandoTerceiros). O do dono já foi tratado acima.
-    const comandoTranscrever = acharComandoTranscrever(info.message)
+    const comandoTranscrever = acharComandoTranscrever(event.message)
     if (comandoTranscrever) {
       if (!podeComandoTerceiros(cfg, from)) {
         if (debug) log('   /transcrever ignorado (terceiros não autorizados nesta conversa)')
@@ -395,30 +393,55 @@ export function criarHandler ({ sock, getConfig }) {
         if (debug) log('   /transcrever: mensagem citada não é áudio')
         return
       }
-      log(`/transcrever recebido de ${soDigitos(info.key.participant || from)} — transcrevendo áudio...`)
-      await processarTranscricao({ node: audio, from, mensagemCitada: info })
+      log(`/transcrever recebido de ${soDigitos(event.key.participant || from)} — transcrevendo áudio...`)
+      await processarTranscricao({ node: audio, from, mensagemCitada: event })
       return
     }
 
     // Detecção barata (só leitura de objeto) antes de qualquer I/O.
-    const achado = acharVisuUnica(info.message, info.key.isViewOnce === true)
+    const achado = acharVisuUnica(event.message, event.key.isViewOnce === true)
     if (!achado) {
       // Não é visu única — ainda pode ser áudio normal de uma conversa com
       // transcrição automática ligada (transcricao.conversas[].auto).
-      const audioAuto = acharAudioDireto(info.message)
+      const audioAuto = acharAudioDireto(event.message)
       if (audioAuto && estaAutoTranscricao(cfg, from)) {
-        log(`Áudio de ${soDigitos(info.key.participant || from)} — transcrição automática...`)
-        await processarTranscricao({ node: audioAuto, from, mensagemCitada: info })
+        log(`Áudio de ${soDigitos(event.key.participant || from)} — transcrição automática...`)
+        await processarTranscricao({ node: audioAuto, from, mensagemCitada: event })
         return
       }
       if (debug) log(`   (não é visu única — ignorado)`)
       return
     }
 
-    const jidReal = info.key.participantAlt || info.key.remoteJidAlt || info.key.participant || from
+    const jidReal = event.key.participantAlt || event.key.remoteJidAlt || event.key.participant || from
     const numero = soDigitos(jidReal)
-    const nome = info.pushName || 'sem nome'
+    const nome = event.pushName || 'sem nome'
 
-    await processarAchado({ achado, from, ehGrupo, numero, nome, origemKey: info.key })
+    await processarAchado({ achado, from, ehGrupo, numero, nome, origemKey: event.key })
   }
+
+  // Evento 'message_unavailable' — placeholder <unavailable/> no lugar do
+  // corpo criptografado. kind:'view_once' é o caso que sustenta o download
+  // automático: visu única consumida/indisponível pro dispositivo vinculado.
+  // Confirmado na doc do Zapo: NÃO é recuperável via resend automático (só
+  // kind:'other' é) — por isso a lógica de pendências continua necessária,
+  // só troca o gatilho (antes: info.key.isViewOnce && !info.message).
+  async function aoIndisponivel (event) {
+    cfg = getConfig()
+    const debug = cfg.hardware?.debug === true
+    if (event.kind !== 'view_once') return
+
+    const from = event.key?.remoteJid
+    if (!from) return
+    const ehGrupo = from.endsWith('@g.us')
+    const alvo = resolverAlvoDownloadAutomatico(event.key, from, ehGrupo)
+    if (estaDownloadAutomatico(cfg, alvo)) {
+      pendentes.marcar(from)
+      if (debug) log('   visu única indisponível — download automático ativo, aguardando resposta do dono')
+      return
+    }
+    if (debug) log('   visu única indisponível — use /recover')
+  }
+
+  return { aoReceber, aoIndisponivel }
 }

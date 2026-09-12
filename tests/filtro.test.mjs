@@ -1,6 +1,6 @@
 // passaFiltro (src/capture.js) é a única linha de defesa hoje pra "não quero
 // capturar disso" — grupo desligado, contato fora da allowlist, grupo fora da
-// allowlist de grupos, contato bloqueado. Roda depois da Baileys decriptar.
+// allowlist de grupos, contato bloqueado. Roda depois do Zapo decriptar.
 import { passaFiltro } from '../src/capture.js'
 
 let falhas = 0

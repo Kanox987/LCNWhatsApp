@@ -2,10 +2,12 @@
 # Variante COM transcrição local (faster-whisper). Mais pesada — use só se for
 # ligar a transcrição no provedor "faster-whisper". Para a maioria, o Dockerfile
 # base já basta.
-FROM node:20-slim
+# node:22 (não 20): zapo-js precisa de WebSocket global do runtime, estável só
+# a partir do Node 22.
+FROM node:22-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg git ca-certificates python3 python3-pip python3-venv build-essential \
+    ffmpeg git ca-certificates python3 python3-pip python3-venv build-essential util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -28,4 +30,4 @@ COPY . .
 
 VOLUME ["/app/sessao", "/app/midia", "/app/data", "/opt/lcn-modelos"]
 ENV NODE_ENV=production
-CMD ["node", "index.js"]
+CMD ["/app/bin/lock-and-run.sh", "/app/data/instance.lock", "node", "index.js"]

@@ -4,7 +4,9 @@ module.exports = {
   apps: [
     {
       name: 'LCNWhatsApp',
-      script: 'index.js',
+      script: 'bin/lock-and-run.sh',
+      args: ['data/instance.lock', 'node', 'index.js'],
+      interpreter: '/bin/sh',
       cwd: __dirname,
       autorestart: true,
       max_memory_restart: '400M',   // segura o consumo de RAM

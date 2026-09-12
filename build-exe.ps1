@@ -17,17 +17,29 @@ if ($nodeMajor -lt 22) {
   exit 1
 }
 
+# DESDE A MIGRACAO BAILEYS->ZAPO: better-sqlite3 (store de sessao do zapo-js,
+# via @zapo-js/store-sqlite) e' um addon nativo (.node) que, ao contrario do
+# sharp de antes, NAO e' opcional -- sem ele nao ha sessao persistida. Um
+# binario nativo nao pode ir pra dentro do blob JS do SEA, e vendorizar o
+# .node certo pra plataforma ao lado do lcn.exe (com resolucao de modulo em
+# runtime) ainda nao foi implementado -- tratado como fora de escopo na
+# migracao inicial (ver plano em .claude/plans). Falha aqui de proposito, em
+# vez de gerar um lcn.exe que quebra silenciosamente ao conectar.
+Write-Host "Empacotamento .exe (SEA) ainda nao suporta o store SQLite do zapo-js"
+Write-Host "(better-sqlite3 e addon nativo, nao pode entrar no bundle)."
+Write-Host "Use o modo Docker ou 'npm start'/PM2 por enquanto."
+exit 1
+
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 
 Write-Host ">> empacotando o codigo (ESM -> CJS num arquivo so, via esbuild)..."
-# --external:sharp: sharp e' o unico addon nativo (.node) em toda a arvore de
-# dependencias (vem so como peer opcional da Baileys) -- um binario nativo
-# nao pode ir pra dentro de um blob JS de forma alguma. A propria Baileys ja
-# cai pra jimp (JS puro, instalado como dependency normal deste projeto) se
-# sharp nao estiver disponivel em runtime -- nao precisa de mais nada aqui.
+# --external:sharp: sharp continua sendo addon nativo opcional (peer do zapo-js
+# tambem) -- cai pra jimp (JS puro) se nao disponivel em runtime.
+# --external:better-sqlite3: ver bloco de saida antecipada acima -- listado
+# aqui so pra quando essa lacuna for fechada (retirar o "exit 1" acima antes).
 & node_modules\.bin\esbuild.cmd bin\lcn-sea.js `
   --bundle --platform=node --format=cjs --target=node22 `
-  --external:sharp `
+  --external:sharp --external:better-sqlite3 `
   --outfile=dist\lcn.bundle.cjs --legal-comments=none
 if ($LASTEXITCODE -ne 0) { Write-Host "Falha no esbuild."; exit 1 }
 

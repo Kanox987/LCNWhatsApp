@@ -1,4 +1,20 @@
-import { downloadContentFromMessage } from '@whiskeysockets/baileys'
+/*
+ * O parsing abaixo (desembrulhar/acharVisuUnica/etc.) opera direto sobre
+ * `message` no formato Proto.IMessage — o protobuf do WhatsApp em si, não
+ * uma abstração da Baileys. O Zapo entrega `event.message` no mesmo formato
+ * (confirmado na doc: "message: Proto.IMessage"), então essa detecção
+ * sobrevive à troca de lib sem alteração de lógica — só a função de
+ * download no fim do arquivo (baixarBuffer) é específica da lib.
+ *
+ * O Zapo tem um helper nativo (resolveMediaPayload()) que desembrulha
+ * ephemeralMessage/viewOnceMessage/viewOnceMessageV2 automaticamente — mas
+ * a doc dele NÃO confirma cobertura de viewOnceMessageV2Extension (áudio em
+ * visualização única), que é um caso real usado neste projeto. Por isso,
+ * deliberadamente NÃO trocamos essa detecção manual pelo helper nativo:
+ * ela já é testada (ver tests/detect.test.mjs) e cobre todos os casos
+ * conhecidos, inclusive o que a doc do helper deixa em aberto.
+ */
+import * as bandwidth from './bandwidth.js'
 
 /*
  * Tira as "cascas" que o WhatsApp coloca em volta da mensagem real
@@ -66,9 +82,9 @@ export function acharVisuUnica (message, marcadaNaChave = false) {
 /*
  * Reconhece um comando de texto (ex: "/recover", "/transcrever") enviado em
  * resposta/citação a outra mensagem. Quando você cita uma mensagem, o
- * WhatsApp inclui em contextInfo.quotedMessage uma cópia do conteúdo — pra
- * visualização única ainda não aberta, isso "vaza" a mídia original mesmo
- * quando ela nunca chegou inline pro bot.
+ * WhatsApp inclui em contextInfo.quotedMessage uma cópia do conteúdo — isso
+ * "vaza" a mídia original de uma visualização única mesmo quando ela nunca
+ * chegou inline pro bot.
  *
  * Retorna { quotedMessage, stanzaId, participant } ou null se o texto não
  * bater com `palavraChave` (ou não houver mensagem citada).
@@ -142,14 +158,24 @@ export function acharAudioDireto (message) {
   return msg?.audioMessage || null
 }
 
-/* Mesma ideia do getFileBuffer() dos bots de exemplo: stream -> Buffer */
-export async function baixarBuffer (node, tipo) {
-  const stream = await downloadContentFromMessage(node, tipo)
-  let buffer = Buffer.from([])
-  for await (const chunk of stream) {
-    buffer = Buffer.concat([buffer, chunk])
-  }
-  return buffer
+// Baixa e decripta a mídia crua (node = imageMessage/videoMessage/audioMessage)
+// via client.message.downloadBytes(). A API do Zapo espera um Proto.IMessage
+// inteiro (ou o WaIncomingMessageEvent), não o nó isolado — por isso o node é
+// reembrulhado em { [tipo+'Message']: node } antes da chamada (confirmado no
+// próprio exemplo da doc de requestMediaReupload, que reconstrói o envelope
+// da mesma forma pra aplicar o directPath novo). maxBytes é obrigatório na
+// API do Zapo — reaproveita o mesmo teto de tamanho que processarAchado já
+// calculava antes de chamar isto (ver src/capture.js), só que agora aplicado
+// dentro do próprio download em vez de só como checagem prévia de
+// node.fileLength.
+export async function baixarBuffer (client, node, tipo, maxBytes) {
+  const tamanhoInformado = Number(node?.fileLength?.toString?.() ?? node?.fileLength)
+  const estimativa = Number.isFinite(tamanhoInformado) && tamanhoInformado > 0
+    ? tamanhoInformado
+    : maxBytes
+  await bandwidth.aguardarDownload(estimativa)
+  const bytes = await client.message.downloadBytes({ [`${tipo}Message`]: node }, { maxBytes })
+  return Buffer.from(bytes)
 }
 
 export function extensaoDe (tipo, mimetype = '') {
