@@ -5,7 +5,8 @@
 import { ErroHttp, resposta } from '../transport.js'
 import { criarServicoAutomacoes } from '../automationsService.js'
 import { carregarCatalogo, resolverOrdemInstalacao } from '../../templates/catalog.js'
-import { renderizarTemplate } from '../../templates/render.js'
+import { renderizarTemplate, renderizarVariaveisDeclaradas } from '../../templates/render.js'
+import { declararDoTemplate } from '../declaredVariables.js'
 
 function exporTemplateResumo (template) {
   return {
@@ -16,6 +17,7 @@ function exporTemplateResumo (template) {
     category: template.category,
     dependsOn: template.dependsOn || [],
     requiredCapabilities: template.requiredCapabilities || [],
+    variables: template.variables || [],
     warnings: template.warnings || [],
     parameters: template.parameters
   }
@@ -62,6 +64,12 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
       documento.scope = { include: scope.include, exclude: Array.isArray(scope.exclude) ? scope.exclude : [] }
       const automacao = servicoAutomacoes.criarEPublicar({ id: automationId, document: documento })
       inserirProvenance.run(automationId, template.templateId, template.templateVersion, JSON.stringify(parametrosFornecidos), new Date().toISOString())
+      // As variáveis que o comando usa passam a existir no catálogo agora, e
+      // não só quando alguma delas receber valor pela primeira vez.
+      declararDoTemplate(db, renderizarVariaveisDeclaradas(template, parametrosFornecidos), {
+        sourceTemplate: template.templateId,
+        sourceAutomation: automationId
+      })
       instaladas.push(automacao)
     }
     return { installed: instaladas }

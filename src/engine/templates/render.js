@@ -62,3 +62,13 @@ export function renderizarTemplate (template, parametrosFornecidos = {}) {
   const parametros = resolverParametros(template, parametrosFornecidos)
   return substituirEmValor(structuredClone(template.documentTemplate), parametros)
 }
+
+// As declarações de variável passam pela MESMA substituição do documento —
+// o nome da variável pode vir de um parâmetro (é o caso do marcar-variavel,
+// onde quem instala escolhe como a variável se chama). Declarar sem resolver
+// registraria a variável com "{{params.variavel}}" no nome.
+export function renderizarVariaveisDeclaradas (template, parametrosFornecidos = {}) {
+  if (!Array.isArray(template?.variables) || !template.variables.length) return []
+  const parametros = resolverParametros(template, parametrosFornecidos)
+  return substituirEmValor(structuredClone(template.variables), parametros)
+}

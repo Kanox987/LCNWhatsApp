@@ -1,10 +1,27 @@
 import { ErroHttp } from '../transport.js'
+import { ID_GLOBAL, separarIdMembro } from '../attributeScopes.js'
 
-const KINDS_SUPORTADOS = new Set(['contact', 'group'])
+// Os cinco escopos que a tabela aceita desde a migração 008. Antes daqui só
+// 'contact' e 'group' passavam, então contador de membro, de categoria e do
+// sistema existiam no motor mas eram invisíveis e ineditáveis pelo painel.
+const KINDS_SUPORTADOS = new Set(['contact', 'group', 'group_member', 'category', 'global'])
 
 function validarKind (kind) {
-  if (!KINDS_SUPORTADOS.has(kind)) throw new ErroHttp(400, `kind inválido: ${kind}.`)
+  if (!KINDS_SUPORTADOS.has(kind)) {
+    throw new ErroHttp(400, `kind inválido: ${kind}. Use um destes: ${[...KINDS_SUPORTADOS].join(', ')}.`)
+  }
   return kind
+}
+
+// 'global' tem um id só, reservado — aceitar qualquer id ali criaria vários
+// "sistemas" paralelos que nenhuma automação alcançaria.
+function normalizarId (kind, id) {
+  if (kind === 'global') return ID_GLOBAL
+  if (typeof id !== 'string' || !id.trim()) throw new ErroHttp(400, 'Informe o id do contato, grupo ou categoria.')
+  if (kind === 'group_member' && !separarIdMembro(id)) {
+    throw new ErroHttp(400, 'Para membro de grupo, o id é "<grupo>|<pessoa>".')
+  }
+  return id
 }
 
 function serializarValor (body) {
@@ -50,14 +67,16 @@ export function registrarRotasEntities (roteador, db) {
 
   roteador.get('/entities/:kind/:id/attributes', ({ params }) => {
     const kind = validarKind(params.kind)
-    return listar.all(kind, params.id).map(exporAtributo)
+    return listar.all(kind, normalizarId(kind, params.id)).map(exporAtributo)
   })
 
   roteador.put('/entities/:kind/:id/attributes/:key', ({ params, body }) => {
-    return definir(validarKind(params.kind), params.id, params.key, body)
+    const kind = validarKind(params.kind)
+    return definir(kind, normalizarId(kind, params.id), params.key, body)
   })
 
   roteador.delete('/entities/:kind/:id/attributes/:key', ({ params }) => {
-    return remover(validarKind(params.kind), params.id, params.key)
+    const kind = validarKind(params.kind)
+    return remover(kind, normalizarId(kind, params.id), params.key)
   })
 }

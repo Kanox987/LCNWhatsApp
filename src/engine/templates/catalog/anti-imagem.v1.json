@@ -6,6 +6,14 @@
   "category": "modulos-especializados",
   "dependsOn": [],
   "requiredCapabilities": [],
+  "variables": [
+    {
+      "scope": "member",
+      "key": "anti-imagem_apagados",
+      "valueType": "number",
+      "description": "Quantas imagens desta pessoa já foram apagadas NESTE grupo."
+    }
+  ],
   "warnings": [
     {
       "level": "requirement",

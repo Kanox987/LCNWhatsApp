@@ -12,6 +12,22 @@
     "category": { "type": "string", "enum": ["utilitarios", "configuracoes", "empresarial", "modulos-especializados"] },
     "dependsOn": { "type": "array", "items": { "type": "string" }, "default": [] },
     "requiredCapabilities": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "variables": {
+      "description": "Variáveis e contadores que este comando usa. Declaradas aqui, aparecem na aba de variáveis assim que o comando é instalado — sem isso a pessoa só descobre que existem quando alguma delas recebe valor pela primeira vez.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scope", "key", "description"],
+        "properties": {
+          "scope": { "enum": ["chat", "sender", "member", "target", "targetMember", "category", "global"] },
+          "key": { "type": "string", "minLength": 1 },
+          "valueType": { "enum": ["text", "number", "boolean"], "default": "text" },
+          "description": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "warnings": {
       "description": "Ressalvas que a pessoa PRECISA ver antes de instalar: onde o comando não funciona (WhatsApp Business, versões antigas), o que ele exige da máquina (ffmpeg), ou que ele depende de um recurso não oficial que pode parar de existir. Aparece no catálogo, junto do botão de instalar — nunca escondido só na descrição.",
       "type": "array",

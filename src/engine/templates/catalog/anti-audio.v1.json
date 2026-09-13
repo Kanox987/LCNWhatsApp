@@ -6,6 +6,14 @@
   "category": "modulos-especializados",
   "dependsOn": [],
   "requiredCapabilities": [],
+  "variables": [
+    {
+      "scope": "member",
+      "key": "anti-audio_apagados",
+      "valueType": "number",
+      "description": "Quantos áudios desta pessoa já foram apagados NESTE grupo."
+    }
+  ],
   "warnings": [
     {
       "level": "requirement",

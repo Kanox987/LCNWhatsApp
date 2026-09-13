@@ -6,6 +6,14 @@
   "category": "modulos-especializados",
   "dependsOn": [],
   "requiredCapabilities": [],
+  "variables": [
+    {
+      "scope": "member",
+      "key": "links_apagados",
+      "valueType": "number",
+      "description": "Quantas mensagens com link desta pessoa já foram apagadas NESTE grupo. Zere para perdoar alguém."
+    }
+  ],
   "warnings": [
     {
       "level": "requirement",

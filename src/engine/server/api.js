@@ -24,6 +24,6 @@ export function criarApi (db) {
   registrarRotasExecutions(roteador, db)
   registrarRotasEntities(roteador, db)
   registrarRotasTemplates(roteador, db)
-  registrarRotasMeta(roteador)
+  registrarRotasMeta(roteador, db)
   return roteador
 }

@@ -6,6 +6,14 @@
   "category": "utilitarios",
   "dependsOn": [],
   "requiredCapabilities": [],
+  "variables": [
+    {
+      "scope": "sender",
+      "key": "{{params.variavel}}",
+      "valueType": "text",
+      "description": "Marca gravada em quem usou o comando. Vale em qualquer conversa com essa pessoa."
+    }
+  ],
   "parameters": [
     {
       "key": "command",
@@ -46,30 +54,59 @@
     "schemaVersion": 1,
     "enabled": true,
     "name": "Marcar remetente com uma variável",
-    "scope": { "include": [], "exclude": [] },
-    "inputPolicy": { "acceptedMessageKinds": ["text"], "historyPolicy": "live_only" },
-    "responder": { "strategy": "weighted_rendezvous", "poolId": "{{params.poolId}}" },
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
     "flow": {
       "nodes": [
         {
           "id": "gatilho-comando",
           "type": "trigger.command",
-          "config": { "command": "{{params.command}}", "match": "exact", "allowFrom": "external" }
+          "config": {
+            "command": "{{params.command}}",
+            "match": "exact",
+            "allowFrom": "external"
+          }
         },
         {
           "id": "gravar-variavel",
           "type": "action.variable.set",
-          "config": { "scope": "sender", "key": "{{params.variavel}}", "value": "{{params.valor}}" }
+          "config": {
+            "scope": "sender",
+            "key": "{{params.variavel}}",
+            "value": "{{params.valor}}"
+          }
         },
         {
           "id": "resposta-whatsapp",
           "type": "action.whatsapp.reply",
-          "config": { "text": "{{params.confirmacao}}" }
+          "config": {
+            "text": "{{params.confirmacao}}"
+          }
         }
       ],
       "edges": [
-        { "from": "gatilho-comando", "to": "gravar-variavel", "on": "matched" },
-        { "from": "gravar-variavel", "to": "resposta-whatsapp", "on": "success" }
+        {
+          "from": "gatilho-comando",
+          "to": "gravar-variavel",
+          "on": "matched"
+        },
+        {
+          "from": "gravar-variavel",
+          "to": "resposta-whatsapp",
+          "on": "success"
+        }
       ]
     }
   }

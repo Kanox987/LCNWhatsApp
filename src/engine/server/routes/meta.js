@@ -1,11 +1,12 @@
 import fs from 'fs'
 import { ErroHttp } from '../transport.js'
 import { obterCapacidadesRuntime } from '../runtimeCapabilities.js'
+import { listarDeclaradas } from '../declaredVariables.js'
 
 const arquivoSchema = new URL('../schema/automation.v1.schema.json', import.meta.url)
 const documentSchema = JSON.parse(fs.readFileSync(arquivoSchema, 'utf8'))
 
-export function registrarRotasMeta (roteador) {
+export function registrarRotasMeta (roteador, db) {
   roteador.get('/meta/automation-editor', ({ query }) => {
     const schemaVersion = query?.get('schemaVersion')
     if (schemaVersion !== undefined && schemaVersion !== null && schemaVersion !== '1') {
@@ -38,6 +39,9 @@ export function registrarRotasMeta (roteador) {
       { namespace: 'var', field: 'global.<chave>', example: '{{var.global.total}}', description: 'Variável do sistema inteiro, não pertence a ninguém. Serve para totais gerais.' },
       { namespace: 'custom', field: '<qualquer chave>', example: '{{custom.vip}}', description: 'Atalho antigo para a variável desta conversa — o mesmo que {{var.chat.<chave>}}. Continua funcionando; prefira a forma nova em automações novas.' }
     ],
+    // Variáveis que os comandos instalados declararam usar. Aparecem assim
+    // que o comando é instalado, sem esperar alguma delas receber valor.
+    declared: db ? listarDeclaradas(db) : [],
     reserved: [
       { placeholder: '{{latencyMs}}', description: 'Tempo de resposta real em milissegundos, resolvido no instante exato do envio. Funciona sem namespace ou ponto.' }
     ]

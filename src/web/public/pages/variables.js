@@ -60,6 +60,36 @@ function linhaVariavel (variavel) {
   return el('div', { className: 'variable-row' }, [principal, copiar])
 }
 
+// Uma variável declarada por um comando. Além da descrição, mostra de onde
+// veio — sem isso a pessoa vê um contador estranho na lista e não faz ideia
+// de quem o criou nem se pode apagar.
+function linhaDeclarada (variavel) {
+  const copiar = button('Copiar', {
+    variant: 'secondary',
+    onClick: async (event) => {
+      const control = event.currentTarget
+      await copyText(variavel.usage)
+      control.textContent = 'Copiado!'
+      window.setTimeout(() => { control.textContent = 'Copiar' }, 1400)
+    }
+  })
+
+  const detalhe = []
+  if (variavel.valueType === 'number') detalhe.push('contador (número)')
+  else if (variavel.valueType === 'boolean') detalhe.push('sim ou não')
+  else detalhe.push('texto')
+  if (variavel.sourceTemplate) detalhe.push(`veio do comando "${variavel.sourceTemplate}"`)
+
+  return el('div', { className: 'variable-row' }, [
+    el('div', { className: 'variable-row-main' }, [
+      el('code', { className: 'variable-token', text: variavel.usage }),
+      el('p', { className: 'field-help', text: variavel.description || 'Sem descrição.' }),
+      el('p', { className: 'field-help muted', text: detalhe.join(' · ') })
+    ]),
+    copiar
+  ])
+}
+
 function grupoNamespace (namespace, variaveis) {
   return el('section', { className: 'panel' }, [
     el('div', { className: 'panel-heading' }, [
@@ -103,6 +133,21 @@ export async function renderVariables () {
 
   const grupos = [...porNamespace.entries()].map(([namespace, variaveis]) => grupoNamespace(namespace, variaveis))
 
+  // Variáveis que os comandos instalados trouxeram. Ficam num painel próprio,
+  // logo depois das do sistema: são as que a pessoa mais vai usar no dia a dia
+  // e as únicas que mudam conforme o que ela instala.
+  const declaradas = (meta.declared || []).length
+    ? el('section', { className: 'panel panel-accent' }, [
+      el('div', { className: 'panel-heading' }, [
+        el('div', {}, [
+          el('h2', { text: 'Contadores e marcas dos seus comandos' }),
+          el('p', { text: 'Criadas pelos comandos que você instalou. Já existem e podem ser usadas em qualquer outro comando seu — mesmo antes de receberem o primeiro valor.' })
+        ])
+      ]),
+      el('div', { className: 'variable-list' }, meta.declared.map(linhaDeclarada))
+    ])
+    : null
+
   const reservadas = (meta.reserved || []).length
     ? el('section', { className: 'panel' }, [
       el('div', { className: 'panel-heading' }, [
@@ -118,5 +163,5 @@ export async function renderVariables () {
     ])
     : null
 
-  return el('div', { className: 'stack-lg' }, [comoUsar, ...grupos, reservadas].filter(Boolean))
+  return el('div', { className: 'stack-lg' }, [comoUsar, declaradas, ...grupos, reservadas].filter(Boolean))
 }
