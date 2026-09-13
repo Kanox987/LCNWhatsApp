@@ -28,6 +28,11 @@ if [ "${1:-}" = "engine" ]; then
   exec node "$RAIZ/src/engine/cli.js" "$@"
 fi
 
+if [ "${1:-}" = "web" ]; then
+  shift
+  exec node "$RAIZ/src/web/cli.js" "$@"
+fi
+
 # Lê "campo": "valor" de runtime.json sem depender de Node (é um JSON plano
 # de strings simples — sed puro basta, e assim o modo container não exige
 # Node no host só pra descobrir o modo).

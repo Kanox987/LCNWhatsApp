@@ -1,5 +1,5 @@
 // src/engine/server/validate.js — validação do documento de automação
-// (JSON Schema + estrutural: referências e ciclo). Usa um banco :memory:
+// (JSON Schema + estrutural: referências, ciclo e linearidade). Usa um banco :memory:
 // só pra popular pool/connection que os testes de referência precisam.
 import { abrirBanco } from '../src/engine/server/db.js'
 import { validarAutomacao } from '../src/engine/server/validate.js'
@@ -51,7 +51,7 @@ check('campo obrigatório faltando (name) é rejeitado', r3.length > 0)
 
 // --- tipo de nó fora da lista v1 ---
 const r4 = validarAutomacao(db, docBase({ flow: { nodes: [{ id: 'a', type: 'action.qualquer_coisa', config: {} }], edges: [] } }))
-check('tipo de nó fora da lista v1 (trigger.command/action.http/action.whatsapp.reply) é rejeitado', r4.length > 0)
+check('tipo de nó fora da lista v1 é rejeitado', r4.length > 0)
 
 // --- edge apontando pra node.id inexistente ---
 const r5 = validarAutomacao(db, docBase({ flow: { ...docBase().flow, edges: [{ from: 'trigger', to: 'nao-existe', on: 'matched' }] } }))
@@ -100,6 +100,44 @@ const r9 = validarAutomacao(db, docBase({
   }
 }))
 check('grafo linear simples sem ciclo valida OK', r9.length === 0)
+
+// --- action.variable.set bem formada passa pelo schema ---
+const docVariableSet = docBase({
+  flow: {
+    nodes: [
+      { id: 'trigger', type: 'trigger.command', config: { command: '/set', match: 'exact', allowFrom: 'external' } },
+      { id: 'set', type: 'action.variable.set', config: { scope: 'sender', key: 'apelido', value: '{{message.text}}' } }
+    ],
+    edges: [{ from: 'trigger', to: 'set', on: 'matched' }]
+  }
+})
+const r10 = validarAutomacao(db, docVariableSet)
+check('action.variable.set bem formada valida sem erro', r10.length === 0)
+
+// --- scope fora de chat/sender é barrado pelo JSON Schema ---
+const docVariableScopeInvalido = structuredClone(docVariableSet)
+docVariableScopeInvalido.flow.nodes[1].config.scope = 'grupo'
+const r11 = validarAutomacao(db, docVariableScopeInvalido)
+check('action.variable.set com scope fora de chat/sender é rejeitada', r11.length > 0)
+
+// --- duas saídas success do mesmo nó violam a capacidade linear da v1 ---
+const r12 = validarAutomacao(db, docBase({
+  flow: {
+    nodes: [
+      { id: 'trigger', type: 'trigger.command', config: { command: '/x', match: 'exact', allowFrom: 'external' } },
+      { id: 'origem', type: 'action.variable.set', config: { scope: 'chat', key: 'x', value: '1' } },
+      { id: 'destino-a', type: 'action.whatsapp.reply', config: { text: 'a' } },
+      { id: 'destino-b', type: 'action.whatsapp.reply', config: { text: 'b' } }
+    ],
+    edges: [
+      { from: 'trigger', to: 'origem', on: 'matched' },
+      { from: 'origem', to: 'destino-a', on: 'success' },
+      { from: 'origem', to: 'destino-b', on: 'success' }
+    ]
+  }
+}))
+check('duas arestas success saindo do mesmo nó são rejeitadas', r12.length > 0)
+check('erro de ramificação aponta o on da segunda aresta conflitante', r12.some((e) => e.path === '/flow/edges/2/on' && e.message.includes('mais de uma aresta de saída')))
 
 // --- validador nunca lança, mesmo com entrada absurda ---
 let lancou = false

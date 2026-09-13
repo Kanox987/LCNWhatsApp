@@ -1,119 +1,19 @@
 import { ErroHttp, resposta } from '../transport.js'
 import { validarAutomacao } from '../validate.js'
-
-function jsonOuNull (valor) {
-  if (valor == null) return null
-  try { return JSON.parse(valor) } catch { return null }
-}
-
-function exporRevision (row) {
-  if (!row) return null
-  return {
-    id: row.id,
-    automationId: row.automation_id,
-    revision: row.revision,
-    status: row.status,
-    document: jsonOuNull(row.doc_json),
-    validationErrors: jsonOuNull(row.validation_errors_json),
-    createdAt: row.created_at
-  }
-}
-
-function extrairDocumento (body) {
-  const documento = body?.document ?? body
-  if (!documento || typeof documento !== 'object' || Array.isArray(documento)) {
-    throw new ErroHttp(400, 'Informe um documento de automação JSON.')
-  }
-  return structuredClone(documento)
-}
-
-function normalizarDocumento (documento, id, revision) {
-  if (documento.id !== undefined && documento.id !== id) {
-    throw new ErroHttp(400, `O id do documento deve ser ${id}.`)
-  }
-  if (documento.schemaVersion !== 1) throw new ErroHttp(400, 'Somente schemaVersion 1 é aceito nesta etapa.')
-  documento.id = id
-  documento.revision = revision
-  return documento
-}
-
-function salvarScopes (db, revisionId, documento) {
-  db.prepare('DELETE FROM automation_scopes WHERE automation_revision_id = ?').run(revisionId)
-  const inserir = db.prepare(`INSERT INTO automation_scopes
-    (automation_revision_id, direction, kind, ref_id) VALUES (?, ?, ?, ?)`)
-  for (const direction of ['include', 'exclude']) {
-    const refs = Array.isArray(documento?.scope?.[direction]) ? documento.scope[direction] : []
-    for (const ref of refs) {
-      if (typeof ref?.kind === 'string' && typeof ref?.id === 'string') {
-        inserir.run(revisionId, direction, ref.kind, ref.id)
-      }
-    }
-  }
-}
+import { criarServicoAutomacoes } from '../automationsService.js'
 
 export function registrarRotasAutomations (roteador, db) {
-  const obterAutomation = db.prepare('SELECT * FROM automations WHERE id = ?')
-  const obterUltimaRevision = db.prepare(`SELECT * FROM automation_revisions
-    WHERE automation_id = ? ORDER BY revision DESC LIMIT 1`)
-  const obterRevision = db.prepare(`SELECT * FROM automation_revisions
-    WHERE automation_id = ? AND revision = ?`)
-  const inserirRevision = db.prepare(`INSERT INTO automation_revisions
-    (automation_id, revision, status, doc_json, validation_errors_json, created_at)
-    VALUES (?, ?, 'draft', ?, NULL, ?)`)
+  const servico = criarServicoAutomacoes(db)
+  const {
+    obterAutomation, obterUltimaRevision, obterRevision,
+    exporAutomation, exporRevision, extrairDocumento, jsonOuNull,
+    criar, salvarRascunho, publicar, despublicar
+  } = servico
 
-  const exporAutomation = (row) => row && ({
-    id: row.id,
-    schemaVersion: row.schema_version,
-    enabled: row.enabled === 1,
-    activeRevisionId: row.active_revision_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    draft: exporRevision(obterUltimaRevision.get(row.id))
-  })
-
-  const criar = db.transaction((body) => {
-    const documentoRecebido = extrairDocumento(body)
-    const id = body?.document ? (body.id ?? documentoRecebido.id) : documentoRecebido.id
-    if (typeof id !== 'string' || !id.trim()) throw new ErroHttp(400, 'Campo obrigatório: id.')
-    const idLimpo = id.trim()
-    const documento = normalizarDocumento(documentoRecebido, idLimpo, 1)
-    const agora = new Date().toISOString()
-    try {
-      db.prepare(`INSERT INTO automations
-        (id, schema_version, enabled, active_revision_id, created_at, updated_at)
-        VALUES (?, 1, 0, NULL, ?, ?)`)
-        .run(idLimpo, agora, agora)
-    } catch (erro) {
-      if (erro.code?.startsWith('SQLITE_CONSTRAINT')) throw new ErroHttp(409, `Automação já cadastrada: ${idLimpo}.`)
-      throw erro
-    }
-    const resultado = inserirRevision.run(idLimpo, 1, JSON.stringify(documento), agora)
-    salvarScopes(db, resultado.lastInsertRowid, documento)
-    return exporAutomation(obterAutomation.get(idLimpo))
-  })
-
-  const salvarRascunho = db.transaction((id, body) => {
-    const automation = obterAutomation.get(id)
-    if (!automation) throw new ErroHttp(404, `Automação não encontrada: ${id}.`)
-    const ultima = obterUltimaRevision.get(id)
-    const proximaRevision = ultima?.status === 'draft' ? ultima.revision : (ultima?.revision ?? 0) + 1
-    const documento = normalizarDocumento(extrairDocumento(body), id, proximaRevision)
-    let revisionId
-    if (ultima?.status === 'draft') {
-      db.prepare(`UPDATE automation_revisions
-        SET doc_json = ?, validation_errors_json = NULL WHERE id = ?`)
-        .run(JSON.stringify(documento), ultima.id)
-      revisionId = ultima.id
-    } else {
-      const resultado = inserirRevision.run(id, proximaRevision, JSON.stringify(documento), new Date().toISOString())
-      revisionId = resultado.lastInsertRowid
-    }
-    salvarScopes(db, revisionId, documento)
-    db.prepare('UPDATE automations SET updated_at = ? WHERE id = ?').run(new Date().toISOString(), id)
-    return exporRevision(db.prepare('SELECT * FROM automation_revisions WHERE id = ?').get(revisionId))
-  })
-
-  roteador.get('/automations', () => db.prepare('SELECT * FROM automations ORDER BY id').all().map(exporAutomation))
+  // Automações nativas (ex: /menu, ver nativeAutomations.js) ficam fora
+  // da listagem normal — são conteúdo do próprio motor, não algo que o
+  // usuário criou ou deveria editar pelo wizard genérico.
+  roteador.get('/automations', () => db.prepare('SELECT * FROM automations WHERE native = 0 ORDER BY id').all().map(exporAutomation))
   roteador.post('/automations', ({ body }) => resposta(201, criar(body)))
   roteador.get('/automations/:id', ({ params }) => {
     const row = obterAutomation.get(params.id)
@@ -121,6 +21,20 @@ export function registrarRotasAutomations (roteador, db) {
     return exporAutomation(row)
   })
   roteador.delete('/automations/:id', ({ params }) => {
+    if (!obterAutomation.get(params.id)) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
+
+    // automation_runs referencia automations sem ON DELETE CASCADE (migração
+    // 002), então uma automação que já executou não pode simplesmente sumir —
+    // o banco recusa. Antes isso vazava como 500 "erro interno"; agora explica
+    // o que houve e qual é a saída. Apagar o histórico junto seria destruir
+    // auditoria, então continua sendo decisão de quem opera, não do sistema.
+    const execucoes = db.prepare('SELECT COUNT(*) AS total FROM automation_runs WHERE automation_id = ?').get(params.id)
+    if (execucoes.total > 0) {
+      throw new ErroHttp(409,
+        `Esta automação já executou ${execucoes.total} vez(es) e o histórico dessas execuções depende dela. ` +
+        'Para tirá-la do ar sem perder o histórico, use "Despublicar" ou desligue a automação.')
+    }
+
     const resultado = db.prepare('DELETE FROM automations WHERE id = ?').run(params.id)
     if (!resultado.changes) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
     return { removed: true, id: params.id }
@@ -137,7 +51,36 @@ export function registrarRotasAutomations (roteador, db) {
     if (!row) throw new ErroHttp(404, `Revisão ${revision} não encontrada para ${params.id}.`)
     return exporRevision(row)
   })
-  roteador.put('/automations/:id/draft', ({ params, body }) => salvarRascunho(params.id, body))
+  // O roteador já entrega o IncomingMessage ao handler, então a concorrência
+  // otimista usa If-Match real sem ampliar a abstração minimalista do transporte.
+  roteador.put('/automations/:id/draft', ({ params, body, req }) => {
+    return salvarRascunho(params.id, body, req?.headers?.['if-match'])
+  })
+
+  roteador.post('/automations/:id/publish', ({ params, body }) => publicar(params.id, body?.revision))
+  roteador.post('/automations/:id/unpublish', ({ params }) => despublicar(params.id))
+
+  roteador.put('/automations/:id/enabled', ({ params, body }) => {
+    if (typeof body?.enabled !== 'boolean') throw new ErroHttp(400, 'enabled deve ser true ou false.')
+    const automation = obterAutomation.get(params.id)
+    if (!automation) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
+    if (body.enabled && automation.active_revision_id === null) {
+      throw new ErroHttp(409, 'Não há revisão publicada pra habilitar esta automação.')
+    }
+    db.prepare('UPDATE automations SET enabled = ?, updated_at = ? WHERE id = ?')
+      .run(body.enabled ? 1 : 0, new Date().toISOString(), params.id)
+    return exporAutomation(obterAutomation.get(params.id))
+  })
+
+  // Alterna sombra/ao vivo sem precisar de nova revisão — é o "promove pra
+  // live no mesmo teste" que o plano descreve pro fluxo do /ping.
+  roteador.put('/automations/:id/deployment-mode', ({ params, body }) => {
+    if (!['shadow', 'live'].includes(body?.mode)) throw new ErroHttp(400, "mode deve ser 'shadow' ou 'live'.")
+    if (!obterAutomation.get(params.id)) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
+    db.prepare('UPDATE automations SET deployment_mode = ?, updated_at = ? WHERE id = ?')
+      .run(body.mode, new Date().toISOString(), params.id)
+    return exporAutomation(obterAutomation.get(params.id))
+  })
   roteador.post('/automations/:id/validate', ({ params, body }) => {
     if (!obterAutomation.get(params.id)) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
     const ultima = obterUltimaRevision.get(params.id)

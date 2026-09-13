@@ -20,6 +20,17 @@ try { const { rodarMigrations } = await import('../src/engine/server/db.js'); ro
 check('rodar migrations de novo no mesmo banco não lança (idempotente)', relancouSemErro)
 const versoes = db.prepare('SELECT version FROM schema_migrations').all().map((r) => r.version)
 check('cada migration só é registrada uma vez em schema_migrations', new Set(versoes).size === versoes.length)
+check('migration de consultas do painel foi aplicada', versoes.includes(3))
+
+const indices = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all().map((r) => r.name))
+for (const esperado of [
+  'idx_automation_runs_created',
+  'idx_automation_runs_automation_created',
+  'idx_automation_runs_status_created',
+  'idx_outbound_commands_target_status_created'
+]) {
+  check(`índice "${esperado}" existe após migrations`, indices.has(esperado))
+}
 
 // UNIQUE(automation_id, revision) — checa a constraint real, não só o nome da coluna.
 const agora = new Date().toISOString()

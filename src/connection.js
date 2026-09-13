@@ -25,11 +25,27 @@ import { EXIT_QUARANTINED } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel } from './engine/zapoAdapter.js'
 import { emitirEventoDebug } from './engine/eventSink.js'
+import { criarClienteEngine } from './engine/client.js'
+import { enviarEventoAoMotor } from './engine/gatewaySink.js'
+import { executarComandos } from './engine/gatewayExecutor.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
 const USAR_CODIGO = process.argv.includes('--code')
 const SESSION_ID = 'default'
+
+// Dispara o caminho novo sem bloquear nem substituir a captura existente.
+// Embora sink/executor sejam defensivos por conta própria, o catch final
+// protege o event emitter contra qualquer regressão futura nesses módulos.
+function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico) {
+  void enviarEventoAoMotor(clienteEngine, eventoCanonico).then(async (resultado) => {
+    if (!resultado.ok) return
+    for (const avaliacao of resultado.results || []) {
+      const comandos = (avaliacao.commands || []).filter((comando) => comando.status === 'pending')
+      if (comandos.length) await executarComandos(client, comandos, clienteEngine)
+    }
+  }).catch(() => {})
+}
 
 // Alimenta o diretório de contatos conhecidos (usado pelas telas de seleção
 // do dashboard) com quem já mandou mensagem — sem sync extra, orgânico.
@@ -119,6 +135,9 @@ export async function iniciar () {
   // enquanto (emitirEventoDebug) — nenhum consumidor real ainda. Recalculado
   // no hot-reload porque cfg.instancia.id pode ser editado ao vivo.
   let accountId = resolverAccountId({ cfg, pastaDados: PASTA_DADOS })
+  // Uma instância por processo, reaproveitada por todas as mensagens e por
+  // todas as reconexões do WaClient.
+  const clienteEngine = criarClienteEngine()
 
   // Hot-reload: a maioria do config (captura, transcrição, atualização) é lida ao
   // vivo pelos handlers via closure em `cfg`. Só reconecta quando muda algo que
@@ -223,18 +242,34 @@ export async function iniciar () {
     })
 
     client.on('message', async (event) => {
+      // Capturado antes de qualquer outro trabalho: é o t0 usado por
+      // automações como /ping pra medir latência de ponta a ponta
+      // (recebimento -> resposta enviada), incluindo o hop pelo motor.
+      const recebidoEmMs = Date.now()
       if (cfg.hardware?.debug) log(`message key.id=${event.key?.id} fromMe=${event.key?.fromMe}`)
       registrarContatoConhecido(event)
-      // Etapa 1 do motor de automação (Parte B) — puramente aditivo e
-      // isolado em try/catch: aoReceber() continua sendo o único consumidor
-      // de verdade. Um bug aqui NUNCA pode derrubar a captura real.
-      try { emitirEventoDebug(construirEventoDeMensagem(event, { accountId }), cfg, log) } catch (e) { if (cfg.hardware?.debug) log('evento canônico (debug) falhou:', e.message) }
+      // O motor é opcional: construção, debug e envio ficam isolados; o
+      // pipeline legado abaixo roda sempre, mesmo sem socket do motor.
+      try {
+        const eventoCanonico = construirEventoDeMensagem(event, { accountId, recebidoEmMs })
+        emitirEventoDebug(eventoCanonico, cfg, log)
+        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico)
+      } catch (e) {
+        if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
+      }
       await handler.aoReceber(event)
     })
 
     client.on('message_unavailable', async (event) => {
+      const recebidoEmMs = Date.now()
       if (cfg.hardware?.debug) log(`message_unavailable kind=${event.kind} resendRequested=${event.resendRequested}`)
-      try { emitirEventoDebug(construirEventoDeIndisponivel(event, { accountId }), cfg, log) } catch (e) { if (cfg.hardware?.debug) log('evento canônico (debug) falhou:', e.message) }
+      try {
+        const eventoCanonico = construirEventoDeIndisponivel(event, { accountId, recebidoEmMs })
+        emitirEventoDebug(eventoCanonico, cfg, log)
+        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico)
+      } catch (e) {
+        if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
+      }
       await handler.aoIndisponivel(event)
     })
 
@@ -243,6 +278,7 @@ export async function iniciar () {
         falhas = 0
         state.registrarSucessoConexao()
         state.limparQR()
+        state.limparCodigoPareamento()
         const creds = client.getCredentials?.()
         const jid = creds?.meJid
         log('Conectado como', jid || '(jid não disponível)')
@@ -337,7 +373,9 @@ export async function iniciar () {
           if (pedidoCodigo) return pedidoCodigo
           pedidoCodigo = client.auth.requestPairingCode(numero)
             .then((codigo) => {
-              log('Código de pareamento:', codigo.match(/.{1,4}/g)?.join('-') || codigo)
+              const formatado = codigo.match(/.{1,4}/g)?.join('-') || codigo
+              log('Código de pareamento:', formatado)
+              state.definirCodigoPareamento(formatado)
             })
             .finally(() => { pedidoCodigo = null })
           return pedidoCodigo

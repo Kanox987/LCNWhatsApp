@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "lcn-template-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["templateId", "templateVersion", "name", "description", "category", "parameters", "documentTemplate"],
+  "properties": {
+    "templateId": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "templateVersion": { "type": "integer", "minimum": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "category": { "type": "string", "enum": ["utilitarios", "configuracoes", "empresarial", "modulos-especializados"] },
+    "dependsOn": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "requiredCapabilities": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "warnings": {
+      "description": "Ressalvas que a pessoa PRECISA ver antes de instalar: onde o comando não funciona (WhatsApp Business, versões antigas), o que ele exige da máquina (ffmpeg), ou que ele depende de um recurso não oficial que pode parar de existir. Aparece no catálogo, junto do botão de instalar — nunca escondido só na descrição.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["level", "text"],
+        "properties": {
+          "level": {
+            "description": "info = funciona, mas há detalhe a saber. compatibility = não funciona em alguma plataforma ou versão. requirement = exige algo instalado na máquina. unofficial = usa recurso não documentado, pode ser removido pela Meta sem aviso.",
+            "enum": ["info", "compatibility", "requirement", "unofficial"]
+          },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "minEngineVersion": { "type": "integer", "minimum": 1, "default": 1 },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label", "type"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "help": { "type": "string" },
+          "type": { "type": "string", "enum": ["string", "number", "boolean"] },
+          "default": {}
+        }
+      }
+    },
+    "documentTemplate": { "type": "object" }
+  }
+}

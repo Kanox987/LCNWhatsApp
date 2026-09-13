@@ -1,0 +1,76 @@
+{
+  "templateId": "marcar-variavel",
+  "templateVersion": 1,
+  "name": "Marcar remetente com uma variável",
+  "description": "Quando alguém manda o comando, grava uma variável customizada nesse contato (ex: marcar como \"vip\") e confirma por mensagem — sem precisar editar cada contato manualmente na aba Dados.",
+  "category": "utilitarios",
+  "dependsOn": [],
+  "requiredCapabilities": [],
+  "parameters": [
+    {
+      "key": "command",
+      "label": "Comando",
+      "type": "string",
+      "default": "/vip",
+      "help": "A palavra que a pessoa digita pra acionar esta automação."
+    },
+    {
+      "key": "variavel",
+      "label": "Nome da variável",
+      "type": "string",
+      "default": "vip",
+      "help": "Fica disponível em outras automações como {{custom.<nome>}}."
+    },
+    {
+      "key": "valor",
+      "label": "Valor gravado",
+      "type": "string",
+      "default": "true",
+      "help": "O valor salvo na variável quando o comando é usado."
+    },
+    {
+      "key": "confirmacao",
+      "label": "Mensagem de confirmação",
+      "type": "string",
+      "default": "Pronto, variável registrada!",
+      "help": "O texto de resposta depois de gravar a variável."
+    },
+    {
+      "key": "poolId",
+      "label": "Pool que responde",
+      "type": "string",
+      "help": "Identificador do pool de números que vai responder este comando. Crie um pool na aba Automações antes de instalar, se ainda não tiver um."
+    }
+  ],
+  "documentTemplate": {
+    "schemaVersion": 1,
+    "enabled": true,
+    "name": "Marcar remetente com uma variável",
+    "scope": { "include": [], "exclude": [] },
+    "inputPolicy": { "acceptedMessageKinds": ["text"], "historyPolicy": "live_only" },
+    "responder": { "strategy": "weighted_rendezvous", "poolId": "{{params.poolId}}" },
+    "flow": {
+      "nodes": [
+        {
+          "id": "gatilho-comando",
+          "type": "trigger.command",
+          "config": { "command": "{{params.command}}", "match": "exact", "allowFrom": "external" }
+        },
+        {
+          "id": "gravar-variavel",
+          "type": "action.variable.set",
+          "config": { "scope": "sender", "key": "{{params.variavel}}", "value": "{{params.valor}}" }
+        },
+        {
+          "id": "resposta-whatsapp",
+          "type": "action.whatsapp.reply",
+          "config": { "text": "{{params.confirmacao}}" }
+        }
+      ],
+      "edges": [
+        { "from": "gatilho-comando", "to": "gravar-variavel", "on": "matched" },
+        { "from": "gravar-variavel", "to": "resposta-whatsapp", "on": "success" }
+      ]
+    }
+  }
+}

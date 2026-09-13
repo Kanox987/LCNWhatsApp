@@ -41,6 +41,8 @@ export const ARQ_ARQUIVO = path.join(PASTA_DADOS, 'archive.json')
 export const ARQ_RUNTIME = path.join(RAIZ, 'runtime.json')
 export const ARQ_CONTATOS = path.join(PASTA_DADOS, 'contatos.json')
 export const ARQ_GRUPOS = path.join(PASTA_DADOS, 'grupos.json')
+// Pares LID <-> telefone aprendidos das mensagens recebidas (ver src/lidMap.js).
+export const ARQ_LID_MAP = path.join(PASTA_DADOS, 'lid-map.json')
 export const ARQ_GRUPOS_REFRESH = path.join(PASTA_DADOS, 'grupos-refresh.request')
 
 export function garantirPastas () {

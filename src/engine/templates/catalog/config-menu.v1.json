@@ -1,0 +1,86 @@
+{
+  "templateId": "config-menu",
+  "templateVersion": 1,
+  "name": "Configurar menu (pelo WhatsApp)",
+  "description": "Permite mudar o texto do menu direto pela conversa, sem abrir o painel. Cada grupo guarda a própria configuração: o mesmo comando usado em dois grupos configura cada um separadamente. Restrito ao dono do bot.",
+  "category": "configuracoes",
+  "dependsOn": [],
+  "requiredCapabilities": [],
+  "warnings": [
+    {
+      "level": "info",
+      "text": "Restrito ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número consegue usar este comando (mandando mensagem para si mesmo) — é por aí que se cadastra o primeiro dono. Estranhos nunca alcançam, mesmo antes de configurar."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "command",
+      "label": "Comando de configuração",
+      "type": "string",
+      "default": "/configmenu",
+      "help": "Digite este comando seguido do texto novo. Exemplo: /configmenu Bem-vindo ao nosso grupo!"
+    },
+    {
+      "key": "confirmText",
+      "label": "Confirmação",
+      "type": "string",
+      "default": "Menu deste grupo atualizado.",
+      "help": "Resposta enviada quando a configuração é salva."
+    },
+    {
+      "key": "poolId",
+      "label": "Pool que responde",
+      "type": "string",
+      "help": "Identificador do pool de números que executa este comando."
+    }
+  ],
+  "documentTemplate": {
+    "schemaVersion": 1,
+    "enabled": true,
+    "name": "Configurar menu (pelo WhatsApp)",
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
+    "flow": {
+      "nodes": [
+        {
+          "id": "gatilho-comando",
+          "type": "trigger.command",
+          "config": {
+            "command": "{{params.command}}",
+            "match": "exact_or_args",
+            "allowFrom": "external",
+            "requireOwner": true
+          }
+        },
+        {
+          "id": "configurar",
+          "type": "action.menu.config",
+          "config": {
+            "field": "header",
+            "usageText": "Escreva o texto do menu depois do comando. Exemplo: {{params.command}} Bem-vindo!",
+            "confirmText": "{{params.confirmText}}"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "gatilho-comando",
+          "to": "configurar",
+          "on": "matched"
+        }
+      ]
+    }
+  }
+}

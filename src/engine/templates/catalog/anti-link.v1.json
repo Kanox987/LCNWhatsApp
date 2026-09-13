@@ -1,0 +1,143 @@
+{
+  "templateId": "anti-link",
+  "templateVersion": 1,
+  "name": "Anti-link",
+  "description": "Apaga mensagens com link automaticamente, sem precisar de comando. Você escolhe quantos avisos a pessoa recebe antes de ser removida do grupo. O contador é por pessoa e por grupo: avisos num grupo não somam com os de outro. O dono do bot nunca é removido.",
+  "category": "modulos-especializados",
+  "dependsOn": [],
+  "requiredCapabilities": [],
+  "warnings": [
+    {
+      "level": "requirement",
+      "text": "Para apagar mensagens e remover pessoas, o número precisa ser ADMINISTRADOR do grupo. Sem isso o WhatsApp recusa a ação e ela aparece como falha no histórico."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "limite",
+      "label": "Avisos antes de remover",
+      "type": "number",
+      "default": 3,
+      "help": "Quantas vezes a pessoa pode mandar link antes de ser removida do grupo. Use um número alto (ex: 999) se quiser só apagar e avisar, sem nunca remover."
+    },
+    {
+      "key": "aviso",
+      "label": "Texto do aviso",
+      "type": "string",
+      "default": "Link não é permitido neste grupo.",
+      "help": "Enviado toda vez que um link é apagado, antes de a pessoa atingir o limite."
+    },
+    {
+      "key": "poolId",
+      "label": "Pool que responde",
+      "type": "string",
+      "help": "Identificador do pool de números que executa esta regra."
+    }
+  ],
+  "documentTemplate": {
+    "schemaVersion": 1,
+    "enabled": true,
+    "name": "Anti-link",
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
+    "flow": {
+      "nodes": [
+        {
+          "id": "detectar-link",
+          "type": "trigger.message",
+          "config": {
+            "allowFrom": "external",
+            "messageKinds": [
+              "text"
+            ],
+            "containsLink": true
+          }
+        },
+        {
+          "id": "apagar",
+          "type": "action.whatsapp.delete",
+          "config": {}
+        },
+        {
+          "id": "contar",
+          "type": "action.variable.increment",
+          "config": {
+            "scope": "group_member",
+            "key": "links_apagados",
+            "by": 1
+          }
+        },
+        {
+          "id": "passou-do-limite",
+          "type": "condition.compare",
+          "config": {
+            "left": {
+              "source": "variable",
+              "scope": "group_member",
+              "key": "links_apagados"
+            },
+            "operator": "gte",
+            "right": {
+              "source": "literal",
+              "value": "{{params.limite}}"
+            }
+          }
+        },
+        {
+          "id": "remover",
+          "type": "action.group.remove",
+          "config": {
+            "who": "sender",
+            "neverRemoveOwner": true
+          }
+        },
+        {
+          "id": "avisar",
+          "type": "action.whatsapp.reply",
+          "config": {
+            "text": "{{params.aviso}} (aviso {{var.member.links_apagados}})"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "detectar-link",
+          "to": "apagar",
+          "on": "matched"
+        },
+        {
+          "from": "apagar",
+          "to": "contar",
+          "on": "success"
+        },
+        {
+          "from": "contar",
+          "to": "passou-do-limite",
+          "on": "success"
+        },
+        {
+          "from": "passou-do-limite",
+          "to": "remover",
+          "on": "true"
+        },
+        {
+          "from": "passou-do-limite",
+          "to": "avisar",
+          "on": "false"
+        }
+      ]
+    }
+  }
+}

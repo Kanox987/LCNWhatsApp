@@ -1,5 +1,6 @@
 import { gerarQuadlet } from '../src/instances/quadlet.js'
 import { PASTA_MODELOS_COMPARTILHADA } from '../src/instances/paths.js'
+import { PASTA_RUN as PASTA_RUN_ENGINE } from '../src/engine/paths.js'
 
 let falhas = 0
 const check = (nome, ok) => {
@@ -40,9 +41,20 @@ check('volume de modelos não aparece sem Whisper', !semRecursos.includes(PASTA_
 const blocoContainer = semRecursos.split('[Container]\n')[1].split('\n\n[Service]')[0]
 check('bloco Container não tem nenhuma política de restart', !/(^|\n)Restart=/m.test(blocoContainer) && !/--restart(?:=|\s|$)/m.test(blocoContainer))
 check('restart existe somente sob Service', semRecursos.includes('[Service]\nRestart=on-failure'))
+
+// Achado real de revisão de segurança: StartLimitIntervalSec/StartLimitBurst
+// são diretivas de [Unit] (systemd.unit(5)), não de [Service] — sob
+// [Service] o systemd as ignora silenciosamente ("chave desconhecida") e o
+// limite de tentativas nunca é aplicado de verdade.
+const blocoUnit = semRecursos.split('[Unit]\n')[1].split('\n\n[Container]')[0]
+const blocoService = semRecursos.split('[Service]\n')[1].split('\n\n[Install]')[0]
+check('StartLimitIntervalSec está sob [Unit], não [Service]', blocoUnit.includes('StartLimitIntervalSec=600') && !blocoService.includes('StartLimitIntervalSec='))
+check('StartLimitBurst está sob [Unit], não [Service]', blocoUnit.includes('StartLimitBurst=8') && !blocoService.includes('StartLimitBurst='))
 check('RestartPreventExitStatus contém os quatro códigos terminais', semRecursos.includes('RestartPreventExitStatus=21 22 23 24'))
 check('LCN_SUPERVISED é definido', semRecursos.includes('Environment=LCN_SUPERVISED=systemd'))
 check('LCN_INSTANCE_ID é definido', semRecursos.includes('Environment=LCN_INSTANCE_ID=wa-000001'))
+check('socket do motor usa o caminho montado dentro do container', semRecursos.includes('Environment=LCN_ENGINE_SOCKET=/run/lcn-engine/engine.sock'))
+check('diretório do socket do motor é montado no gateway', semRecursos.includes(`Volume=${PASTA_RUN_ENGINE}:/run/lcn-engine`))
 check('Exec sempre passa pelo lock', semRecursos.includes('Exec=/app/bin/lock-and-run.sh /app/data/instance.lock node index.js'))
 
 for (const volume of [

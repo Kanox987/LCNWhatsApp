@@ -15,6 +15,7 @@
  * conhecidos, inclusive o que a doc do helper deixa em aberto.
  */
 import * as bandwidth from './bandwidth.js'
+import * as state from './state.js'
 
 /*
  * Tira as "cascas" que o WhatsApp coloca em volta da mensagem real
@@ -175,6 +176,7 @@ export async function baixarBuffer (client, node, tipo, maxBytes) {
     : maxBytes
   await bandwidth.aguardarDownload(estimativa)
   const bytes = await client.message.downloadBytes({ [`${tipo}Message`]: node }, { maxBytes })
+  state.incr('bytesBaixados', bytes.length)
   return Buffer.from(bytes)
 }
 

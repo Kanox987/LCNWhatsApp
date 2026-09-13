@@ -3,6 +3,7 @@ import path from 'path'
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'url'
 import { ARQ_DB } from '../paths.js'
+import { garantirAutomacoesNativas } from './nativeAutomations.js'
 
 const PASTA_MIGRACOES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations')
 
@@ -43,6 +44,7 @@ export function abrirBanco (arquivo = ARQ_DB, { pastaMigracoes = PASTA_MIGRACOES
     db.pragma('foreign_keys = ON')
     db.pragma('journal_mode = WAL')
     rodarMigrations(db, pastaMigracoes)
+    garantirAutomacoesNativas(db)
     if (arquivo !== ':memory:') {
       try { fs.chmodSync(arquivo, 0o600) } catch {}
     }

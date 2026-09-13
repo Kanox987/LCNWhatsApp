@@ -53,7 +53,7 @@ export function criarRoteador () {
   return roteador
 }
 
-function lerCorpoJson (req) {
+export function lerCorpoJson (req) {
   return new Promise((resolve, reject) => {
     const partes = []
     let tamanho = 0
@@ -78,7 +78,7 @@ function lerCorpoJson (req) {
   })
 }
 
-function enviarJson (res, status, body) {
+export function enviarJson (res, status, body) {
   const conteudo = JSON.stringify(body ?? null)
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',

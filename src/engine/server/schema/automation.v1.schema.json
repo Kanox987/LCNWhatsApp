@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://lcnwhatsapp.local/schema/automation.v1.schema.json",
   "title": "Documento de automação LCN v1",
-  "description": "A v1 aceita apenas trigger.command, action.http e action.whatsapp.reply. Outros tipos de nó são rejeitados. Referências e ciclos são validados pela camada estrutural.",
+  "description": "A v1 aceita trigger.command, condition.compare, action.http, action.variable.set, action.variable.increment, action.whatsapp.reply e action.menu.render. Outros tipos de nó são rejeitados. Referências, ciclos, gatilho único e as saídas admitidas por tipo de nó são validados pela camada estrutural. O que o motor de fato EXECUTA é declarado em runtimeCapabilities.js e imposto no publish — o schema é mais permissivo que o runtime de propósito (action.http é o caso).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "revision", "enabled", "name", "scope", "inputPolicy", "responder", "flow"],
@@ -12,6 +12,14 @@
     "revision": { "type": "integer", "minimum": 1 },
     "enabled": { "type": "boolean" },
     "name": { "type": "string", "minLength": 1 },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "menuLabel": { "type": "string", "minLength": 1 },
+        "menuDescription": { "type": "string" }
+      }
+    },
     "scope": {
       "type": "object",
       "additionalProperties": false,
@@ -55,8 +63,19 @@
           "items": {
             "oneOf": [
               { "$ref": "#/definitions/triggerCommand" },
+              { "$ref": "#/definitions/triggerMessage" },
               { "$ref": "#/definitions/actionHttp" },
-              { "$ref": "#/definitions/actionWhatsappReply" }
+              { "$ref": "#/definitions/actionVariableSet" },
+              { "$ref": "#/definitions/actionWhatsappReply" },
+              { "$ref": "#/definitions/actionMenuRender" },
+              { "$ref": "#/definitions/actionMenuConfig" },
+              { "$ref": "#/definitions/actionVariableIncrement" },
+              { "$ref": "#/definitions/actionWhatsappSticker" },
+              { "$ref": "#/definitions/actionWhatsappRecover" },
+              { "$ref": "#/definitions/actionWhatsappDelete" },
+              { "$ref": "#/definitions/actionWhatsappRich" },
+              { "$ref": "#/definitions/actionGroupRemove" },
+              { "$ref": "#/definitions/conditionCompare" }
             ]
           }
         },
@@ -69,7 +88,7 @@
             "properties": {
               "from": { "type": "string", "minLength": 1 },
               "to": { "type": "string", "minLength": 1 },
-              "on": { "enum": ["matched", "success", "error"] }
+              "on": { "enum": ["matched", "success", "error", "true", "false"] }
             }
           }
         }
@@ -100,7 +119,85 @@
           "properties": {
             "command": { "type": "string", "minLength": 1 },
             "match": { "enum": ["exact", "prefix", "keyword", "exact_or_args"] },
-            "allowFrom": { "const": "external" }
+            "allowFrom": { "const": "external" },
+            "requireOwner": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "triggerMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "trigger.message" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allowFrom"],
+          "properties": {
+            "allowFrom": { "const": "external" },
+            "messageKinds": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "enum": ["text", "audio", "image", "video", "document", "view_once", "unavailable", "unknown"] }
+            },
+            "containsLink": { "type": "boolean" },
+            "keywords": {
+              "type": "array",
+              "maxItems": 50,
+              "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+            },
+            "requireOwner": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "actionWhatsappRich": {
+      "description": "Mensagem com formatação rica (código colorido, LaTeX, tabela). ATENÇÃO: usa um caminho NÃO OFICIAL do WhatsApp — a mensagem viaja marcada como conteúdo da Meta AI, que é o que destrava o renderizador. Pode parar de funcionar sem aviso e não deve ser o formato padrão de nada importante.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.rich" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text"],
+          "properties": {
+            "text": { "type": "string", "minLength": 1 },
+            "richKind": { "enum": ["code", "latex", "text"] },
+            "language": { "type": "string", "maxLength": 40 },
+            "fallbackText": { "type": "string" }
+          }
+        }
+      }
+    },
+    "actionWhatsappDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.delete" },
+        "config": { "type": "object", "additionalProperties": false, "properties": {} }
+      }
+    },
+    "actionGroupRemove": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.group.remove" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "who": { "enum": ["sender", "target"] },
+            "neverRemoveOwner": { "type": "boolean" }
           }
         }
       }
@@ -129,6 +226,133 @@
         }
       }
     },
+    "comparableOperand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "value"],
+          "properties": {
+            "source": { "const": "literal" },
+            "value": { "type": ["string", "number", "boolean"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "scope", "key"],
+          "properties": {
+            "source": { "const": "variable" },
+            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global"] },
+            "categoryKey": { "type": "string", "minLength": 1 },
+            "key": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "field"],
+          "properties": {
+            "source": { "const": "event" },
+            "field": { "enum": ["message.text", "message.kind", "sender.id", "chat.id", "chat.kind", "target.id", "sender.isOwner", "message.args"] }
+          }
+        }
+      ]
+    },
+    "conditionCompare": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "condition.compare" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["left", "operator", "right"],
+          "properties": {
+            "left": { "$ref": "#/definitions/comparableOperand" },
+            "operator": { "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "not_contains"] },
+            "right": { "$ref": "#/definitions/comparableOperand" }
+          }
+        }
+      }
+    },
+    "actionWhatsappRecover": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.recover" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "destination": { "enum": ["same_chat", "saved_messages", "fixed"] },
+            "destinationId": { "type": "string", "minLength": 1 },
+            "caption": { "type": "string" },
+            "notFoundText": { "type": "string" }
+          }
+        }
+      }
+    },
+    "actionWhatsappSticker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.sticker" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "notFoundText": { "type": "string" }
+          }
+        }
+      }
+    },
+    "actionVariableIncrement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.variable.increment" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "key", "by"],
+          "properties": {
+            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global"] },
+            "categoryKey": { "type": "string", "minLength": 1 },
+            "key": { "type": "string", "minLength": 1 },
+            "by": { "type": "integer", "minimum": -1000000, "maximum": 1000000 }
+          }
+        }
+      }
+    },
+    "actionVariableSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.variable.set" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "key", "value"],
+          "properties": {
+            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global"] },
+            "categoryKey": { "type": "string", "minLength": 1 },
+            "key": { "type": "string", "minLength": 1 },
+            "value": { "type": "string" }
+          }
+        }
+      }
+    },
     "actionWhatsappReply": {
       "type": "object",
       "additionalProperties": false,
@@ -142,6 +366,44 @@
           "required": ["text"],
           "properties": {
             "text": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "actionMenuConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.menu.config" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "field": { "enum": ["header", "footer", "emptyText", "buttonTitle", "format"] },
+            "usageText": { "type": "string" },
+            "confirmText": { "type": "string" }
+          }
+        }
+      }
+    },
+    "actionMenuRender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.menu.render" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "format": { "enum": ["text", "interactive"] },
+            "header": { "type": "string" },
+            "footer": { "type": "string" },
+            "emptyText": { "type": "string" },
+            "buttonTitle": { "type": "string" }
           }
         }
       }

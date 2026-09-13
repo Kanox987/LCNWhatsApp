@@ -1,0 +1,729 @@
+// Avaliador de eventos canônicos contra automações publicadas — Etapa 3.5
+// do plano. Um único caminho de código serve sombra E ao vivo: a diferença
+// é só o que acontece depois de um match (grava "teria executado" vs. gera
+// comando executável) — decisão já registrada no plano pra não precisar de
+// uma "Etapa 3 modo sombra" separada.
+import crypto from 'crypto'
+import { ErroHttp } from './transport.js'
+import { interpolar } from './interpolate.js'
+import { ehDono, podeUsarComandoRestrito } from './owners.js'
+import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
+import {
+  ErroDeContador,
+  aplicarNasVariaveis,
+  carregarCategoria,
+  carregarVariaveis,
+  gravarAtributo,
+  incrementarAtributo,
+  resolverAlvo,
+  resolverEscopo
+} from './attributeScopes.js'
+
+// Fluxo malformado que passou pela validação de publish (documento adulterado
+// no banco, revisão antiga de antes de uma regra nova). Vira status 'error' no
+// run — nunca truncar o fluxo em silêncio, que esconderia meia execução.
+class ErroDeFluxo extends Error {}
+
+function jsonOuNull (valor) {
+  if (valor == null) return null
+  try { return JSON.parse(valor) } catch { return null }
+}
+
+function kindDoEscopo (chat) {
+  return chat.kind === 'group' ? 'group' : 'contact'
+}
+
+// scope.include vazio NUNCA significa "todos" — decisão explícita do plano
+// (item 2 das "três decisões a fechar antes do primeiro publish"). Sem
+// include nenhum, a automação não casa com JID nenhum.
+function escopoCasa (refs, chat) {
+  const includes = refs.filter((r) => r.direction === 'include')
+  const excludes = refs.filter((r) => r.direction === 'exclude')
+  const kindEsperado = kindDoEscopo(chat)
+  const bateInclude = includes.some((r) => r.kind === kindEsperado && r.ref_id === chat.id)
+  if (!bateInclude) return false
+  const bateExclude = excludes.some((r) => r.kind === kindEsperado && r.ref_id === chat.id)
+  return !bateExclude
+}
+
+function acharTrigger (documento) {
+  return (documento?.flow?.nodes || []).find((n) => typeof n?.type === 'string' && n.type.startsWith('trigger.')) || null
+}
+
+// Detector de link próprio, fechado. Deliberadamente NÃO aceita regex vinda do
+// usuário: além do risco de expressão catastrófica, uma regex livre num gatilho
+// que roda em toda mensagem é superfície demais. Segue a heurística que os bots
+// de referência usam para não marcar reticências e números decimais como link.
+const TLD_COMUM = /\b[a-z0-9][a-z0-9-]{0,61}\.(com|net|org|br|io|me|gg|app|dev|xyz|info|tv|co|link|site|online|shop|store|club|live|news|blog|top|fun|bet|vip)\b/i
+const ESQUEMA = /\b(https?:\/\/|www\.)\S{2,}/i
+
+export function contemLink (texto) {
+  if (typeof texto !== 'string' || !texto.trim()) return false
+  if (ESQUEMA.test(texto)) return true
+  // Sem esquema, exige um domínio com TLD conhecido. "3.5" e "etc..." não
+  // passam, que era o falso-positivo clássico desses bots.
+  return TLD_COMUM.test(texto)
+}
+
+// Gatilho que dispara sem comando: por tipo de mídia, por link, por palavra.
+// É o que os "anti-*" e "auto-*" dos bots de referência precisam.
+function eventoCasaGatilhoDeMensagem (evento, config) {
+  const tipos = config?.messageKinds
+  if (Array.isArray(tipos) && tipos.length && !tipos.includes(evento.message.kind)) return false
+
+  const texto = typeof evento.message.text === 'string' ? evento.message.text : ''
+
+  if (config?.containsLink === true && !contemLink(texto)) return false
+  if (config?.containsLink === false && contemLink(texto)) return false
+
+  if (Array.isArray(config?.keywords) && config.keywords.length) {
+    const baixo = texto.toLowerCase()
+    const achou = config.keywords.some((p) => typeof p === 'string' && p && baixo.includes(p.toLowerCase()))
+    if (!achou) return false
+  }
+
+  return true
+}
+
+// Barreira NÃO configurável, aplicada antes de qualquer gatilho automático.
+// Diferente de allowFrom (que é campo do documento e pode ser desmarcado),
+// isto não tem como desligar: um gatilho que reage a toda mensagem não pode
+// reagir às próprias mensagens do bot nem a status/transmissão, sob risco de
+// laço entre bots e de tempestade de execuções.
+function barreiraDeGatilhoAutomatico (evento) {
+  if (evento.sender?.authoredBySelf === true) return false
+  const chatId = evento.chat?.id || ''
+  if (chatId.endsWith('@broadcast') || chatId.endsWith('@newsletter')) return false
+  if (evento.chat?.kind === 'channel') return false
+  return true
+}
+
+function textoCasaComando (texto, config) {
+  if (typeof texto !== 'string') return false
+  const alvo = texto.trim()
+  const comando = config.command
+  switch (config.match) {
+    case 'exact': return alvo.toLowerCase() === comando.toLowerCase()
+    case 'prefix': return alvo.toLowerCase().startsWith(comando.toLowerCase())
+    case 'keyword': return new RegExp(`(^|\\s)${comando.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`, 'i').test(alvo)
+    case 'exact_or_args': {
+      const baixo = alvo.toLowerCase()
+      const cmdBaixo = comando.toLowerCase()
+      return baixo === cmdBaixo || baixo.startsWith(`${cmdBaixo} `)
+    }
+    default: return false
+  }
+}
+
+// O que a pessoa escreveu DEPOIS do comando: "/adv fulano bagunçou" -> "fulano
+// bagunçou". Sem isso, todo comando que recebe parâmetro pelo chat (a maioria
+// nos bots de referência) fica sem como ler o que veio.
+export function extrairArgumentos (texto, comando) {
+  if (typeof texto !== 'string' || typeof comando !== 'string') return ''
+  const limpo = texto.trim()
+  if (limpo.toLowerCase().startsWith(comando.toLowerCase())) {
+    return limpo.slice(comando.length).trim()
+  }
+  return ''
+}
+
+const CAMPOS_DE_EVENTO = {
+  'message.text': (evento) => evento?.message?.text,
+  'message.kind': (evento) => evento?.message?.kind,
+  'sender.id': (evento) => evento?.sender?.id,
+  'chat.id': (evento) => evento?.chat?.id,
+  'chat.kind': (evento) => evento?.chat?.kind,
+  'target.id': (evento) => resolverAlvo(evento) ?? undefined
+}
+
+// Campos que dependem do banco, resolvidos com o contexto já montado.
+const CAMPOS_DE_CONTEXTO = {
+  'sender.isOwner': (contexto) => contexto?.sender?.isOwner === true,
+  'message.args': (contexto) => contexto?.message?.args
+}
+
+// Resolve um operando para seu valor BRUTO (número continua número), nunca
+// para o texto já interpolado: comparar "10" com "3" como texto daria 10 < 3.
+function resolverOperando (db, operando, evento, contexto) {
+  if (operando.source === 'literal') return operando.value
+  if (operando.source === 'event') {
+    if (CAMPOS_DE_CONTEXTO[operando.field]) return CAMPOS_DE_CONTEXTO[operando.field](contexto)
+    return CAMPOS_DE_EVENTO[operando.field]?.(evento)
+  }
+
+  const alvo = resolverEscopo(operando.scope, evento, { categoryKey: operando.categoryKey })
+  if (!alvo) return undefined
+  if (operando.scope === 'category') carregarCategoria(db, contexto.var, operando.categoryKey)
+
+  const ramo = operando.scope === 'category'
+    ? contexto.var.category?.[operando.categoryKey]
+    : contexto.var[ramoDoEscopo(operando.scope)]
+  return ramo && Object.hasOwn(ramo, operando.key) ? ramo[operando.key] : undefined
+}
+
+function ramoDoEscopo (escopo) {
+  if (escopo === 'sender') return 'sender'
+  if (escopo === 'group_member') return 'member'
+  if (escopo === 'target') return 'target'
+  if (escopo === 'target_group_member') return 'targetMember'
+  if (escopo === 'global') return 'global'
+  return 'chat'
+}
+
+function comoNumero (valor) {
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : undefined
+  if (typeof valor === 'string' && valor.trim() !== '') {
+    const n = Number(valor)
+    return Number.isFinite(n) ? n : undefined
+  }
+  return undefined
+}
+
+function comoTexto (valor) {
+  if (valor === undefined || valor === null) return undefined
+  return typeof valor === 'string' ? valor : String(valor)
+}
+
+function compararValores (esquerda, operador, direita) {
+  if (operador === 'contains' || operador === 'not_contains') {
+    const alvo = comoTexto(esquerda)
+    const agulha = comoTexto(direita)
+    if (alvo === undefined || agulha === undefined) return false
+    const achou = alvo.toLowerCase().includes(agulha.toLowerCase())
+    return operador === 'contains' ? achou : !achou
+  }
+
+  if (operador === 'eq' || operador === 'neq') {
+    const nEsq = comoNumero(esquerda)
+    const nDir = comoNumero(direita)
+    // Dois números comparam como número; qualquer outro par compara como
+    // texto, para "true" bater com true e "vip" com "vip".
+    const igual = (nEsq !== undefined && nDir !== undefined)
+      ? nEsq === nDir
+      : comoTexto(esquerda) === comoTexto(direita)
+    return operador === 'eq' ? igual : !igual
+  }
+
+  // Ordem só faz sentido entre números. Um contador que ainda não existe é
+  // undefined e a comparação é falsa — nunca tratado como zero, senão
+  // "avisos >= 0" removeria alguém que nunca infringiu nada.
+  const nEsq = comoNumero(esquerda)
+  const nDir = comoNumero(direita)
+  if (nEsq === undefined || nDir === undefined) return false
+  switch (operador) {
+    case 'gt': return nEsq > nDir
+    case 'gte': return nEsq >= nDir
+    case 'lt': return nEsq < nDir
+    case 'lte': return nEsq <= nDir
+    default: return false
+  }
+}
+
+// Executa UM nó e devolve por qual aresta seguir ('success' para ação,
+// 'true'/'false' para condição). Só roda no caminho ao vivo — em sombra
+// nada aqui é chamado, então nenhum efeito é persistido.
+function executarNo (db, no, evento, contexto, comandos) {
+  switch (no.type) {
+    case 'action.whatsapp.reply': {
+      const payload = { chatId: evento.chat.id, text: interpolar(no.config.text, contexto) }
+      // O motor não sabe quando a resposta vai sair de verdade pelo WhatsApp
+      // — só o gateway sabe, na hora do envio. Por isso o texto pode conter o
+      // placeholder literal "{{latencyMs}}" (ex: template /ping) e o motor só
+      // repassa o instante de recebimento pro gateway resolver o valor real
+      // logo antes de mandar (ver gatewayExecutor.js). Não é um motor de
+      // template genérico — só esse um placeholder.
+      if (typeof no.config.text === 'string' && no.config.text.includes('{{latencyMs}}') && typeof evento.receivedAtMs === 'number') {
+        payload.receivedAtMs = evento.receivedAtMs
+      }
+      comandos.push({ commandType: 'whatsapp.reply', payload })
+      return 'success'
+    }
+
+    case 'action.whatsapp.sticker': {
+      // O motor NUNCA vê a mídia: repassa o token opaco que só o processo do
+      // gateway que o criou sabe resolver (mediaRefCache). Quem baixa e
+      // converte é o gateway — mesma fronteira que /recover e visu única já
+      // respeitam. Sem mídia no evento, não gera comando de figurinha: manda
+      // (se configurado) só um aviso de texto explicando o que faltou.
+      const mediaRef = evento.message?.mediaRef
+      if (mediaRef) {
+        comandos.push({
+          commandType: 'whatsapp.sticker',
+          payload: { chatId: evento.chat.id, mediaRef, sourceKind: evento.message.kind }
+        })
+      } else if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+        comandos.push({
+          commandType: 'whatsapp.reply',
+          payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+        })
+      }
+      return 'success'
+    }
+
+    case 'action.whatsapp.recover': {
+      // O comando que deu origem ao projeto, agora configurável em vez de
+      // fixo no código. O motor decide COM BASE NUM TOKEN e num tipo — nunca
+      // recebe a mídia da visu única, que continua só na memória do gateway.
+      const citada = evento.message?.quotedMediaRef
+      if (!citada?.token) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+        }
+        return 'success'
+      }
+
+      const destino = no.config?.destination || 'saved_messages'
+      // 'saved_messages' vira null aqui de propósito: só o gateway sabe qual é
+      // o JID da própria conta, e inventar isso no motor daria destino errado
+      // quando o mesmo documento roda em números diferentes.
+      const chatDestino = destino === 'same_chat'
+        ? evento.chat.id
+        : (destino === 'fixed' ? (no.config?.destinationId || null) : null)
+
+      comandos.push({
+        commandType: 'whatsapp.recover',
+        payload: {
+          chatId: evento.chat.id,
+          destination: destino,
+          destinationId: chatDestino,
+          mediaRef: citada.token,
+          mediaKind: citada.mediaKind,
+          ...(typeof no.config?.caption === 'string' && no.config.caption
+            ? { caption: interpolar(no.config.caption, contexto) }
+            : {})
+        }
+      })
+      return 'success'
+    }
+
+    case 'action.whatsapp.rich': {
+      // Formatação rica (código colorido, LaTeX). CAMINHO NÃO OFICIAL: ver o
+      // comentário em gatewayExecutor.js — a mensagem precisa viajar marcada
+      // como conteúdo da Meta AI para o app renderizar. O fallback em texto
+      // é obrigatório, não opcional, porque isto pode parar de funcionar
+      // sem aviso do dia para a noite.
+      const texto = interpolar(no.config.text, contexto)
+      comandos.push({
+        commandType: 'whatsapp.rich',
+        payload: {
+          chatId: evento.chat.id,
+          text: texto,
+          richKind: no.config.richKind || 'code',
+          language: no.config.language || 'javascript',
+          fallbackText: no.config.fallbackText ? interpolar(no.config.fallbackText, contexto) : texto
+        }
+      })
+      return 'success'
+    }
+
+    case 'action.whatsapp.delete': {
+      // Apagar a mensagem que acionou o gatilho. Precisa da chave original,
+      // que o gateway já mandou em providerRef — o motor só repassa, não
+      // remonta endereço de mensagem por conta própria.
+      if (!evento.providerRef?.id) {
+        throw new ErroDeFluxo('Sem a referência da mensagem original não dá para apagá-la.')
+      }
+      comandos.push({
+        commandType: 'whatsapp.delete',
+        payload: { chatId: evento.chat.id, messageRef: evento.providerRef }
+      })
+      return 'success'
+    }
+
+    case 'action.group.remove': {
+      // Remover alguém do grupo é a ação mais destrutiva do catálogo e não tem
+      // desfazer. Três travas, todas aqui e não configuráveis para menos:
+      // só em grupo, nunca sem alvo resolvido, e (por padrão) nunca um dono.
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para remover participante dentro de um grupo.')
+      }
+      const quem = no.config?.who === 'target' ? resolverAlvo(evento) : evento.sender?.id
+      if (!quem) {
+        throw new ErroDeFluxo('Não há quem remover: o comando não indicou ninguém.')
+      }
+      if (no.config?.neverRemoveOwner !== false && ehDono(db, quem)) {
+        // Silencioso de propósito: uma regra automática tentando remover o
+        // dono é engano de configuração, não motivo para derrubar a execução.
+        return 'success'
+      }
+      comandos.push({
+        commandType: 'group.remove',
+        payload: { chatId: evento.chat.id, participantId: quem }
+      })
+      return 'success'
+    }
+
+    case 'action.menu.config': {
+      // Configura o menu DESTA conversa pelo próprio WhatsApp. O valor vem do
+      // que a pessoa escreveu depois do comando. Restrição de quem pode fazer
+      // isso é do GATILHO (requireOwner), não daqui — assim a mesma ação serve
+      // para um dono, e futuramente para um admin de grupo.
+      const argumento = (contexto.message?.args || '').trim()
+      const campo = no.config?.field || 'header'
+
+      if (!argumento) {
+        comandos.push({
+          commandType: 'whatsapp.reply',
+          payload: { chatId: evento.chat.id, text: no.config?.usageText || 'Escreva o texto novo depois do comando.' }
+        })
+        return 'success'
+      }
+
+      const alvo = evento.chat.kind === 'group'
+        ? { scopeKind: 'group', scopeId: evento.chat.id, key: CHAVE_MENU }
+        : { scopeKind: 'contact', scopeId: evento.chat.id, key: CHAVE_MENU }
+
+      if (campo === 'format' && !FORMATOS_DE_MENU.includes(argumento)) {
+        comandos.push({
+          commandType: 'whatsapp.reply',
+          payload: { chatId: evento.chat.id, text: `Formato inválido. Use ${FORMATOS_DE_MENU.join(' ou ')}.` }
+        })
+        return 'success'
+      }
+
+      // Preserva o que já estava configurado: mudar o cabeçalho não pode
+      // apagar o rodapé que alguém configurou antes.
+      const atual = lerConfigDeMenu(db, alvo)
+      gravarConfigDeMenu(db, alvo, { ...atual, [campo]: argumento })
+
+      comandos.push({
+        commandType: 'whatsapp.reply',
+        payload: { chatId: evento.chat.id, text: (no.config?.confirmText || 'Menu atualizado.') }
+      })
+      return 'success'
+    }
+
+    case 'action.menu.render': {
+      const menu = renderizarMenu(db, no, evento)
+      // Formato interativo vira um comando próprio, com os itens
+      // ESTRUTURADOS: o gateway é quem sabe montar a mensagem de botões do
+      // WhatsApp, e cai para texto sozinho se o envio interativo falhar —
+      // mensagem com botão depende de suporte do app de quem recebe, então
+      // nunca pode ser um caminho sem saída.
+      if (menu.config.format === 'interactive' && menu.itens.length) {
+        comandos.push({
+          commandType: 'whatsapp.menu',
+          payload: {
+            chatId: evento.chat.id,
+            title: menu.config.buttonTitle,
+            header: menu.config.header,
+            footer: menu.config.footer,
+            fallbackText: menu.texto,
+            items: menu.itens.map((item) => ({ id: item.label, label: item.label, description: item.description || '' }))
+          }
+        })
+        return 'success'
+      }
+      comandos.push({
+        commandType: 'whatsapp.reply',
+        payload: { chatId: evento.chat.id, text: menu.texto }
+      })
+      return 'success'
+    }
+
+    case 'action.variable.set': {
+      const alvo = resolverEscopo(no.config.scope, evento, { categoryKey: no.config.categoryKey })
+      // Escopo que não existe neste evento (ex: group_member numa conversa
+      // direta) é ignorado, não é erro: a mesma automação pode valer nos dois
+      // lugares e só ter o contador de membro fazendo sentido em grupo.
+      if (alvo) {
+        const valor = interpolar(no.config.value, contexto)
+        gravarAtributo(db, alvo, no.config.key, valor)
+        aplicarNasVariaveis(contexto.var, no.config.scope, no.config.key, valor, { categoryKey: no.config.categoryKey })
+      }
+      return 'success'
+    }
+
+    case 'action.variable.increment': {
+      const alvo = resolverEscopo(no.config.scope, evento, { categoryKey: no.config.categoryKey })
+      if (alvo) {
+        const novo = incrementarAtributo(db, alvo, no.config.key, no.config.by)
+        aplicarNasVariaveis(contexto.var, no.config.scope, no.config.key, novo, { categoryKey: no.config.categoryKey })
+      }
+      return 'success'
+    }
+
+    case 'condition.compare': {
+      const esquerda = resolverOperando(db, no.config.left, evento, contexto)
+      const direita = resolverOperando(db, no.config.right, evento, contexto)
+      return compararValores(esquerda, no.config.operator, direita) ? 'true' : 'false'
+    }
+
+    default:
+      // Nó que o schema aceita mas o runtime não executa nunca deveria chegar
+      // aqui — o publish barra isso. Se chegou, o documento é inconsistente
+      // com o runtime e a execução para com erro, nunca segue pela metade.
+      throw new ErroDeFluxo(`Nó "${no.type}" não é executável pelo motor.`)
+  }
+}
+
+// Interpretador de caminho: anda o grafo a partir da aresta "matched" do
+// gatilho, seguindo a saída que cada nó devolve. Substituiu a antiga coleta
+// linear, que só conhecia "success" e encerrava em SILÊNCIO ao revisitar um
+// nó — com ramificação, silêncio viraria execução pela metade sem ninguém saber.
+function executarFluxo (db, documento, triggerId, evento) {
+  const nodesPorId = new Map(documento.flow.nodes.map((n) => [n.id, n]))
+  const gatilho = nodesPorId.get(triggerId)
+  const comandos = []
+  const alvo = resolverAlvo(evento)
+  const contexto = {
+    message: { ...evento.message, args: extrairArgumentos(evento.message?.text, gatilho?.config?.command) },
+    // isOwner entra como campo do remetente (e não como variável de usuário)
+    // porque é uma propriedade do evento, não algo que a automação grava.
+    sender: { ...evento.sender, isOwner: ehDono(db, evento.sender?.id) },
+    chat: evento.chat,
+    // Sem menção nem citação não existe alvo — o ramo fica vazio e
+    // {{target.id}} permanece literal no texto, sinalizando o erro de uso em
+    // vez de mandar uma mensagem com um buraco no meio.
+    target: alvo ? { id: alvo } : {},
+    var: carregarVariaveis(db, evento)
+  }
+  // {{custom.X}} sempre significou "variável desta conversa" — mantido como
+  // alias vivo (mesma referência) para não quebrar documento já publicado.
+  contexto.custom = contexto.var.chat
+
+  const visitados = new Set()
+  // O publish já rejeita ciclo, então o limite é rede de segurança contra
+  // documento adulterado direto no banco ou revisão antiga de antes da regra.
+  const limitePassos = documento.flow.nodes.length
+  let edge = documento.flow.edges.find((e) => e.from === triggerId && e.on === 'matched')
+  let passos = 0
+
+  while (edge) {
+    if (++passos > limitePassos) throw new ErroDeFluxo('O fluxo passou do limite de passos — provável ciclo.')
+    const no = nodesPorId.get(edge.to)
+    if (!no) throw new ErroDeFluxo(`A aresta aponta para um nó inexistente: "${edge.to}".`)
+    if (visitados.has(no.id)) throw new ErroDeFluxo(`O nó "${no.id}" seria executado duas vezes.`)
+    visitados.add(no.id)
+
+    const saida = executarNo(db, no, evento, contexto, comandos)
+    edge = documento.flow.edges.find((e) => e.from === no.id && e.on === saida)
+  }
+
+  return comandos
+}
+
+function inserirEvento (db, evento) {
+  const jaExiste = db.prepare('SELECT 1 FROM inbound_events WHERE id = ?').get(evento.eventId)
+  if (jaExiste) return false
+  db.prepare(`INSERT INTO inbound_events
+    (id, account_id, chat_id, chat_kind, sender_id, message_kind, message_text, replay, raw_json, received_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(
+      evento.eventId, evento.accountId, evento.chat.id, evento.chat.kind, evento.sender.id,
+      evento.message.kind, evento.message.text ?? null, evento.replay ? 1 : 0,
+      JSON.stringify(evento), new Date().toISOString()
+    )
+  return true
+}
+
+function candidatosPublicados (db) {
+  return db.prepare(`
+    SELECT a.id AS automation_id, a.deployment_mode, a.native, r.id AS revision_id, r.doc_json
+    FROM automations a
+    JOIN automation_revisions r ON r.id = a.active_revision_id
+    WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL
+  `).all()
+}
+
+// Automações do próprio sistema (hoje só /menu, ver nativeAutomations.js)
+// pulam a checagem de escopo — a regra "scope.include vazio nunca casa
+// com tudo" existe pra conteúdo AUTORADO PELO USUÁRIO, nunca foi pensada
+// pra um comando nativo que precisa funcionar em qualquer chat.
+function passaEscopoPara (candidato, refs, chat) {
+  if (candidato.native) return true
+  return escopoCasa(refs, chat)
+}
+
+// Lista as automações (não-nativas, publicadas, ao vivo, habilitadas)
+// visíveis no chat do evento — base do /menu nativo. Reusa exatamente a
+// mesma semântica de escopo (`escopoCasa`) que o avaliador já aplica pra
+// decidir se uma automação "roda" ali.
+function automacoesVisiveisEm (db, chatDoEvento) {
+  const linhas = db.prepare(`
+    SELECT a.active_revision_id, r.doc_json
+    FROM automations a
+    JOIN automation_revisions r ON r.id = a.active_revision_id
+    WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL
+      AND a.native = 0 AND a.deployment_mode = 'live'
+  `).all()
+
+  const obterRefs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?')
+  const visiveis = []
+  for (const linha of linhas) {
+    const documento = jsonOuNull(linha.doc_json)
+    if (!documento) continue
+    const refs = obterRefs.all(linha.active_revision_id)
+    if (!escopoCasa(refs, chatDoEvento)) continue
+    const trigger = acharTrigger(documento)
+    const rotulo = documento.display?.menuLabel || trigger?.config?.command
+    // Regra automática (anti-link e afins) não é um comando que alguém digita,
+    // então não vira linha no menu — a não ser que quem instalou tenha dado um
+    // menuLabel de propósito, o que só faz sentido para anunciar a regra.
+    if (!rotulo) continue
+    visiveis.push({
+      label: rotulo,
+      description: documento.display?.menuDescription || null
+    })
+  }
+  return visiveis
+}
+
+// Monta o menu daquela conversa. A configuração vem em cascata (config do
+// grupo > padrão do tipo > config do nó > padrão do código), então o mesmo
+// documento de automação produz menus diferentes em grupos diferentes.
+function renderizarMenu (db, acao, evento) {
+  const config = resolverConfigDeMenu(db, evento.chat, acao.config)
+  const visiveis = automacoesVisiveisEm(db, evento.chat)
+
+  if (!visiveis.length) {
+    return { config, itens: [], texto: config.emptyText }
+  }
+
+  const linhas = visiveis.map((item) => item.description ? `• ${item.label} — ${item.description}` : `• ${item.label}`)
+  const partes = [config.header, ...linhas]
+  if (config.footer) partes.push('', config.footer)
+
+  return { config, itens: visiveis, texto: partes.join('\n') }
+}
+
+function jaAvaliado (db, eventId, revisionId) {
+  return db.prepare('SELECT * FROM automation_runs WHERE event_id = ? AND automation_revision_id = ?').get(eventId, revisionId)
+}
+
+function comandosDoRun (db, runId) {
+  return db.prepare('SELECT * FROM outbound_commands WHERE run_id = ?').all(runId).map(exporComando)
+}
+
+function exporComando (row) {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    targetAccountId: row.target_account_id,
+    commandType: row.command_type,
+    payload: jsonOuNull(row.payload_json),
+    status: row.status
+  }
+}
+
+// Ponto de entrada. Idempotente: reenviar o MESMO evento nunca reavalia nem
+// duplica comando — devolve de novo o que já tinha sido decidido da
+// primeira vez (achado real do design: rede instável entre gateway e motor
+// pode causar retry do POST /events).
+export function avaliarEvento (db, evento) {
+  if (!evento?.eventId || !evento?.accountId || !evento?.chat?.id || !evento?.message?.kind) {
+    throw new ErroHttp(400, 'Evento canônico inválido: faltam campos obrigatórios.')
+  }
+
+  const transacao = db.transaction(() => {
+    const novo = inserirEvento(db, evento)
+    const resultados = []
+
+    for (const candidato of candidatosPublicados(db)) {
+      const existente = novo ? null : jaAvaliado(db, evento.eventId, candidato.revision_id)
+      if (existente) {
+        resultados.push({
+          automationId: candidato.automation_id,
+          status: existente.status,
+          commands: comandosDoRun(db, existente.id)
+        })
+        continue
+      }
+
+      const documento = jsonOuNull(candidato.doc_json)
+      const trigger = documento && acharTrigger(documento)
+      let status = 'no_match'
+      let comandosGerados = []
+      let detalheErro = null
+
+      if (documento && trigger) {
+        const refs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?').all(candidato.revision_id)
+        const passaEscopo = passaEscopoPara(candidato, refs, evento.chat)
+        const passaHistoria = documento.inputPolicy.historyPolicy !== 'live_only' || evento.replay !== true
+        const passaTipo = documento.inputPolicy.acceptedMessageKinds.includes(evento.message.kind)
+        // Comando restrito é o canal de administração pelo WhatsApp, então
+        // mensagem do PRÓPRIO número precisa passar mesmo com
+        // allowFrom:'external' — é assim que quem está com a conta na mão
+        // cadastra o primeiro dono. Para comando comum, a regra de sempre
+        // continua valendo (bot não reage a si mesmo).
+        const ehAdministrativo = trigger.config.requireOwner === true
+        const passaAutor = ehAdministrativo ||
+          trigger.config.allowFrom !== 'external' || evento.sender.authoredBySelf !== true
+        const ehAutomatico = trigger.type === 'trigger.message'
+        // inputPolicy.acceptedMessageKinds continua valendo nos dois casos: é a
+        // política de entrada da automação, anterior ao gatilho.
+        const passaComando = passaTipo && (ehAutomatico
+          ? (barreiraDeGatilhoAutomatico(evento) && eventoCasaGatilhoDeMensagem(evento, trigger.config))
+          : textoCasaComando(evento.message.text, trigger.config))
+        // Comando restrito a dono: enquanto ninguém foi marcado como dono, a
+        // instalação continua aberta (senão nasce trancada e nem dá pra
+        // configurar o primeiro dono pelo WhatsApp). Depois do primeiro,
+        // vale a lista.
+        const passaDono = trigger.config.requireOwner !== true ||
+          podeUsarComandoRestrito(db, evento.sender.id, { souEuMesmo: evento.sender.authoredBySelf === true })
+
+        if (passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
+          status = candidato.deployment_mode === 'live' ? 'matched_live' : 'matched_shadow'
+          if (status === 'matched_live') {
+            try {
+              // Savepoint por automação (transação aninhada do better-sqlite3):
+              // se o fluxo falhar no meio, as variáveis que ele já tinha
+              // gravado voltam atrás. Sem isso, "incrementou o aviso e só
+              // depois quebrou" deixaria o contador adiantado para sempre.
+              comandosGerados = db.transaction(() => executarFluxo(db, documento, trigger.id, evento))()
+            } catch (erro) {
+              // Fluxo inconsistente ou contador corrompido não pode derrubar a
+              // avaliação das OUTRAS automações do mesmo evento: vira erro
+              // registrado nesta, e o laço segue.
+              if (!(erro instanceof ErroDeFluxo) && !(erro instanceof ErroDeContador)) throw erro
+              status = 'error'
+              detalheErro = { message: erro.message }
+              comandosGerados = []
+            }
+          }
+        }
+      }
+
+      const agora = new Date().toISOString()
+      const runResult = db.prepare(`INSERT INTO automation_runs
+        (event_id, automation_id, automation_revision_id, deployment_mode, status, detail_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(evento.eventId, candidato.automation_id, candidato.revision_id, candidato.deployment_mode, status,
+          detalheErro ? JSON.stringify(detalheErro) : null, agora)
+
+      const inserirComando = db.prepare(`INSERT INTO outbound_commands
+        (id, run_id, target_account_id, command_type, payload_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+      for (const cmd of comandosGerados) {
+        inserirComando.run(crypto.randomUUID(), runResult.lastInsertRowid, evento.accountId, cmd.commandType, JSON.stringify(cmd.payload), agora)
+      }
+
+      resultados.push({
+        automationId: candidato.automation_id,
+        status,
+        commands: comandosDoRun(db, runResult.lastInsertRowid)
+      })
+    }
+
+    return resultados
+  })
+
+  return { eventId: evento.eventId, results: transacao() }
+}
+
+export function registrarResultadoExecucao (db, commandId, { status, detail } = {}) {
+  if (!['sent', 'failed', 'outcome_unknown'].includes(status)) {
+    throw new ErroHttp(400, "status deve ser 'sent', 'failed' ou 'outcome_unknown'.")
+  }
+  const row = db.prepare('SELECT * FROM outbound_commands WHERE id = ?').get(commandId)
+  if (!row) throw new ErroHttp(404, `Comando não encontrado: ${commandId}.`)
+  db.prepare('UPDATE outbound_commands SET status = ?, resolved_at = ? WHERE id = ?')
+    .run(status, new Date().toISOString(), commandId)
+  if (detail !== undefined) {
+    db.prepare('UPDATE automation_runs SET detail_json = ? WHERE id = ?').run(JSON.stringify(detail), row.run_id)
+  }
+  return exporComando(db.prepare('SELECT * FROM outbound_commands WHERE id = ?').get(commandId))
+}

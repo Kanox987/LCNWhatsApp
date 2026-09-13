@@ -55,7 +55,7 @@ function normalizarGrupos (grupos) {
 // Busca a lista de grupos que a conta participa e grava em disco.
 export async function atualizarGrupos (client) {
   const grupos = await client.group.queryAllGroups()
-  const lista = normalizarGrupos(grupos).map((g) => ({ id: g.id, nome: g.subject || g.id }))
+  const lista = normalizarGrupos(grupos).map((g) => ({ id: g.jid, nome: g.subject || g.jid }))
   escreverJson(ARQ_GRUPOS, lista)
   return lista
 }

@@ -35,7 +35,7 @@ const eventoTexto = construirEventoDeMensagem({
   message: { conversation: 'oi, tudo bem?' },
   timestampSeconds: 1893456000,
   pushName: 'Fulano'
-}, { accountId: 'acc-1' })
+}, { accountId: 'acc-1', recebidoEmMs: 1893456000123 })
 checkBool('DM texto: forma canônica válida', validarFormaCanonica(eventoTexto))
 check('DM texto: chat.kind = direct', eventoTexto.chat.kind, 'direct')
 check('DM texto: message.kind = text', eventoTexto.message.kind, 'text')
@@ -43,6 +43,13 @@ check('DM texto: texto extraído certo', eventoTexto.message.text, 'oi, tudo bem
 check('DM texto: sender.id cai pro remoteJid (sem alt)', eventoTexto.sender.id, '5511999@s.whatsapp.net')
 check('DM texto: sender.authoredBySelf = false', eventoTexto.sender.authoredBySelf, false)
 checkBool('DM texto: sem mediaRef (não é mídia)', eventoTexto.message.mediaRef === undefined)
+check('DM texto: receivedAtMs repassa o valor do gateway (t0 pra latência)', eventoTexto.receivedAtMs, 1893456000123)
+
+const eventoSemRecebidoEmMs = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSG1B', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'oi' }
+}, { accountId: 'acc-1' })
+checkBool('DM texto: sem recebidoEmMs explícito, cai pra Date.now() (número válido)', typeof eventoSemRecebidoEmMs.receivedAtMs === 'number')
 
 // --- comando em grupo, sender via participantAlt (LID vs PN) ---
 const eventoGrupo = construirEventoDeMensagem({
@@ -55,6 +62,21 @@ const eventoGrupo = construirEventoDeMensagem({
 }, { accountId: 'acc-1' })
 check('grupo: chat.kind = group', eventoGrupo.chat.kind, 'group')
 check('grupo: sender.id usa participantAlt (PN), não o LID cru', eventoGrupo.sender.id, '5511988888888@s.whatsapp.net')
+check('grupo: chat.id continua o JID do grupo (sem alt aplicável)', eventoGrupo.chat.id, '120363000000000000@g.us')
+
+// --- DM onde o Zapo entrega remoteJid como LID (achado real testando /ping
+// ao vivo: scope.include configurado com o JID de telefone nunca casava
+// porque chat.id ficava com o LID cru enquanto sender.id já vinha
+// normalizado por remoteJidAlt) ---
+const eventoDmComLid = construirEventoDeMensagem({
+  key: {
+    remoteJid: '224867676901549@lid', remoteJidAlt: '5522981197896@s.whatsapp.net',
+    id: 'MSG4', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false
+  },
+  message: { conversation: '/ping' }
+}, { accountId: 'acc-1' })
+check('DM com LID: chat.id usa remoteJidAlt (PN), não o LID cru', eventoDmComLid.chat.id, '5522981197896@s.whatsapp.net')
+check('DM com LID: sender.id bate com chat.id (é a mesma pessoa)', eventoDmComLid.sender.id, eventoDmComLid.chat.id)
 
 // --- imagem view-once: mediaRef precisa ser um token opaco, nunca o node cru ---
 const nodeImagem = { url: 'x', mediaKey: 'segredo-de-verdade', directPath: '/v/abc', mimetype: 'image/jpeg' }

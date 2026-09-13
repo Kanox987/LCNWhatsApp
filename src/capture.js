@@ -258,6 +258,7 @@ export function criarHandler ({ client, getConfig }) {
       await bandwidth.aguardarUpload(buffer.length)
       await client.message.send(destino, conteudo)
       if (tipo === 'audio') await client.message.send(destino, legenda)
+      state.incr('bytesEnviados', buffer.length)
 
       state.marcarCaptura()
       log(`Enviado como mídia normal ✅  (arquivado: ${path.basename(arquivo)})`)

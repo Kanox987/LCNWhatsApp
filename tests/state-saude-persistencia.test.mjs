@@ -29,7 +29,7 @@ try {
   // "Processo 1": grava saude com 12 falhas consecutivas (ex: caiu no meio
   // de um ciclo de retry, antes de bater o limiar de quarentena).
   const r1 = rodarNoProcessoFilho(`
-    import * as state from '${new URL('../src/state.js', import.meta.url).pathname}'
+    import * as state from '${new URL('../src/state.js', import.meta.url).href}'
     for (let i = 0; i < 12; i++) state.registrarFalhaConexao()
     state.gravar()
   `)
@@ -42,7 +42,7 @@ try {
   // um bot reiniciando faria — e também simula o que index.js faz no boot
   // (chama gravar() logo de cara). Antes do fix, isso zerava o contador.
   const r2 = rodarNoProcessoFilho(`
-    import * as state from '${new URL('../src/state.js', import.meta.url).pathname}'
+    import * as state from '${new URL('../src/state.js', import.meta.url).href}'
     state.gravar()   // igual a index.js:49 — não pode zerar saude persistida
     console.log(JSON.stringify(state.ler()?.saude))
   `)
@@ -53,12 +53,17 @@ try {
   // registrarSucessoConexao no processo novo deve zerar normalmente (um
   // sucesso real É o fim do ciclo de falhas, isso continua certo).
   const r3 = rodarNoProcessoFilho(`
-    import * as state from '${new URL('../src/state.js', import.meta.url).pathname}'
+    import * as state from '${new URL('../src/state.js', import.meta.url).href}'
     state.registrarSucessoConexao()
     console.log(JSON.stringify(state.ler()?.saude))
   `)
   const saudeAposSucesso = JSON.parse(r3.stdout.trim().split('\n').pop())
   check('sucesso real ainda zera falhasConsecutivas', saudeAposSucesso?.falhasConsecutivas === 0)
+
+  // Achado de revisão de segurança: state.json carrega QR e código de
+  // pareamento — não pode ficar legível por outros usuários locais.
+  const modoEstado = fs.statSync(ARQ_ESTADO).mode & 0o777
+  check('state.json fica 0600 depois de gravado (nunca legível por outros)', modoEstado === 0o600)
 } finally {
   if (backup !== null) fs.writeFileSync(ARQ_ESTADO, backup)
   else { try { fs.unlinkSync(ARQ_ESTADO) } catch {} }

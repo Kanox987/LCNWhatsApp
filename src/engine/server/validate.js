@@ -62,7 +62,65 @@ export function validarAutomacao (db, documento) {
     }
   })
 
+  const saidasPorEvento = new Set()
+  edges.forEach((edge, indice) => {
+    if (typeof edge?.from !== 'string' || typeof edge?.on !== 'string') return
+    const chave = JSON.stringify([edge.from, edge.on])
+    if (saidasPorEvento.has(chave)) {
+      erros.push({
+        path: `/flow/edges/${indice}/on`,
+        message: `o nó ${edge.from} não pode ter mais de uma aresta de saída com on '${edge.on}'`
+      })
+    } else {
+      saidasPorEvento.add(chave)
+    }
+  })
+
   if (temCiclo(ids, edges)) erros.push({ path: '/flow/edges', message: 'o fluxo não pode conter ciclo' })
+
+  // maxTriggers:1 era anunciado em runtimeCapabilities mas nunca imposto aqui,
+  // e o avaliador usa .find() — com dois gatilhos, o segundo era ignorado em
+  // silêncio e a automação parecia publicada e correta.
+  const gatilhos = nodes.filter((node) => typeof node?.type === 'string' && node.type.startsWith('trigger.'))
+  if (!gatilhos.length) {
+    erros.push({ path: '/flow/nodes', message: 'o fluxo precisa de exatamente um gatilho' })
+  } else if (gatilhos.length > 1) {
+    erros.push({ path: '/flow/nodes', message: `o fluxo só aceita um gatilho, mas tem ${gatilhos.length}` })
+  }
+
+  // Cada tipo de nó só pode sair pelas arestas que ele de fato produz. Sem
+  // isso dá pra publicar uma condição ligada por 'success' (que nunca
+  // dispara) ou uma ação ligada por 'true' — fluxo que morre calado.
+  const tipoPorId = new Map(nodes.filter((n) => typeof n?.id === 'string').map((n) => [n.id, n.type]))
+  const SAIDAS_ADMITIDAS = {
+    trigger: new Set(['matched']),
+    condition: new Set(['true', 'false']),
+    action: new Set(['success'])
+  }
+  edges.forEach((edge, indice) => {
+    const tipo = tipoPorId.get(edge?.from)
+    if (typeof tipo !== 'string') return
+    const familia = tipo.split('.')[0]
+    const admitidas = SAIDAS_ADMITIDAS[familia]
+    if (admitidas && typeof edge?.on === 'string' && !admitidas.has(edge.on)) {
+      erros.push({
+        path: `/flow/edges/${indice}/on`,
+        message: `${tipo} não produz a saída '${edge.on}' (aceita: ${[...admitidas].join(', ')})`
+      })
+    }
+  })
+
+  // Uma condição sem os dois caminhos é meia decisão: o lado faltante encerra
+  // o fluxo em silêncio, que é exatamente o que a ramificação veio evitar.
+  nodes.forEach((node, indice) => {
+    if (node?.type !== 'condition.compare') return
+    for (const lado of ['true', 'false']) {
+      const temSaida = edges.some((e) => e.from === node.id && e.on === lado)
+      if (!temSaida) {
+        erros.push({ path: `/flow/nodes/${indice}`, message: `a condição ${node.id} precisa de uma saída '${lado}'` })
+      }
+    }
+  })
 
   const connectionExiste = db.prepare('SELECT 1 FROM connections WHERE id = ?')
   nodes.forEach((node, indice) => {

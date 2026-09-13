@@ -18,7 +18,9 @@ const INICIAL = {
     quedas: 0,
     processadas: 0,   // visu única capturada e reenviada
     ignoradas: 0,     // (aprox.) mensagens que chegaram ao handler e foram descartadas
-    ultimaCaptura: null
+    ultimaCaptura: null,
+    bytesBaixados: 0, // total baixado (mídia), acumulado desde este boot — painel de recursos (Parte C, Módulo 6)
+    bytesEnviados: 0  // total reenviado (mídia), acumulado desde este boot
   },
   // saude.falhasConsecutivas é persistido (não só uma variável em memória em
   // connection.js) de propósito: precisa sobreviver a reinícios de processo
@@ -55,7 +57,16 @@ export function gravar () {
     garantirPastas()
     estado.memoriaMB = Math.round(process.memoryUsage().rss / 1048576)
     estado.atualizadoEm = Date.now()
-    fs.writeFileSync(ARQ_ESTADO, JSON.stringify(estado, null, 2) + '\n')
+    // Achado de revisão de segurança: state.json carrega o QR e o código de
+    // pareamento (ambos permitem sequestrar o pareamento da conta enquanto
+    // válidos) — sem modo explícito o arquivo herda o umask do processo
+    // (visto 0664 nesta máquina), legível por outros usuários locais.
+    // `mode` no writeFileSync só pega na CRIAÇÃO (open(2) só aplica o modo
+    // quando O_CREAT cria o arquivo de fato) — como este arquivo já pode
+    // existir de uma execução anterior com permissão mais aberta, o
+    // chmodSync explícito é necessário pra corrigir isso de verdade.
+    fs.writeFileSync(ARQ_ESTADO, JSON.stringify(estado, null, 2) + '\n', { mode: 0o600 })
+    fs.chmodSync(ARQ_ESTADO, 0o600)
   } catch {}
 }
 
@@ -74,6 +85,22 @@ export function definirQR (qr) {
 export function limparQR () {
   estado.qr = null
   estado.qrEm = null
+  agendarFlush()
+}
+
+// Código de pareamento (modo --code) — mesmo espírito do QR: hoje só ia pro
+// log do processo, sem jeito de um painel (terminal remoto ou web) ler sem
+// depender de stdout. Persistido igual ao QR pro agente conseguir expor via
+// API sem precisar acompanhar logs.
+export function definirCodigoPareamento (codigo) {
+  estado.codigoPareamento = codigo
+  estado.codigoPareamentoEm = Date.now()
+  gravar()
+}
+
+export function limparCodigoPareamento () {
+  estado.codigoPareamento = null
+  estado.codigoPareamentoEm = null
   agendarFlush()
 }
 

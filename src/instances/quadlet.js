@@ -5,6 +5,7 @@ import {
   EXIT_QUARANTINED
 } from '../exitCodes.js'
 import { PASTA_MODELOS_COMPARTILHADA } from './paths.js'
+import { PASTA_RUN as PASTA_RUN_ENGINE } from '../engine/paths.js'
 
 const CODIGOS_TERMINAIS = [
   EXIT_LOGOUT_REPAIR_NEEDED,
@@ -30,6 +31,13 @@ export function gerarQuadlet (instancia) {
     `Description=LCNWhatsApp instance ${instancia.instanceId} (${descricaoSegura(instancia.label)})`,
     'After=network-online.target',
     'Wants=network-online.target',
+    // StartLimitIntervalSec/StartLimitBurst são diretivas de [Unit], não de
+    // [Service] (systemd.unit(5)) — achado real de revisão de segurança:
+    // estavam sob [Service] abaixo, onde o systemd as ignora silenciosamente
+    // ("chave desconhecida"), fazendo o limite de 8 tentativas/600s nunca
+    // ser aplicado de verdade contra reinícios em loop.
+    'StartLimitIntervalSec=600',
+    'StartLimitBurst=8',
     '',
     '[Container]',
     `Image=${imagem}`,
@@ -37,10 +45,12 @@ export function gerarQuadlet (instancia) {
     'Exec=/app/bin/lock-and-run.sh /app/data/instance.lock node index.js',
     'Environment=LCN_SUPERVISED=systemd',
     `Environment=LCN_INSTANCE_ID=${instancia.instanceId}`,
+    'Environment=LCN_ENGINE_SOCKET=/run/lcn-engine/engine.sock',
     `Volume=${instancia.dataDir}/sessao:/app/sessao`,
     `Volume=${instancia.dataDir}/midia:/app/midia`,
     `Volume=${instancia.dataDir}/data:/app/data`,
-    `Volume=${instancia.dataDir}/config.json:/app/config.json`
+    `Volume=${instancia.dataDir}/config.json:/app/config.json`,
+    `Volume=${PASTA_RUN_ENGINE}:/run/lcn-engine`
   ]
 
   if (instancia.transcricaoLocal?.instalada) {
@@ -53,8 +63,6 @@ export function gerarQuadlet (instancia) {
     '[Service]',
     'Restart=on-failure',
     'RestartSec=5',
-    'StartLimitIntervalSec=600',
-    'StartLimitBurst=8',
     `RestartPreventExitStatus=${CODIGOS_TERMINAIS.join(' ')}`,
     'TimeoutStopSec=30',
     '',

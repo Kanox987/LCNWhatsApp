@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>LCN · Painel local</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegação principal">
+      <a class="brand" href="/" data-link aria-label="LCN, ir para o painel">
+        <span class="brand-mark" aria-hidden="true">L</span>
+        <span><strong>LCN</strong><small>Painel local</small></span>
+      </a>
+      <nav class="main-nav">
+        <a href="/" data-link><span aria-hidden="true">◈</span> Instâncias</a>
+        <a href="/automations" data-link><span aria-hidden="true">↯</span> Automações</a>
+        <a href="/catalog" data-link><span aria-hidden="true">▦</span> Catálogo</a>
+        <a href="/executions" data-link><span aria-hidden="true">◷</span> Execuções</a>
+        <a href="/connections" data-link><span aria-hidden="true">⌘</span> Conexões</a>
+        <a href="/entities" data-link><span aria-hidden="true">✦</span> Dados</a>
+        <a href="/variables" data-link><span aria-hidden="true">⟐</span> Variáveis</a>
+      </nav>
+      <div class="local-note">
+        <span class="status-dot"></span>
+        Acesso somente local
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow" id="page-eyebrow">Visão geral</p>
+          <h1 id="page-title">Instâncias</h1>
+          <p class="page-description" id="page-description">Acompanhe seus números e a saúde de cada serviço.</p>
+        </div>
+        <div id="page-actions" class="page-actions"></div>
+      </header>
+      <section id="page" class="page" aria-live="polite">
+        <div class="loading"><span class="spinner"></span> Carregando painel…</div>
+      </section>
+    </main>
+  </div>
+  <div id="toast-region" class="toast-region" aria-live="assertive" aria-atomic="true"></div>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
