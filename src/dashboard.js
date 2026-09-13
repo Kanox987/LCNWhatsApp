@@ -68,7 +68,7 @@ function cabecalho () {
     console.log(`${Y}⚠ faster-whisper configurado mas o ambiente Python não foi encontrado.${Z}`)
     if (dentroDeContainer()) {
       console.log(`${D}   Esta imagem não tem o ambiente do faster-whisper (foi construída com o Dockerfile${Z}`)
-      console.log(`${D}   simples). No HOST, rode "sh update.sh" (ou update.ps1) e ative a transcrição${Z}`)
+      console.log(`${D}   simples). No HOST, rode "sh update.sh" e ative a transcrição${Z}`)
       console.log(`${D}   local — isso reconstrói com Dockerfile.whisper e baixa o modelo.${Z}`)
     } else {
       console.log(`${D}   Rode o instalador (venv + pip install faster-whisper) — no 1º uso baixa o modelo (Hugging Face, pode demorar).${Z}`)
@@ -564,17 +564,12 @@ async function telaAtualizar () {
     console.log(`${Y}Este painel está rodando DENTRO do container${Z} — daqui não dá pra`)
     console.log(`reconstruir a própria imagem (sem acesso ao Docker/Podman do host).\n`)
     console.log('Rode a atualização no HOST (fora do container), na pasta do projeto:')
-    console.log(`  ${B}sh update.sh${Z}                    (Linux/macOS)`)
-    console.log(`  ${B}powershell -File update.ps1${Z}      (Windows)`)
+    console.log(`  ${B}sh update.sh${Z}`)
     return pausar()
   }
   console.log('Isto roda o script de atualização (git pull + rebuild/npm install + restart).')
   if (!await confirmar('Continuar?')) return
-  const win = process.platform === 'win32'
-  const script = win ? 'update.ps1' : './update.sh'
-  const cmd = win ? 'powershell' : 'sh'
-  const args = win ? ['-ExecutionPolicy', 'Bypass', '-File', script] : [script]
-  const r = spawnSync(cmd, args, { cwd: process.cwd(), encoding: 'utf8' })
+  const r = spawnSync('sh', ['./update.sh'], { cwd: process.cwd(), encoding: 'utf8' })
   console.log(r.stdout || '')
   if (r.stderr) console.log(`${Y}${r.stderr}${Z}`)
   await pausar()

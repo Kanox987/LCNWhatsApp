@@ -140,10 +140,9 @@ export function statusServico () {
     if (!r.ok) return 'desconhecido'
     return r.out.includes(NOME_CONTAINER) ? 'rodando' : 'parado'
   }
-  // Modo seco: primeiro tenta o pid-file próprio (gravado pelo index.js —
-  // cobre o .exe standalone do Windows, sem depender de PM2/Node globais).
-  // Sem esse arquivo, tenta PM2; sem os dois, desconhecido (pode estar
-  // rodando via node direto, sem nenhum dos dois mecanismos).
+  // Modo seco: primeiro tenta o pid-file próprio (gravado pelo index.js, sem
+  // depender de PM2 nem de Node global). Sem esse arquivo, tenta PM2; sem os
+  // dois, desconhecido (pode estar rodando via node direto).
   const peloPid = statusPeloPid()
   if (peloPid) return peloPid
   const r = roda('pm2', ['jlist'])
@@ -151,13 +150,18 @@ export function statusServico () {
   return 'desconhecido'
 }
 
-// Inicia o bot re-executando o próprio processo atual (process.execPath) com
-// a flag --bot — dentro do .exe standalone (SEA) isso É o próprio lcn.exe;
-// rodando via `node`, é o binário do node instalado (equivalente a `node
-// index.js`, já que bin/lcn-sea.js despacha por essa mesma flag).
+// Inicia o bot num processo próprio, destacado deste.
+//
+// Isto era `spawn(process.execPath, ['--bot'])`, que só funcionava dentro do
+// executável empacotado do Windows — ali o próprio binário sabia despachar
+// essa flag. Fora dele, `node --bot` é uma flag que o Node não conhece, então
+// iniciar pelo painel simplesmente falhava. Com o empacotamento removido, o
+// caminho honesto é executar o index.js diretamente.
 export function iniciarBot () {
   if (statusServico() === 'rodando') return { ok: false, out: 'Bot já está rodando.' }
-  const filho = spawn(process.execPath, ['--bot'], { detached: true, stdio: 'ignore', cwd: RAIZ })
+  const entrada = path.join(RAIZ, 'index.js')
+  if (!fs.existsSync(entrada)) return { ok: false, out: 'Não encontrei o index.js na raiz do projeto.' }
+  const filho = spawn(process.execPath, [entrada], { detached: true, stdio: 'ignore', cwd: RAIZ })
   filho.unref()
   return { ok: true, out: `Bot iniciado (pid ${filho.pid}).` }
 }
@@ -167,7 +171,7 @@ export function iniciarBot () {
 // usando reiniciarBot()/o restart.request de sempre.
 //
 // Remove o pid-file aqui mesmo, não só no `process.on('exit', ...)` do
-// index.js: process.kill() manda SIGTERM (no Windows, TerminateProcess) sem
+// index.js: process.kill() manda SIGTERM sem
 // handler algum instalado no alvo, então o encerramento é imediato e NENHUM
 // código do processo morto roda depois — o exit handler dele é só um reforço
 // pra saída graciosa (crash tratado, process.exit() interno), não pra este
@@ -199,8 +203,8 @@ export function logsServico (linhas = 40) {
   return roda('pm2', ['logs', 'LCNWhatsApp', '--lines', String(linhas), '--nostream'])
 }
 
-// Pede ao bot pra reiniciar (sem apagar sessão). Com pid-file (.exe
-// standalone), para e reinicia direto, já que não há PM2/restart policy de
+// Pede ao bot pra reiniciar (sem apagar sessão). Com pid-file, para e
+// reinicia direto, já que não há PM2/restart policy de
 // container pra recolocar o processo de pé sozinho. Nos outros modos, só
 // grava o flag: o bot detecta, sai, e o restart policy do container / PM2
 // recolocam de pé.

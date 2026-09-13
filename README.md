@@ -1,158 +1,171 @@
 # LCNWhatsApp
 
-Captura mídias em **visualização única** recebidas no PV do WhatsApp e **reenvia
-como mídia normal** para o destino que você escolher (por padrão, a sua própria
-conversa — "Mensagens salvas"). Também salva uma cópia local, com galeria,
-limpeza e transcrição de áudio opcional. Roda em **Docker/Podman** ou **no seco**
-(nativo), em Linux, Windows e macOS. Usa a **Baileys oficial**
-(`github:WhiskeySockets/Baileys`).
+Plataforma de automação de WhatsApp que roda na **sua** máquina. Você cria
+comandos por um painel web, sem escrever código, e o bot responde por eles.
 
-O comando **`lcn`** abre o painel (dashboard) da aplicação.
+O projeto começou como uma automação só: recuperar mídia de **visualização
+única** e transcrever áudio. Isso continua funcionando exatamente como antes —
+virou um dos comandos do catálogo, ao lado de vários outros.
 
-> ⚠️ **É necessário responder a mensagem.** Na grande maioria dos casos o
-> WhatsApp não entrega o conteúdo da visualização única direto pro bot — ele só
-> chega se você **responder a mensagem com `/recover`** (de
-> qualquer dispositivo logado na sua conta). Sem isso, a automação não consegue
-> capturar o arquivo. Em conversas marcadas em "Download automático", nem
-> precisa digitar `/recover` — qualquer resposta sua já revela (ver
-> [docs/DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md)). Ver item 3 de
-> [Como funciona](#como-funciona-resumo) e
-> [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md).
+Usa a biblioteca **zapo-js** para falar com o WhatsApp. Roda em Docker/Podman
+ou direto na máquina, em Linux e macOS.
+
+> ⚠️ **Você precisa responder a mensagem.** Na maioria dos casos o WhatsApp não
+> entrega o conteúdo de uma visualização única direto para o bot — ele só chega
+> se você **responder a mensagem** com o comando (de qualquer aparelho logado na
+> sua conta). Em conversas marcadas em "Download automático", qualquer resposta
+> sua já revela. Ver [docs/DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md).
 
 ---
 
-## Instalação rápida
+## O que dá para fazer
 
-**Linux / macOS**
+**Comandos prontos.** Um catálogo com comandos já configurados: `/ping`,
+`/menu`, figurinha, recuperar visualização única, anti-link, anti-imagem,
+anti-áudio, e outros. Você escolhe, preenche os campos e instala — o comando
+passa a valer nos contatos e grupos que você marcar.
+
+**Comandos seus.** Um assistente monta o comando passo a passo: quando executa,
+onde vale, o que responde. Por baixo é sempre uma sequência de ações
+auditadas — nunca código solto rodando no seu servidor.
+
+**Regras automáticas.** Nem todo comando precisa de alguém digitar. Uma regra
+pode reagir sozinha a um link, a uma foto ou a uma palavra: apagar a mensagem,
+avisar, contar a infração e, depois de N vezes, remover a pessoa do grupo —
+sendo que esse N é você quem escolhe.
+
+**Memória por pessoa e por grupo.** Contadores e variáveis que você cria e o bot
+atualiza: avisos, nível, saldo, "cliente VIP". Valem por contato, por grupo, por
+pessoa dentro de um grupo específico, por categoria ou para o sistema todo.
+
+**Menu diferente em cada conversa.** Cada grupo pode ter o próprio menu, com
+texto próprio, em lista simples ou com botões. E dá para mudar esse texto pelo
+próprio WhatsApp, sem abrir o painel.
+
+**Dono do bot.** Você marca contatos como donos, e alguns comandos só respondem
+a eles. Serve para o caso comum de uma empresa: o número da empresa roda o bot,
+e o seu contato pessoal configura tudo de fora.
+
+**Vários números.** Cada número roda isolado, em seu próprio container, com
+limite de banda e recuperação automática quando a sessão cai.
+
+---
+
+## Instalação
+
 ```bash
 cd LCNWhatsApp
 sh install.sh
 ```
 
-> ⚠️ **Não rode com `sudo`.** O instalador roda como o seu usuário normal —
+> ⚠️ **Não rode com `sudo`.** O instalador roda como o seu usuário —
 > `config.json`, `sessao/`, `midia/`, `data/`, `node_modules` e o venv do
-> faster-whisper ficam com o seu dono, não root. O comando `lcn` é instalado
-> em `~/.local/bin` (sem privilégio). Só operações que realmente alteram o
-> sistema, como instalar um pacote ou criar o link opcional em `/usr/local/bin`,
-> usam `sudo`/`doas` pontualmente.
+> faster-whisper ficam com o seu dono, não do root. O comando `lcn` vai para
+> `~/.local/bin`. Só o que realmente mexe no sistema (instalar um pacote,
+> criar link em `/usr/local/bin`) usa `sudo` pontualmente.
 
-No modo **nativo**, o instalador valida `node` e `npm` antes de rodar
-`npm install`. A versão recomendada é **Node.js 24 LTS** e o mínimo aceito pelo
-instalador é **Node.js 22**. Se necessário, ele tenta preparar uma versão LTS
-compatível usando a estratégia apropriada para Debian/Ubuntu, Fedora,
-RHEL/CentOS e derivados, Arch/Manjaro, openSUSE, Alpine, Amazon Linux ou macOS
-(Homebrew), com `nvm` como fallback por usuário. Em Debian/Ubuntu, adicionar o
-repositório NodeSource exige confirmação. No modo **Docker/Podman**, Node.js
-continua não sendo necessário no host.
+O instalador detecta se há Docker ou Podman e pergunta se você quer rodar em
+container (recomendado) ou direto na máquina. Sem engine de container, segue
+no modo direto.
 
-**Windows (PowerShell)**
+No modo direto ele valida `node` e `npm` antes do `npm install`: recomendado
+**Node.js 24 LTS**, mínimo **Node.js 22**. Se precisar, tenta preparar uma
+versão compatível conforme a distribuição (Debian/Ubuntu, Fedora, RHEL, Arch,
+openSUSE, Alpine, Amazon Linux, macOS via Homebrew), com `nvm` como último
+recurso. Em Docker/Podman, o host não precisa de Node.
 
-> ⚠️ **Experimental.** No modo "no seco", o instalador agora empacota o
-> próprio app num `lcn.exe` standalone (Node.js Single Executable
-> Applications) — depois de instalado, não precisa mais de Node/npm pra usar
-> o bot no dia a dia. Isso foi validado de ponta a ponta (bundle, geração do
-> blob SEA, injeção via `postject`, execução real) num ambiente Linux com um
-> Node oficial, mas **ainda não foi testado numa máquina Windows de
-> verdade** — se algo falhar, o painel/bot continuam funcionando do jeito de
-> sempre com `npm run dashboard` / `npm start`. Reporte problemas abrindo uma
-> issue no repositório.
+Detalhes e casos específicos: [docs/INSTALACAO.md](docs/INSTALACAO.md).
 
-```powershell
-cd LCNWhatsApp
-powershell -ExecutionPolicy Bypass -File install.ps1
-```
+### Alguns comandos exigem mais
 
-O instalador **detecta** se há Docker/Podman e pergunta se você quer rodar em
-container (recomendado) ou no seco. Se não houver engine, oferece instalar o
-Docker ou seguir no seco. No fim, instala o comando `lcn` (em qualquer sistema,
-funciona independente de onde você clonou o projeto — só evite mover/renomear
-a pasta depois de instalado, senão precisa reinstalar o comando).
+Figurinha precisa do **ffmpeg** instalado. Apagar mensagem e remover pessoas de
+grupo exigem que o número seja **administrador** do grupo. O painel avisa isso
+em cada comando, antes de você instalar.
 
-### Verificar dependências
+---
 
-Depois da instalação (ou ao diagnosticar outra máquina), rode o verificador do
-sistema. Ele **não instala nem altera dependências**: só testa o ambiente e
-retorna erro (`exit 1`) quando encontra falha crítica.
+## Os dois painéis
 
-Linux/macOS:
+**No terminal**, o comando `lcn` abre o painel de sempre: parear o número,
+configurar, ligar e desligar, ver o estado da conexão.
+
+**Na web**, `lcn web start` sobe o painel em `http://127.0.0.1:4780` — é onde
+você cria automações, instala comandos do catálogo, vê o histórico de execuções
+e edita as variáveis de cada contato e grupo.
+
 ```bash
-sh check-deps.sh
+lcn engine start      # motor de automação
+lcn web start         # painel web (porta 4780)
+lcn instances list    # números administrados nesta máquina
 ```
 
-Windows:
-```powershell
-powershell -ExecutionPolicy Bypass -File check-deps.ps1
-```
+> 🔒 O painel web escuta **somente em 127.0.0.1** e não tem login. Ele foi feito
+> para a sua máquina, não para a internet — não exponha essa porta sem colocar
+> autenticação na frente.
 
-O diagnóstico respeita o modo salvo em `runtime.json`: em modo nativo verifica
-Node.js 22+, npm e os módulos principais; em modo container verifica o engine,
-o daemon, o container e o Node dentro dele. Também checa o comando `lcn`,
-permissões de `sessao/`, `midia/`, `data/` e `config.json`, além das dependências
-do provedor de transcrição configurado (`faster-whisper`, OpenAI ou comando
-externo). No Windows, o verificador recarrega o PATH persistente antes
-dos testes, o que ajuda a diagnosticar instalações feitas por `winget` em uma
-sessão de PowerShell que já estava aberta.
+---
 
-Depois de instalar, conecte pelo próprio painel — é o jeito padrão, funciona
-igual em container ou no seco:
-```bash
-lcn
-```
-Escolha **5 Serviço** > **1 Conectar / mostrar QR** e escaneie no WhatsApp
-(Aparelhos conectados > Conectar aparelho). O painel atualiza a tela sozinho
-até conectar.
+## Como funciona
 
-## O painel: `lcn`
-Abre um menu de terminal com:
-- **Status** no topo: conectado?, qual número, mídias salvas e por remetente.
-- **Dados de uso e conexões** (uptime, quedas, capturas, memória).
-- **Galeria** dos arquivos locais (abre no visualizador do SO, revela a pasta).
-- **Limpeza** por seleção ou em lote (por remetente, período, ou tudo).
-- **Configurações** por tópicos (destino, destino próprio por contato,
-  contatos, grupos, transcrição — geral e por conversa —, download automático,
-  hardware, atualização), com seleção por lista (e busca por nome) em vez de
-  digitar JID/número de cabeça.
-- **Serviço** — é por aqui que você **conecta** (QR/código de pareamento),
-  reinicia, vê logs ou desconecta pra trocar de número. **Atualizar** puxa
-  updates do app/Baileys.
+1. **Um processo por número.** Cada número conectado roda isolado, com a própria
+   sessão. Ele recebe as mensagens do WhatsApp e nunca compartilha sessão com
+   ninguém.
 
-## Como funciona (resumo)
-1. `shouldIgnoreJid` descarta grupos/status/canais **antes de descriptografar** —
-   é o que evita processar milhares de msgs de grupo só pra pegar visu única de PV.
-   Ver [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
-2. Quando a visu única chega **inline** (nem sempre acontece — depende do
-   WhatsApp), o bot baixa a mídia (`downloadContentFromMessage`), salva em
-   `midia/`, arquiva o metadado e **reenvia como mídia normal** (payload sem
-   `viewOnce`) pro destino configurado.
-3. Quando não chega inline (o caso mais comum), **responda a mensagem com
-   `/recover`** — o bot recupera a mídia pela citação e segue o
-   mesmo fluxo do item 2. Contatos marcados em "destino próprio" recebem a
-   mídia de volta na própria conversa, em vez do destino padrão. Ver
-   [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md).
-4. Se for áudio e a transcrição estiver ligada, anexa o texto — também dá pra
-   transcrever áudio comum (não visu única), automaticamente numa conversa
-   configurada ou sob demanda com `/transcrever`. Ver
-   [docs/TRANSCRICAO.md](docs/TRANSCRICAO.md).
+2. **Um motor de automação separado.** O número repassa cada mensagem, já
+   normalizada, para o motor local — que decide o que fazer comparando com as
+   automações publicadas. O motor nunca abre uma sessão de WhatsApp e nunca
+   recebe conteúdo de mídia: só uma referência que apenas o processo do número
+   consegue resolver.
+
+3. **A decisão volta como ordem.** Se alguma automação combinou, o motor devolve
+   o que fazer, e o processo do número executa: responder, apagar, gerar
+   figurinha, remover do grupo. Tudo fica registrado no histórico.
+
+4. **Nada é executado duas vezes.** A mesma mensagem, reprocessada, não gera
+   ação repetida. Quando o resultado de um envio fica ambíguo, o sistema marca
+   como incerto em vez de reenviar por conta própria.
+
+---
 
 ## Documentação
-- [INSTALACAO.md](docs/INSTALACAO.md) — instalador, requisitos e diagnóstico
-- [CONTAINER.md](docs/CONTAINER.md) — Docker/Podman e rodar no seco
-- [DASHBOARD.md](docs/DASHBOARD.md) — o painel `lcn`
-- [CONFIG.md](docs/CONFIG.md) — todas as opções do `config.json`
-- [PERFORMANCE.md](docs/PERFORMANCE.md) — descarte pré-crypto e baixo consumo
-- [HARDWARE.md](docs/HARDWARE.md) — ajustes de consumo
-- [TRANSCRICAO.md](docs/TRANSCRICAO.md) — provedores de transcrição
-- [DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md) — dispensa digitar `/recover`, por conversa
-- [ATUALIZACAO.md](docs/ATUALIZACAO.md) — atualizar app + Baileys
-- [API.md](docs/API.md) — ponto de extensão da API de saída (desligado)
-- [SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md) — visu única não capturada, LID, reconectar, debug
+
+| Arquivo | Assunto |
+|---|---|
+| [docs/INSTALACAO.md](docs/INSTALACAO.md) | Instalação em detalhe, modos e requisitos |
+| [docs/AUTOMACOES.md](docs/AUTOMACOES.md) | Comandos, regras automáticas, variáveis e donos |
+| [docs/DASHBOARD.md](docs/DASHBOARD.md) | Painel do terminal |
+| [docs/CONFIG.md](docs/CONFIG.md) | Todos os campos do `config.json` |
+| [docs/TRANSCRICAO.md](docs/TRANSCRICAO.md) | Transcrição de áudio, local ou por API |
+| [docs/DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md) | Recuperar sem digitar comando |
+| [docs/CONTAINER.md](docs/CONTAINER.md) | Docker e Podman |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Uso de recursos e limites |
+| [docs/HARDWARE.md](docs/HARDWARE.md) | Limites de mídia e banda |
+| [docs/ATUALIZACAO.md](docs/ATUALIZACAO.md) | Como atualizar |
+| [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md) | Quando algo não funciona |
+| [docs/API.md](docs/API.md) | API local do motor |
+
+---
 
 ## Testes
+
 ```bash
 npm test
 ```
 
+Roda a suíte inteira sem depender de WhatsApp real: banco em memória, servidor
+HTTP local e dependências injetadas.
+
+> Não deixe o bot rodando (`node index.js`) enquanto roda os testes — os dois
+> escrevem nos mesmos arquivos em `data/` e atrapalham um ao outro.
+
+---
+
 ## Aviso
-Ferramenta para uso pessoal/autorizado. Respeite a privacidade das pessoas e os
-termos do WhatsApp. Revelar visualização única de terceiros pode violar a
-expectativa de privacidade de quem enviou — use com responsabilidade.
+
+Este projeto usa uma biblioteca não oficial para falar com o WhatsApp. Isso
+não é homologado pela Meta e, em tese, pode levar a bloqueio da conta. Use com
+o seu próprio número e por sua conta e risco.
+
+Recuperar mídia de visualização única contorna uma expectativa de privacidade
+de quem enviou. Use com responsabilidade e dentro da lei — a
+responsabilidade pelo uso é sua.

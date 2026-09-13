@@ -44,4 +44,4 @@ pm2 save && pm2 startup
 ```
 
 > Nota: neste ambiente o `docker` é o **Podman** emulando a CLI. Por isso
-> entregamos `run.sh`/`run.ps1` além do compose — funcionam com os dois.
+> entregamos `run.sh` além do compose — funcionam com os dois.

@@ -1,9 +1,8 @@
-# Atualização (app + Baileys)
+# Atualização
 
 Rode `lcn` > Atualizar, ou direto:
 ```bash
-sh update.sh            # Linux/macOS
-powershell -File update.ps1   # Windows
+sh update.sh
 ```
 
 O que faz, conforme o modo (lido de `runtime.json`):
@@ -19,9 +18,8 @@ não tem acesso ao Docker/Podman do host. Se você abrir `lcn` > Atualizar
 estando dentro do container, o painel detecta isso e avisa em vez de tentar
 (e falhar) o rebuild.
 
-Pra atualizar em modo container, rode `sh update.sh` (ou
-`powershell -File update.ps1` no Windows) **direto no host**, na pasta do
-projeto — não via `lcn`/`docker exec`.
+Pra atualizar em modo container, rode `sh update.sh` **direto no host**, na
+pasta do projeto — não via `lcn`/`docker exec`.
 
 ## Auto-update da Baileys em quedas
 Se `atualizacao.autoUpdateBaileys` estiver ligado e houver muitas quedas seguidas

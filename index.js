@@ -17,8 +17,8 @@ garantirPastas()
 
 // Grava o próprio PID — é como o painel (src/runtime.js: statusServico/
 // iniciarBot/pararBot) sabe se o bot está de pé sem depender de PM2 (que por
-// sua vez exige Node/npm globais, contradizendo o .exe standalone do
-// Windows). Cobre tanto "iniciado pelo painel" quanto o .exe/`node index.js`
+// sua vez exige Node/npm globais). Cobre tanto "iniciado pelo painel" quanto
+// o `node index.js` direto
 // rodado direto. A limpeza aqui no 'exit' é só um reforço pra saída graciosa
 // (crash tratado, SIGTERM em Linux/macOS onde é entregue de verdade) — quem
 // para o bot pelo painel (runtime.js: pararBot) já remove o arquivo direto,

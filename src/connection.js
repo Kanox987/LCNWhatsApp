@@ -91,10 +91,7 @@ function assinaturaSocket (cfg) {
 }
 
 // SQLite local (better-sqlite3, addon nativo) — equivalente mais próximo do
-// useMultiFileAuthState em arquivos da Baileys. NOTA: addon nativo quebra o
-// empacotamento .exe (SEA) do jeito que build-exe.ps1 funciona hoje (mesmo
-// motivo pelo qual sharp é excluído do bundle) — fora de escopo por ora,
-// tratado só pra Docker/`npm start` nesta validação (ver plano).
+// useMultiFileAuthState em arquivos da Baileys.
 function criarStore () {
   const caminho = path.join(PASTA_SESSAO, 'zapo.sqlite')
   return createStore({
@@ -433,7 +430,7 @@ function avaliarAutoUpdate (falhas, cfg) {
   try {
     garantirPastas()
     const flag = path.join(PASTA_DADOS, 'precisa-update.flag')
-    fs.writeFileSync(flag, `Quedas consecutivas: ${falhas}. Rode a atualização (update.sh/update.ps1) ou "lcn" > Atualizar.\n`)
+    fs.writeFileSync(flag, `Quedas consecutivas: ${falhas}. Rode a atualização (sh update.sh) ou "lcn" > Atualizar.\n`)
     log('⚠️  Muitas quedas seguidas — pode ser mudança de protocolo do WhatsApp. Sinalizado update do zapo-js.')
   } catch {}
 }

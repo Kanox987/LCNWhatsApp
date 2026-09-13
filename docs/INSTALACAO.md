@@ -28,40 +28,13 @@ alteram o sistema usam `sudo` ou `doas` pontualmente; os arquivos do projeto,
 `node_modules`, sessão, mídias, configurações e venv continuam pertencendo ao
 usuário normal.
 
-## Windows
-
-> ⚠️ **Empacotamento em `.exe` ainda é experimental.** No modo "no seco",
-> depois do `npm install`, o instalador roda `build-exe.ps1` e gera um
-> `lcn.exe` standalone (Node SEA) na raiz do projeto — sem ele, o dia a dia
-> continua exigindo Node instalado. Validado de ponta a ponta (bundle,
-> blob SEA, injeção via `postject`, execução real) num ambiente Linux com um
-> Node oficial equivalente ao que o `winget` instala, mas **sem teste de
-> campo numa máquina Windows real ainda**. Se a geração falhar ou o
-> `lcn.exe` não funcionar direito, o painel/bot continuam disponíveis do
-> jeito de sempre: `npm run dashboard` e `npm start` (ou `npm run code`).
-
-```powershell
-powershell -ExecutionPolicy Bypass -File install.ps1
-```
-Cria `lcn.cmd` em `%LOCALAPPDATA%\LCNWhatsApp\bin` e adiciona ao PATH do usuário.
-O instalador recarrega o PATH da própria sessão depois de instalar Node/Python ou
-o comando `lcn`. Se ele tiver sido iniciado a partir de outro PowerShell usando
-`powershell -File`, o processo pai continua com o PATH antigo; nesse caso,
-reabra o terminal pai antes de usar os comandos recém-instalados.
-
 ## Verificar dependências do sistema
 
-Há dois verificadores somente de diagnóstico. Eles não instalam, removem ou
-atualizam dependências.
+Há um verificador somente de diagnóstico. Ele não instala, remove nem atualiza
+dependências.
 
-Linux/macOS:
 ```bash
 sh check-deps.sh
-```
-
-Windows:
-```powershell
-powershell -ExecutionPolicy Bypass -File check-deps.ps1
 ```
 
 O script usa `runtime.json` para adaptar o teste ao modo instalado:
@@ -83,13 +56,8 @@ Para transcrição, o diagnóstico testa apenas o que estiver ativo:
 - `openai`: presença da chave configurada, sem imprimir seu valor;
 - `comando`: presença de um comando externo configurado.
 
-No Windows, `check-deps.ps1` começa recarregando o PATH persistente de
-**Machine + User**. Isso é útil logo após instalações feitas via `winget`, já
-que uma janela do PowerShell aberta antes da instalação pode continuar com uma
-cópia antiga do PATH.
-
-Os verificadores imprimem `[OK]`, `[AVISO]` e `[ERRO]`, mostram um resumo no fim
-e retornam:
+O verificador imprime `[OK]`, `[AVISO]` e `[ERRO]`, mostram um resumo no fim
+e retorna:
 
 ```text
 exit 0  -> nenhuma falha crítica encontrada
@@ -265,7 +233,6 @@ Não tente resolver esse tipo de erro com `sudo npm install`.
 ### Modo container
 
 Docker, Podman ou nerdctl podem ser usados. Nada de Node no host é necessário —
-o painel roda dentro do container (`bin/lcn`/`bin/lcn.cmd` não dependem de Node
-para descobrir o modo). Se nenhum engine existir na hora de subir o container
-(`run.sh`/`run.ps1`), eles tentam preparar o Docker antes de abortar com uma
-mensagem clara.
+o painel roda dentro do container (`bin/lcn` não depende de Node para descobrir
+o modo). Se nenhum engine existir na hora de subir o container (`run.sh`), ele
+tenta preparar o Docker antes de abortar com uma mensagem clara.

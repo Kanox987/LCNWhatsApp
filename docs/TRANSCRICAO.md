@@ -32,7 +32,7 @@ Nos dois casos, o áudio baixado é temporário: existe só durante a transcriç
   pré-baixam/validam o modelo num container temporário logo após o build,
   gravando em `./modelos` (montado em `/opt/lcn-modelos`) — persistente entre
   rebuilds/updates, nunca baixa de novo à toa. No seco, o instalador
-  (`install.sh`/`install.ps1`) pode criar o venv e tenta instalar Python
+  (`install.sh`) pode criar o venv e tenta instalar Python
   sozinho se faltar — o caminho do Python do venv fica gravado em
   `transcricao.pythonBin`. No container, `pythonBin` fica vazio de propósito
   (é o `Dockerfile.whisper` quem define `LCN_PYTHON`, via `ENV`); o painel
@@ -40,7 +40,7 @@ Nos dois casos, o áudio baixado é temporário: existe só durante a transcriç
   `faster-whisper` mas a imagem em uso foi construída a partir do `Dockerfile`
   simples (a etapa de transcrição local em `install.sh`/`update.sh` foi
   recusada ou pulada) —, o `lcn` avisa no topo do painel; a correção é rodar
-  `update.sh`/`update.ps1` no HOST e aceitar a transcrição local, o que
+  `update.sh` no HOST e aceitar a transcrição local, o que
   reconstrói com `Dockerfile.whisper`. Concorrência de transcrição é sempre 1
   (nunca duas ao mesmo tempo, pra não competir por CPU/memória com modelos
   maiores como `small`).
