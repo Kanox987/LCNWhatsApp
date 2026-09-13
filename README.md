@@ -162,9 +162,8 @@ HTTP local e dependências injetadas.
 
 ## Aviso
 
-Este projeto usa uma biblioteca não oficial para falar com o WhatsApp. Isso
-não é homologado pela Meta e, em tese, pode levar a bloqueio da conta. Use com
-o seu próprio número e por sua conta e risco.
+Este projeto usa uma biblioteca não oficial para falar com o WhatsApp — não é
+homologado pela Meta. Use com o seu próprio número e por sua conta e risco.
 
 Recuperar mídia de visualização única contorna uma expectativa de privacidade
 de quem enviou. Use com responsabilidade e dentro da lei — a

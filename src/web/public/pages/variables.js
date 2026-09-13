@@ -77,8 +77,8 @@ export async function renderVariables () {
 
   setPageHeader({
     eyebrow: 'Referência',
-    title: 'Variáveis do sistema',
-    description: 'Escreva qualquer uma destas no texto de resposta de uma automação e o motor troca pelo valor real no momento do envio.',
+    title: 'Variáveis e funções do sistema',
+    description: 'O que você pode escrever dentro de um comando para o sistema preencher na hora: dados da mensagem, de quem enviou, e as variáveis e contadores que você mesmo cria.',
     actions: []
   })
 

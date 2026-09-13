@@ -208,14 +208,14 @@ async function executarRemoverDoGrupo (client, comando) {
 // Não existe API de "mensagem formatada" para bots comuns. O que existe é o
 // app renderizar conteúdo rico quando ele vem da Meta AI. Para conseguir isso,
 // a mensagem sai marcada como ENCAMINHADA da Meta AI (o JID e o nome do bot
-// oficial deles vão no contexto). Três consequências que ninguém deve
-// descobrir depois:
-//   1. A Meta pode invalidar isso a qualquer momento, sem aviso e sem versão.
-//   2. Quem manda é o número do usuário — se o WhatsApp tratar como abuso, a
-//      conta em risco é a dele.
-//   3. É exibir a marca de outra empresa em conteúdo que não é dela.
-// Por isso: nunca é o formato padrão de nada, o template que a usa carrega
-// aviso de "recurso não oficial", e o fallback em texto comum é obrigatório.
+// oficial deles vão no contexto). Duas consequências práticas:
+//   1. Nada disso é documentado, então a Meta pode invalidar a qualquer
+//      momento, sem aviso e sem versão. É o motivo de o fallback em texto
+//      comum ser obrigatório e não opcional.
+//   2. A mensagem se apresenta ao destinatário como conteúdo da Meta AI,
+//      embora saia do número de quem usa o bot.
+// Por isso o template que usa esta ação carrega aviso de "recurso não
+// oficial": não é para virar o formato padrão de nada.
 const META_AI_BOT_JID = '867051314767696@bot'
 const META_AI_BOT_NAME = 'Meta AI'
 const FORWARD_ORIGIN_META_AI = 4

@@ -9,35 +9,82 @@
   "warnings": [
     {
       "level": "unofficial",
-      "text": "Este comando usa um caminho NÃO OFICIAL do WhatsApp. Não existe API de mensagem formatada para bots: para o aplicativo aceitar a formatação, a mensagem precisa viajar marcada como conteúdo da Meta AI. A Meta pode desativar isso a qualquer momento, sem aviso — e nesse dia o comando passa a responder em texto simples sozinho, sem quebrar."
+      "text": "Este comando usa um caminho NÃO OFICIAL do WhatsApp. Não existe API de mensagem formatada para bots: para o aplicativo aceitar a formatação, a mensagem precisa viajar marcada como conteúdo da Meta AI. Como isso não é documentado, a Meta pode desativar a qualquer momento — e nesse dia o comando passa a responder em texto simples sozinho, sem quebrar."
     },
     {
       "level": "compatibility",
       "text": "Pode não aparecer formatado em versões antigas do aplicativo nem no WhatsApp Business. Nesses casos chega como texto comum."
-    },
-    {
-      "level": "info",
-      "text": "Como a mensagem é enviada pelo seu número marcada como conteúdo da Meta AI, evite usar isso como formato padrão de comandos importantes ou em números de clientes."
     }
   ],
   "parameters": [
-    { "key": "command", "label": "Comando", "type": "string", "default": "/codigo", "help": "A palavra que a pessoa digita, seguida do texto a formatar." },
-    { "key": "language", "label": "Linguagem", "type": "string", "default": "javascript", "help": "Usada para colorir as palavras-chave. Exemplos: javascript, python, sql." },
-    { "key": "poolId", "label": "Pool que responde", "type": "string", "help": "Identificador do pool de números que responde este comando." }
+    {
+      "key": "command",
+      "label": "Comando",
+      "type": "string",
+      "default": "/codigo",
+      "help": "A palavra que a pessoa digita, seguida do texto a formatar."
+    },
+    {
+      "key": "language",
+      "label": "Linguagem",
+      "type": "string",
+      "default": "javascript",
+      "help": "Usada para colorir as palavras-chave. Exemplos: javascript, python, sql."
+    },
+    {
+      "key": "poolId",
+      "label": "Pool que responde",
+      "type": "string",
+      "help": "Identificador do pool de números que responde este comando."
+    }
   ],
   "documentTemplate": {
     "schemaVersion": 1,
     "enabled": true,
     "name": "Responder com código colorido",
-    "scope": { "include": [], "exclude": [] },
-    "inputPolicy": { "acceptedMessageKinds": ["text"], "historyPolicy": "live_only" },
-    "responder": { "strategy": "weighted_rendezvous", "poolId": "{{params.poolId}}" },
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
     "flow": {
       "nodes": [
-        { "id": "gatilho-comando", "type": "trigger.command", "config": { "command": "{{params.command}}", "match": "exact_or_args", "allowFrom": "external" } },
-        { "id": "responder-formatado", "type": "action.whatsapp.rich", "config": { "text": "{{message.args}}", "richKind": "code", "language": "{{params.language}}", "fallbackText": "{{message.args}}" } }
+        {
+          "id": "gatilho-comando",
+          "type": "trigger.command",
+          "config": {
+            "command": "{{params.command}}",
+            "match": "exact_or_args",
+            "allowFrom": "external"
+          }
+        },
+        {
+          "id": "responder-formatado",
+          "type": "action.whatsapp.rich",
+          "config": {
+            "text": "{{message.args}}",
+            "richKind": "code",
+            "language": "{{params.language}}",
+            "fallbackText": "{{message.args}}"
+          }
+        }
       ],
-      "edges": [{ "from": "gatilho-comando", "to": "responder-formatado", "on": "matched" }]
+      "edges": [
+        {
+          "from": "gatilho-comando",
+          "to": "responder-formatado",
+          "on": "matched"
+        }
+      ]
     }
   }
 }
