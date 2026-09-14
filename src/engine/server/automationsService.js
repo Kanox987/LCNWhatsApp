@@ -61,9 +61,13 @@ function salvarScopes (db, revisionId, documento) {
   for (const direction of ['include', 'exclude']) {
     const refs = Array.isArray(documento?.scope?.[direction]) ? documento.scope[direction] : []
     for (const ref of refs) {
-      if (typeof ref?.kind === 'string' && typeof ref?.id === 'string') {
-        inserir.run(revisionId, direction, ref.kind, ref.id)
-      }
+      if (typeof ref?.kind !== 'string' || !ref.kind) continue
+      // Os destinos abrangentes (all_contacts, all_groups, everywhere) não
+      // endereçam ninguém em particular, então não têm id. A coluna é NOT NULL,
+      // e string vazia diz exatamente isso: "este destino não aponta para um
+      // JID". Para `tagged`, o id é o nome da variável que marca a conversa.
+      const refId = typeof ref.id === 'string' ? ref.id : ''
+      inserir.run(revisionId, direction, ref.kind, refId)
     }
   }
 }

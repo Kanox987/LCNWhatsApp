@@ -5,78 +5,174 @@
   "description": "A v1 aceita trigger.command, condition.compare, action.http, action.variable.set, action.variable.increment, action.whatsapp.reply e action.menu.render. Outros tipos de nó são rejeitados. Referências, ciclos, gatilho único e as saídas admitidas por tipo de nó são validados pela camada estrutural. O que o motor de fato EXECUTA é declarado em runtimeCapabilities.js e imposto no publish — o schema é mais permissivo que o runtime de propósito (action.http é o caso).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "id", "revision", "enabled", "name", "scope", "inputPolicy", "responder", "flow"],
+  "required": [
+    "schemaVersion",
+    "id",
+    "revision",
+    "enabled",
+    "name",
+    "scope",
+    "inputPolicy",
+    "responder",
+    "flow"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "id": { "type": "string", "minLength": 1 },
-    "revision": { "type": "integer", "minimum": 1 },
-    "enabled": { "type": "boolean" },
-    "name": { "type": "string", "minLength": 1 },
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
     "display": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "menuLabel": { "type": "string", "minLength": 1 },
-        "menuDescription": { "type": "string" }
+        "menuLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "menuDescription": {
+          "type": "string"
+        }
       }
     },
     "scope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["include", "exclude"],
+      "required": [
+        "include",
+        "exclude"
+      ],
       "properties": {
-        "include": { "type": "array", "items": { "$ref": "#/definitions/scopeRef" } },
-        "exclude": { "type": "array", "items": { "$ref": "#/definitions/scopeRef" } }
+        "include": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/scopeRef"
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/scopeRef"
+          }
+        }
       }
     },
     "inputPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["acceptedMessageKinds", "historyPolicy"],
+      "required": [
+        "acceptedMessageKinds",
+        "historyPolicy"
+      ],
       "properties": {
         "acceptedMessageKinds": {
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "enum": ["text", "audio", "image", "video", "document", "view_once"] }
+          "items": {
+            "enum": [
+              "text",
+              "audio",
+              "image",
+              "video",
+              "document",
+              "view_once"
+            ]
+          }
         },
-        "historyPolicy": { "const": "live_only" }
+        "historyPolicy": {
+          "const": "live_only"
+        }
       }
     },
     "responder": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["strategy", "poolId"],
+      "required": [
+        "strategy",
+        "poolId"
+      ],
       "properties": {
-        "strategy": { "const": "weighted_rendezvous" },
-        "poolId": { "type": "string", "minLength": 1 }
+        "strategy": {
+          "const": "weighted_rendezvous"
+        },
+        "poolId": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "flow": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["nodes", "edges"],
+      "required": [
+        "nodes",
+        "edges"
+      ],
       "properties": {
         "nodes": {
           "type": "array",
           "minItems": 1,
           "items": {
             "oneOf": [
-              { "$ref": "#/definitions/triggerCommand" },
-              { "$ref": "#/definitions/triggerMessage" },
-              { "$ref": "#/definitions/actionHttp" },
-              { "$ref": "#/definitions/actionVariableSet" },
-              { "$ref": "#/definitions/actionWhatsappReply" },
-              { "$ref": "#/definitions/actionMenuRender" },
-              { "$ref": "#/definitions/actionMenuConfig" },
-              { "$ref": "#/definitions/actionVariableIncrement" },
-              { "$ref": "#/definitions/actionWhatsappSticker" },
-              { "$ref": "#/definitions/actionWhatsappRecover" },
-              { "$ref": "#/definitions/actionWhatsappDelete" },
-              { "$ref": "#/definitions/actionWhatsappRich" },
-              { "$ref": "#/definitions/actionWhatsappSendFile" },
-              { "$ref": "#/definitions/actionGroupRemove" },
-              { "$ref": "#/definitions/conditionCompare" }
+              {
+                "$ref": "#/definitions/triggerCommand"
+              },
+              {
+                "$ref": "#/definitions/triggerMessage"
+              },
+              {
+                "$ref": "#/definitions/actionHttp"
+              },
+              {
+                "$ref": "#/definitions/actionVariableSet"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappReply"
+              },
+              {
+                "$ref": "#/definitions/actionMenuRender"
+              },
+              {
+                "$ref": "#/definitions/actionMenuConfig"
+              },
+              {
+                "$ref": "#/definitions/actionVariableIncrement"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappSticker"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappRecover"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappDelete"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappRich"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappSendFile"
+              },
+              {
+                "$ref": "#/definitions/actionGroupRemove"
+              },
+              {
+                "$ref": "#/definitions/conditionCompare"
+              }
             ]
           }
         },
@@ -85,11 +181,29 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["from", "to", "on"],
+            "required": [
+              "from",
+              "to",
+              "on"
+            ],
             "properties": {
-              "from": { "type": "string", "minLength": 1 },
-              "to": { "type": "string", "minLength": 1 },
-              "on": { "enum": ["matched", "success", "error", "true", "false"] }
+              "from": {
+                "type": "string",
+                "minLength": 1
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1
+              },
+              "on": {
+                "enum": [
+                  "matched",
+                  "success",
+                  "error",
+                  "true",
+                  "false"
+                ]
+              }
             }
           }
         }
@@ -98,30 +212,107 @@
   },
   "definitions": {
     "scopeRef": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "id"],
-      "properties": {
-        "kind": { "enum": ["contact", "group"] },
-        "id": { "type": "string", "minLength": 1 }
-      }
+      "description": "Um destino da automação. 'contact'/'group' endereçam UMA conversa. 'all_contacts', 'all_groups' e 'everywhere' são os destinos abrangentes — existem para a pessoa poder escolher 'todos' de propósito, já que lista vazia nunca significa todos. 'tagged' casa com as conversas marcadas com uma variável (a mesma que {{var.chat.<chave>}} lê).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "contact",
+                "group"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "all_contacts",
+                "all_groups",
+                "everywhere"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "tagged"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Nome da variável que marca a conversa. Marcada = existe e vale algo (não false, 0 nem vazio)."
+            }
+          }
+        }
+      ]
     },
     "triggerCommand": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "trigger.command" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "trigger.command"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["command", "match", "allowFrom"],
+          "required": [
+            "command",
+            "match",
+            "allowFrom"
+          ],
           "properties": {
-            "command": { "type": "string", "minLength": 1 },
-            "match": { "enum": ["exact", "prefix", "keyword", "exact_or_args"] },
-            "allowFrom": { "const": "external" },
-            "requireOwner": { "type": "boolean" }
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "match": {
+              "enum": [
+                "exact",
+                "prefix",
+                "keyword",
+                "exact_or_args"
+              ]
+            },
+            "allowFrom": {
+              "const": "external"
+            },
+            "requireOwner": {
+              "type": "boolean"
+            }
           }
         }
       }
@@ -129,28 +320,60 @@
     "triggerMessage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "trigger.message" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "trigger.message"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["allowFrom"],
+          "required": [
+            "allowFrom"
+          ],
           "properties": {
-            "allowFrom": { "const": "external" },
+            "allowFrom": {
+              "const": "external"
+            },
             "messageKinds": {
               "type": "array",
               "uniqueItems": true,
-              "items": { "enum": ["text", "audio", "image", "video", "document", "view_once", "unavailable", "unknown"] }
+              "items": {
+                "enum": [
+                  "text",
+                  "audio",
+                  "image",
+                  "video",
+                  "document",
+                  "view_once",
+                  "unavailable",
+                  "unknown"
+                ]
+              }
             },
-            "containsLink": { "type": "boolean" },
+            "containsLink": {
+              "type": "boolean"
+            },
             "keywords": {
               "type": "array",
               "maxItems": 50,
-              "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
             },
-            "requireOwner": { "type": "boolean" }
+            "requireOwner": {
+              "type": "boolean"
+            }
           }
         }
       }
@@ -159,18 +382,36 @@
       "description": "Envia um arquivo do acervo (foto, áudio, vídeo, PDF). O documento guarda só o id — quem troca id por bytes é o gateway, no instante do envio.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.whatsapp.sendFile" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.sendFile"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["fileId"],
+          "required": [
+            "fileId"
+          ],
           "properties": {
-            "fileId": { "type": "string", "pattern": "^[0-9a-f]{24}$" },
-            "caption": { "type": "string" },
-            "notFoundText": { "type": "string" }
+            "fileId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{24}$"
+            },
+            "caption": {
+              "type": "string"
+            },
+            "notFoundText": {
+              "type": "string"
+            }
           }
         }
       }
@@ -179,19 +420,44 @@
       "description": "Mensagem com formatação rica (código colorido, LaTeX, tabela). ATENÇÃO: usa um caminho NÃO OFICIAL do WhatsApp — a mensagem viaja marcada como conteúdo da Meta AI, que é o que destrava o renderizador. Pode parar de funcionar sem aviso e não deve ser o formato padrão de nada importante.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.whatsapp.rich" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.rich"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["text"],
+          "required": [
+            "text"
+          ],
           "properties": {
-            "text": { "type": "string", "minLength": 1 },
-            "richKind": { "enum": ["code", "latex", "text"] },
-            "language": { "type": "string", "maxLength": 40 },
-            "fallbackText": { "type": "string" }
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "richKind": {
+              "enum": [
+                "code",
+                "latex",
+                "text"
+              ]
+            },
+            "language": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "fallbackText": {
+              "type": "string"
+            }
           }
         }
       }
@@ -199,26 +465,55 @@
     "actionWhatsappDelete": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.whatsapp.delete" },
-        "config": { "type": "object", "additionalProperties": false, "properties": {} }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.delete"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        }
       }
     },
     "actionGroupRemove": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.group.remove" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.group.remove"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "who": { "enum": ["sender", "target"] },
-            "neverRemoveOwner": { "type": "boolean" }
+            "who": {
+              "enum": [
+                "sender",
+                "target"
+              ]
+            },
+            "neverRemoveOwner": {
+              "type": "boolean"
+            }
           }
         }
       }
@@ -226,23 +521,62 @@
     "actionHttp": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.http" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.http"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["connectionRef", "method", "path", "timeoutMs"],
+          "required": [
+            "connectionRef",
+            "method",
+            "path",
+            "timeoutMs"
+          ],
           "properties": {
-            "connectionRef": { "type": "string", "minLength": 1 },
-            "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
-            "path": { "type": "string", "pattern": "^/" },
+            "connectionRef": {
+              "type": "string",
+              "minLength": 1
+            },
+            "method": {
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^/"
+            },
             "query": {
               "type": "object",
-              "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              }
             },
-            "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000 }
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 120000
+            }
           }
         }
       }
@@ -252,30 +586,80 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["source", "value"],
+          "required": [
+            "source",
+            "value"
+          ],
           "properties": {
-            "source": { "const": "literal" },
-            "value": { "type": ["string", "number", "boolean"] }
+            "source": {
+              "const": "literal"
+            },
+            "value": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["source", "scope", "key"],
+          "required": [
+            "source",
+            "scope",
+            "key"
+          ],
           "properties": {
-            "source": { "const": "variable" },
-            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global"] },
-            "categoryKey": { "type": "string", "minLength": 1 },
-            "key": { "type": "string", "minLength": 1 }
+            "source": {
+              "const": "variable"
+            },
+            "scope": {
+              "enum": [
+                "chat",
+                "sender",
+                "group",
+                "group_member",
+                "target",
+                "target_group_member",
+                "category",
+                "global"
+              ]
+            },
+            "categoryKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["source", "field"],
+          "required": [
+            "source",
+            "field"
+          ],
           "properties": {
-            "source": { "const": "event" },
-            "field": { "enum": ["message.text", "message.kind", "sender.id", "chat.id", "chat.kind", "target.id", "sender.isOwner", "message.args"] }
+            "source": {
+              "const": "event"
+            },
+            "field": {
+              "enum": [
+                "message.text",
+                "message.kind",
+                "sender.id",
+                "chat.id",
+                "chat.kind",
+                "target.id",
+                "sender.isOwner",
+                "message.args"
+              ]
+            }
           }
         }
       ]
@@ -283,18 +667,46 @@
     "conditionCompare": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "condition.compare" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "condition.compare"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["left", "operator", "right"],
+          "required": [
+            "left",
+            "operator",
+            "right"
+          ],
           "properties": {
-            "left": { "$ref": "#/definitions/comparableOperand" },
-            "operator": { "enum": ["eq", "neq", "gt", "gte", "lt", "lte", "contains", "not_contains"] },
-            "right": { "$ref": "#/definitions/comparableOperand" }
+            "left": {
+              "$ref": "#/definitions/comparableOperand"
+            },
+            "operator": {
+              "enum": [
+                "eq",
+                "neq",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "contains",
+                "not_contains"
+              ]
+            },
+            "right": {
+              "$ref": "#/definitions/comparableOperand"
+            }
           }
         }
       }
@@ -302,18 +714,40 @@
     "actionWhatsappRecover": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.whatsapp.recover" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.recover"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "destination": { "enum": ["same_chat", "saved_messages", "fixed"] },
-            "destinationId": { "type": "string", "minLength": 1 },
-            "caption": { "type": "string" },
-            "notFoundText": { "type": "string" }
+            "destination": {
+              "enum": [
+                "same_chat",
+                "saved_messages",
+                "fixed"
+              ]
+            },
+            "destinationId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "caption": {
+              "type": "string"
+            },
+            "notFoundText": {
+              "type": "string"
+            }
           }
         }
       }
@@ -321,15 +755,26 @@
     "actionWhatsappSticker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.whatsapp.sticker" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.sticker"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "notFoundText": { "type": "string" }
+            "notFoundText": {
+              "type": "string"
+            }
           }
         }
       }
@@ -337,19 +782,53 @@
     "actionVariableIncrement": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.variable.increment" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.variable.increment"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["scope", "key", "by"],
+          "required": [
+            "scope",
+            "key",
+            "by"
+          ],
           "properties": {
-            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global"] },
-            "categoryKey": { "type": "string", "minLength": 1 },
-            "key": { "type": "string", "minLength": 1 },
-            "by": { "type": "integer", "minimum": -1000000, "maximum": 1000000 }
+            "scope": {
+              "enum": [
+                "chat",
+                "sender",
+                "group",
+                "group_member",
+                "target",
+                "target_group_member",
+                "category",
+                "global"
+              ]
+            },
+            "categoryKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "by": {
+              "type": "integer",
+              "minimum": -1000000,
+              "maximum": 1000000
+            }
           }
         }
       }
@@ -357,19 +836,51 @@
     "actionVariableSet": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.variable.set" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.variable.set"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["scope", "key", "value"],
+          "required": [
+            "scope",
+            "key",
+            "value"
+          ],
           "properties": {
-            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global"] },
-            "categoryKey": { "type": "string", "minLength": 1 },
-            "key": { "type": "string", "minLength": 1 },
-            "value": { "type": "string" }
+            "scope": {
+              "enum": [
+                "chat",
+                "sender",
+                "group",
+                "group_member",
+                "target",
+                "target_group_member",
+                "category",
+                "global"
+              ]
+            },
+            "categoryKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string"
+            }
           }
         }
       }
@@ -377,16 +888,30 @@
     "actionWhatsappReply": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.whatsapp.reply" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.reply"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["text"],
+          "required": [
+            "text"
+          ],
           "properties": {
-            "text": { "type": "string", "minLength": 1 }
+            "text": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       }
@@ -394,17 +919,38 @@
     "actionMenuConfig": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.menu.config" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.menu.config"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "field": { "enum": ["header", "footer", "emptyText", "buttonTitle", "format"] },
-            "usageText": { "type": "string" },
-            "confirmText": { "type": "string" }
+            "field": {
+              "enum": [
+                "header",
+                "footer",
+                "emptyText",
+                "buttonTitle",
+                "format"
+              ]
+            },
+            "usageText": {
+              "type": "string"
+            },
+            "confirmText": {
+              "type": "string"
+            }
           }
         }
       }
@@ -412,19 +958,41 @@
     "actionMenuRender": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "type", "config"],
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "type": { "const": "action.menu.render" },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.menu.render"
+        },
         "config": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "format": { "enum": ["text", "interactive"] },
-            "header": { "type": "string" },
-            "footer": { "type": "string" },
-            "emptyText": { "type": "string" },
-            "buttonTitle": { "type": "string" }
+            "format": {
+              "enum": [
+                "text",
+                "interactive"
+              ]
+            },
+            "header": {
+              "type": "string"
+            },
+            "footer": {
+              "type": "string"
+            },
+            "emptyText": {
+              "type": "string"
+            },
+            "buttonTitle": {
+              "type": "string"
+            }
           }
         }
       }
