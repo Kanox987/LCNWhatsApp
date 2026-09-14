@@ -4,6 +4,7 @@
 // arriscadas de a UI errar silenciosamente: conversão de unidade de banda
 // e montagem do documento de automação a partir do estado do wizard.
 import { parseBandwidth, formatBandwidth, formatBytes } from '../src/web/public/logic/optimization.js'
+import { converterParaTipo, descreverValor, tipoDoValor, valorParaCampo } from '../src/web/public/logic/valores.js'
 import { suggestAutomationId, emptyScopeBlocksSave, buildAutomationDocument, automationSummary, stateFromDocument } from '../src/web/public/logic/automation.js'
 
 let falhas = 0
@@ -101,6 +102,33 @@ const doc2 = buildAutomationDocument(stateFromDocument(doc))
 check('ida e volta documento->estado->documento não perde informação', JSON.stringify(doc2) === JSON.stringify(doc))
 const docComMenu2 = buildAutomationDocument(stateFromDocument(docComMenu))
 check('ida e volta documento->estado->documento não perde "display" (menu)', JSON.stringify(docComMenu2) === JSON.stringify(docComMenu))
+
+// --- valores tipados na aba Dados (Bloco 1b) -----------------------------
+// A tabela sempre guardou qualquer tipo; era a tela que mandava tudo como
+// texto — e um contador criado à mão como "0" não podia ser somado depois.
+check('tipoDoValor reconhece número', tipoDoValor(3) === 'number')
+check('tipoDoValor reconhece sim/não', tipoDoValor(true) === 'boolean')
+check('tipoDoValor cai em texto por padrão', tipoDoValor('premium') === 'text' && tipoDoValor(null) === 'text')
+
+check('converte número digitado', converterParaTipo('7', 'number').valor === 7)
+check('aceita vírgula como separador decimal', converterParaTipo('1,5', 'number').valor === 1.5)
+check('número inválido é ERRO, não vira zero em silêncio', converterParaTipo('abc', 'number').ok === false)
+check('número vazio é erro explicado', converterParaTipo('', 'number').ok === false)
+
+check('converte sim', converterParaTipo('sim', 'boolean').valor === true)
+check('converte true', converterParaTipo('true', 'boolean').valor === true)
+check('converte não (com acento)', converterParaTipo('não', 'boolean').valor === false)
+check('vazio em sim/não vira não, não vira erro', converterParaTipo('', 'boolean').valor === false)
+check('texto qualquer em sim/não é erro', converterParaTipo('talvez', 'boolean').ok === false)
+
+check('texto passa direto', converterParaTipo('premium', 'text').valor === 'premium')
+check('tipo desconhecido é recusado', converterParaTipo('x', 'inventado').ok === false)
+check('converter nunca lança', converterParaTipo(undefined, 'text').ok === true && converterParaTipo(null, 'number').ok === false)
+
+check('valorParaCampo não coloca aspas em texto', valorParaCampo('premium') === 'premium')
+check('valorParaCampo mostra número sem aspas', valorParaCampo(3) === '3')
+check('descreverValor explica vazio em vez de mostrar nada', descreverValor('') === '(vazio)')
+check('descreverValor traduz booleano', descreverValor(true) === 'sim' && descreverValor(false) === 'não')
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LÓGICA DO PAINEL PASSARAM')
 process.exit(falhas ? 1 : 0)

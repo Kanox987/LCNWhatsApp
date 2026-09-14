@@ -6,14 +6,50 @@
 // variáveis valem pra esse contato/grupo em qualquer automação.
 import { api, ApiError } from '../api.js'
 import { badge, button, el, emptyState, errorState, field, notify, setBusy, setPageHeader } from '../ui.js'
+import { TIPOS, converterParaTipo, descreverValor, tipoDoValor, valorParaCampo } from '../logic/valores.js'
+
+// Seletor de tipo + campo, que troca conforme o tipo. Devolve os dois nós e
+// uma função que lê o valor já convertido — quem chama não precisa saber qual
+// controle está na tela.
+function controleDeValor (valorInicial) {
+  const tipoInicial = tipoDoValor(valorInicial)
+  const tipoSelect = el('select', {}, TIPOS.map((t) => el('option', { value: t.id, text: t.rotulo, selected: t.id === tipoInicial })))
+
+  const campoTexto = el('input', { type: 'text', value: tipoInicial === 'boolean' ? '' : valorParaCampo(valorInicial ?? '') })
+  const campoSimNao = el('select', {}, [
+    el('option', { value: 'sim', text: 'Sim', selected: valorInicial === true }),
+    el('option', { value: 'não', text: 'Não', selected: valorInicial !== true })
+  ])
+
+  function aplicarTipo () {
+    const tipo = tipoSelect.value
+    campoTexto.hidden = tipo === 'boolean'
+    campoSimNao.hidden = tipo !== 'boolean'
+    campoTexto.type = tipo === 'number' ? 'number' : 'text'
+    campoTexto.step = tipo === 'number' ? 'any' : ''
+    campoTexto.placeholder = tipo === 'number' ? 'ex: 0' : 'ex: premium'
+  }
+  tipoSelect.addEventListener('change', aplicarTipo)
+  aplicarTipo()
+
+  return {
+    tipoSelect,
+    campos: el('div', { className: 'valor-campos' }, [campoTexto, campoSimNao]),
+    ler: () => converterParaTipo(tipoSelect.value === 'boolean' ? campoSimNao.value : campoTexto.value, tipoSelect.value)
+  }
+}
 
 function attributeRow (kind, id, attribute, onChanged) {
-  const valueInput = el('input', { type: 'text', value: typeof attribute.value === 'string' ? attribute.value : JSON.stringify(attribute.value) })
+  const valor = controleDeValor(attribute.value)
   const saveBtn = button('Salvar', { variant: 'quiet', onClick: async (event) => {
     const control = event.currentTarget
+    const convertido = valor.ler()
+    // Erro de conversão é da pessoa, não do servidor: avisa aqui e nem manda
+    // a requisição, para não gravar um contador que nunca poderá ser somado.
+    if (!convertido.ok) return notify(convertido.erro, 'danger')
     setBusy(control, true, 'Salvando…')
     try {
-      await api.entities.set(kind, id, attribute.key, valueInput.value)
+      await api.entities.set(kind, id, attribute.key, convertido.valor)
       notify(`Variável "${attribute.key}" atualizada.`)
       setBusy(control, false)
     } catch (error) {
@@ -37,7 +73,8 @@ function attributeRow (kind, id, attribute, onChanged) {
   return el('div', { className: 'list-card compact' }, [
     el('div', { className: 'list-card-main' }, [
       el('strong', { className: 'mono', text: attribute.key }),
-      valueInput
+      el('span', { className: 'field-help', text: `Agora vale: ${descreverValor(attribute.value)}` }),
+      el('div', { className: 'valor-linha' }, [valor.tipoSelect, valor.campos])
     ]),
     el('div', { className: 'button-row' }, [saveBtn, removeBtn])
   ])
@@ -46,16 +83,17 @@ function attributeRow (kind, id, attribute, onChanged) {
 function entityPanel (kind, entity) {
   const attributesArea = el('div', { className: 'stack' })
   const newKeyInput = el('input', { type: 'text', placeholder: 'ex: vip' })
-  const newValueInput = el('input', { type: 'text', placeholder: 'ex: true' })
+  const novoValor = controleDeValor('')
   const addBtn = button('Adicionar variável', { variant: 'primary', onClick: async (event) => {
     const key = newKeyInput.value.trim()
     if (!key) return notify('Informe um nome pra variável.', 'danger')
+    const convertido = novoValor.ler()
+    if (!convertido.ok) return notify(convertido.erro, 'danger')
     const control = event.currentTarget
     setBusy(control, true, 'Adicionando…')
     try {
-      await api.entities.set(kind, entity.id, key, newValueInput.value)
+      await api.entities.set(kind, entity.id, key, convertido.valor)
       newKeyInput.value = ''
-      newValueInput.value = ''
       notify(`Variável "${key}" adicionada.`)
       await renderAttributes()
       setBusy(control, false)
@@ -88,11 +126,12 @@ function entityPanel (kind, entity) {
       ]),
       badge(kind === 'group' ? 'Grupo' : 'Contato', 'info')
     ]),
-    el('p', { className: 'field-help', text: 'Variáveis customizadas ficam disponíveis em qualquer automação como {{custom.<nome>}}, e valem pra este contato/grupo em qualquer instância — não são por número.' }),
+    el('p', { className: 'field-help', text: 'Estas variáveis valem para este contato ou grupo em qualquer automação e em qualquer número — não são por instância. Nos comandos, use {{var.chat.<nome>}}.' }),
     attributesArea,
     el('div', { className: 'form-grid' }, [
       field('Nova variável — nome', newKeyInput, 'Sem espaços; use letras/números/hífen.'),
-      field('Nova variável — valor', newValueInput, 'Sempre texto (ex: "true", "premium").')
+      field('Tipo', novoValor.tipoSelect, 'Escolha "Número" para criar um contador — só assim o sistema consegue somar nele depois.'),
+      field('Valor inicial', novoValor.campos, 'Onde a variável começa. Um contador normalmente começa em 0.')
     ]),
     el('div', { className: 'button-row' }, addBtn)
   ])

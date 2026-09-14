@@ -1093,3 +1093,10 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
 .variable-warning.tone-danger { color: var(--danger); background: var(--danger-bg); }
 .template-warnings { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .catalog-card-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex: none; }
+
+/* Editor de valor tipado na aba Dados: o seletor de tipo e o campo dele
+   ficam lado a lado, e o campo troca conforme o tipo escolhido. */
+.valor-linha { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.valor-linha > select { flex: none; width: auto; min-width: 118px; }
+.valor-campos { flex: 1 1 160px; min-width: 0; }
+.valor-campos > input, .valor-campos > select { width: 100%; }
