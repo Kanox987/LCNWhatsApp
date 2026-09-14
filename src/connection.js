@@ -16,7 +16,6 @@ import readline from 'readline'
 import path from 'path'
 import { PASTA_SESSAO, PASTA_DADOS, ARQ_GRUPOS_REFRESH, garantirPastas } from './paths.js'
 import { carregar, observar } from './config.js'
-import { criarHandler } from './capture.js'
 import { atualizarGrupos, registrarContato } from './directory.js'
 import * as state from './state.js'
 import * as bandwidth from './bandwidth.js'
@@ -64,8 +63,8 @@ const SESSION_ID = 'default'
 function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico) {
   // O enriquecimento de grupo (nome, tamanho, quem é admin) acontece aqui e
   // não na construção do evento porque é chamada de rede: fica no caminho já
-  // assíncrono, sem atrasar a captura legada nem o handler da mensagem. Falha
-  // aberto — sem os dados, o evento segue como estava.
+  // assíncrono, sem atrasar o processamento da mensagem. Falha aberto — sem os
+  // dados, o evento segue como estava.
   void groupInfo.enriquecerEvento(client, eventoCanonico)
     .catch(() => eventoCanonico)
     .then((evento) => enviarEventoAoMotor(clienteEngine, evento))
@@ -78,7 +77,7 @@ function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico) {
   }).catch(() => {})
 }
 
-// O JID da própria conta. Mesma normalização de capture.js: meJid vem com
+// O JID da própria conta. meJid vem com
 // sufixo de dispositivo (":12@"), e é a forma sem ele que endereça a pessoa.
 function jidProprio (client) {
   try {
@@ -278,7 +277,6 @@ export async function iniciar () {
       })
     }
 
-    const handler = criarHandler({ client, getConfig: () => cfg })
 
     // VALIDAR: candidato a equivalente de contacts.upsert/contacts.update
     // (agenda do telefone) — ver comentário de registrarNomesDoDiretorio.
@@ -301,8 +299,8 @@ export async function iniciar () {
       const recebidoEmMs = Date.now()
       if (cfg.hardware?.debug) log(`message key.id=${event.key?.id} fromMe=${event.key?.fromMe}`)
       registrarContatoConhecido(event)
-      // O motor é opcional: construção, debug e envio ficam isolados; o
-      // pipeline legado abaixo roda sempre, mesmo sem socket do motor.
+      // Construção, debug e envio ficam isolados: um erro aqui não pode
+      // derrubar o event emitter da conexão.
       try {
         const eventoCanonico = construirEventoDeMensagem(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
         emitirEventoDebug(eventoCanonico, cfg, log)
@@ -310,7 +308,6 @@ export async function iniciar () {
       } catch (e) {
         if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
       }
-      await handler.aoReceber(event)
     })
 
     client.on('message_unavailable', async (event) => {
@@ -323,7 +320,6 @@ export async function iniciar () {
       } catch (e) {
         if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
       }
-      await handler.aoIndisponivel(event)
     })
 
     client.on('connection', ({ status, reason, isLogout }) => {

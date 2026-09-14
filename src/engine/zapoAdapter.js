@@ -9,7 +9,7 @@ import * as lidMap from '../lidMap.js'
 import { nomeDe, registrarContato } from '../directory.js'
 
 // participantAlt/remoteJidAlt têm prioridade sobre o LID cru — mesma
-// normalização já usada inline em connection.js/capture.js, reaproveitada
+// normalização já usada inline em connection.js, reaproveitada
 // aqui (não reinventada) por consistência.
 function resolverSenderId (key) {
   return key.participantAlt || key.remoteJidAlt || key.participant || key.remoteJid
@@ -42,7 +42,7 @@ function resolverChatId (key, kind) {
 // nunca chegava ao evento canônico, então `textoCasaComando` recebia
 // `undefined` e recusava antes de qualquer outra checagem — sem erro, sem
 // registro, sem nada que ajudasse a entender. O código legado
-// (`capture.js:239`) já lia `node.caption`; só o motor não lia.
+// antigo já lia `node.caption`; só o motor não lia.
 function extrairTexto (msg) {
   if (!msg) return undefined
   if (typeof msg.extendedTextMessage?.text === 'string') return msg.extendedTextMessage.text
@@ -107,7 +107,7 @@ function dadosDaMidia (msgBruta, msg, kind, marcadaComoViewOnce) {
 }
 
 // Varre os campos da mensagem procurando contextInfo.quotedMessage — mesma
-// ideia de acharCitacaoGenerica (src/capture.js), mas devolvendo só
+// ideia de acharCitacaoGenerica, mas devolvendo só
 // endereçamento (nunca o conteúdo da citação: /recover e visu única
 // continuam ação nativa protegida, não precisam vazar isso pro motor).
 function construirQuotedRef (msg) {

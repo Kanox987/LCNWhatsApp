@@ -406,7 +406,7 @@ async function resolverDependencias (deps) {
       converterParaFigurinha: sticker.converterParaFigurinha,
       podeVirarFigurinha: sticker.podeVirarFigurinha,
       ehAnimada: sticker.ehAnimada,
-      // Mesma normalização de capture.js (jidProprio): meJid vem com sufixo
+      // meJid vem com sufixo
       // de dispositivo (":12@") e o self-chat só aceita a forma sem ele.
       resolverJidProprio: (client) => {
         const meJid = client.getCredentials?.()?.meJid

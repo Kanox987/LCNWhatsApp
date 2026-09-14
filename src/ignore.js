@@ -14,7 +14,7 @@
 // equivalente pré-decrypt. Ainda não é usado neste arquivo (ver Parte B,
 // "Processamento seletivo por grupo/contato" no plano, pra quando isso for
 // ligado de verdade) — continua só uma checagem pós-decrypt, redundante com
-// a que já existe em passaFiltro()/aoReceber (src/capture.js), mantida por
+// a que já existia no pipeline de captura antigo, mantida por
 // clareza e porque os testes (ignore.test.mjs) continuam valendo como está.
 //
 // Ponto de atenção herdado da versão Baileys: bloquear @g.us genericamente

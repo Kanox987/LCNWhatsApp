@@ -166,7 +166,7 @@ export function acharAudioDireto (message) {
 // próprio exemplo da doc de requestMediaReupload, que reconstrói o envelope
 // da mesma forma pra aplicar o directPath novo). maxBytes é obrigatório na
 // API do Zapo — reaproveita o mesmo teto de tamanho que processarAchado já
-// calculava antes de chamar isto (ver src/capture.js), só que agora aplicado
+// calculava antes de chamar isto, só que agora aplicado
 // dentro do próprio download em vez de só como checagem prévia de
 // node.fileLength.
 export async function baixarBuffer (client, node, tipo, maxBytes) {

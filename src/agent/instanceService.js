@@ -357,7 +357,7 @@ export function criarInstanceService ({
   // direto — só o que o próprio bot já autorreporta em `state.json`
   // (`memoriaMB`, gravado em `state.js:gravar()`; `bytesBaixados`/
   // `bytesEnviados`, contadores acumulados desde o boot, gravados em
-  // `visu.js`/`capture.js` nos mesmos pontos que já chamam
+  // `visu.js` nos mesmos pontos que já chamam
   // `bandwidth.aguardarDownload/aguardarUpload`).
   //
   // Instância da Parte A (Podman): DELIBERADAMENTE não implementado ainda

@@ -1,4 +1,4 @@
-// Utilidades pequenas e compartilhadas entre capture.js, connection.js,
+// Utilidades pequenas e compartilhadas entre connection.js,
 // directory.js e dashboard.js.
 
 // Extrai só os dígitos de um número, aceitando tanto um JID completo
