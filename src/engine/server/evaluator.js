@@ -34,17 +34,61 @@ function kindDoEscopo (chat) {
   return chat.kind === 'group' ? 'group' : 'contact'
 }
 
+// Uma conversa está "marcada" quando a variável daquela conversa existe e vale
+// algo de verdade. É a mesma entidade que {{var.chat.<chave>}} lê — marcar um
+// contato como vip na aba Dados é o que o coloca no destino "marcados com vip".
+//
+// Vazio, zero e false NÃO marcam: quem desmarcou alguém gravando `false`
+// esperaria que ele saísse do destino, não que continuasse dentro.
+function conversaMarcada (db, chat, chave) {
+  if (!db || !chave) return false
+  const linha = db.prepare(
+    'SELECT value_json FROM entity_attributes WHERE scope_kind = ? AND scope_id = ? AND key = ?'
+  ).get(kindDoEscopo(chat), chat.id, chave)
+  if (!linha) return false
+  try {
+    const valor = JSON.parse(linha.value_json)
+    return valor !== false && valor !== null && valor !== 0 && valor !== ''
+  } catch {
+    return false
+  }
+}
+
+// Um destino casa com a conversa do evento?
+//
+// `contact`/`group` continuam sendo o endereço exato de uma conversa. Os outros
+// são os destinos abrangentes, que existem para a pessoa poder dizer "todos" de
+// PROPÓSITO — a diferença entre escolher e esquecer, que é o motivo de lista
+// vazia nunca significar todos.
+function refCasa (db, ref, chat) {
+  switch (ref.kind) {
+    case 'contact':
+    case 'group':
+      return ref.kind === kindDoEscopo(chat) && ref.ref_id === chat.id
+    // "Todos os contatos no privado" é conversa direta mesmo — canal e
+    // transmissão não são contatos, e o bot não tem o que fazer lá.
+    case 'all_contacts': return chat.kind === 'direct'
+    case 'all_groups': return chat.kind === 'group'
+    // "Qualquer conversa" é contato OU grupo, e a tela diz isso com estas
+    // palavras. Canal e transmissão ficam de fora de propósito: responder num
+    // canal não é um caso de uso, é um acidente.
+    case 'everywhere': return chat.kind === 'direct' || chat.kind === 'group'
+    case 'tagged': return conversaMarcada(db, chat, ref.ref_id)
+    default: return false
+  }
+}
+
 // scope.include vazio NUNCA significa "todos" — decisão explícita do plano
 // (item 2 das "três decisões a fechar antes do primeiro publish"). Sem
-// include nenhum, a automação não casa com JID nenhum.
-function escopoCasa (refs, chat) {
-  const includes = refs.filter((r) => r.direction === 'include')
-  const excludes = refs.filter((r) => r.direction === 'exclude')
-  const kindEsperado = kindDoEscopo(chat)
-  const bateInclude = includes.some((r) => r.kind === kindEsperado && r.ref_id === chat.id)
-  if (!bateInclude) return false
-  const bateExclude = excludes.some((r) => r.kind === kindEsperado && r.ref_id === chat.id)
-  return !bateExclude
+// include nenhum, a automação não casa com JID nenhum. O erro é assimétrico:
+// esquecer de preencher e o bot responder em TODAS as conversas, inclusive as
+// pessoais, é muito pior do que ele não responder em nenhuma.
+//
+// Exclude vence include, sempre: é o que faz "todos os grupos MENOS este"
+// funcionar, que é o motivo principal de os destinos abrangentes existirem.
+function escopoCasa (db, refs, chat) {
+  if (refs.some((r) => r.direction === 'exclude' && refCasa(db, r, chat))) return false
+  return refs.some((r) => r.direction === 'include' && refCasa(db, r, chat))
 }
 
 function acharTrigger (documento) {
@@ -246,11 +290,20 @@ function executarNo (db, no, evento, contexto, comandos) {
       // converte é o gateway — mesma fronteira que /recover e visu única já
       // respeitam. Sem mídia no evento, não gera comando de figurinha: manda
       // (se configurado) só um aviso de texto explicando o que faltou.
-      const mediaRef = evento.message?.mediaRef
+      // Duas formas de mandar a mídia, e as duas precisam funcionar: a foto
+      // COM o comando na legenda, e o comando RESPONDENDO uma foto já enviada.
+      // A segunda é a mais usada nos bots de referência, e era a que faltava —
+      // a referência da citação existia no evento e esta ação não a consultava.
+      const citada = evento.message?.quotedMediaRef
+      const mediaRef = evento.message?.mediaRef || citada?.token
       if (mediaRef) {
         comandos.push({
           commandType: 'whatsapp.sticker',
-          payload: { chatId: evento.chat.id, mediaRef, sourceKind: evento.message.kind }
+          payload: {
+            chatId: evento.chat.id,
+            mediaRef,
+            sourceKind: evento.message?.mediaRef ? evento.message.kind : (citada?.mediaKind || null)
+          }
         })
       } else if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
         comandos.push({
@@ -266,6 +319,19 @@ function executarNo (db, no, evento, contexto, comandos) {
       // fixo no código. O motor decide COM BASE NUM TOKEN e num tipo — nunca
       // recebe a mídia da visu única, que continua só na memória do gateway.
       const citada = evento.message?.quotedMediaRef
+      // Exige visualização única EXPLICITAMENTE. A citação passou a carregar
+      // também mídia comum (é o que faz a figurinha funcionar respondendo uma
+      // foto), e recuperar uma foto que todo mundo ainda vê não é recuperar
+      // nada — o /recover existe para o que sumiu depois de aberto.
+      if (citada?.token && citada.kind !== 'view_once') {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+        }
+        return 'success'
+      }
       if (!citada?.token) {
         if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
           comandos.push({
@@ -556,9 +622,9 @@ function candidatosPublicados (db) {
 // pulam a checagem de escopo — a regra "scope.include vazio nunca casa
 // com tudo" existe pra conteúdo AUTORADO PELO USUÁRIO, nunca foi pensada
 // pra um comando nativo que precisa funcionar em qualquer chat.
-function passaEscopoPara (candidato, refs, chat) {
+function passaEscopoPara (db, candidato, refs, chat) {
   if (candidato.native) return true
-  return escopoCasa(refs, chat)
+  return escopoCasa(db, refs, chat)
 }
 
 // Lista as automações (não-nativas, publicadas, ao vivo, habilitadas)
@@ -580,7 +646,7 @@ function automacoesVisiveisEm (db, chatDoEvento) {
     const documento = jsonOuNull(linha.doc_json)
     if (!documento) continue
     const refs = obterRefs.all(linha.active_revision_id)
-    if (!escopoCasa(refs, chatDoEvento)) continue
+    if (!escopoCasa(db, refs, chatDoEvento)) continue
     const trigger = acharTrigger(documento)
     const rotulo = documento.display?.menuLabel || trigger?.config?.command
     // Regra automática (anti-link e afins) não é um comando que alguém digita,
@@ -664,7 +730,7 @@ export function avaliarEvento (db, evento) {
 
       if (documento && trigger) {
         const refs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?').all(candidato.revision_id)
-        const passaEscopo = passaEscopoPara(candidato, refs, evento.chat)
+        const passaEscopo = passaEscopoPara(db, candidato, refs, evento.chat)
         const passaHistoria = documento.inputPolicy.historyPolicy !== 'live_only' || evento.replay !== true
         const passaTipo = documento.inputPolicy.acceptedMessageKinds.includes(evento.message.kind)
         // Comando restrito é o canal de administração pelo WhatsApp, então

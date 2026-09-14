@@ -7,6 +7,7 @@
 // (evaluator) e metade é o gateway (gatewayExecutor com tudo injetado).
 import { abrirBanco } from '../src/engine/server/db.js'
 import { avaliarEvento } from '../src/engine/server/evaluator.js'
+import { construirEventoDeMensagem } from '../src/engine/zapoAdapter.js'
 import { executarComandos } from '../src/engine/gatewayExecutor.js'
 
 let falhas = 0
@@ -48,23 +49,58 @@ function evento (mensagem) {
 }
 const comandosDe = (r, id) => r.results.find((x) => x.automationId === id)?.commands || []
 
-// --- figurinha: o motor repassa o token, nunca a mídia -------------------
+// --- figurinha: os DOIS usos reais, montados pelo adaptador ---------------
+//
+// Estes casos passam pelo `construirEventoDeMensagem` de propósito. O teste
+// anterior montava `{ kind: 'image', text: '/fig' }` na mão — combinação que o
+// adaptador NUNCA produzia, porque a legenda da foto era descartada. O teste
+// ficava verde e o comando ficava mudo no WhatsApp real. Evento de teste que o
+// produtor real não consegue gerar não prova nada.
 publicar('fig', [
   { id: 'g', type: 'trigger.command', config: { command: '/fig', match: 'exact_or_args', allowFrom: 'external' } },
   { id: 's', type: 'action.whatsapp.sticker', config: { notFoundText: 'Manda uma imagem com /fig, ou responda uma.' } }
-], [{ from: 'g', to: 's', on: 'matched' }])
+], [{ from: 'g', to: 's', on: 'matched' }], { acceptedMessageKinds: ['text', 'image', 'video'] })
 
-const comFoto = avaliarEvento(db, evento({ kind: 'image', text: '/fig', mediaRef: 'token-abc-123' }))
-const cmdFig = comandosDe(comFoto, 'fig')[0]
-check('figurinha: gera comando whatsapp.sticker', cmdFig?.commandType === 'whatsapp.sticker')
-check('figurinha: o payload leva o TOKEN, não a mídia', cmdFig?.payload?.mediaRef === 'token-abc-123')
-check('figurinha: nenhum campo do payload carrega bytes ou segredo de mídia',
-  !JSON.stringify(cmdFig?.payload || {}).match(/mediaKey|directPath|fileEncSha|Buffer/))
+let idMsg = 0
+const chaveDireta = () => ({
+  remoteJid: CHAT, id: `REAL${++idMsg}`, fromMe: false,
+  isGroup: false, isBroadcast: false, isNewsletter: false
+})
+const doAdaptador = (message) => construirEventoDeMensagem(
+  { key: chaveDireta(), message }, { accountId: 'acc-1', botId: '5511900000002@s.whatsapp.net' }
+)
 
-const semFoto = avaliarEvento(db, evento({ kind: 'text', text: '/fig' }))
-const cmdSemFoto = comandosDe(semFoto, 'fig')[0]
-check('figurinha sem mídia: não gera comando de figurinha', cmdSemFoto?.commandType !== 'whatsapp.sticker')
-check('figurinha sem mídia: avisa por texto o que faltou', cmdSemFoto?.payload?.text === 'Manda uma imagem com /fig, ou responda uma.')
+// USO 1: a foto vem COM o comando escrito na legenda.
+const eventoLegenda = doAdaptador({ imageMessage: { url: 'x', mimetype: 'image/jpeg', caption: '/fig' } })
+check('adaptador: a legenda da foto vira o texto da mensagem', eventoLegenda.message.text === '/fig', JSON.stringify(eventoLegenda.message.text))
+const cmdLegenda = comandosDe(avaliarEvento(db, eventoLegenda), 'fig')[0]
+check('figurinha na legenda da foto: gera whatsapp.sticker', cmdLegenda?.commandType === 'whatsapp.sticker', cmdLegenda?.commandType)
+check('figurinha na legenda: o payload leva TOKEN, não a mídia', typeof cmdLegenda?.payload?.mediaRef === 'string' && cmdLegenda.payload.mediaRef.length > 0)
+check('figurinha na legenda: nenhum segredo de mídia no payload',
+  !JSON.stringify(cmdLegenda?.payload || {}).match(/mediaKey|directPath|fileEncSha|Buffer/))
+
+// USO 2: o comando RESPONDE uma foto já enviada.
+const eventoCitando = doAdaptador({
+  extendedTextMessage: {
+    text: '/fig',
+    contextInfo: { stanzaId: 'Q1', participant: CHAT, quotedMessage: { imageMessage: { url: 'y', mimetype: 'image/jpeg' } } }
+  }
+})
+check('adaptador: foto comum citada NÃO é rotulada visualização única', eventoCitando.message.quotedMediaRef?.kind === 'media', eventoCitando.message.quotedMediaRef?.kind)
+check('adaptador: e o tipo real da mídia citada é preservado', eventoCitando.message.quotedMediaRef?.mediaKind === 'image')
+const cmdCitando = comandosDe(avaliarEvento(db, eventoCitando), 'fig')[0]
+check('figurinha respondendo uma foto: gera whatsapp.sticker', cmdCitando?.commandType === 'whatsapp.sticker', cmdCitando?.commandType)
+check('figurinha respondendo: usa o token da mídia CITADA', cmdCitando?.payload?.mediaRef === eventoCitando.message.quotedMediaRef.token)
+
+// USO 3: o comando sozinho, sem foto nenhuma — aí sim é o aviso.
+const cmdSozinho = comandosDe(avaliarEvento(db, doAdaptador({ conversation: '/fig' })), 'fig')[0]
+check('figurinha sem mídia nenhuma: não gera comando de figurinha', cmdSozinho?.commandType !== 'whatsapp.sticker')
+check('figurinha sem mídia nenhuma: avisa por texto o que faltou', cmdSozinho?.payload?.text === 'Manda uma imagem com /fig, ou responda uma.')
+
+// Legenda sem comando não pode acionar nada — o texto agora existe, então vale
+// conferir que ele não casa por acidente.
+const cmdLegendaComum = comandosDe(avaliarEvento(db, doAdaptador({ imageMessage: { url: 'z', caption: 'olha que foto linda' } })), 'fig')[0]
+check('foto com legenda comum não aciona o comando', cmdLegendaComum === undefined)
 
 // --- recover: decide pelo token da mídia CITADA ---------------------------
 publicar('rec', [
@@ -85,6 +121,29 @@ check('recover: destino "saved_messages" NÃO vira endereço no motor (só o gat
 
 const semVisu = avaliarEvento(db, evento({ kind: 'text', text: '/recover' }))
 check('recover sem visu única citada: explica em vez de falhar calado', comandosDe(semVisu, 'rec')[0]?.payload?.text === 'Responda uma visualização única com /recover.')
+
+// A citação passou a carregar mídia comum também (é o que faz a figurinha
+// funcionar respondendo uma foto). O /recover tem que continuar recusando:
+// reenviar uma foto que todo mundo ainda vê não é recuperar nada.
+const recFotoComum = avaliarEvento(db, doAdaptador({
+  extendedTextMessage: {
+    text: '/recover',
+    contextInfo: { stanzaId: 'Q2', participant: CHAT, quotedMessage: { imageMessage: { url: 'w', mimetype: 'image/jpeg' } } }
+  }
+}))
+const cmdRecComum = comandosDe(recFotoComum, 'rec')[0]
+check('recover respondendo foto COMUM: recusa em vez de recuperar', cmdRecComum?.commandType !== 'whatsapp.recover', cmdRecComum?.commandType)
+check('recover respondendo foto comum: explica o que faltou', cmdRecComum?.payload?.text === 'Responda uma visualização única com /recover.')
+
+// E visualização única de verdade continua funcionando pelo adaptador.
+const recVisuReal = doAdaptador({
+  extendedTextMessage: {
+    text: '/recover',
+    contextInfo: { stanzaId: 'Q3', participant: CHAT, quotedMessage: { viewOnceMessageV2: { message: { imageMessage: { url: 'v', viewOnce: true } } } } }
+  }
+})
+check('adaptador: visu única citada continua rotulada view_once', recVisuReal.message.quotedMediaRef?.kind === 'view_once', recVisuReal.message.quotedMediaRef?.kind)
+check('recover respondendo visu única de verdade: recupera', comandosDe(avaliarEvento(db, recVisuReal), 'rec')[0]?.commandType === 'whatsapp.recover')
 
 publicar('rec2', [
   { id: 'g', type: 'trigger.command', config: { command: '/aqui', match: 'exact', allowFrom: 'external' } },

@@ -34,8 +34,25 @@ function resolverChatId (key, kind) {
   return key.remoteJid
 }
 
+// O texto que a pessoa escreveu — inclusive quando ela escreveu na LEGENDA de
+// uma foto, vídeo ou documento.
+//
+// Isto não é detalhe: mandar a foto com "/fig" embaixo é a forma mais natural
+// de usar um comando de mídia, e era o caso em que o bot ficava mudo. A legenda
+// nunca chegava ao evento canônico, então `textoCasaComando` recebia
+// `undefined` e recusava antes de qualquer outra checagem — sem erro, sem
+// registro, sem nada que ajudasse a entender. O código legado
+// (`capture.js:239`) já lia `node.caption`; só o motor não lia.
 function extrairTexto (msg) {
-  return msg?.extendedTextMessage?.text ?? (typeof msg?.conversation === 'string' ? msg.conversation : undefined)
+  if (!msg) return undefined
+  if (typeof msg.extendedTextMessage?.text === 'string') return msg.extendedTextMessage.text
+  if (typeof msg.conversation === 'string') return msg.conversation
+  // Áudio não tem legenda; os outros três têm.
+  for (const campo of ['imageMessage', 'videoMessage', 'documentMessage']) {
+    const legenda = msg[campo]?.caption
+    if (typeof legenda === 'string' && legenda) return legenda
+  }
+  return undefined
 }
 
 // mediaRef só existe pra mensagem com mídia de verdade — o node cru
@@ -105,11 +122,19 @@ function construirQuotedMediaRef (msg) {
     if (chave === 'messageContextInfo') continue
     const citada = node?.contextInfo?.quotedMessage
     if (!citada) continue
-    const achado = acharVisuUnica(citada, true)
+    // Duas perguntas diferentes, feitas em ordem:
+    //   1. a mídia citada é visualização única DE VERDADE? (sem forçar a flag)
+    //   2. se não é, ainda assim existe mídia ali?
+    // Antes só existia a segunda, com o resultado rotulado `view_once` sempre —
+    // então uma foto comum citada viajava mentindo o tipo. O rótulo agora diz a
+    // verdade, e quem exige visu única é quem CONSOME (o /recover), não o nome
+    // do campo.
+    const visu = acharVisuUnica(citada, false)
+    const achado = visu || acharVisuUnica(citada, true)
     if (achado) {
       return {
         token: mediaRefCache.criar({ node: achado.node, tipo: achado.tipo, interno: achado.interno }),
-        kind: 'view_once',
+        kind: visu ? 'view_once' : 'media',
         mediaKind: achado.tipo
       }
     }
@@ -215,7 +240,11 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
   const nomeDeQuemEnviou = resolverNome(event, senderId)
 
   const mensagem = { kind }
-  if (kind === 'text') mensagem.text = extrairTexto(msg)
+  // Sem amarrar a `kind === 'text'`: uma foto com legenda É uma mensagem com
+  // texto, e é assim que se usa comando de mídia. O campo só não aparece quando
+  // não há texto nenhum — nunca vira string vazia, que casaria com `prefix`.
+  const texto = extrairTexto(msg)
+  if (typeof texto === 'string' && texto) mensagem.text = texto
   const mediaRef = construirMediaRef(msgBruta, msg, kind, key.isViewOnce === true)
   if (mediaRef) mensagem.mediaRef = mediaRef
   const quotedRef = construirQuotedRef(msg)
