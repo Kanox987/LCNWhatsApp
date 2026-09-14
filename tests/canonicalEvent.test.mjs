@@ -45,6 +45,41 @@ check('DM texto: sender.authoredBySelf = false', eventoTexto.sender.authoredBySe
 checkBool('DM texto: sem mediaRef (não é mídia)', eventoTexto.message.mediaRef === undefined)
 check('DM texto: receivedAtMs repassa o valor do gateway (t0 pra latência)', eventoTexto.receivedAtMs, 1893456000123)
 
+// --- nome de exibição (pushName) -----------------------------------------
+// O nome que a pessoa escolheu aparecer. Já vinha na fixture e no evento real
+// do Zapo; o adaptador simplesmente descartava, então {{sender.name}} não
+// tinha de onde sair.
+check('DM texto: sender.name vem do pushName', eventoTexto.sender.name, 'Fulano')
+
+const semNome = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'SEMNOME', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'oi' }
+}, { accountId: 'acc-1' })
+// Ausente é ausente: sem a chave, {{sender.name}} fica literal no texto e a
+// pessoa percebe. Com string vazia, a saudação sairia com um buraco no meio.
+checkBool('sem pushName: o campo name nem existe (placeholder fica literal)', !('name' in semNome.sender))
+
+const nomeSujo = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'SUJO', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'oi' },
+  pushName: '  Ana\u0000\u001bMaria\u007f  '
+}, { accountId: 'acc-1' })
+check('nome com caractere de controle é limpo antes de entrar', nomeSujo.sender.name, 'AnaMaria')
+
+const nomeGigante = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'GIGANTE', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'oi' },
+  pushName: 'A'.repeat(400)
+}, { accountId: 'acc-1' })
+checkBool('nome absurdamente longo é cortado', nomeGigante.sender.name.length === 60)
+
+const nomeSoEspaco = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'BRANCO', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'oi' },
+  pushName: '   '
+}, { accountId: 'acc-1' })
+checkBool('nome só com espaço conta como ausente', !('name' in nomeSoEspaco.sender))
+
 const eventoSemRecebidoEmMs = construirEventoDeMensagem({
   key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSG1B', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
   message: { conversation: 'oi' }

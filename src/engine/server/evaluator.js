@@ -6,6 +6,7 @@
 import crypto from 'crypto'
 import { ErroHttp } from './transport.js'
 import { interpolar } from './interpolate.js'
+import { valoresDeAgora } from './momento.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
 import {
@@ -495,6 +496,14 @@ function executarFluxo (db, documento, triggerId, evento) {
     // {{target.id}} permanece literal no texto, sinalizando o erro de uso em
     // vez de mandar uma mensagem com um buraco no meio.
     target: alvo ? { id: alvo } : {},
+    // Quem escreveu a mensagem RESPONDIDA. `target` prefere a menção quando
+    // existem as duas; aqui é sempre o autor da citação, que é o que um
+    // comando tipo "/apagar" respondendo alguém precisa saber.
+    quoted: evento.message?.quotedRef?.participant ? { sender: evento.message.quotedRef.participant } : {},
+    // O número que está executando. Serve para o bot se apresentar sem a
+    // pessoa precisar digitar o próprio número dentro da resposta.
+    bot: evento.accountId ? { id: evento.accountId } : {},
+    now: valoresDeAgora(),
     var: carregarVariaveis(db, evento)
   }
 

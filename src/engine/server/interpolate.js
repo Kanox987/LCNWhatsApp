@@ -1,10 +1,21 @@
+import { CAMPOS_DE_AGORA } from './momento.js'
+
 const NAMESPACES_EMBUTIDOS = {
   message: new Set(['text', 'kind', 'args']),
-  sender: new Set(['id', 'isOwner']),
+  // `name` é o nome que a própria pessoa escolheu exibir no WhatsApp. Nem
+  // toda mensagem traz — quando não vem, o placeholder fica literal.
+  sender: new Set(['id', 'name', 'isOwner']),
   chat: new Set(['id', 'kind']),
   // Quem o comando mira: o primeiro @mencionado ou o autor da mensagem
   // citada. Fica vazio (placeholder intacto) quando não há alvo nenhum.
-  target: new Set(['id'])
+  target: new Set(['id']),
+  // A mensagem RESPONDIDA. Diferente de `target`, que prefere a menção:
+  // aqui é sempre quem escreveu a mensagem citada, mencionada ou não.
+  quoted: new Set(['sender']),
+  // O próprio número que está executando a automação.
+  bot: new Set(['id']),
+  // Relógio da máquina no instante da avaliação (ver momento.js).
+  now: new Set(CAMPOS_DE_AGORA)
 }
 
 // Escopos de variável endereçáveis por {{var.<escopo>.<chave>}}. 'category'

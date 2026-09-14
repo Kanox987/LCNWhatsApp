@@ -5,7 +5,10 @@ const TITULOS_NAMESPACE = {
   message: 'Mensagem recebida',
   sender: 'Quem enviou',
   target: 'Quem o comando está mirando',
+  quoted: 'A mensagem respondida',
   chat: 'Onde aconteceu',
+  bot: 'O próprio bot',
+  now: 'Data e hora',
   var: 'Variáveis e contadores que você cria'
 }
 
@@ -13,7 +16,10 @@ const AJUDA_NAMESPACE = {
   message: 'Conteúdo e tipo da mensagem que acionou a automação.',
   sender: 'Identificação de quem mandou a mensagem.',
   target: 'Quando alguém escreve "/comando @fulano" — ou responde a mensagem de alguém — o fulano é o alvo. Fica vazio se não houver menção nem resposta.',
+  quoted: 'Quando alguém responde a mensagem de outra pessoa e usa um comando, é dessa mensagem respondida que se trata.',
   chat: 'A conversa onde a automação executou — contato ou grupo.',
+  bot: 'O número que está executando a automação.',
+  now: 'O relógio da máquina no instante em que a resposta é montada. Já vêm prontas em vários formatos porque não existe conta nem função dentro do texto — você escolhe a que quer colar.',
   var: 'Você cria essas na aba Dados e usa aqui. O escopo (depois de "var.") decide de quem é o valor: da conversa, de quem enviou, do alvo, da categoria ou do sistema todo.'
 }
 

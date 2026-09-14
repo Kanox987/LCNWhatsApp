@@ -154,6 +154,32 @@ function construirProviderRef (key) {
   }
 }
 
+// O nome de exibição vem do atributo `notify` da stanza: é texto escolhido por
+// quem enviou, então chega livre. Corta caractere de controle (que bagunçaria a
+// mensagem de saída) e limita o tamanho. Nada aqui vira caminho, comando nem
+// decisão de permissão — só entra em saudação.
+//
+// A limpeza compara codepoint em vez de usar classe de caractere. O padrão
+// equivalente escrito com os bytes crus (como em mediaLibrary.js) grava um NUL
+// dentro do arquivo-fonte: o arquivo passa a contar como binário para o git e
+// basta uma ferramenta normalizar aquilo para o saneador virar outra coisa em
+// silêncio. Aconteceu escrevendo justamente esta função.
+function semControle (texto) {
+  let saida = ''
+  for (const caractere of texto) {
+    const codigo = caractere.codePointAt(0)
+    if (codigo > 31 && codigo !== 127) saida += caractere
+  }
+  return saida
+}
+
+function nomeExibido (event) {
+  const bruto = event?.pushName
+  if (typeof bruto !== 'string') return null
+  const limpo = semControle(bruto).trim()
+  return limpo ? limpo.slice(0, 60) : null
+}
+
 export function construirEventoDeMensagem (event, { accountId, recebidoEmMs }) {
   const key = event.key || {}
   // Toda mensagem que passa ensina um par LID<->telefone. É de graça: os dois
@@ -165,6 +191,7 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs }) {
   const msgBruta = event.message
   const msg = desembrulhar(msgBruta) || msgBruta
   const kind = classificarMensagem(msgBruta, { marcadaComoViewOnce: key.isViewOnce === true })
+  const nomeDeQuemEnviou = nomeExibido(event)
 
   const mensagem = { kind }
   if (kind === 'text') mensagem.text = extrairTexto(msg)
@@ -185,7 +212,12 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs }) {
     replay: event.offline === true,
     receivedAtMs: recebidoEmMs ?? Date.now(),
     chat: { id: chatId, kind: chatKind },
-    sender: { id: senderId, authoredBySelf: key.fromMe === true },
+    // `pushName` é o nome que a própria pessoa escolheu exibir. NEM SEMPRE
+    // chega, por isso entra só quando existe: sem o campo, {{sender.name}}
+    // fica literal no texto em vez de mandar saudação com um buraco no meio.
+    sender: nomeDeQuemEnviou
+      ? { id: senderId, authoredBySelf: key.fromMe === true, name: nomeDeQuemEnviou }
+      : { id: senderId, authoredBySelf: key.fromMe === true },
     message: mensagem,
     providerRef: construirProviderRef(key)
   }

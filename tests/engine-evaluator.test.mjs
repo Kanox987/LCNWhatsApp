@@ -119,6 +119,45 @@ const rVarAusente = avaliarEvento(db, eventoBase({
 const resultVarAusente = rVarAusente.results.find((r) => r.automationId === 'ping-var-ausente')
 check('variável ausente mantém o placeholder literal', resultVarAusente?.commands[0]?.payload?.text === 'VIP={{var.chat.vip}}')
 
+// --- nome, citação, bot e relógio no contexto real do avaliador ----------
+// A interpolação já é testada isolada; o que se prova aqui é que o avaliador
+// MONTA o contexto com esses campos a partir do evento canônico.
+const scopeContexto = '5511333@s.whatsapp.net'
+criarAutomacaoPing({
+  id: 'ping-contexto',
+  scopeId: scopeContexto,
+  text: '{{now.greeting}}, {{sender.name}}! bot={{bot.id}} citado={{quoted.sender}} dia={{now.weekday}}'
+})
+definirModo('ping-contexto', 'live')
+const rContexto = avaliarEvento(db, eventoBase({
+  msgId: 'CTX1',
+  chat: { id: scopeContexto, kind: 'direct' },
+  sender: { id: scopeContexto, authoredBySelf: false, name: 'Ana' },
+  message: {
+    kind: 'text',
+    text: '/ping',
+    quotedRef: { provider: 'zapo', id: 'Q1', participant: '5511222@s.whatsapp.net' }
+  }
+}))
+const textoContexto = rContexto.results.find((r) => r.automationId === 'ping-contexto')?.commands[0]?.payload?.text || ''
+check('avaliador põe o nome de exibição no contexto', /, Ana!/.test(textoContexto))
+check('avaliador põe o número do próprio bot no contexto', /bot=acc-1/.test(textoContexto))
+check('avaliador põe o autor da mensagem citada no contexto', /citado=5511222@s\.whatsapp\.net/.test(textoContexto))
+check('avaliador resolve a saudação pela hora', /^(Bom dia|Boa tarde|Boa noite), /.test(textoContexto))
+check('avaliador resolve o dia da semana por extenso', /dia=\S+-feira|dia=(sábado|domingo)/.test(textoContexto))
+check('nenhum placeholder de relógio sobrou sem resolver', !/\{\{now\./.test(textoContexto))
+
+// Sem citação, o placeholder fica literal em vez de virar vazio — mesma regra
+// do {{target.id}}: buraco no meio do texto esconde o erro de uso.
+const rSemCitacao = avaliarEvento(db, eventoBase({
+  msgId: 'CTX2',
+  chat: { id: scopeContexto, kind: 'direct' },
+  sender: { id: scopeContexto, authoredBySelf: false }
+}))
+const textoSemCitacao = rSemCitacao.results.find((r) => r.automationId === 'ping-contexto')?.commands[0]?.payload?.text || ''
+check('sem citação o placeholder fica literal', textoSemCitacao.includes('citado={{quoted.sender}}'))
+check('sem nome de exibição o placeholder fica literal', textoSemCitacao.includes('{{sender.name}}'))
+
 // --- duas ações: a gravação atualiza o mesmo contexto usado pela resposta ---
 const scopeSetReply = '5511444@s.whatsapp.net'
 criarAutomacaoComFluxo({
