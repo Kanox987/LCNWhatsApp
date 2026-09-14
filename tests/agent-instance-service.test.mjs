@@ -208,6 +208,7 @@ const serviceBare = criarInstanceService({
   bareArqEstado,
   bareArqConfig,
   bareStatusServico: () => { bareServicoFake.chamadas.push('status'); return 'rodando' },
+  bareIniciarBot: () => { bareServicoFake.chamadas.push('iniciar'); return { ok: true, out: 'Bot iniciado (pid 123).' } },
   barePararBot: () => { bareServicoFake.chamadas.push('parar'); return { ok: true, out: 'parado' } },
   bareReiniciarBot: () => { bareServicoFake.chamadas.push('reiniciar'); return { ok: true, out: 'reiniciado' } },
   bareLogsServico: (n) => { bareServicoFake.chamadas.push(`logs:${n}`); return { ok: true, out: 'linha 1\nlinha 2' } },
@@ -224,9 +225,13 @@ const barePareamento = await serviceBare.pareamento('bare')
 check('pareamento("bare"): lê o state.json do modo simples (injetado)', barePareamento.qr === 'QR-BARE-FAKE')
 check('pareamento("bare"): também gera qrDataUrl', barePareamento.qrDataUrl === 'data:image/png;base64,FAKE-QR-BARE-FAKE')
 
-let lancouStartBare = false
-try { serviceBare.iniciar('bare') } catch { lancouStartBare = true }
-check('iniciar("bare"): recusado com mensagem clara (exige terminal pra ligar do zero)', lancouStartBare)
+// Ligar pelo painel PASSOU a funcionar no modo simples: iniciarBot() antes
+// reexecutava o processo atual (inseguro a partir do painel, que não é o
+// binário do bot) e hoje executa index.js destacado. É o que permite conectar
+// um número sem abrir terminal — a ação principal de quem acabou de instalar.
+const iniciouBare = serviceBare.iniciar('bare')
+check('iniciar("bare"): liga o bot pelo painel, sem exigir terminal', iniciouBare.ok === true && iniciouBare.action === 'start')
+check('iniciar("bare"): usa o iniciarBot do runtime, não systemctl', bareServicoFake.chamadas.includes('iniciar'))
 check('iniciar("bare"): nunca chama runtime.js por engano', !bareServicoFake.chamadas.includes('start'))
 
 const paradaBare = serviceBare.parar('bare')

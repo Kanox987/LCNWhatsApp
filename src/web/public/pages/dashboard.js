@@ -1,5 +1,5 @@
 import { api } from '../api.js'
-import { badge, button, el, emptyState, setPageHeader } from '../ui.js'
+import { badge, button, el, emptyState, notify, setBusy, setPageHeader } from '../ui.js'
 
 const ROTULOS_SAUDE = {
   saudavel: 'Saudável',
@@ -38,9 +38,32 @@ function instanceCard (instance, navigate) {
       el('div', {}, [el('dt', { text: 'Saúde' }), el('dd', {}, healthBadge(instance.health))]),
       el('div', {}, [el('dt', { text: 'Número' }), el('dd', { text: instance.phoneNumber || instance.expectedPhoneE164 || '—' })])
     ]),
-    el('div', { className: 'instance-card-foot' }, [
+    el('div', { className: 'instance-card-foot button-row' }, [
+      // Conectar é a ação principal de um número desconectado, e ficava
+      // escondida atrás de "Abrir detalhes": quem acabou de instalar não tem
+      // como adivinhar que o QR mora lá dentro.
+      instance.connected === true
+        ? null
+        : button('Conectar', {
+          variant: 'primary',
+          onClick: async (evento) => {
+            const controle = evento.currentTarget
+            setBusy(controle, true, 'Ligando…')
+            try {
+              // Ligar é o que faz o WhatsApp emitir o QR. Se já estiver de pé,
+              // seguimos direto para a tela que mostra o código.
+              await api.instances.action(instance.instanceId, 'start').catch((erro) => {
+                if (!/já está rodando/i.test(erro.message || '')) throw erro
+              })
+              navigate(`/instances/${encodeURIComponent(instance.instanceId)}?conectar=1`)
+            } catch (erro) {
+              notify(erro.message, 'danger')
+              setBusy(controle, false)
+            }
+          }
+        }),
       button('Abrir detalhes', { onClick: () => navigate(`/instances/${encodeURIComponent(instance.instanceId)}`) })
-    ])
+    ].filter(Boolean))
   ])
 }
 

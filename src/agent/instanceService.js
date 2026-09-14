@@ -23,7 +23,7 @@ import QRCode from 'qrcode'
 import { lerRegistro, buscarPorId, listarInstancias as listarInstanciasRegistro } from '../instances/registry.js'
 import { caminhoInstancia, nomeContainer } from '../instances/paths.js'
 import { ARQ_ESTADO as ARQ_ESTADO_BARE, ARQ_CONFIG as ARQ_CONFIG_BARE } from '../paths.js'
-import { statusServico as statusServicoBare, pararBot as pararBotBare, reiniciarBot as reiniciarBotBare, logsServico as logsServicoBare } from '../runtime.js'
+import { statusServico as statusServicoBare, iniciarBot as iniciarBotBare, pararBot as pararBotBare, reiniciarBot as reiniciarBotBare, logsServico as logsServicoBare } from '../runtime.js'
 
 export const ID_BARE = 'bare'
 
@@ -149,6 +149,7 @@ export function criarInstanceService ({
   bareArqEstado = ARQ_ESTADO_BARE,
   bareArqConfig = ARQ_CONFIG_BARE,
   bareStatusServico = statusServicoBare,
+  bareIniciarBot = iniciarBotBare,
   barePararBot = pararBotBare,
   bareReiniciarBot = reiniciarBotBare,
   bareLogsServico = logsServicoBare,
@@ -223,17 +224,15 @@ export function criarInstanceService ({
 
   // Ciclo de vida do modo "bare": reaproveita src/runtime.js (mesmas
   // funções que dashboard.js/terminal já usam). Iniciar um bot do ZERO
-  // nesse modo é intencionalmente FORA de escopo aqui — `iniciarBot()`
-  // (runtime.js) reexecuta o processo atual, o que não é seguro nem
-  // bem-definido chamado a partir do processo do painel web (que não é o
-  // mesmo binário/SEA do bot); pra ligar do zero, o usuário ainda precisa
-  // rodar `npm start`/`node index.js`/`lcn` no terminal. Depois disso já
-  // rodando, pausar/reiniciar E ver o pareamento funcionam pelo painel.
+  // nesse modo JÁ funciona: `iniciarBot()` (runtime.js) antes reexecutava o
+  // processo atual — o que de fato não era seguro a partir do painel, porque
+  // o painel não é o mesmo binário do bot. Hoje ele executa `index.js`
+  // explicitamente, destacado, então ligar pelo painel é bem-definido. É o
+  // que permite conectar um número sem abrir terminal.
   function executarAcaoCicloDeVidaBare (acao) {
-    if (acao === 'start') {
-      throw new Error('Iniciar o modo simples do zero ainda exige o terminal (rode "npm start" ou "node index.js"). Depois de rodando, pausar/reiniciar já funcionam por aqui.')
-    }
-    const resultado = acao === 'stop' ? barePararBot() : bareReiniciarBot()
+    const resultado = acao === 'start'
+      ? bareIniciarBot()
+      : (acao === 'stop' ? barePararBot() : bareReiniciarBot())
     if (!resultado.ok) throw new Error(resultado.out)
     return { instanceId: ID_BARE, action: acao, ok: true }
   }
