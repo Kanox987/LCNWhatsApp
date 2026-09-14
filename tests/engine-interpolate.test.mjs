@@ -7,7 +7,7 @@ const contexto = {
   message: { text: '/ping agora', kind: 'text' },
   sender: { id: '5511999@s.whatsapp.net' },
   chat: { id: '120363000@g.us', kind: 'group' },
-  custom: { vip: true, apelido: 'Ana', perfil: { nivel: 3 } }
+  var: { chat: { vip: true, apelido: 'Ana', perfil: { nivel: 3 } } }
 }
 
 check(
@@ -15,14 +15,20 @@ check(
   interpolar('{{message.text}}|{{message.kind}}|{{sender.id}}|{{chat.id}}|{{chat.kind}}', contexto) ===
     '/ping agora|text|5511999@s.whatsapp.net|120363000@g.us|group'
 )
-check('substitui string customizada sem acrescentar aspas', interpolar('Oi, {{custom.apelido}}!', contexto) === 'Oi, Ana!')
-check('representa booleano customizado como texto JSON', interpolar('VIP={{custom.vip}}', contexto) === 'VIP=true')
-check('representa objeto customizado como texto JSON', interpolar('{{custom.perfil}}', contexto) === '{"nivel":3}')
-check('mantém variável customizada ausente literalmente', interpolar('VIP={{custom.ausente}}', contexto) === 'VIP={{custom.ausente}}')
+check('substitui variável de texto sem acrescentar aspas', interpolar('Oi, {{var.chat.apelido}}!', contexto) === 'Oi, Ana!')
+check('representa booleano como texto JSON', interpolar('VIP={{var.chat.vip}}', contexto) === 'VIP=true')
+check('representa objeto como texto JSON', interpolar('{{var.chat.perfil}}', contexto) === '{"nivel":3}')
+check('mantém variável ausente literalmente', interpolar('VIP={{var.chat.ausente}}', contexto) === 'VIP={{var.chat.ausente}}')
 check('mantém campo embutido desconhecido literalmente', interpolar('{{message.name}}', contexto) === '{{message.name}}')
 check('mantém namespace desconhecido literalmente', interpolar('{{sistema.valor}}', contexto) === '{{sistema.valor}}')
+
+// Variável de usuário tem um endereço só. Um apelido que resolvesse para o
+// mesmo valor com outro nome esconderia o escopo — e o escopo é justamente o
+// que diz de quem é aquele valor.
+check('não existe apelido de escopo: {{custom.X}} fica literal', interpolar('VIP={{custom.vip}}', contexto) === 'VIP={{custom.vip}}')
+
 check('nunca toca no placeholder de latência sem ponto', interpolar('pong ({{latencyMs}}ms)', contexto) === 'pong ({{latencyMs}}ms)')
-check('substitui múltiplas ocorrências no mesmo texto', interpolar('{{custom.apelido}}/{{custom.apelido}}/{{chat.kind}}', contexto) === 'Ana/Ana/group')
+check('substitui múltiplas ocorrências no mesmo texto', interpolar('{{var.chat.apelido}}/{{var.chat.apelido}}/{{chat.kind}}', contexto) === 'Ana/Ana/group')
 check('texto sem placeholder passa direto', interpolar('texto simples', contexto) === 'texto simples')
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE INTERPOLAÇÃO PASSARAM')

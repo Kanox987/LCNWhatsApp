@@ -41,12 +41,11 @@ function obterValorDeEscopo (contexto, campo) {
   return undefined
 }
 
+// Variável de usuário tem UM endereço só: {{var.<escopo>.<chave>}}. Qualquer
+// apelido que resolvesse para o mesmo valor com outro nome esconderia o
+// escopo — e escopo é justamente o que decide de quem é aquele valor.
 function obterValor (contexto, namespace, campo) {
   if (namespace === 'var') return obterValorDeEscopo(contexto, campo)
-
-  // Atalho histórico: {{custom.X}} sempre significou "a variável desta
-  // conversa" e continua significando, para não quebrar documento publicado.
-  if (namespace === 'custom') return lerDe(contexto?.custom, campo)
 
   if (!NAMESPACES_EMBUTIDOS[namespace]?.has(campo)) return undefined
   const origem = contexto?.[namespace]

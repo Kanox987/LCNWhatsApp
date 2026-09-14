@@ -6,7 +6,7 @@
 // segurança do interpolador de runtime em server/interpolate.js, mas uma
 // camada anterior e totalmente separada: esta roda uma vez, na instalação,
 // pra produzir o `doc_json` final; qualquer `{{namespace.campo}}` que sobrar
-// no documento gerado — ex.: `{{latencyMs}}`, `{{custom.vip}}` — nunca casa
+// no documento gerado — ex.: `{{latencyMs}}`, `{{var.chat.vip}}` — nunca casa
 // com `params.` e chega intacto no avaliador de verdade, pra ser resolvido
 // em tempo de execução como já acontece hoje).
 const PLACEHOLDER_EXATO = /^\{\{params\.([^{}.]+)\}\}$/

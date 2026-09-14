@@ -6,8 +6,7 @@ const TITULOS_NAMESPACE = {
   sender: 'Quem enviou',
   target: 'Quem o comando está mirando',
   chat: 'Onde aconteceu',
-  var: 'Variáveis e contadores que você cria',
-  custom: 'Forma antiga (ainda funciona)'
+  var: 'Variáveis e contadores que você cria'
 }
 
 const AJUDA_NAMESPACE = {
@@ -15,8 +14,7 @@ const AJUDA_NAMESPACE = {
   sender: 'Identificação de quem mandou a mensagem.',
   target: 'Quando alguém escreve "/comando @fulano" — ou responde a mensagem de alguém — o fulano é o alvo. Fica vazio se não houver menção nem resposta.',
   chat: 'A conversa onde a automação executou — contato ou grupo.',
-  var: 'Você cria essas na aba Dados e usa aqui. O escopo (depois de "var.") decide de quem é o valor: da conversa, de quem enviou, do alvo, da categoria ou do sistema todo.',
-  custom: 'Atalho histórico para a variável da conversa. Mantido para não quebrar automações antigas.'
+  var: 'Você cria essas na aba Dados e usa aqui. O escopo (depois de "var.") decide de quem é o valor: da conversa, de quem enviou, do alvo, da categoria ou do sistema todo.'
 }
 
 // Rótulo e tom de cada tipo de ressalva. "unofficial" é o mais grave: recurso

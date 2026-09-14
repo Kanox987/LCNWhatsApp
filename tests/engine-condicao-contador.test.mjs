@@ -131,17 +131,20 @@ check('escopo global acumula e é legível por {{var.global.X}}', respostaDe(rGl
 const rGlobal2 = avaliarEvento(db, evento({ texto: '/global' }))
 check('escopo global e categoria acumulam entre eventos', respostaDe(rGlobal2, 'globais') === 'total=4 vip=10', respostaDe(rGlobal2, 'globais'))
 
-// --- {{custom.X}} continua funcionando (retrocompatibilidade) -------------
-publicar('legado', base('legado', [
-  { id: 'g', type: 'trigger.command', config: { command: '/legado', match: 'exact', allowFrom: 'external' } },
+// --- só existe um endereço para variável de usuário -----------------------
+// {{var.<escopo>.<chave>}} é a forma única. Um apelido sem escopo no nome
+// (existiu um, {{custom.X}}) esconderia de quem é o valor, que é a única
+// informação que o escopo carrega.
+publicar('endereco', base('endereco', [
+  { id: 'g', type: 'trigger.command', config: { command: '/endereco', match: 'exact', allowFrom: 'external' } },
   { id: 's', type: 'action.variable.set', config: { scope: 'chat', key: 'apelido', value: 'turma' } },
-  { id: 'r', type: 'action.whatsapp.reply', config: { text: 'oi {{custom.apelido}} / {{var.chat.apelido}}' } }
+  { id: 'r', type: 'action.whatsapp.reply', config: { text: 'oi {{var.chat.apelido}} / {{custom.apelido}}' } }
 ], [
   { from: 'g', to: 's', on: 'matched' },
   { from: 's', to: 'r', on: 'success' }
 ]))
-const rLegado = avaliarEvento(db, evento({ texto: '/legado' }))
-check('{{custom.X}} antigo e {{var.chat.X}} novo apontam para a mesma variável', respostaDe(rLegado, 'legado') === 'oi turma / turma', respostaDe(rLegado, 'legado'))
+const rEndereco = avaliarEvento(db, evento({ texto: '/endereco' }))
+check('{{var.chat.X}} resolve e apelido sem escopo fica literal', respostaDe(rEndereco, 'endereco') === 'oi turma / {{custom.apelido}}', respostaDe(rEndereco, 'endereco'))
 
 // --- sombra nunca persiste contador ---------------------------------------
 publicar('sombra', base('sombra', [

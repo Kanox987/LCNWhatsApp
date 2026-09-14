@@ -497,9 +497,6 @@ function executarFluxo (db, documento, triggerId, evento) {
     target: alvo ? { id: alvo } : {},
     var: carregarVariaveis(db, evento)
   }
-  // {{custom.X}} sempre significou "variável desta conversa" — mantido como
-  // alias vivo (mesma referência) para não quebrar documento já publicado.
-  contexto.custom = contexto.var.chat
 
   const visitados = new Set()
   // O publish já rejeita ciclo, então o limite é rede de segurança contra

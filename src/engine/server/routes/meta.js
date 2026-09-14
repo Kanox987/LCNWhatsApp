@@ -36,8 +36,7 @@ export function registrarRotasMeta (roteador, db) {
       { namespace: 'var', field: 'target.<chave>', example: '{{var.target.nivel}}', description: 'Variável de quem o comando está mirando (o mencionado ou respondido).' },
       { namespace: 'var', field: 'targetMember.<chave>', example: '{{var.targetMember.avisos}}', description: 'Variável do alvo DENTRO deste grupo — a combinação usada por "/adv @fulano".' },
       { namespace: 'var', field: 'category.<categoria>.<chave>', example: '{{var.category.vip.usos}}', description: 'Contador compartilhado por uma categoria de pessoas. Quem pertence à categoria você marca na aba Dados (ex: vip = true num contato).' },
-      { namespace: 'var', field: 'global.<chave>', example: '{{var.global.total}}', description: 'Variável do sistema inteiro, não pertence a ninguém. Serve para totais gerais.' },
-      { namespace: 'custom', field: '<qualquer chave>', example: '{{custom.vip}}', description: 'Atalho antigo para a variável desta conversa — o mesmo que {{var.chat.<chave>}}. Continua funcionando; prefira a forma nova em automações novas.' }
+      { namespace: 'var', field: 'global.<chave>', example: '{{var.global.total}}', description: 'Variável do sistema inteiro, não pertence a ninguém. Serve para totais gerais.' }
     ],
     // Variáveis que os comandos instalados declararam usar. Aparecem assim
     // que o comando é instalado, sem esperar alguma delas receber valor.

@@ -97,27 +97,27 @@ const rSemPlaceholder = avaliarEvento(db, eventoBase({
 const resultSemPlaceholder = rSemPlaceholder.results.find((r) => r.automationId === 'ping-sem-placeholder')
 check('sem placeholder: payload não carrega receivedAtMs à toa', resultSemPlaceholder?.commands[0]?.payload?.receivedAtMs === undefined)
 
-// --- variáveis customizadas do chat: substitui quando há atributo e
-// preserva literalmente quando a chave não foi cadastrada. ---
-const scopeCustom = '5511666@s.whatsapp.net'
-criarAutomacaoPing({ id: 'ping-custom', scopeId: scopeCustom, text: 'VIP={{custom.vip}}' })
-definirModo('ping-custom', 'live')
+// --- variáveis da conversa: substitui quando há atributo e preserva
+// literalmente quando a chave não foi cadastrada. ---
+const scopeVar = '5511666@s.whatsapp.net'
+criarAutomacaoPing({ id: 'ping-var', scopeId: scopeVar, text: 'VIP={{var.chat.vip}}' })
+definirModo('ping-var', 'live')
 db.prepare(`INSERT INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at)
-  VALUES ('contact', ?, 'vip', 'true', ?)`).run(scopeCustom, agora)
-const rCustom = avaliarEvento(db, eventoBase({
-  msgId: 'CUSTOM1', chat: { id: scopeCustom, kind: 'direct' }, sender: { id: scopeCustom, authoredBySelf: false }
+  VALUES ('contact', ?, 'vip', 'true', ?)`).run(scopeVar, agora)
+const rVar = avaliarEvento(db, eventoBase({
+  msgId: 'VAR1', chat: { id: scopeVar, kind: 'direct' }, sender: { id: scopeVar, authoredBySelf: false }
 }))
-const resultCustom = rCustom.results.find((r) => r.automationId === 'ping-custom')
-check('atributo customizado do chat é interpolado no comando', resultCustom?.commands[0]?.payload?.text === 'VIP=true')
+const resultVar = rVar.results.find((r) => r.automationId === 'ping-var')
+check('variável da conversa é interpolada no comando', resultVar?.commands[0]?.payload?.text === 'VIP=true')
 
-const scopeSemCustom = '5511555@s.whatsapp.net'
-criarAutomacaoPing({ id: 'ping-custom-ausente', scopeId: scopeSemCustom, text: 'VIP={{custom.vip}}' })
-definirModo('ping-custom-ausente', 'live')
-const rCustomAusente = avaliarEvento(db, eventoBase({
-  msgId: 'CUSTOM2', chat: { id: scopeSemCustom, kind: 'direct' }, sender: { id: scopeSemCustom, authoredBySelf: false }
+const scopeSemVar = '5511555@s.whatsapp.net'
+criarAutomacaoPing({ id: 'ping-var-ausente', scopeId: scopeSemVar, text: 'VIP={{var.chat.vip}}' })
+definirModo('ping-var-ausente', 'live')
+const rVarAusente = avaliarEvento(db, eventoBase({
+  msgId: 'VAR2', chat: { id: scopeSemVar, kind: 'direct' }, sender: { id: scopeSemVar, authoredBySelf: false }
 }))
-const resultCustomAusente = rCustomAusente.results.find((r) => r.automationId === 'ping-custom-ausente')
-check('atributo customizado ausente mantém o placeholder literal', resultCustomAusente?.commands[0]?.payload?.text === 'VIP={{custom.vip}}')
+const resultVarAusente = rVarAusente.results.find((r) => r.automationId === 'ping-var-ausente')
+check('variável ausente mantém o placeholder literal', resultVarAusente?.commands[0]?.payload?.text === 'VIP={{var.chat.vip}}')
 
 // --- duas ações: a gravação atualiza o mesmo contexto usado pela resposta ---
 const scopeSetReply = '5511444@s.whatsapp.net'
@@ -127,7 +127,7 @@ criarAutomacaoComFluxo({
   nodes: [
     { id: 'trigger', type: 'trigger.command', config: { command: '/ping', match: 'exact', allowFrom: 'external' } },
     { id: 'set', type: 'action.variable.set', config: { scope: 'chat', key: 'ultimo_texto', value: '{{message.text}}' } },
-    { id: 'reply', type: 'action.whatsapp.reply', config: { text: 'Recebi {{custom.ultimo_texto}}' } }
+    { id: 'reply', type: 'action.whatsapp.reply', config: { text: 'Recebi {{var.chat.ultimo_texto}}' } }
   ],
   edges: [
     { from: 'trigger', to: 'set', on: 'matched' },
@@ -183,8 +183,8 @@ criarAutomacaoComFluxo({
   nodes: [
     { id: 'trigger', type: 'trigger.command', config: { command: '/ping', match: 'exact', allowFrom: 'external' } },
     { id: 'set-um', type: 'action.variable.set', config: { scope: 'chat', key: 'primeiro', value: 'alfa' } },
-    { id: 'set-dois', type: 'action.variable.set', config: { scope: 'chat', key: 'segundo', value: '{{custom.primeiro}}-beta' } },
-    { id: 'reply', type: 'action.whatsapp.reply', config: { text: '{{custom.segundo}}' } }
+    { id: 'set-dois', type: 'action.variable.set', config: { scope: 'chat', key: 'segundo', value: '{{var.chat.primeiro}}-beta' } },
+    { id: 'reply', type: 'action.whatsapp.reply', config: { text: '{{var.chat.segundo}}' } }
   ],
   edges: [
     { from: 'trigger', to: 'set-um', on: 'matched' },

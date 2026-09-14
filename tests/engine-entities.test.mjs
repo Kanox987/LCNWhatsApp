@@ -67,7 +67,9 @@ try {
   check('meta documenta os escopos de variável, inclusive o do alvo no grupo',
     exemplos.includes('{{var.member.avisos}}') && exemplos.includes('{{var.targetMember.avisos}}') &&
     exemplos.includes('{{var.global.total}}') && exemplos.some((e) => e.startsWith('{{var.category.')))
-  check('meta mantém o atalho antigo documentado como tal', variaveis.builtIn.some((v) => v.namespace === 'custom' && /antig/i.test(v.description)))
+  // Variável de usuário aparece com um endereço só. Documentar um apelido
+  // sem escopo no nome ensinaria a forma que esconde de quem é o valor.
+  check('não documenta apelido de variável sem escopo', variaveis.builtIn.every((v) => v.namespace !== 'custom'))
 
   const requisicoes = []
   const requestOriginal = http.request

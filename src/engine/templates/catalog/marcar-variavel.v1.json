@@ -27,7 +27,7 @@
       "label": "Nome da variável",
       "type": "string",
       "default": "vip",
-      "help": "Fica disponível em outras automações como {{custom.<nome>}}."
+      "help": "Fica disponível em outras automações como {{var.sender.<nome>}} — vale em qualquer conversa com essa pessoa."
     },
     {
       "key": "valor",
