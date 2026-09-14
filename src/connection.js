@@ -32,7 +32,30 @@ import { executarComandos } from './engine/gatewayExecutor.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
-const USAR_CODIGO = process.argv.includes('--code')
+// Pareamento por código aceita o número por argumento ou ambiente, além do
+// terminal. Sem isso ele só existia de forma interativa (`pergunta()` no
+// stdin), e um bot iniciado pelo painel — que roda destacado, sem terminal —
+// ficava pendurado esperando alguém digitar num prompt que ninguém vê.
+//
+//   node index.js --code=5522999999999
+//   LCN_PAIR_NUMBER=5522999999999 node index.js --code
+const USAR_CODIGO = process.argv.some((a) => a === '--code' || a.startsWith('--code='))
+
+function numeroDoArgumento () {
+  const arg = process.argv.find((a) => a.startsWith('--code='))
+  const bruto = arg ? arg.slice('--code='.length) : (process.env.LCN_PAIR_NUMBER || '')
+  const digitos = String(bruto).replace(/\D/g, '')
+  return digitos.length >= 8 ? digitos : null
+}
+
+// Só cai no prompt quando existe terminal de verdade. Num processo destacado
+// isso travaria para sempre — e travar em silêncio é pior que recusar.
+async function numeroParaParear () {
+  const doArgumento = numeroDoArgumento()
+  if (doArgumento) return doArgumento
+  if (!process.stdin.isTTY) return null
+  return (await pergunta('Digite seu número com DDI (ex: 5511999999999): ')).replace(/\D/g, '')
+}
 const SESSION_ID = 'default'
 
 // Dispara o caminho novo sem bloquear nem substituir a captura existente.
@@ -402,7 +425,8 @@ export async function iniciar () {
 
     if (USAR_CODIGO) {
       if (!client.getState().registered) {
-        const numero = (await pergunta('Digite seu número com DDI (ex: 5511999999999): ')).replace(/\D/g, '')
+        const numero = await numeroParaParear()
+        if (!numero) throw new Error('pareamento por código exige um número: use --code=5522999999999 ou LCN_PAIR_NUMBER')
         let pedidoCodigo = null
 
         const solicitarCodigo = () => {
