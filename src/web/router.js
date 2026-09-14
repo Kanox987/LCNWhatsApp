@@ -34,6 +34,13 @@ export function criarRoteadorWeb (aplicacao) {
 
   // --- instâncias: ciclo de vida real e otimização (agente/data plane) ---
   roteador.get('/api/v1/instances', () => aplicacao.instancias.listar())
+
+  // Acervo de arquivos
+  roteador.get('/api/v1/media', () => aplicacao.acervo.listar())
+  roteador.post('/api/v1/media', ({ body }) => aplicacao.acervo.enviar(body))
+  roteador.put('/api/v1/media/:id', ({ params, body }) => aplicacao.acervo.descrever(params.id, body?.description))
+  roteador.delete('/api/v1/media/:id', ({ params }) => aplicacao.acervo.remover(params.id))
+  roteador.put('/api/v1/media-quota', ({ body }) => aplicacao.acervo.definirCota(body?.quotaBytes))
   roteador.get('/api/v1/instances/:id', ({ params }) => aplicacao.instancias.obter(params.id))
   roteador.post('/api/v1/instances/:id/start', ({ params }) => aplicacao.instancias.iniciar(params.id))
   roteador.post('/api/v1/instances/:id/stop', ({ params }) => aplicacao.instancias.parar(params.id))

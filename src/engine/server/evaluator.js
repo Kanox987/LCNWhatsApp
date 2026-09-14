@@ -299,6 +299,22 @@ function executarNo (db, no, evento, contexto, comandos) {
       return 'success'
     }
 
+    case 'action.whatsapp.sendFile': {
+      // O motor NÃO confere se o arquivo existe: ele não enxerga o acervo, que
+      // vive do lado do gateway. Manda o id e o gateway resolve — se sumiu, o
+      // comando falha com motivo, e o notFoundText (se houver) avisa a pessoa.
+      comandos.push({
+        commandType: 'whatsapp.sendFile',
+        payload: {
+          chatId: evento.chat.id,
+          fileId: no.config.fileId,
+          ...(no.config.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
+          ...(no.config.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {})
+        }
+      })
+      return 'success'
+    }
+
     case 'action.whatsapp.rich': {
       // Formatação rica (código colorido, LaTeX). CAMINHO NÃO OFICIAL: ver o
       // comentário em gatewayExecutor.js — a mensagem precisa viajar marcada

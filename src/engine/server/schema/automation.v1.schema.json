@@ -74,6 +74,7 @@
               { "$ref": "#/definitions/actionWhatsappRecover" },
               { "$ref": "#/definitions/actionWhatsappDelete" },
               { "$ref": "#/definitions/actionWhatsappRich" },
+              { "$ref": "#/definitions/actionWhatsappSendFile" },
               { "$ref": "#/definitions/actionGroupRemove" },
               { "$ref": "#/definitions/conditionCompare" }
             ]
@@ -150,6 +151,26 @@
               "items": { "type": "string", "minLength": 1, "maxLength": 200 }
             },
             "requireOwner": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "actionWhatsappSendFile": {
+      "description": "Envia um arquivo do acervo (foto, áudio, vídeo, PDF). O documento guarda só o id — quem troca id por bytes é o gateway, no instante do envio.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.sendFile" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fileId"],
+          "properties": {
+            "fileId": { "type": "string", "pattern": "^[0-9a-f]{24}$" },
+            "caption": { "type": "string" },
+            "notFoundText": { "type": "string" }
           }
         }
       }

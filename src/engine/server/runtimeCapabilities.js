@@ -13,7 +13,8 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.menu.config',
   'action.whatsapp.delete',
   'action.group.remove',
-  'action.whatsapp.rich'
+  'action.whatsapp.rich',
+  'action.whatsapp.sendFile'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([

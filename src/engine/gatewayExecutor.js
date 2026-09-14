@@ -264,6 +264,44 @@ async function executarMensagemRica (client, comando) {
   }
 }
 
+// Envia um arquivo do acervo. É aqui, e só aqui, que um id vira bytes — o
+// motor nunca carregou o conteúdo, do mesmo jeito que não carrega mídia de
+// conversa. Arquivo que sumiu do acervo é erro conhecido, não resultado
+// ambíguo: nada foi enviado, e a pessoa recebe o aviso se houver um.
+async function executarEnvioDeArquivo (client, comando, deps) {
+  const { acervo } = deps
+  const payload = comando.payload
+  const registro = acervo.obter(payload.fileId)
+
+  if (!registro) {
+    if (payload.notFoundText) {
+      await comTimeout(
+        () => client.message.send(payload.chatId, { type: 'text', text: payload.notFoundText }),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar do arquivo ausente no comando ${comando.id}`
+      )
+    }
+    throw new Error(`o arquivo ${payload.fileId} não está mais no acervo`)
+  }
+
+  const buffer = acervo.lerConteudo(registro.id)
+
+  // 'text' no acervo é resposta pronta: vai como mensagem de texto, não como
+  // documento anexado — que é o que a pessoa espera ao guardar um texto.
+  const conteudo = registro.kind === 'text'
+    ? { type: 'text', text: buffer.toString('utf8') }
+    : { type: registro.kind === 'document' ? 'document' : registro.kind, media: buffer, mimetype: registro.mimetype }
+
+  if (conteudo.type !== 'text' && payload.caption) conteudo.caption = payload.caption
+  if (conteudo.type === 'document') conteudo.fileName = registro.name
+
+  await comTimeout(
+    () => client.message.send(payload.chatId, conteudo),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao enviar o arquivo do comando ${comando.id}`
+  )
+}
+
 export async function executarComandos (client, comandos, clienteEngine, deps = {}) {
   for (const comando of Array.isArray(comandos) ? comandos : []) {
     let status
@@ -275,7 +313,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       'whatsapp.menu': executarMenu,
       'whatsapp.delete': executarApagar,
       'group.remove': executarRemoverDoGrupo,
-      'whatsapp.rich': executarMensagemRica
+      'whatsapp.rich': executarMensagemRica,
+      'whatsapp.sendFile': executarEnvioDeArquivo
     }[comando?.commandType]
 
     if (!executor) {
@@ -302,13 +341,15 @@ let padroesCarregados = null
 async function resolverDependencias (deps) {
   if (deps.mediaRefCache) return deps
   if (!padroesCarregados) {
-    const [cache, visu, sticker] = await Promise.all([
+    const [cache, visu, sticker, acervo] = await Promise.all([
       import('./mediaRefCache.js'),
       import('../visu.js'),
-      import('../sticker.js')
+      import('../sticker.js'),
+      import('../mediaLibrary.js')
     ])
     padroesCarregados = {
       mediaRefCache: cache,
+      acervo,
       baixarBuffer: visu.baixarBuffer,
       converterParaFigurinha: sticker.converterParaFigurinha,
       podeVirarFigurinha: sticker.podeVirarFigurinha,

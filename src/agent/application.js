@@ -6,11 +6,13 @@
 // nada — só troca quem chama estes métodos.
 import { criarInstanceService } from './instanceService.js'
 import { criarDirectoryService } from './directoryService.js'
+import { criarServicoAcervo } from './mediaService.js'
 import { criarClienteEngine } from '../engine/client.js'
 
 export function criarAplicacao ({
   instanceService = criarInstanceService(),
   directoryService = criarDirectoryService(),
+  mediaService = criarServicoAcervo(),
   engineClient = criarClienteEngine()
 } = {}) {
   return {
@@ -33,6 +35,15 @@ export function criarAplicacao ({
     },
     diretorio: {
       listar: (instanciaId, opcoes) => directoryService.listar(instanciaId, opcoes)
+    },
+    // Acervo de arquivos: vive aqui, e não no motor, porque quem tem os bytes
+    // em disco é este lado. O motor só conhece ids.
+    acervo: {
+      listar: () => mediaService.listar(),
+      enviar: (body) => mediaService.enviar(body),
+      remover: (id) => mediaService.remover(id),
+      descrever: (id, descricao) => mediaService.descrever(id, descricao),
+      definirCota: (bytes) => mediaService.definirCota(bytes)
     },
     // Repassa pro motor sem esconder a forma da API dele — os Módulos 1/2
     // definem o contrato real de automations/executions; aqui é só o ponto
