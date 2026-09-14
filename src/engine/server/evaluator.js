@@ -128,6 +128,50 @@ function soDigitos (jid) {
   return digitos || undefined
 }
 
+// A mensagem RESPONDIDA, do ponto de vista de quem escreve um comando: quem
+// escreveu, o número dela, o texto, e o primeiro link que esse texto tiver.
+// O link sai pronto porque é o que um "/dow" marcando uma mensagem precisa.
+function montarCitacao (evento) {
+  const ref = evento?.message?.quotedRef
+  if (!ref?.participant && !ref?.text) return {}
+  const citacao = {}
+  if (ref.participant) {
+    citacao.sender = ref.participant
+    citacao.number = soDigitos(ref.participant)
+  }
+  if (typeof ref.text === 'string' && ref.text) {
+    citacao.text = ref.text
+    const link = primeiroLink(ref.text)
+    if (link) citacao.link = link
+  }
+  return citacao
+}
+
+// Qual mensagem a resposta deve MARCAR: a que tem o link.
+//
+// Com "/dow" respondendo alguém, o link está na mensagem citada — é ela que
+// interessa, não o comando. Sem citação (download automático), o link está na
+// própria mensagem que chegou. Devolve só endereçamento, nunca conteúdo.
+function referenciaDoLink (evento) {
+  const citada = evento?.message?.quotedRef
+  if (citada?.id) {
+    return {
+      remoteJid: evento.chat?.id,
+      id: citada.id,
+      fromMe: false,
+      ...(citada.participant ? { participant: citada.participant } : {})
+    }
+  }
+  const propria = evento?.providerRef
+  if (!propria?.id) return null
+  return {
+    remoteJid: propria.remoteJid || evento.chat?.id,
+    id: propria.id,
+    fromMe: propria.fromMe === true,
+    ...(propria.participant ? { participant: propria.participant } : {})
+  }
+}
+
 // Tipo e legenda da mídia que o comando está tratando. A da própria mensagem
 // ganha da citada, na mesma ordem em que as ações a consomem.
 function dadosDaMidiaEmJogo (evento) {
@@ -167,6 +211,28 @@ export function contemLink (texto) {
   // Sem esquema, exige um domínio com TLD conhecido. "3.5" e "etc..." não
   // passam, que era o falso-positivo clássico desses bots.
   return TLD_COMUM.test(texto)
+}
+
+// O primeiro link de um texto, já limpo de pontuação grudada.
+//
+// Existe porque uma mensagem quase nunca é só a URL: é "olha isso
+// https://... muito bom". Um comando que baixa mídia precisa da URL sozinha, e
+// obrigar a pessoa a mandar só o link seria transformar um detalhe nosso em
+// regra dela.
+//
+// Reaproveita a MESMA heurística do detector de link (`contemLink`), para não
+// existirem duas noções de "isto é um link" que discordam — uma para o
+// anti-link e outra para o download.
+export function primeiroLink (texto) {
+  if (typeof texto !== 'string' || !texto.trim()) return undefined
+  for (const pedaco of texto.split(/\s+/)) {
+    // Ponto, vírgula e parêntese no fim são pontuação da frase, não da URL.
+    const limpo = pedaco.replace(/[.,;:!?)\]}>'"]+$/, '')
+    if (!limpo) continue
+    if (ESQUEMA.test(limpo)) return limpo.startsWith('www.') ? `https://${limpo}` : limpo
+    if (TLD_COMUM.test(limpo) && !/\s/.test(limpo)) return `https://${limpo}`
+  }
+  return undefined
 }
 
 // Gatilho que dispara sem comando: por tipo de mídia, por link, por palavra.
@@ -357,6 +423,47 @@ function executarNo (db, no, evento, contexto, comandos) {
           payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
         })
       }
+      return 'success'
+    }
+
+    case 'action.media.download': {
+      // O motor NÃO fala com a rede. Ele resolve a URL, decide qual mensagem
+      // marcar na resposta, e passa isso ao gateway — que é quem chama o
+      // serviço, espera o trabalho terminar e envia os bytes. Mesma fronteira
+      // do recover e da figurinha: aqui não entra nem byte nem requisição.
+      // Placeholder que não resolveu é APAGADO antes de procurar o link, em vez
+      // de invalidar o campo inteiro. É o que permite um comando aceitar as duas
+      // formas — "{{quoted.link}} {{message.link}}" funciona marcando uma
+      // mensagem OU colando o link junto do comando, e o que sobra é o que
+      // existir. Sem isso a pessoa teria que escolher uma das duas na instalação.
+      //
+      // Apagar importa porque "{{quoted.link}}" PARECE um link: `.link` é um
+      // domínio de verdade, e o detector cairia nele.
+      const bruta = interpolar(no.config?.url || '', contexto).replace(/\{\{[^}]*\}\}/g, ' ').trim()
+      const url = primeiroLink(bruta)
+
+      if (!url) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto), replyTo: referenciaDoLink(evento) }
+          })
+        }
+        return 'success'
+      }
+
+      comandos.push({
+        commandType: 'media.download',
+        payload: {
+          chatId: evento.chat.id,
+          url,
+          modo: no.config?.modo || null,
+          replyTo: referenciaDoLink(evento),
+          ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
+          ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
+          ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+        }
+      })
       return 'success'
     }
 
@@ -625,7 +732,13 @@ function executarFluxo (db, documento, triggerId, evento) {
     // pode ser lido tem que sair AQUI — e o que sai é token de mídia, que é
     // capacidade, não informação. O tipo e a legenda da mídia continuam
     // disponíveis, em `media.*`, porque são dados e não segredo.
-    message: semTokens({ ...evento.message, args: extrairArgumentos(evento.message?.text, gatilho?.config?.command) }),
+    message: semTokens({
+      ...evento.message,
+      args: extrairArgumentos(evento.message?.text, gatilho?.config?.command),
+      // O primeiro link da própria mensagem — é o que o download automático usa,
+      // já que ali ninguém digitou comando nenhum.
+      ...(primeiroLink(evento.message?.text) ? { link: primeiroLink(evento.message.text) } : {})
+    }),
     // isOwner entra como campo do remetente (e não como variável de usuário)
     // porque é uma propriedade do evento, não algo que a automação grava.
     sender: { ...evento.sender, isOwner: ehDono(db, evento.sender?.id), number: soDigitos(evento.sender?.id) },
@@ -637,9 +750,7 @@ function executarFluxo (db, documento, triggerId, evento) {
     // Quem escreveu a mensagem RESPONDIDA. `target` prefere a menção quando
     // existem as duas; aqui é sempre o autor da citação, que é o que um
     // comando tipo "/apagar" respondendo alguém precisa saber.
-    quoted: evento.message?.quotedRef?.participant
-      ? { sender: evento.message.quotedRef.participant, number: soDigitos(evento.message.quotedRef.participant) }
-      : {},
+    quoted: montarCitacao(evento),
     // A mídia em jogo: a da própria mensagem, ou a da mensagem citada. É o que
     // permite uma resposta se explicar ("recuperei um áudio de fulano") sem o
     // motor nunca tocar nos bytes — tipo e legenda não são segredo de mídia.

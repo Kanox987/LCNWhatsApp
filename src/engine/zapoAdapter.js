@@ -116,12 +116,18 @@ function construirQuotedRef (msg) {
     if (chave === 'messageContextInfo') continue
     const contextInfo = node?.contextInfo
     if (contextInfo?.quotedMessage) {
+      // O TEXTO da citação entra; a MÍDIA dela continua fora (só o token opaco,
+      // em quotedMediaRef). São coisas diferentes: texto de uma mensagem que o
+      // bot já recebeu não é segredo, e sem ele um comando como "/dow" marcando
+      // uma mensagem com link não tem de onde tirar o link.
+      const textoCitado = extrairTexto(desembrulhar(contextInfo.quotedMessage) || contextInfo.quotedMessage)
       return {
         provider: 'zapo',
         remoteJid: undefined,
         id: contextInfo.stanzaId,
         // Mesmo problema do mentionedJid: o autor da citação pode vir como LID.
-        participant: lidMap.paraTelefone(contextInfo.participant) || contextInfo.participant
+        participant: lidMap.paraTelefone(contextInfo.participant) || contextInfo.participant,
+        ...(typeof textoCitado === 'string' && textoCitado ? { text: textoCitado } : {})
       }
     }
   }

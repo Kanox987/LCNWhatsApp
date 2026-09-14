@@ -53,10 +53,25 @@ async function confirmarFailOpen (clienteEngine, comando, status) {
   }
 }
 
+// Responder MARCANDO a mensagem que originou a conversa.
+//
+// A biblioteca aceita isso em `contextInfo.quoted`, com a chave da mensagem
+// alvo. O motor manda só o endereçamento (`replyTo`), nunca o conteúdo — a
+// mesma fronteira de sempre.
+//
+// Sem `replyTo`, a mensagem sai solta, que é o comportamento de antes: nenhum
+// comando existente muda de forma por causa disto.
+function comCitacao (conteudo, replyTo) {
+  if (!replyTo?.id || !replyTo?.remoteJid) return conteudo
+  const key = { remoteJid: replyTo.remoteJid, id: replyTo.id, fromMe: replyTo.fromMe === true }
+  if (replyTo.participant) key.participant = replyTo.participant
+  return { ...conteudo, contextInfo: { ...(conteudo.contextInfo || {}), quoted: { key } } }
+}
+
 async function executarResposta (client, comando) {
   const texto = resolverTextoComLatencia(comando.payload.text, comando.payload.receivedAtMs)
   await comTimeout(
-    () => client.message.send(comando.payload.chatId, { type: 'text', text: texto }),
+    () => client.message.send(comando.payload.chatId, comCitacao({ type: 'text', text: texto }, comando.payload.replyTo)),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar o comando ${comando.id}`
   )
@@ -126,6 +141,66 @@ async function executarRecover (client, comando, deps) {
     () => client.message.send(destino, conteudo),
     TIMEOUT_ENVIO_MS,
     `timeout ao reenviar a mídia recuperada do comando ${comando.id}`
+  )
+}
+
+// Baixar mídia de um link e mandar no WhatsApp.
+//
+// Roda INTEIRO aqui, de propósito: pedir ao serviço, esperar o trabalho e
+// buscar os bytes são três idas à rede que o motor nunca poderia fazer. O motor
+// só decidiu "baixe esta URL e mande aqui, marcando aquela mensagem".
+//
+// Duas mensagens saem: um aviso na hora (download demora, e silêncio parece que
+// o comando não funcionou) e a mídia no fim. As duas marcam a mensagem que tinha
+// o link, que é a única forma de saber a qual link a resposta se refere quando a
+// conversa andou no meio do caminho.
+async function executarDownload (client, comando, deps) {
+  const { criarBaixador, cfg } = deps
+  const { chatId, url, modo, replyTo, ackText, caption, errorText } = comando.payload
+
+  if (ackText) {
+    // Aviso é cortesia, não a entrega: se ele falhar, o download continua.
+    try {
+      await comTimeout(
+        () => client.message.send(chatId, comCitacao({ type: 'text', text: ackText }, replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar o início do download do comando ${comando.id}`
+      )
+    } catch (erro) {
+      console.warn(`[engine] Não consegui avisar o início do download: ${mensagemDoErro(erro)}`)
+    }
+  }
+
+  let midia
+  try {
+    midia = await criarBaixador({ cfg }).baixar(url, modo)
+  } catch (erro) {
+    // Falhou depois de prometer: explicar é obrigatório. E o registro fica como
+    // falha mesmo assim — a pessoa recebeu uma mensagem, mas não recebeu o que
+    // pediu, e o histórico não pode dizer que deu certo.
+    const texto = (errorText || 'Não consegui baixar essa mídia: {{erro}}')
+      .replaceAll('{{erro}}', mensagemDoErro(erro))
+    try {
+      await comTimeout(
+        () => client.message.send(chatId, comCitacao({ type: 'text', text: texto }, replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar a falha do download do comando ${comando.id}`
+      )
+    } catch { /* já estamos num caminho de erro; o throw abaixo é o que importa */ }
+    throw erro
+  }
+
+  const conteudo = { type: midia.tipo, media: midia.buffer, mimetype: midia.mime }
+  if (midia.tipo === 'document') conteudo.fileName = midia.nome
+  // A descrição vinda do serviço (título do vídeo, autor) só entra quando o
+  // comando não trouxe legenda própria — quem configurou manda.
+  const legenda = caption || midia.descricao
+  if (legenda && midia.tipo !== 'audio') conteudo.caption = legenda
+
+  await comTimeout(
+    () => client.message.send(chatId, comCitacao(conteudo, replyTo)),
+    TIMEOUT_ENVIO_MS * 4,
+    `timeout ao enviar a mídia baixada do comando ${comando.id}`
   )
 }
 
@@ -364,7 +439,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       'whatsapp.delete': executarApagar,
       'group.remove': executarRemoverDoGrupo,
       'whatsapp.rich': executarMensagemRica,
-      'whatsapp.sendFile': executarEnvioDeArquivo
+      'whatsapp.sendFile': executarEnvioDeArquivo,
+      'media.download': executarDownload
     }[comando?.commandType]
 
     if (!executor) {
@@ -393,11 +469,12 @@ let padroesCarregados = null
 async function resolverDependencias (deps) {
   if (deps.mediaRefCache) return deps
   if (!padroesCarregados) {
-    const [cache, visu, sticker, acervo] = await Promise.all([
+    const [cache, visu, sticker, acervo, downloader] = await Promise.all([
       import('./mediaRefCache.js'),
       import('../visu.js'),
       import('../sticker.js'),
-      import('../mediaLibrary.js')
+      import('../mediaLibrary.js'),
+      import('../downloader.js')
     ])
     padroesCarregados = {
       mediaRefCache: cache,
@@ -412,6 +489,7 @@ async function resolverDependencias (deps) {
         const meJid = client.getCredentials?.()?.meJid
         return meJid ? meJid.replace(/:\d+@/, '@') : null
       },
+      criarBaixador: downloader.criarBaixador,
       limiteBytes: 64 * 1024 * 1024
     }
   }

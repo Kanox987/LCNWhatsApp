@@ -90,6 +90,25 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.media.download',
+    rotulo: 'Baixar mídia de um link',
+    familia: 'midia',
+    resumo: 'Pega o vídeo, o áudio ou a foto de um link (YouTube, TikTok, Instagram, Facebook…) por um serviço externo e manda no WhatsApp.',
+    exemplo: 'Responder uma mensagem que tem link com "/dow", ou deixar a conversa baixando sozinha.',
+    ressalva: {
+      level: 'requirement',
+      text: 'Precisa de um serviço de download configurado em download.api no config.json, com o token num arquivo. O WhatsApp recusa arquivo grande, então há um teto (download.limiteMB, 64 MB por padrão) — acima dele o bot explica em vez de tentar e falhar.'
+    },
+    campos: [
+      { chave: 'url', rotulo: 'O link', ajuda: 'Aceita variável: {{quoted.link}} pega o link da mensagem marcada, {{message.link}} pega o da própria mensagem. Se não houver link, o comando avisa em vez de tentar.' },
+      { chave: 'modo', rotulo: 'O que baixar', ajuda: 'auto deixa o serviço escolher · video traz imagem e som · audio traz só a trilha · thumbnail traz só a capa.' },
+      { chave: 'ackText', rotulo: 'Aviso ao começar', ajuda: 'Enviado na hora, marcando a mensagem do link. Download demora, e silêncio parece que o comando não funcionou.' },
+      { chave: 'caption', rotulo: 'Legenda', ajuda: 'Acompanha a mídia. Sem legenda, entra a descrição que o serviço trouxer (título do vídeo, por exemplo).' },
+      { chave: 'notFoundText', rotulo: 'Se não houver link', ajuda: 'Enviado quando o comando é usado sem link nenhum por perto.' },
+      { chave: 'errorText', rotulo: 'Se o download falhar', ajuda: 'Escreva {{erro}} onde quiser que apareça o motivo que o serviço deu — arquivo grande demais, link não suportado, serviço fora do ar.' }
+    ]
+  },
+  {
     tipo: 'action.whatsapp.sticker',
     rotulo: 'Transformar em figurinha',
     familia: 'midia',

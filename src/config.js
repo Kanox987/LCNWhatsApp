@@ -40,7 +40,22 @@ export const PADRAO = {
   // "marcar pra atualizar" é um sinal leve, quarentena é a última instância
   // (para de tentar reconectar sozinho) — não fazem sentido no mesmo limiar.
   confiabilidade: { falhasConsecutivasParaQuarentena: 15 },
-  outputApi: { enabled: false, host: '127.0.0.1', porta: 8787, token: '' }
+  outputApi: { enabled: false, host: '127.0.0.1', porta: 8787, token: '' },
+  // Serviço externo que baixa mídia de link (YouTube, TikTok, Instagram…).
+  //
+  // O token fica num ARQUIVO, não aqui: assim ele não passa pelo painel, não
+  // entra em backup de configuração por acidente e continua com a permissão
+  // que o dono deu a ele no disco. `tokenArquivo` aceita ~ no começo.
+  //
+  // `limiteMB` é o teto do que vale a pena reenviar pelo WhatsApp — a API
+  // aceita arquivos muito maiores do que o WhatsApp entrega.
+  download: {
+    api: '',
+    tokenArquivo: '',
+    modoPadrao: 'auto',
+    limiteMB: 64,
+    esperaMaximaSegundos: 300
+  }
 }
 
 // Junta o padrão com o config do usuário, sem sobrescrever objeto por primitivo.

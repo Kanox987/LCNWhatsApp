@@ -172,6 +172,9 @@
               },
               {
                 "$ref": "#/definitions/conditionCompare"
+              },
+              {
+                "$ref": "#/definitions/actionMediaDownload"
               }
             ]
           }
@@ -992,6 +995,64 @@
             },
             "buttonTitle": {
               "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "actionMediaDownload": {
+      "description": "Baixa a mídia de um link (YouTube, TikTok, Instagram…) por um serviço externo configurado e envia no WhatsApp. O motor NÃO fala com a rede: ele decide e passa a URL; quem chama o serviço, espera o trabalho terminar e envia os bytes é o gateway — a mesma fronteira do recover e da figurinha.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.media.download"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1,
+              "description": "O link a baixar. Aceita variável — {{quoted.link}} pega o link da mensagem marcada, {{message.link}} pega o da própria mensagem."
+            },
+            "modo": {
+              "enum": [
+                "auto",
+                "video",
+                "audio",
+                "thumbnail"
+              ],
+              "description": "auto deixa o serviço escolher; audio traz só a trilha; thumbnail traz a capa."
+            },
+            "ackText": {
+              "type": "string",
+              "description": "Avisa que começou, marcando a mensagem do link. Download demora, e silêncio parece que não funcionou."
+            },
+            "caption": {
+              "type": "string",
+              "description": "Legenda da mídia enviada. Aceita variáveis."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Quando não há link nenhum para baixar."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "Quando o serviço não conseguiu baixar. Aceita {{erro}} com o motivo que o serviço deu."
             }
           }
         }

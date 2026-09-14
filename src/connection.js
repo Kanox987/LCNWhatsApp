@@ -72,7 +72,10 @@ function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico) {
     if (!resultado.ok) return
     for (const avaliacao of resultado.results || []) {
       const comandos = (avaliacao.commands || []).filter((comando) => comando.status === 'pending')
-      if (comandos.length) await executarComandos(client, comandos, clienteEngine)
+      // O `cfg` chega ao executor porque ações como o download leem
+      // configuração (endereço do serviço, token, limite de tamanho). Era a
+      // lacuna que também travava a transcrição.
+      if (comandos.length) await executarComandos(client, comandos, clienteEngine, { cfg })
     }
   }).catch(() => {})
 }

@@ -1,0 +1,132 @@
+{
+  "templateId": "baixar-midia",
+  "templateVersion": 1,
+  "name": "Baixar mídia de um link",
+  "description": "Responda uma mensagem que tenha link e use o comando: o bot baixa o vídeo, o áudio ou a foto e manda de volta, marcando a mensagem do link. Também funciona colando o link junto do comando. Serve para YouTube, TikTok, Instagram, Facebook e as outras redes que o serviço suportar.",
+  "category": "utilitarios",
+  "dependsOn": [],
+  "requiredCapabilities": [],
+  "variables": [],
+  "warnings": [
+    {
+      "level": "requirement",
+      "text": "Precisa de um serviço de download configurado no config.json (download.api e download.tokenArquivo). Sem isso o comando responde explicando o que falta, em vez de ficar mudo."
+    },
+    {
+      "level": "info",
+      "text": "O WhatsApp recusa arquivo grande. O limite de envio é download.limiteMB (64 MB por padrão) — acima dele o bot avisa o tamanho em vez de tentar e falhar."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "command",
+      "label": "Comando",
+      "type": "string",
+      "default": "/dow",
+      "help": "Use respondendo uma mensagem com link, ou colando o link logo depois do comando."
+    },
+    {
+      "key": "allowFrom",
+      "label": "Quem pode acionar",
+      "type": "string",
+      "default": "external",
+      "help": "\"any\" responde também às SUAS próprias mensagens, do número onde o bot roda. \"external\" faz o bot ignorar o próprio número."
+    },
+    {
+      "key": "modo",
+      "label": "O que baixar",
+      "type": "string",
+      "default": "auto",
+      "help": "auto deixa o serviço escolher · video traz imagem e som · audio traz só a trilha · thumbnail traz só a capa."
+    },
+    {
+      "key": "ackText",
+      "label": "Aviso ao começar",
+      "type": "string",
+      "default": "⏳ Baixando seu arquivo de mídia…",
+      "help": "Enviado na hora, marcando a mensagem do link. Download demora — sem aviso, parece que o comando não funcionou."
+    },
+    {
+      "key": "caption",
+      "label": "Legenda da mídia",
+      "type": "string",
+      "default": "",
+      "help": "Deixe vazio para usar a descrição que o serviço trouxer (título do vídeo, por exemplo)."
+    },
+    {
+      "key": "notFoundText",
+      "label": "Se não houver link",
+      "type": "string",
+      "default": "Responda uma mensagem que tenha link, ou mande o link junto com o comando.",
+      "help": "Enviado quando não há link nenhum por perto."
+    },
+    {
+      "key": "errorText",
+      "label": "Se falhar",
+      "type": "string",
+      "default": "Não consegui baixar essa mídia: {{erro}}",
+      "help": "Escreva {{erro}} onde quiser que apareça o motivo — link não suportado, arquivo grande demais, serviço fora do ar."
+    },
+    {
+      "key": "poolId",
+      "label": "Pool que responde",
+      "type": "string",
+      "help": "Identificador do pool de números que vai executar este comando."
+    }
+  ],
+  "documentTemplate": {
+    "schemaVersion": 1,
+    "enabled": true,
+    "name": "Baixar mídia de um link",
+    "display": {
+      "menuLabel": "{{params.command}}",
+      "menuDescription": "Baixa o vídeo ou a foto de um link"
+    },
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
+    "flow": {
+      "nodes": [
+        {
+          "id": "gatilho-comando",
+          "type": "trigger.command",
+          "config": {
+            "command": "{{params.command}}",
+            "match": "exact_or_args",
+            "allowFrom": "{{params.allowFrom}}"
+          }
+        },
+        {
+          "id": "baixar",
+          "type": "action.media.download",
+          "config": {
+            "url": "{{quoted.link}} {{message.link}}",
+            "modo": "{{params.modo}}",
+            "ackText": "{{params.ackText}}",
+            "caption": "{{params.caption}}",
+            "notFoundText": "{{params.notFoundText}}",
+            "errorText": "{{params.errorText}}"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "gatilho-comando",
+          "to": "baixar",
+          "on": "matched"
+        }
+      ]
+    }
+  }
+}
