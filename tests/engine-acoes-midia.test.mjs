@@ -169,6 +169,52 @@ publicar('rec2', [
 const mesmoChat = avaliarEvento(db, evento({ kind: 'text', text: '/aqui', quotedMediaRef: { token: 't2', kind: 'view_once', mediaKind: 'video' } }))
 check('recover com destino "same_chat": endereça a própria conversa', comandosDe(mesmoChat, 'rec2')[0]?.payload?.destinationId === CHAT)
 
+// --- destino que vem de VARIÁVEL, não do documento ------------------------
+// É o encontro entre o comando comum e o de configuração: o de configuração
+// grava na tabela, o comum lê de lá. Mesma tabela dos marcadores tipo VIP,
+// nenhum mecanismo novo.
+publicar('rec-config', [
+  { id: 'g', type: 'trigger.command', config: { command: '/rc', match: 'exact_or_args', allowFrom: 'external' } },
+  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'configured', destinationId: '{{var.global.recover_destino}}', notFoundText: 'sem visu' } }
+], [{ from: 'g', to: 'r', on: 'matched' }])
+
+const visuCitada = () => doAdaptador({
+  extendedTextMessage: {
+    text: '/rc',
+    contextInfo: { stanzaId: `QC${Math.random()}`, participant: CHAT, quotedMessage: { viewOnceMessageV2: { message: { imageMessage: { url: 'k', viewOnce: true } } } } }
+  }
+})
+
+// Antes de configurar: funciona, indo para as mensagens salvas. Quem acabou de
+// instalar não pode ficar com um comando morto esperando configuração.
+const semConfig = comandosDe(avaliarEvento(db, visuCitada()), 'rec-config')[0]
+check('destino configurável sem configuração: ainda recupera', semConfig?.commandType === 'whatsapp.recover', semConfig?.commandType)
+check('destino configurável sem configuração: cai para mensagens salvas', semConfig?.payload?.destination === 'saved_messages' && semConfig?.payload?.destinationId === null)
+
+// O comando de configuração grava exatamente isto:
+db.prepare('INSERT INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?, ?, ?, ?, ?)')
+  .run('global', '__global__', 'recover_destino', JSON.stringify('5511777777777'), agora)
+
+const comConfig = comandosDe(avaliarEvento(db, visuCitada()), 'rec-config')[0]
+check('depois de configurar: o destino vem da variável', comConfig?.payload?.destinationId === '5511777777777@s.whatsapp.net', comConfig?.payload?.destinationId)
+check('depois de configurar: o número digitado vira JID sozinho', comConfig?.payload?.destination === 'fixed' || comConfig?.payload?.destination === 'configured')
+
+// --- recuperação AUTOMÁTICA: a mídia é da própria mensagem ----------------
+// Sem citação e sem comando. É o que permite o auto-recover existir sem ação
+// nova: trigger.message filtrando visualização única.
+publicar('rec-auto', [
+  { id: 'g', type: 'trigger.message', config: { allowFrom: 'external', messageKinds: ['view_once'] } },
+  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat' } }
+], [{ from: 'g', to: 'r', on: 'matched' }], { acceptedMessageKinds: ['view_once'] })
+
+const visuChegando = doAdaptador({ viewOnceMessageV2: { message: { imageMessage: { url: 'auto', viewOnce: true, caption: 'segredo' } } } })
+check('adaptador: visu única própria expõe o tipo real', visuChegando.message.mediaKind === 'image', visuChegando.message.mediaKind)
+check('adaptador: e a legenda original da mídia', visuChegando.message.mediaCaption === 'segredo')
+const cmdAuto = comandosDe(avaliarEvento(db, visuChegando), 'rec-auto')[0]
+check('recuperação automática: recupera sem ninguém digitar nada', cmdAuto?.commandType === 'whatsapp.recover', cmdAuto?.commandType)
+check('recuperação automática: usa a mídia da PRÓPRIA mensagem', cmdAuto?.payload?.mediaRef === visuChegando.message.mediaRef)
+check('recuperação automática: leva o tipo real, não "view_once"', cmdAuto?.payload?.mediaKind === 'image', cmdAuto?.payload?.mediaKind)
+
 // --- lado do gateway: token vira mídia de verdade -------------------------
 function clienteFake () {
   const enviados = []

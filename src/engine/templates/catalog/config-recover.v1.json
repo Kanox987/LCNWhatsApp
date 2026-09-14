@@ -1,0 +1,110 @@
+{
+  "templateId": "config-recover",
+  "templateVersion": 1,
+  "name": "Configurar destino do recover",
+  "description": "Escolhe, pelo próprio WhatsApp, para qual conversa o /recover manda a mídia recuperada. Escreva o número depois do comando, ou \"aqui\" para usar a conversa atual. O valor fica guardado numa variável do sistema, que o /recover lê na hora de enviar — é o mesmo lugar onde moram os marcadores tipo VIP.",
+  "category": "configuracoes",
+  "dependsOn": [],
+  "requiredCapabilities": [],
+  "variables": [
+    {
+      "scope": "global",
+      "key": "recover_destino",
+      "valueType": "text",
+      "description": "Para qual conversa o /recover manda a mídia recuperada. Aceita o número com DDI ou um JID completo. Vazio = mensagens salvas."
+    }
+  ],
+  "warnings": [
+    {
+      "level": "info",
+      "text": "Restrito ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número do bot consegue usar."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "command",
+      "label": "Comando",
+      "type": "string",
+      "default": "/configrecover",
+      "help": "Digite o comando seguido do número (ex: /configrecover 5511999999999)."
+    },
+    {
+      "key": "confirmText",
+      "label": "Confirmação",
+      "type": "string",
+      "default": "Pronto. A partir de agora o recover manda para: {{message.args}}",
+      "help": "Resposta depois de gravar o destino."
+    },
+    {
+      "key": "poolId",
+      "label": "Pool que responde",
+      "type": "string",
+      "help": "Identificador do pool de números que vai executar este comando."
+    }
+  ],
+  "documentTemplate": {
+    "schemaVersion": 1,
+    "enabled": true,
+    "name": "Configurar destino do recover",
+    "display": {
+      "menuLabel": "{{params.command}}",
+      "menuDescription": "Escolhe para onde o recover envia"
+    },
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
+    "flow": {
+      "nodes": [
+        {
+          "id": "gatilho-comando",
+          "type": "trigger.command",
+          "config": {
+            "command": "{{params.command}}",
+            "match": "exact_or_args",
+            "allowFrom": "external",
+            "requireOwner": true
+          }
+        },
+        {
+          "id": "gravar",
+          "type": "action.variable.set",
+          "config": {
+            "scope": "global",
+            "key": "recover_destino",
+            "value": "{{message.args}}"
+          }
+        },
+        {
+          "id": "confirmar",
+          "type": "action.whatsapp.reply",
+          "config": {
+            "text": "{{params.confirmText}}"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "gatilho-comando",
+          "to": "gravar",
+          "on": "matched"
+        },
+        {
+          "from": "gravar",
+          "to": "confirmar",
+          "on": "success"
+        }
+      ]
+    }
+  }
+}

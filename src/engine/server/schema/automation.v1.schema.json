@@ -730,8 +730,10 @@
               "enum": [
                 "same_chat",
                 "saved_messages",
-                "fixed"
-              ]
+                "fixed",
+                "configured"
+              ],
+              "description": "Para onde a mídia recuperada vai. 'configured' lê o destino de uma variável (o campo destinationId aceita {{var...}}) e cai para as mensagens salvas enquanto ninguém configurou; 'fixed' exige um destino resolvido e avisa quando não há."
             },
             "destinationId": {
               "type": "string",

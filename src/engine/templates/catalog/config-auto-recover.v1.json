@@ -1,0 +1,163 @@
+{
+  "templateId": "config-auto-recover",
+  "templateVersion": 1,
+  "name": "Ligar/desligar recuperação automática",
+  "description": "Liga ou desliga a recuperação automática NESTA conversa, pelo próprio WhatsApp. Escreva \"sim\" depois do comando para ligar, qualquer outra coisa (ou nada) para desligar. Ele só marca a conversa — quem recupera é o comando de recuperação automática.",
+  "category": "configuracoes",
+  "dependsOn": [],
+  "requiredCapabilities": [],
+  "variables": [
+    {
+      "scope": "chat",
+      "key": "auto_recover",
+      "valueType": "text",
+      "description": "Marcador desta conversa. Preenchido = recuperação automática ligada aqui."
+    }
+  ],
+  "warnings": [
+    {
+      "level": "info",
+      "text": "Restrito ao dono do bot. Marca só a conversa onde o comando for usado."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "command",
+      "label": "Comando",
+      "type": "string",
+      "default": "/autorecover",
+      "help": "Digite \"/autorecover sim\" para ligar aqui, ou \"/autorecover nao\" para desligar."
+    },
+    {
+      "key": "ligadoText",
+      "label": "Confirmação ao ligar",
+      "type": "string",
+      "default": "Recuperação automática LIGADA nesta conversa.",
+      "help": "Resposta quando liga."
+    },
+    {
+      "key": "desligadoText",
+      "label": "Confirmação ao desligar",
+      "type": "string",
+      "default": "Recuperação automática desligada nesta conversa.",
+      "help": "Resposta quando desliga."
+    },
+    {
+      "key": "poolId",
+      "label": "Pool que responde",
+      "type": "string",
+      "help": "Identificador do pool de números que vai executar este comando."
+    }
+  ],
+  "documentTemplate": {
+    "schemaVersion": 1,
+    "enabled": true,
+    "name": "Ligar/desligar recuperação automática",
+    "display": {
+      "menuLabel": "{{params.command}}",
+      "menuDescription": "Liga a recuperação automática nesta conversa"
+    },
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
+    "flow": {
+      "nodes": [
+        {
+          "id": "gatilho-comando",
+          "type": "trigger.command",
+          "config": {
+            "command": "{{params.command}}",
+            "match": "exact_or_args",
+            "allowFrom": "external",
+            "requireOwner": true
+          }
+        },
+        {
+          "id": "decidir",
+          "type": "condition.compare",
+          "config": {
+            "operator": "eq",
+            "left": {
+              "source": "event",
+              "field": "message.args"
+            },
+            "right": {
+              "source": "literal",
+              "value": "sim"
+            }
+          }
+        },
+        {
+          "id": "ligar",
+          "type": "action.variable.set",
+          "config": {
+            "scope": "chat",
+            "key": "auto_recover",
+            "value": "sim"
+          }
+        },
+        {
+          "id": "avisar-ligado",
+          "type": "action.whatsapp.reply",
+          "config": {
+            "text": "{{params.ligadoText}}"
+          }
+        },
+        {
+          "id": "desligar",
+          "type": "action.variable.set",
+          "config": {
+            "scope": "chat",
+            "key": "auto_recover",
+            "value": ""
+          }
+        },
+        {
+          "id": "avisar-desligado",
+          "type": "action.whatsapp.reply",
+          "config": {
+            "text": "{{params.desligadoText}}"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "gatilho-comando",
+          "to": "decidir",
+          "on": "matched"
+        },
+        {
+          "from": "decidir",
+          "to": "ligar",
+          "on": "true"
+        },
+        {
+          "from": "ligar",
+          "to": "avisar-ligado",
+          "on": "success"
+        },
+        {
+          "from": "decidir",
+          "to": "desligar",
+          "on": "false"
+        },
+        {
+          "from": "desligar",
+          "to": "avisar-desligado",
+          "on": "success"
+        }
+      ]
+    }
+  }
+}

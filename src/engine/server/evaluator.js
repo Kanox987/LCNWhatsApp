@@ -397,21 +397,29 @@ function executarNo (db, no, evento, contexto, comandos) {
       // o JID da própria conta, e inventar isso no motor daria destino errado
       // quando o mesmo documento roda em números diferentes.
       let chatDestino = null
+      let destinoFinal = destino
       if (destino === 'same_chat') {
         chatDestino = evento.chat.id
-      } else if (destino === 'fixed') {
+      } else if (destino === 'fixed' || destino === 'configured') {
         chatDestino = resolverDestinoConfigurado(no.config?.destinationId, contexto)
-        // Destino configurável que ainda não foi configurado: avisa em vez de
-        // mandar a mídia para um endereço inventado. É o caso de quem instalou
-        // o comando e ainda não rodou o de configuração.
-        if (!chatDestino) return avisar()
+        if (!chatDestino) {
+          // A diferença entre os dois é o que significa "não resolveu":
+          //   'fixed'      — alguém escreveu um destino e ele não vale: é erro
+          //                  de configuração, e avisar é o certo.
+          //   'configured' — ninguém configurou AINDA, o que é o estado normal
+          //                  de quem acabou de instalar. Cai para as mensagens
+          //                  salvas em vez de recusar: o comando funciona no
+          //                  primeiro uso, e configurar depois só muda o destino.
+          if (destino === 'fixed') return avisar()
+          destinoFinal = 'saved_messages'
+        }
       }
 
       comandos.push({
         commandType: 'whatsapp.recover',
         payload: {
           chatId: evento.chat.id,
-          destination: destino,
+          destination: destinoFinal,
           destinationId: chatDestino,
           mediaRef: fonte.token,
           mediaKind: fonte.mediaKind,
