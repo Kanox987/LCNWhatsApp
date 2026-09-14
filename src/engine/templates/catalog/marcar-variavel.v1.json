@@ -23,6 +23,13 @@
       "help": "A palavra que a pessoa digita pra acionar esta automação."
     },
     {
+      "key": "allowFrom",
+      "label": "Quem pode acionar",
+      "type": "string",
+      "default": "external",
+      "help": "\"any\" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. \"external\" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando."
+    },
+    {
       "key": "variavel",
       "label": "Nome da variável",
       "type": "string",
@@ -76,7 +83,7 @@
           "config": {
             "command": "{{params.command}}",
             "match": "exact",
-            "allowFrom": "external"
+            "allowFrom": "{{params.allowFrom}}"
           }
         },
         {

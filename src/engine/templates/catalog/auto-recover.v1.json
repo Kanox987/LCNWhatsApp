@@ -2,11 +2,9 @@
   "templateId": "auto-recover",
   "templateVersion": 1,
   "name": "Recuperar automaticamente",
-  "description": "Recupera TODA visualização única que chegar, sem ninguém digitar comando. Instale escolhendo o destino \"conversas marcadas com auto_recover\" e ligue conversa por conversa pelo comando de configuração — assim ele vale só onde você quiser.",
+  "description": "Recupera TODA visualização única que chegar, sem ninguém digitar comando. Instale escolhendo o destino \"conversas marcadas com auto_recover\" e ligue conversa por conversa — pelo comando /autorecover ou marcando na aba Dados — assim ele vale só onde você quiser.",
   "category": "modulos-especializados",
-  "dependsOn": [
-    "config-auto-recover"
-  ],
+  "dependsOn": [],
   "requiredCapabilities": [],
   "variables": [
     {
@@ -45,10 +43,6 @@
     "schemaVersion": 1,
     "enabled": true,
     "name": "Recuperar automaticamente",
-    "display": {
-      "menuLabel": null,
-      "menuDescription": null
-    },
     "scope": {
       "include": [],
       "exclude": []

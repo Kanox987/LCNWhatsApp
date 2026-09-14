@@ -25,6 +25,13 @@
       "help": "A palavra que a pessoa digita pra transformar a mídia em figurinha."
     },
     {
+      "key": "allowFrom",
+      "label": "Quem pode acionar",
+      "type": "string",
+      "default": "external",
+      "help": "\"any\" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. \"external\" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando."
+    },
+    {
       "key": "notFoundText",
       "label": "Aviso quando não vier mídia",
       "type": "string",
@@ -70,7 +77,7 @@
           "config": {
             "command": "{{params.command}}",
             "match": "exact_or_args",
-            "allowFrom": "external"
+            "allowFrom": "{{params.allowFrom}}"
           }
         },
         {

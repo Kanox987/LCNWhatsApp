@@ -308,7 +308,11 @@
               ]
             },
             "allowFrom": {
-              "const": "external"
+              "enum": [
+                "external",
+                "any"
+              ],
+              "description": "Quem pode acionar. 'external' ignora mensagens do próprio número do bot, que é o padrão seguro. 'any' também responde ao próprio número — é o que faz um comando pessoal funcionar quando você manda a mídia de onde o bot roda. Só vale para comando digitado: a barreira do gatilho AUTOMÁTICO não tem como ser desligada, porque lá reagir à própria mensagem vira laço."
             },
             "requireOwner": {
               "type": "boolean"

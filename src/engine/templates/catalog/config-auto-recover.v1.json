@@ -1,8 +1,8 @@
 {
   "templateId": "config-auto-recover",
   "templateVersion": 1,
-  "name": "Ligar/desligar recuperação automática",
-  "description": "Liga ou desliga a recuperação automática NESTA conversa, pelo próprio WhatsApp. Escreva \"sim\" depois do comando para ligar, qualquer outra coisa (ou nada) para desligar. Ele só marca a conversa — quem recupera é o comando de recuperação automática.",
+  "name": "Interruptor da recuperação automática",
+  "description": "Liga e desliga a recuperação automática NESTA conversa, alternando a cada uso. Digite o comando e ele responde dizendo em que estado ficou. Ele só marca a conversa — quem recupera é a regra \"Recuperar automaticamente\".",
   "category": "configuracoes",
   "dependsOn": [],
   "requiredCapabilities": [],
@@ -26,21 +26,21 @@
       "label": "Comando",
       "type": "string",
       "default": "/autorecover",
-      "help": "Digite \"/autorecover sim\" para ligar aqui, ou \"/autorecover nao\" para desligar."
+      "help": "Digite o comando sozinho: cada uso inverte o estado nesta conversa."
     },
     {
       "key": "ligadoText",
-      "label": "Confirmação ao ligar",
+      "label": "Resposta ao ligar",
       "type": "string",
-      "default": "Recuperação automática LIGADA nesta conversa.",
-      "help": "Resposta quando liga."
+      "default": "✅ Recuperação automática LIGADA nesta conversa.\nToda visualização única que chegar aqui será recuperada.",
+      "help": "Resposta quando o comando liga."
     },
     {
       "key": "desligadoText",
-      "label": "Confirmação ao desligar",
+      "label": "Resposta ao desligar",
       "type": "string",
-      "default": "Recuperação automática desligada nesta conversa.",
-      "help": "Resposta quando desliga."
+      "default": "⛔ Recuperação automática DESLIGADA nesta conversa.",
+      "help": "Resposta quando o comando desliga."
     },
     {
       "key": "poolId",
@@ -52,10 +52,10 @@
   "documentTemplate": {
     "schemaVersion": 1,
     "enabled": true,
-    "name": "Ligar/desligar recuperação automática",
+    "name": "Interruptor da recuperação automática",
     "display": {
       "menuLabel": "{{params.command}}",
-      "menuDescription": "Liga a recuperação automática nesta conversa"
+      "menuDescription": "Liga/desliga a recuperação automática aqui"
     },
     "scope": {
       "include": [],
@@ -78,40 +78,25 @@
           "type": "trigger.command",
           "config": {
             "command": "{{params.command}}",
-            "match": "exact_or_args",
+            "match": "exact",
             "allowFrom": "external",
             "requireOwner": true
           }
         },
         {
-          "id": "decidir",
+          "id": "esta-ligado",
           "type": "condition.compare",
           "config": {
             "operator": "eq",
             "left": {
-              "source": "event",
-              "field": "message.args"
+              "source": "variable",
+              "scope": "chat",
+              "key": "auto_recover"
             },
             "right": {
               "source": "literal",
               "value": "sim"
             }
-          }
-        },
-        {
-          "id": "ligar",
-          "type": "action.variable.set",
-          "config": {
-            "scope": "chat",
-            "key": "auto_recover",
-            "value": "sim"
-          }
-        },
-        {
-          "id": "avisar-ligado",
-          "type": "action.whatsapp.reply",
-          "config": {
-            "text": "{{params.ligadoText}}"
           }
         },
         {
@@ -129,32 +114,48 @@
           "config": {
             "text": "{{params.desligadoText}}"
           }
+        },
+        {
+          "id": "ligar",
+          "type": "action.variable.set",
+          "config": {
+            "scope": "chat",
+            "key": "auto_recover",
+            "value": "sim"
+          }
+        },
+        {
+          "id": "avisar-ligado",
+          "type": "action.whatsapp.reply",
+          "config": {
+            "text": "{{params.ligadoText}}"
+          }
         }
       ],
       "edges": [
         {
           "from": "gatilho-comando",
-          "to": "decidir",
+          "to": "esta-ligado",
           "on": "matched"
         },
         {
-          "from": "decidir",
-          "to": "ligar",
-          "on": "true"
-        },
-        {
-          "from": "ligar",
-          "to": "avisar-ligado",
-          "on": "success"
-        },
-        {
-          "from": "decidir",
+          "from": "esta-ligado",
           "to": "desligar",
-          "on": "false"
+          "on": "true"
         },
         {
           "from": "desligar",
           "to": "avisar-desligado",
+          "on": "success"
+        },
+        {
+          "from": "esta-ligado",
+          "to": "ligar",
+          "on": "false"
+        },
+        {
+          "from": "ligar",
+          "to": "avisar-ligado",
           "on": "success"
         }
       ]

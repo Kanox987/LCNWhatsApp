@@ -26,6 +26,13 @@
       "help": "A palavra que você digita respondendo a mídia de visualização única."
     },
     {
+      "key": "allowFrom",
+      "label": "Quem pode acionar",
+      "type": "string",
+      "default": "any",
+      "help": "\"any\" responde também quando VOCÊ mandou a mídia do número onde o bot roda — é o normal para um comando pessoal. Use \"external\" se quiser que o bot ignore as próprias mensagens."
+    },
+    {
       "key": "caption",
       "label": "Legenda da mídia recuperada",
       "type": "string",
@@ -76,7 +83,7 @@
           "config": {
             "command": "{{params.command}}",
             "match": "exact_or_args",
-            "allowFrom": "external"
+            "allowFrom": "{{params.allowFrom}}"
           }
         },
         {

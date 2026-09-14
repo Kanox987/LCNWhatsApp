@@ -15,6 +15,13 @@
       "help": "A palavra que a pessoa digita pra acionar esta automação."
     },
     {
+      "key": "allowFrom",
+      "label": "Quem pode acionar",
+      "type": "string",
+      "default": "external",
+      "help": "\"any\" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. \"external\" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando."
+    },
+    {
       "key": "poolId",
       "label": "Pool que responde",
       "type": "string",
@@ -25,24 +32,45 @@
     "schemaVersion": 1,
     "enabled": true,
     "name": "Ping (teste de latência)",
-    "scope": { "include": [], "exclude": [] },
-    "inputPolicy": { "acceptedMessageKinds": ["text"], "historyPolicy": "live_only" },
-    "responder": { "strategy": "weighted_rendezvous", "poolId": "{{params.poolId}}" },
+    "scope": {
+      "include": [],
+      "exclude": []
+    },
+    "inputPolicy": {
+      "acceptedMessageKinds": [
+        "text"
+      ],
+      "historyPolicy": "live_only"
+    },
+    "responder": {
+      "strategy": "weighted_rendezvous",
+      "poolId": "{{params.poolId}}"
+    },
     "flow": {
       "nodes": [
         {
           "id": "gatilho-comando",
           "type": "trigger.command",
-          "config": { "command": "{{params.command}}", "match": "exact", "allowFrom": "external" }
+          "config": {
+            "command": "{{params.command}}",
+            "match": "exact",
+            "allowFrom": "{{params.allowFrom}}"
+          }
         },
         {
           "id": "resposta-whatsapp",
           "type": "action.whatsapp.reply",
-          "config": { "text": "pong ({{latencyMs}}ms)" }
+          "config": {
+            "text": "pong ({{latencyMs}}ms)"
+          }
         }
       ],
       "edges": [
-        { "from": "gatilho-comando", "to": "resposta-whatsapp", "on": "matched" }
+        {
+          "from": "gatilho-comando",
+          "to": "resposta-whatsapp",
+          "on": "matched"
+        }
       ]
     }
   }

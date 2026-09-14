@@ -169,6 +169,48 @@ publicar('rec2', [
 const mesmoChat = avaliarEvento(db, evento({ kind: 'text', text: '/aqui', quotedMediaRef: { token: 't2', kind: 'view_once', mediaKind: 'video' } }))
 check('recover com destino "same_chat": endereça a própria conversa', comandosDe(mesmoChat, 'rec2')[0]?.payload?.destinationId === CHAT)
 
+// --- comando na PRÓPRIA mensagem (uso pessoal) ---------------------------
+// Mandar a mídia do número onde o bot roda e usar o comando ali mesmo é o caso
+// normal de quem só quer o bot para si. Com allowFrom 'external' isso NÃO
+// dispara — a regra existe para o bot não reagir a si mesmo. 'any' abre para
+// comando digitado, e só para ele: a barreira do gatilho AUTOMÁTICO continua
+// não sendo configurável, porque lá reagir à própria mensagem vira laço.
+publicar('x9-proprio', [
+  { id: 'g', type: 'trigger.command', config: { command: '/x9', match: 'exact_or_args', allowFrom: 'any' } },
+  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat', notFoundText: 'sem visu' } }
+], [{ from: 'g', to: 'r', on: 'matched' }])
+
+publicar('x9-externo', [
+  { id: 'g', type: 'trigger.command', config: { command: '/x9ext', match: 'exact_or_args', allowFrom: 'external' } },
+  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat', notFoundText: 'sem visu' } }
+], [{ from: 'g', to: 'r', on: 'matched' }])
+
+const meuProprioEvento = (texto) => {
+  const e = doAdaptador({
+    extendedTextMessage: {
+      text: texto,
+      contextInfo: { stanzaId: `EU${Math.random()}`, participant: CHAT, quotedMessage: { viewOnceMessageV2: { message: { imageMessage: { url: 'eu', viewOnce: true } } } } }
+    }
+  })
+  e.sender.authoredBySelf = true
+  return e
+}
+
+const proprio = comandosDe(avaliarEvento(db, meuProprioEvento('/x9')), 'x9-proprio')[0]
+check('comando com allowFrom "any" responde à própria mensagem', proprio?.commandType === 'whatsapp.recover', proprio?.commandType)
+
+const externo = comandosDe(avaliarEvento(db, meuProprioEvento('/x9ext')), 'x9-externo')
+check('comando com allowFrom "external" continua ignorando a própria mensagem', externo.length === 0)
+
+// A barreira do gatilho automático NÃO é afetada: continua absoluta.
+publicar('auto-proprio', [
+  { id: 'g', type: 'trigger.message', config: { allowFrom: 'external', messageKinds: ['view_once'] } },
+  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat' } }
+], [{ from: 'g', to: 'r', on: 'matched' }], { acceptedMessageKinds: ['view_once'] })
+const autoProprio = doAdaptador({ viewOnceMessageV2: { message: { imageMessage: { url: 'loop', viewOnce: true } } } })
+autoProprio.sender.authoredBySelf = true
+check('gatilho automático nunca reage à própria mensagem, aconteça o que acontecer', comandosDe(avaliarEvento(db, autoProprio), 'auto-proprio').length === 0)
+
 // --- destino que vem de VARIÁVEL, não do documento ------------------------
 // É o encontro entre o comando comum e o de configuração: o de configuração
 // grava na tabela, o comum lê de lá. Mesma tabela dos marcadores tipo VIP,
