@@ -9,6 +9,16 @@ function mensagemDoErro (erro) {
   }
 }
 
+// "Não sei se aconteceu" é diferente de "não aconteceu", e o invariante 3 diz
+// que resultado ambíguo nunca vira sucesso — mas também não pode virar falha,
+// senão o operador tenta consertar à mão algo que talvez já tenha ocorrido.
+// Mesmo mecanismo do timeout: um código no erro que o laço traduz em status.
+function erroIncerto (mensagem) {
+  const erro = new Error(mensagem)
+  erro.code = 'LCN_RESULTADO_INCERTO'
+  return erro
+}
+
 function comTimeout (operacao, timeoutMs, mensagem) {
   let timer
   const timeout = new Promise((resolve, reject) => {
@@ -183,9 +193,28 @@ async function executarApagar (client, comando) {
   )
 }
 
-// Remover participante do grupo. Só funciona se o bot for admin; quando não
-// for, a lib responde com falha por participante e isso vira 'failed' — erro
-// conhecido, não resultado ambíguo.
+// Acha, na resposta por participante, o item que fala do participante pedido.
+//
+// O casamento é por `jid`, mas com uma saída: pedimos a remoção de UM
+// participante só, então um array de um item é a resposta sobre esse pedido,
+// mesmo que o servidor devolva o identificador noutro formato — LID e telefone
+// são o mesmo alvo aqui, e exigir igualdade literal transformaria remoção
+// normal em "resultado incerto". Com mais de um item e nenhum casando, aí não
+// dá pra saber qual é qual: devolve null e o chamador trata como incerto.
+function acharResultadoDoParticipante (resultado, participantId) {
+  if (!Array.isArray(resultado) || resultado.length === 0) return null
+  const exato = resultado.find((item) => item?.jid === participantId)
+  if (exato) return exato
+  return resultado.length === 1 ? resultado[0] : null
+}
+
+// Remover participante do grupo. Só funciona se o bot for admin.
+//
+// O contrato da lib (WaGroupCoordinator, parseParticipantActionResult) é
+// `{ jid, status: 'ok' | 'error', code: number }` — o `code` é 200 quando o nó
+// não trouxe atributo de erro, e o próprio número do erro quando trouxe. Ler
+// `status ?? code` e comparar com '200' dava sempre 'ok' !== '200', ou seja,
+// TODA remoção bem-sucedida era gravada como falha, com a mensagem errada.
 async function executarRemoverDoGrupo (client, comando) {
   const { chatId, participantId } = comando.payload
   const resultado = await comTimeout(
@@ -193,14 +222,28 @@ async function executarRemoverDoGrupo (client, comando) {
     TIMEOUT_ENVIO_MS,
     `timeout ao remover ${participantId} do comando ${comando.id}`
   )
-  // A API devolve o resultado POR participante: um array "ok" com status de
-  // erro dentro não é sucesso, e tratar como sucesso esconderia "o bot não é
-  // admin" — o motivo mais comum dessa ação falhar.
-  const item = Array.isArray(resultado) ? resultado[0] : null
-  const status = item?.status ?? item?.code
-  if (status !== undefined && String(status) !== '200' && item?.success !== true) {
-    throw new Error(`o WhatsApp recusou a remoção (status ${status}) — o bot provavelmente não é admin do grupo`)
+
+  const item = acharResultadoDoParticipante(resultado, participantId)
+  if (!item) {
+    throw erroIncerto(`o WhatsApp não confirmou a remoção de ${participantId}: a resposta não trouxe o participante pedido`)
   }
+
+  const codigo = Number(item.code)
+  const codigoConhecido = Number.isFinite(codigo)
+  const codigoOk = codigoConhecido && codigo >= 200 && codigo < 300
+
+  // Sucesso exige as DUAS confirmações. Uma resposta que traga só metade do
+  // contrato é resposta que não entendemos, e não entender não é ter dado certo.
+  if (item.status === 'ok' && codigoOk) return
+
+  if (item.status === 'error' || (codigoConhecido && !codigoOk)) {
+    const motivo = codigo === 403
+      ? 'o bot não é admin do grupo'
+      : 'o WhatsApp recusou'
+    throw new Error(`a remoção de ${participantId} não aconteceu: ${motivo} (código ${codigoConhecido ? codigo : item.status})`)
+  }
+
+  throw erroIncerto(`o WhatsApp respondeu a remoção de ${participantId} num formato que não sei ler (status ${item.status}, código ${item.code}) — não dá para afirmar que aconteceu`)
 }
 
 // ⚠️ CAMINHO NÃO OFICIAL DO WHATSAPP — leia antes de mexer.
@@ -325,7 +368,9 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         await executor(client, comando, await resolverDependencias(deps))
         status = 'sent'
       } catch (erro) {
-        status = erro?.code === 'LCN_TIMEOUT' ? 'outcome_unknown' : 'failed'
+        status = (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_RESULTADO_INCERTO')
+          ? 'outcome_unknown'
+          : 'failed'
         console.warn(`[engine] Falha ao executar o comando ${comando.id}: ${mensagemDoErro(erro)}`)
       }
     }

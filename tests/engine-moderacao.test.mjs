@@ -142,7 +142,16 @@ const semPalavra = avaliarEvento(db, evento('conversa normal aqui'))
 check('filtro de palavra não pega mensagem comum', semPalavra.results.find((x) => x.automationId === 'palavrao')?.status === 'no_match')
 
 // --- lado do gateway -------------------------------------------------------
-function clienteFake (falhaRemocao) {
+//
+// O mock devolve EXATAMENTE o que a lib instalada devolve. O formato está em
+// zapo-js, WaGroupCoordinator.parseParticipantActionResult:
+//
+//   { jid, status: code >= 200 && code < 300 ? 'ok' : 'error', code, ... }
+//
+// O mock antigo usava { status: '200' }, que não existe no contrato real — e
+// foi por isso que o teste passou enquanto o executor gravava toda remoção
+// bem-sucedida como falha. Mock que não é o contrato não testa nada.
+function clienteFake (respostaRemocao) {
   const enviados = []
   const removidos = []
   return {
@@ -152,28 +161,68 @@ function clienteFake (falhaRemocao) {
     group: {
       removeParticipants: async (jid, ids) => {
         removidos.push({ jid, ids })
-        return falhaRemocao ? [{ jid: ids[0], status: '403' }] : [{ jid: ids[0], status: '200' }]
+        return typeof respostaRemocao === 'function' ? respostaRemocao(ids) : respostaRemocao
       }
     }
   }
 }
+const OK = (ids) => [{ jid: ids[0], status: 'ok', code: 200 }]
 let confirmado = null
 const engineFake = { execucoes: { confirmar: async (_id, r) => { confirmado = r.status } } }
 
-const c1 = clienteFake(false)
+const removerCom = async (id, resposta) => {
+  confirmado = null
+  const c = clienteFake(resposta)
+  await executarComandos(c, [{ id, commandType: 'group.remove', payload: { chatId: GRUPO, participantId: PESSOA } }], engineFake)
+  return c
+}
+
+const c1 = clienteFake(OK)
 await executarComandos(c1, [{ id: 'd1', commandType: 'whatsapp.delete', payload: { chatId: GRUPO, messageRef: { remoteJid: GRUPO, id: 'msg1', participant: PESSOA, fromMe: false } } }], engineFake)
 check('gateway: apagar usa type revoke', c1.enviados[0]?.conteudo?.type === 'revoke')
 check('gateway: o revoke aponta para a mensagem certa', c1.enviados[0]?.conteudo?.target?.id === 'msg1')
 check('gateway: o revoke leva o participante (necessário em grupo)', c1.enviados[0]?.conteudo?.target?.participant === PESSOA)
 
-const c2 = clienteFake(false)
-await executarComandos(c2, [{ id: 'r1', commandType: 'group.remove', payload: { chatId: GRUPO, participantId: PESSOA } }], engineFake)
+const c2 = await removerCom('r1', OK)
 check('gateway: remoção chama removeParticipants', c2.removidos[0]?.ids?.[0] === PESSOA)
-check('gateway: remoção bem-sucedida confirma como sent', confirmado === 'sent')
+check('gateway: remoção bem-sucedida confirma como sent', confirmado === 'sent', String(confirmado))
 
-const c3 = clienteFake(true)
-await executarComandos(c3, [{ id: 'r2', commandType: 'group.remove', payload: { chatId: GRUPO, participantId: PESSOA } }], engineFake)
-check('gateway: recusa do WhatsApp (bot não é admin) vira failed, não sucesso silencioso', confirmado === 'failed')
+await removerCom('r2', (ids) => [{ jid: ids[0], status: 'error', code: 403 }])
+check('gateway: recusa do WhatsApp (bot não é admin) vira failed, não sucesso silencioso', confirmado === 'failed', String(confirmado))
+
+// --- resultado ambíguo nunca é sucesso, mas também não é falha -------------
+// Registrar "failed" no que talvez tenha acontecido faz o operador tentar
+// consertar à mão uma remoção que já ocorreu. É o invariante 3.
+await removerCom('r3', [])
+check('gateway: resposta vazia vira outcome_unknown, não sucesso', confirmado === 'outcome_unknown', String(confirmado))
+
+await removerCom('r4', undefined)
+check('gateway: resposta ausente vira outcome_unknown', confirmado === 'outcome_unknown', String(confirmado))
+
+await removerCom('r5', [
+  { jid: '5511777777777@s.whatsapp.net', status: 'ok', code: 200 },
+  { jid: '5511666666666@s.whatsapp.net', status: 'ok', code: 200 }
+])
+check('gateway: resposta só sobre outros participantes vira outcome_unknown', confirmado === 'outcome_unknown', String(confirmado))
+
+await removerCom('r6', [{ jid: PESSOA, status: 'ok' }])
+check('gateway: metade do contrato (sem código) não vira sucesso', confirmado === 'outcome_unknown', String(confirmado))
+
+// LID e telefone são o mesmo alvo: pedimos UM participante, então um item só
+// é a resposta sobre ele, mesmo que o servidor ecoe o identificador noutro
+// formato. Exigir igualdade literal aqui quebraria remoção que funciona.
+await removerCom('r7', [{ jid: '111111111111111@lid', status: 'ok', code: 200 }])
+check('gateway: item único com jid noutro formato ainda é a resposta do pedido', confirmado === 'sent', String(confirmado))
+
+// A mensagem de erro precisa distinguir "não é admin" de outra recusa — a
+// antiga chutava "provavelmente não é admin" para qualquer código.
+const c8 = clienteFake((ids) => [{ jid: ids[0], status: 'error', code: 409 }])
+let avisou = ''
+const warnOriginal = console.warn
+console.warn = (m) => { avisou += String(m) }
+await executarComandos(c8, [{ id: 'r8', commandType: 'group.remove', payload: { chatId: GRUPO, participantId: PESSOA } }], engineFake)
+console.warn = warnOriginal
+check('gateway: recusa que não é 403 não chuta "não é admin"', !/admin/.test(avisou) && /409/.test(avisou), avisou.slice(0, 80))
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE MODERAÇÃO PASSARAM')
 process.exit(falhas ? 1 : 0)
