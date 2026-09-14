@@ -2,9 +2,19 @@
 // canônico (src/engine/canonicalEvent.js) + adaptador Zapo real
 // (src/engine/zapoAdapter.js). Fixtures construídas direto a partir das
 // formas reais confirmadas em node_modules/zapo-js/dist/client/types.d.ts.
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { classificarMensagem, calcularEventId, validarFormaCanonica } from '../src/engine/canonicalEvent.js'
+import * as diretorio from '../src/directory.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel } from '../src/engine/zapoAdapter.js'
 import { resolver } from '../src/engine/mediaRefCache.js'
+
+// O adaptador agora LEMBRA o nome de quem já falou (é o que faz
+// {{sender.name}} valer sempre). Isso significa que ele escreve no diretório —
+// então o teste precisa de pasta própria, nunca o data/ do checkout.
+const pastaTeste = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-evento-'))
+diretorio._usarPastaParaTeste(pastaTeste)
 
 let falhas = 0
 const check = (nome, got, exp) => {
@@ -61,8 +71,10 @@ const comBot = construirEventoDeMensagem({
 check('bot.id traz o número da própria conta', comBot.bot.id, '5511777@s.whatsapp.net')
 checkBool('sem botId o campo bot nem existe (placeholder fica literal)', !('bot' in eventoTexto))
 
+// Número nunca visto: de quem já falou, o nome é lembrado de propósito (ver
+// GARANTIA 4 em variaveis-confiaveis.test.mjs).
 const semNome = construirEventoDeMensagem({
-  key: { remoteJid: '5511999@s.whatsapp.net', id: 'SEMNOME', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  key: { remoteJid: '5511000000001@s.whatsapp.net', id: 'SEMNOME', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
   message: { conversation: 'oi' }
 }, { accountId: 'acc-1' })
 // Ausente é ausente: sem a chave, {{sender.name}} fica literal no texto e a
@@ -84,11 +96,26 @@ const nomeGigante = construirEventoDeMensagem({
 checkBool('nome absurdamente longo é cortado', nomeGigante.sender.name.length === 60)
 
 const nomeSoEspaco = construirEventoDeMensagem({
-  key: { remoteJid: '5511999@s.whatsapp.net', id: 'BRANCO', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  key: { remoteJid: '5511000000002@s.whatsapp.net', id: 'BRANCO', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
   message: { conversation: 'oi' },
   pushName: '   '
 }, { accountId: 'acc-1' })
 checkBool('nome só com espaço conta como ausente', !('name' in nomeSoEspaco.sender))
+
+// E o outro lado da moeda: quem JÁ falou uma vez continua tendo nome mesmo
+// quando o WhatsApp não manda na mensagem seguinte. Número próprio de
+// propósito — os casos acima reusam 5511999 e vão sobrescrevendo o nome dele.
+const PRIMEIRA = '5511000000003@s.whatsapp.net'
+construirEventoDeMensagem({
+  key: { remoteJid: PRIMEIRA, id: 'ANTES', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'oi' },
+  pushName: 'Carla'
+}, { accountId: 'acc-1' })
+const jaFalou = construirEventoDeMensagem({
+  key: { remoteJid: PRIMEIRA, id: 'DEPOIS', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'de novo' }
+}, { accountId: 'acc-1' })
+check('nome de quem já falou é lembrado na mensagem sem pushName', jaFalou.sender.name, 'Carla')
 
 const eventoSemRecebidoEmMs = construirEventoDeMensagem({
   key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSG1B', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
@@ -183,6 +210,9 @@ try {
   construirEventoDeMensagem({ key: {} }, { accountId: 'acc-1' })
 } catch { lancouEmEventoMinimo = true }
 checkBool('evento com key vazio não lança exceção', !lancouEmEventoMinimo)
+
+diretorio._usarPastaParaTeste()
+fs.rmSync(pastaTeste, { recursive: true, force: true })
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE EVENTO CANÔNICO PASSARAM')
 process.exit(falhas ? 1 : 0)

@@ -23,9 +23,10 @@
 import * as lidMap from '../lidMap.js'
 
 const TTL_MS = 5 * 60 * 1000
-// Falha fica guardada por pouco tempo só para não repetir a chamada a cada
-// mensagem enquanto o problema dura. Curto, porque a causa costuma ser passageira.
-const TTL_FALHA_MS = 30 * 1000
+// Depois de uma falha, espera um pouco antes de tentar de novo — senão uma
+// indisponibilidade vira uma consulta por mensagem. Enquanto espera, o ÚLTIMO
+// VALOR CONHECIDO continua valendo (ver abaixo); ninguém fica sem dado.
+const ESPERA_APOS_FALHA_MS = 15 * 1000
 const TIMEOUT_MS = 4000
 const MAX_GRUPOS = 500
 
@@ -98,6 +99,12 @@ function comTimeout (promessa, ms) {
   return Promise.race([promessa, limite]).finally(() => clearTimeout(timer))
 }
 
+function guardar (alvo, dados) {
+  cache.set(alvo, { expiraEm: Date.now() + TTL_MS, dados })
+  podar()
+  return dados
+}
+
 export async function obter (client, groupJid, { agoraMs = Date.now() } = {}) {
   const alvo = normalizar(groupJid)
   if (!alvo || typeof client?.group?.queryGroupMetadata !== 'function') return null
@@ -110,21 +117,52 @@ export async function obter (client, groupJid, { agoraMs = Date.now() } = {}) {
   if (jaIndo) return jaIndo
 
   const busca = comTimeout(Promise.resolve().then(() => client.group.queryGroupMetadata(alvo)), TIMEOUT_MS)
-    .then((metadados) => {
-      const dados = resumir(metadados)
-      cache.set(alvo, { expiraEm: Date.now() + TTL_MS, dados })
-      podar()
-      return dados
-    })
+    .then((metadados) => guardar(alvo, resumir(metadados)))
     .catch(() => {
-      cache.set(alvo, { expiraEm: Date.now() + TTL_FALHA_MS, dados: null })
+      // FALHA NÃO APAGA O QUE JÁ SE SABIA.
+      //
+      // Guardar `null` aqui era o pior defeito do desenho anterior: uma queda
+      // passageira fazia TODA mensagem seguinte sair sem isAdmin e sem o nome
+      // do grupo, e era exatamente isso que obrigava a tela a avisar "nem
+      // sempre funciona". O último valor conhecido é informação real, obtida do
+      // servidor; o que muda a permissão de alguém (promover, rebaixar) chega
+      // por evento e invalida o cache na hora — não depende desta consulta.
+      const anterior = cache.get(alvo)?.dados ?? null
+      cache.set(alvo, { expiraEm: Date.now() + ESPERA_APOS_FALHA_MS, dados: anterior })
       podar()
-      return null
+      return anterior
     })
     .finally(() => emVoo.delete(alvo))
 
   emVoo.set(alvo, busca)
   return busca
+}
+
+// Carrega de uma vez os dados de todos os grupos em que a conta está.
+//
+// Chamado quando a conexão abre. Sem isto, a PRIMEIRA mensagem de cada grupo
+// depois de ligar o bot pagaria a consulta — e, se ela falhasse, sairia sem os
+// dados, que é o caso "às vezes funciona" que este módulo existe para eliminar.
+// Uma chamada cobre todos os grupos; consultar um por um seria pior para a
+// conta do que o problema que resolve.
+export async function aquecer (client) {
+  if (typeof client?.group?.queryAllGroups !== 'function') return 0
+  try {
+    const todos = await comTimeout(Promise.resolve().then(() => client.group.queryAllGroups()), TIMEOUT_MS * 3)
+    const lista = Array.isArray(todos) ? todos : Object.values(todos || {})
+    let guardados = 0
+    for (const metadados of lista) {
+      const alvo = normalizar(metadados?.jid)
+      if (!alvo) continue
+      guardar(alvo, resumir(metadados))
+      guardados++
+    }
+    return guardados
+  } catch {
+    // Não conseguir aquecer não é erro: cada grupo consulta sozinho na
+    // primeira mensagem, que é o comportamento de antes.
+    return 0
+  }
 }
 
 // Preenche o evento canônico com o que só o gateway consegue saber. Devolve o

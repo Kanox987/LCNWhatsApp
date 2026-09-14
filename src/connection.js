@@ -71,8 +71,14 @@ function jidProprio (client) {
 function registrarContatoConhecido (event) {
   const from = event.key?.remoteJid
   if (!from || event.key.fromMe) return
-  if (from.endsWith('@g.us') || from.endsWith('@broadcast') || from.endsWith('@newsletter')) return
-  const jidReal = event.key.participantAlt || event.key.remoteJidAlt || event.key.participant || from
+  if (from.endsWith('@broadcast') || from.endsWith('@newsletter')) return
+  // Grupo entra também: antes só conversa direta era registrada, então o nome
+  // de quem falava em grupo nunca era lembrado e {{sender.name}} dependia de o
+  // WhatsApp mandar o nome naquela mensagem específica. O que se guarda é a
+  // PESSOA que escreveu, nunca o grupo.
+  const ehGrupo = from.endsWith('@g.us')
+  const jidReal = event.key.participantAlt || event.key.participant || (ehGrupo ? null : (event.key.remoteJidAlt || from))
+  if (!jidReal) return
   try { registrarContato(jidReal, event.pushName) } catch {}
 }
 
@@ -311,6 +317,12 @@ export async function iniciar () {
         // encriptar as mensagens pra ele.
         client.presence?.send?.('available').catch(() => {})
         atualizarGrupos(client).catch((e) => log('erro atualizando grupos:', e.message))
+        // Carrega de uma vez quem é admin em cada grupo. Sem isto, a PRIMEIRA
+        // mensagem de cada grupo depois de conectar pagaria a consulta — e, se
+        // ela falhasse, sairia sem {{sender.isAdmin}} e sem {{chat.name}}.
+        groupInfo.aquecer(client)
+          .then((n) => { if (n) log(`dados de ${n} grupo(s) carregados`) })
+          .catch(() => {})
         state.definirConexao({
           conectado: true,
           numero: jid ? jid.split('@')[0].split(':')[0] : null,

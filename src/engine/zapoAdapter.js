@@ -6,6 +6,7 @@ import { desembrulhar, acharVisuUnica } from '../visu.js'
 import { calcularEventId, classificarMensagem } from './canonicalEvent.js'
 import * as mediaRefCache from './mediaRefCache.js'
 import * as lidMap from '../lidMap.js'
+import { nomeDe, registrarContato } from '../directory.js'
 
 // participantAlt/remoteJidAlt têm prioridade sobre o LID cru — mesma
 // normalização já usada inline em connection.js/capture.js, reaproveitada
@@ -180,6 +181,26 @@ function nomeExibido (event) {
   return limpo ? limpo.slice(0, 60) : null
 }
 
+// O nome de quem enviou, resolvido de forma CONFIÁVEL.
+//
+// O WhatsApp não manda `pushName` em toda mensagem — mas o nome de exibição
+// quase não muda, então lembrar o último que passou resolve o resto. É o que
+// tira {{sender.name}} da categoria "às vezes funciona": depois da primeira
+// mensagem de alguém, o nome vale sempre, inclusive em grupo.
+//
+// A mensagem atual sempre ganha do lembrado: se a pessoa trocou de nome, é
+// este o momento em que se descobre.
+function resolverNome (event, senderId) {
+  const agora = nomeExibido(event)
+  if (agora) {
+    // Guardar aqui (e não só no caminho de conversa direta, como antes) é o
+    // que faz o nome de quem fala em GRUPO ser lembrado.
+    try { registrarContato(senderId, agora) } catch {}
+    return agora
+  }
+  try { return nomeDe(senderId) } catch { return null }
+}
+
 export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, botId }) {
   const key = event.key || {}
   // Toda mensagem que passa ensina um par LID<->telefone. É de graça: os dois
@@ -191,7 +212,7 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
   const msgBruta = event.message
   const msg = desembrulhar(msgBruta) || msgBruta
   const kind = classificarMensagem(msgBruta, { marcadaComoViewOnce: key.isViewOnce === true })
-  const nomeDeQuemEnviou = nomeExibido(event)
+  const nomeDeQuemEnviou = resolverNome(event, senderId)
 
   const mensagem = { kind }
   if (kind === 'text') mensagem.text = extrairTexto(msg)

@@ -26,6 +26,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { PASTA_LCN } from './instances/paths.js'
+import { lerRuntime } from './runtime.js'
 
 export const PASTA_ACERVO = path.join(PASTA_LCN, 'acervo')
 
@@ -52,6 +53,54 @@ export const TIPOS_ACEITOS = Object.freeze({
 
 export const LIMITE_POR_ARQUIVO_BYTES = 32 * 1024 * 1024
 export const COTA_PADRAO_BYTES = 512 * 1024 * 1024
+
+// A COTA NÃO É EDITÁVEL PELO PAINEL, de propósito.
+//
+// Ela existe para limitar quem usa o sistema. Um limite que o próprio limitado
+// pode aumentar num campo de texto não limita nada — e é exatamente este número
+// que precisa valer na versão hospedada, onde quem paga a conta do disco é quem
+// hospeda, não quem usa.
+//
+// Por isso ela vem de fora, na mesma ordem de precedência do resto da
+// configuração de recursos: variável de ambiente (o jeito natural no Docker),
+// depois `container.disk` do runtime.json (gravado pelo instalador, do lado de
+// memory e cpus), e só então o padrão.
+//
+// A CONTABILIDADE continua no aplicativo, e isso não muda: limitar disco no
+// nível do container (`--storage-opt size=`) depende do driver de armazenamento
+// e não existe no modo simples. O que mudou é quem define o número, não quem o
+// aplica.
+const SUFIXOS = { b: 1, k: 1024, m: 1024 * 1024, g: 1024 * 1024 * 1024 }
+
+export function interpretarTamanho (bruto) {
+  if (bruto === null) return null
+  if (Number.isSafeInteger(bruto) && bruto > 0) return bruto
+  const texto = String(bruto ?? '').trim().toLowerCase()
+  if (!texto) return undefined
+  const casou = /^(\d+(?:\.\d+)?)\s*([bkmg])?b?$/.exec(texto)
+  if (!casou) return undefined
+  const valor = Number(casou[1]) * (SUFIXOS[casou[2] || 'b'] || 1)
+  return valor > 0 ? Math.floor(valor) : undefined
+}
+
+// Lido a cada chamada, nunca memorizado: mudar o limite no ambiente e
+// reiniciar precisa bastar, sem passo extra escondido.
+function cotaConfigurada () {
+  const doAmbiente = interpretarTamanho(process.env.LCN_ACERVO_LIMITE)
+  if (doAmbiente !== undefined) return doAmbiente
+
+  try {
+    const rt = lerRuntime()
+    if ('disk' in (rt?.container || {})) {
+      const doArquivo = interpretarTamanho(rt.container.disk)
+      if (doArquivo !== undefined) return doArquivo
+    }
+  } catch {
+    // runtime.json ausente ou ilegível é normal (modo simples recém-clonado):
+    // cai no padrão em vez de deixar o acervo sem teto.
+  }
+  return COTA_PADRAO_BYTES
+}
 
 export class ErroDeAcervo extends Error {
   constructor (mensagem, status = 400) {
@@ -88,32 +137,20 @@ function lerIndice () {
   }
 }
 
-function gravarIndice (arquivos, cotaBytes) {
+function gravarIndice (arquivos) {
   garantirPastas()
   const temp = path.join(pastaBase(), `.index.${process.pid}.tmp`)
-  const conteudo = { versao: 1, cotaBytes: cotaBytes ?? lerCota(), arquivos }
+  // Sem cota aqui: o índice é inventário do que existe, não configuração. O
+  // teto vindo de um arquivo que o aplicativo escreve seria editável por dentro.
+  const conteudo = { versao: 1, arquivos }
   fs.writeFileSync(temp, JSON.stringify(conteudo, null, 2) + '\n', { mode: 0o600 })
   fs.renameSync(temp, arqIndice())
 }
 
+// `null` significa sem teto — escolha explícita de quem instala, igual a
+// memory/cpus nulos em argsRecursos().
 export function lerCota () {
-  try {
-    const bruto = JSON.parse(fs.readFileSync(arqIndice(), 'utf8'))
-    return Number.isSafeInteger(bruto?.cotaBytes) && bruto.cotaBytes > 0 ? bruto.cotaBytes : COTA_PADRAO_BYTES
-  } catch {
-    return COTA_PADRAO_BYTES
-  }
-}
-
-export function definirCota (bytes) {
-  if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new ErroDeAcervo('A cota precisa ser um número de bytes positivo.')
-  const arquivos = lerIndice()
-  const usado = arquivos.reduce((soma, a) => soma + (a.sizeBytes || 0), 0)
-  if (bytes < usado) {
-    throw new ErroDeAcervo(`A cota não pode ser menor que o que já está guardado (${usado} bytes).`)
-  }
-  gravarIndice(arquivos, bytes)
-  return bytes
+  return cotaConfigurada()
 }
 
 function exporArquivo (registro) {
@@ -136,7 +173,12 @@ export function uso () {
   const arquivos = lerIndice()
   const usedBytes = arquivos.reduce((soma, a) => soma + (a.sizeBytes || 0), 0)
   const quotaBytes = lerCota()
-  return { files: arquivos.length, usedBytes, quotaBytes, freeBytes: Math.max(0, quotaBytes - usedBytes) }
+  return {
+    files: arquivos.length,
+    usedBytes,
+    quotaBytes,
+    freeBytes: quotaBytes === null ? null : Math.max(0, quotaBytes - usedBytes)
+  }
 }
 
 export function obter (id) {
@@ -172,7 +214,7 @@ export function guardar (buffer, { mimetype, name, description } = {}) {
   }
 
   const atual = uso()
-  if (atual.usedBytes + buffer.length > atual.quotaBytes) {
+  if (atual.quotaBytes !== null && atual.usedBytes + buffer.length > atual.quotaBytes) {
     throw new ErroDeAcervo(
       `Não cabe no acervo: falta espaço. Em uso ${atual.usedBytes} de ${atual.quotaBytes} bytes. Apague algo ou aumente o limite.`,
       507

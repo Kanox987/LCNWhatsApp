@@ -89,9 +89,7 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     return atualizado
   }
 
-  function definirCota (bytes) {
-    return { quotaBytes: biblioteca.definirCota(bytes) }
-  }
-
-  return { listar, enviar, conteudo, remover, descrever, definirCota }
+  // Sem definirCota: o teto do acervo é configuração de quem instala, não
+  // ação do painel. Ver o comentário em mediaLibrary.js.
+  return { listar, enviar, conteudo, remover, descrever }
 }

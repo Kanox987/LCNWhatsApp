@@ -32,7 +32,12 @@ export const NOME_CONTAINER = 'LCNWhatsApp'
 export const PADRAO_RUNTIME = {
   mode: 'bare',
   engine: null,
-  container: { memory: '512m', cpus: '1.0' },
+  // `disk` é o teto do acervo de arquivos. Fica AQUI, junto de memory/cpus,
+  // porque é a mesma natureza: limite definido por quem instala/hospeda, na
+  // instalação, e nunca pelo painel. Um limite que o próprio limitado pode
+  // aumentar não é limite — e é justamente esse campo que precisa valer na
+  // versão hospedada.
+  container: { memory: '512m', cpus: '1.0', disk: '512m' },
   transcricaoLocal: { instalada: false, modelo: 'base' }
 }
 
@@ -53,7 +58,8 @@ export function normalizarRuntime (bruto) {
     engine: rt.engine ?? null,
     container: {
       memory: 'memory' in container ? container.memory : PADRAO_RUNTIME.container.memory,
-      cpus: 'cpus' in container ? container.cpus : PADRAO_RUNTIME.container.cpus
+      cpus: 'cpus' in container ? container.cpus : PADRAO_RUNTIME.container.cpus,
+      disk: 'disk' in container ? container.disk : PADRAO_RUNTIME.container.disk
     },
     transcricaoLocal: {
       instalada: typeof transcricaoLocal.instalada === 'boolean' ? transcricaoLocal.instalada : PADRAO_RUNTIME.transcricaoLocal.instalada,
@@ -248,6 +254,7 @@ function cliPrincipal () {
     const engine = valor('--engine'); if (engine !== undefined) rt.engine = engine || null
     const memory = valor('--memory'); if (memory !== undefined) rt.container.memory = memory === '' ? null : memory
     const cpus = valor('--cpus'); if (cpus !== undefined) rt.container.cpus = cpus === '' ? null : cpus
+    const disk = valor('--disk'); if (disk !== undefined) rt.container.disk = disk === '' ? null : disk
     const instalada = valor('--instalada'); if (instalada !== undefined) rt.transcricaoLocal.instalada = instalada === 'true'
     const modelo = valor('--modelo'); if (modelo) rt.transcricaoLocal.modelo = modelo
     salvarRuntime(rt)

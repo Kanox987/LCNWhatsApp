@@ -24,22 +24,22 @@ const eq = (nome, got, exp) => {
 eq(
   'runtime.json antigo (só mode/engine) ganha defaults econômico + transcrição desligada',
   normalizarRuntime({ mode: 'docker', engine: 'docker' }),
-  { mode: 'docker', engine: 'docker', container: { memory: '512m', cpus: '1.0' }, transcricaoLocal: { instalada: false, modelo: 'base' } }
+  { mode: 'docker', engine: 'docker', container: { memory: '512m', cpus: '1.0', disk: '512m' }, transcricaoLocal: { instalada: false, modelo: 'base' } }
 )
 eq(
   'runtime.json vazio/inexistente vira o padrão bare',
   normalizarRuntime({}),
-  { mode: 'bare', engine: null, container: { memory: '512m', cpus: '1.0' }, transcricaoLocal: { instalada: false, modelo: 'base' } }
+  { mode: 'bare', engine: null, container: { memory: '512m', cpus: '1.0', disk: '512m' }, transcricaoLocal: { instalada: false, modelo: 'base' } }
 )
 eq(
   'migração preserva memory/cpus null explícito ("sem limites") em vez de resetar pro padrão',
-  normalizarRuntime({ mode: 'docker', container: { memory: null, cpus: null } }),
-  { mode: 'docker', engine: null, container: { memory: null, cpus: null }, transcricaoLocal: { instalada: false, modelo: 'base' } }
+  normalizarRuntime({ mode: 'docker', container: { memory: null, cpus: null, disk: '512m' } }),
+  { mode: 'docker', engine: null, container: { memory: null, cpus: null, disk: '512m' }, transcricaoLocal: { instalada: false, modelo: 'base' } }
 )
 eq(
   'migração não reseta modelo/instalada já configurados (update não pisa na escolha)',
   normalizarRuntime({ mode: 'docker', transcricaoLocal: { instalada: true, modelo: 'small' } }),
-  { mode: 'docker', engine: null, container: { memory: '512m', cpus: '1.0' }, transcricaoLocal: { instalada: true, modelo: 'small' } }
+  { mode: 'docker', engine: null, container: { memory: '512m', cpus: '1.0', disk: '512m' }, transcricaoLocal: { instalada: true, modelo: 'small' } }
 )
 
 // --- montagem de argumentos Docker ---
@@ -63,7 +63,7 @@ eq('override inclui dockerfile.whisper', overrideComLimites.includes('dockerfile
 eq('override inclui limites quando definidos', overrideComLimites.includes('memory: 2g') && overrideComLimites.includes('cpus: "2.0"'), true)
 eq('override inclui mount de modelos quando instalada', overrideComLimites.includes('./modelos:/opt/lcn-modelos'), true)
 
-const overrideSemLimites = composeOverride({ container: { memory: null, cpus: null }, transcricaoLocal: { instalada: false, modelo: 'base' } })
+const overrideSemLimites = composeOverride({ container: { memory: null, cpus: null, disk: '512m' }, transcricaoLocal: { instalada: false, modelo: 'base' } })
 eq('override "sem limites" não tem bloco deploy', overrideSemLimites.includes('deploy:'), false)
 eq('override sem transcrição local não monta volumes', overrideSemLimites.includes('volumes:'), false)
 

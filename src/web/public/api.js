@@ -107,7 +107,6 @@ export const api = {
     upload: (body) => request('/media', { method: 'POST', body }),
     describe: (id, description) => request(`/media/${segment(id)}`, { method: 'PUT', body: { description } }),
     remove: (id) => request(`/media/${segment(id)}`, { method: 'DELETE' }),
-    setQuota: (quotaBytes) => request('/media-quota', { method: 'PUT', body: { quotaBytes } }),
     // Endereço dos bytes, não uma chamada: vai direto no src da miniatura.
     contentUrl: (id) => `/api/v1/media/${segment(id)}/content`
   },

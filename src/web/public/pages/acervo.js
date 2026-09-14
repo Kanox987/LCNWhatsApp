@@ -212,53 +212,37 @@ function painelDeEnvio (limites, refresh) {
   return form
 }
 
-// A cota é contabilizada pelo próprio sistema, não pelo container: limitar
-// disco no nível do Podman depende do driver de armazenamento e simplesmente
-// não existe no modo simples, que é como a maioria roda. Aqui funciona nos
-// dois modos e a recusa vem com explicação.
-function painelDeUso (uso, refresh) {
-  const megas = el('input', {
-    type: 'number',
-    min: '1',
-    step: '1',
-    value: String(Math.round((uso.quotaBytes || 0) / 1024 / 1024))
-  })
+// O limite do acervo NÃO é editável aqui, de propósito.
+//
+// Ele existe para limitar quem usa o sistema; um campo onde o próprio limitado
+// digita outro número não limita nada. Vem de fora — variável de ambiente
+// LCN_ACERVO_LIMITE ou `container.disk` no runtime.json, do lado de memória e
+// CPU, gravados na instalação. Esta tela mostra e explica, como a tela da
+// instância já faz com memória e CPU.
+function painelDeUso (uso) {
+  const semTeto = uso.quotaBytes === null
+  const ocupado = semTeto || !uso.quotaBytes ? 0 : Math.min(100, Math.round((uso.usedBytes / uso.quotaBytes) * 100))
 
-  const salvar = button('Salvar limite', {
-    variant: 'secondary',
-    onClick: async (evento) => {
-      const controle = evento.currentTarget
-      const valor = Math.round(Number(megas.value) * 1024 * 1024)
-      if (!Number.isSafeInteger(valor) || valor <= 0) return notify('Informe um limite em MB maior que zero.', 'danger')
-      setBusy(controle, true, 'Salvando…')
-      try {
-        await api.media.setQuota(valor)
-        notify('Limite do acervo atualizado.')
-        await refresh()
-      } catch (erro) {
-        notify(erro.message, 'danger')
-        setBusy(controle, false)
-      }
-    }
-  })
+  const resumo = semTeto
+    ? `${uso.files} ${uso.files === 1 ? 'arquivo' : 'arquivos'} · ${formatarBytes(uso.usedBytes)} em uso · sem limite definido`
+    : `${uso.files} ${uso.files === 1 ? 'arquivo' : 'arquivos'} · ${formatarBytes(uso.usedBytes)} de ${formatarBytes(uso.quotaBytes)} · ${formatarBytes(uso.freeBytes)} livres`
 
-  const ocupado = uso.quotaBytes ? Math.min(100, Math.round((uso.usedBytes / uso.quotaBytes) * 100)) : 0
-  const barra = el('div', { className: 'acervo-barra', role: 'img', 'aria-label': `${ocupado}% do acervo em uso` }, [
-    el('span', { style: `width: ${ocupado}%` })
-  ])
+  const barra = semTeto
+    ? null
+    : el('div', { className: 'acervo-barra', role: 'img', 'aria-label': `${ocupado}% do acervo em uso` }, [
+      el('span', { style: `width: ${ocupado}%` })
+    ])
 
   return el('section', { className: 'panel stack' }, [
     el('div', { className: 'panel-heading' }, [
       el('div', {}, [
         el('h2', { text: 'Espaço em uso' }),
-        el('p', { text: `${uso.files} ${uso.files === 1 ? 'arquivo' : 'arquivos'} · ${formatarBytes(uso.usedBytes)} de ${formatarBytes(uso.quotaBytes)} · ${formatarBytes(uso.freeBytes)} livres` })
-      ])
+        el('p', { text: resumo })
+      ]),
+      semTeto ? badge('Sem limite', 'warning') : badge(`Limite: ${formatarBytes(uso.quotaBytes)}`, 'info')
     ]),
     barra,
-    el('div', { className: 'acervo-cota' }, [
-      field('Limite do acervo, em MB', megas, 'Vale para o acervo inteiro. Não dá para definir abaixo do que já está guardado.'),
-      salvar
-    ])
+    el('p', { className: 'field-help', text: 'O limite é definido na instalação, junto de memória e CPU — pela variável LCN_ACERVO_LIMITE ou pelo campo container.disk do runtime.json. Não é ajustável por aqui.' })
   ])
 }
 
@@ -281,7 +265,7 @@ export async function renderAcervo ({ refresh }) {
 
   return el('div', { className: 'stack-lg' }, [
     painelDeEnvio(limits, refresh),
-    painelDeUso(usage, refresh),
+    painelDeUso(usage),
     el('div', { className: 'section-heading' }, [
       el('div', {}, [
         el('h2', { text: 'Arquivos guardados' }),
