@@ -5,6 +5,7 @@
 // de propósito explícito rota por rota (nunca um proxy cru de path pro
 // motor) pra manter controlado o que o navegador pode alcançar.
 import { criarRoteador, resposta } from '../engine/server/transport.js'
+import { respostaBinaria } from './binario.js'
 
 function queryObjeto (query) {
   return Object.fromEntries(query.entries())
@@ -35,9 +36,11 @@ export function criarRoteadorWeb (aplicacao) {
   // --- instâncias: ciclo de vida real e otimização (agente/data plane) ---
   roteador.get('/api/v1/instances', () => aplicacao.instancias.listar())
 
-  // Acervo de arquivos
+  // Acervo de arquivos. `/content` é a única rota do painel que devolve bytes
+  // em vez de JSON — os cabeçalhos que protegem isso estão em binario.js.
   roteador.get('/api/v1/media', () => aplicacao.acervo.listar())
   roteador.post('/api/v1/media', ({ body }) => aplicacao.acervo.enviar(body))
+  roteador.get('/api/v1/media/:id/content', ({ params }) => respostaBinaria(aplicacao.acervo.conteudo(params.id)))
   roteador.put('/api/v1/media/:id', ({ params, body }) => aplicacao.acervo.descrever(params.id, body?.description))
   roteador.delete('/api/v1/media/:id', ({ params }) => aplicacao.acervo.remover(params.id))
   roteador.put('/api/v1/media-quota', ({ body }) => aplicacao.acervo.definirCota(body?.quotaBytes))

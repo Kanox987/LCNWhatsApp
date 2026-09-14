@@ -41,6 +41,7 @@ export function criarAplicacao ({
     acervo: {
       listar: () => mediaService.listar(),
       enviar: (body) => mediaService.enviar(body),
+      conteudo: (id) => mediaService.conteudo(id),
       remover: (id) => mediaService.remover(id),
       descrever: (id, descricao) => mediaService.descrever(id, descricao),
       definirCota: (bytes) => mediaService.definirCota(bytes)

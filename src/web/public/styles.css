@@ -1100,3 +1100,79 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
 .valor-linha > select { flex: none; width: auto; min-width: 118px; }
 .valor-campos { flex: 1 1 160px; min-width: 0; }
 .valor-campos > input, .valor-campos > select { width: 100%; }
+
+/* --- Acervo de arquivos ---
+   A miniatura é o ponto da tela: sem ela a pessoa precisa lembrar qual
+   "produto-2.png" é qual. Por isso o cartão vira coluna (o .list-card padrão
+   é linha) e a prévia ocupa o topo inteiro. */
+.acervo-card {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 0 14px;
+  overflow: hidden;
+}
+.acervo-card > *:not(.acervo-previa) { margin-inline: 16px; }
+
+.acervo-previa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 148px;
+  padding: 10px;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border);
+}
+/* `contain` e não `cover`: cortar a foto do produto para preencher o cartão
+   esconderia justamente a parte que a pessoa usa para reconhecê-la. */
+.acervo-previa img {
+  max-width: 100%;
+  max-height: 188px;
+  object-fit: contain;
+  border-radius: var(--radius-xs);
+}
+.acervo-previa-simbolo span {
+  font-size: 2.4rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+.acervo-previa-audio, .acervo-previa-texto { flex-direction: column; gap: 8px; padding: 14px; }
+.acervo-audio { width: 100%; max-width: 280px; }
+.acervo-previa-texto { align-items: stretch; }
+.acervo-previa-texto .readonly-box {
+  margin: 0;
+  max-height: 168px;
+  overflow: auto;
+  white-space: pre-wrap;
+  padding: 10px 12px;
+}
+
+.acervo-campo-descricao { display: flex; gap: 8px; align-items: center; }
+.acervo-campo-descricao > input { flex: 1 1 auto; min-width: 0; }
+.acervo-campo-descricao > .button { flex: none; }
+
+/* Barra de uso: só a proporção, sem número repetido — o texto do cabeçalho
+   já diz quantos MB de quantos. */
+.acervo-barra {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.acervo-barra > span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width var(--speed) ease;
+}
+
+.acervo-cota { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.acervo-cota > .field { flex: 1 1 220px; margin: 0; }
+.acervo-cota > .button { flex: none; }
+
+@media (max-width: 700px) {
+  .acervo-campo-descricao { flex-direction: column; align-items: stretch; }
+  .acervo-campo-descricao > .button { width: 100%; }
+}

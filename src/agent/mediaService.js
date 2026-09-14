@@ -26,8 +26,20 @@ function decodificarBase64 (bruto) {
 }
 
 export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
+  // Os limites viajam junto com a lista de propósito: a tela precisa deles
+  // para montar o `accept` do seletor e recusar arquivo grande ANTES de ler
+  // 32 MB em memória. Duplicar esses números no navegador seria criar uma
+  // segunda fonte de verdade que sai de sincronia no dia em que um tipo novo
+  // for aceito.
   function listar () {
-    return { files: biblioteca.listar(), usage: biblioteca.uso() }
+    return {
+      files: biblioteca.listar(),
+      usage: biblioteca.uso(),
+      limits: {
+        maxFileBytes: biblioteca.LIMITE_POR_ARQUIVO_BYTES,
+        acceptedTypes: Object.keys(biblioteca.TIPOS_ACEITOS)
+      }
+    }
   }
 
   function enviar (body) {
@@ -51,6 +63,21 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     })
   }
 
+  // Bytes de volta para o navegador do próprio dono — é o que faz a tela
+  // mostrar miniatura em vez de uma lista de nomes. Quem transforma isso em
+  // resposta HTTP (e quem decide os cabeçalhos de segurança) é a camada web:
+  // aqui só sai o conteúdo com o tipo que o acervo já validou na entrada.
+  function conteudo (id) {
+    const registro = biblioteca.obter(id)
+    if (!registro) throw new biblioteca.ErroDeAcervo('Arquivo não encontrado no acervo.', 404)
+    return {
+      buffer: biblioteca.lerConteudo(id),
+      mimetype: registro.mimetype,
+      name: registro.name,
+      kind: registro.kind
+    }
+  }
+
   function remover (id) {
     if (!biblioteca.remover(id)) throw new biblioteca.ErroDeAcervo('Arquivo não encontrado no acervo.', 404)
     return { removed: true, id }
@@ -66,5 +93,5 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     return { quotaBytes: biblioteca.definirCota(bytes) }
   }
 
-  return { listar, enviar, remover, descrever, definirCota }
+  return { listar, enviar, conteudo, remover, descrever, definirCota }
 }

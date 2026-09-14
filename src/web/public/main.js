@@ -6,6 +6,7 @@ import { renderConnections } from './pages/connections.js'
 import { renderEntities } from './pages/entities.js'
 import { renderCatalog } from './pages/catalog.js'
 import { renderVariables } from './pages/variables.js'
+import { renderAcervo } from './pages/acervo.js'
 import { button, emptyState, errorState, loading, setPageHeader } from './ui.js'
 
 const page = document.querySelector('#page')
@@ -22,6 +23,7 @@ function matchRoute (pathname) {
   if (pathname === '/entities') return { render: renderEntities, section: '/entities' }
   if (pathname === '/catalog') return { render: renderCatalog, section: '/catalog' }
   if (pathname === '/variables') return { render: renderVariables, section: '/variables' }
+  if (pathname === '/acervo') return { render: renderAcervo, section: '/acervo' }
   return null
 }
 

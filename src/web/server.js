@@ -9,6 +9,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { enviarJson, lerCorpoJson } from '../engine/server/transport.js'
 import { criarRoteadorWeb } from './router.js'
+import { ehRespostaBinaria, enviarBinario } from './binario.js'
 import { criarAplicacao } from '../agent/application.js'
 
 const HOSTS_PERMITIDOS = new Set(['127.0.0.1', 'localhost', '::1'])
@@ -66,7 +67,8 @@ export async function iniciarServidorWeb ({ host = '127.0.0.1', port = 4780, apl
       }
       const body = await lerCorpoJson(req)
       const retorno = await roteador.resolver(req.method, url.pathname, { req, body, query: url.searchParams })
-      if (retorno?.__respostaHttp) enviarJson(res, retorno.status, retorno.body)
+      if (ehRespostaBinaria(retorno)) enviarBinario(res, retorno)
+      else if (retorno?.__respostaHttp) enviarJson(res, retorno.status, retorno.body)
       else enviarJson(res, 200, retorno)
     } catch (erro) {
       // client.js (chamadas ao motor) usa `.status`/`.details`; ErroHttp

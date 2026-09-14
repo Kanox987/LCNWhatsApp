@@ -54,6 +54,15 @@ function criarAplicacaoFake () {
         definir: registrar('entidades.definir', { key: 'vip', value: true }),
         remover: registrar('entidades.remover', { removed: true, key: 'vip' })
       }
+    },
+    acervo: {
+      listar: registrar('acervo.listar', { files: [], usage: {}, limits: {} }),
+      conteudo: registrar('acervo.conteudo', {
+        buffer: Buffer.from('bytes-de-uma-foto'),
+        mimetype: 'image/png',
+        name: 'produto.png',
+        kind: 'image'
+      })
     }
   }
 }
@@ -122,6 +131,36 @@ try {
 
   const r13 = await fetch(`${base}/api/v1/automations/ping/provenance`)
   check('GET .../provenance: repassa o id certo', aplicacao.chamadas.some((c) => c.nome === 'automacoes.obterProvenance' && c.args[0] === 'ping') && r13.status === 200)
+
+  // --- acervo: a única rota do painel que devolve bytes em vez de JSON ---
+  // O acervo já limita o TIPO na entrada; estes cabeçalhos limitam o que o
+  // navegador faz com o arquivo na saída, na mesma origem do painel.
+  const r14 = await fetch(`${base}/api/v1/media/abc123/content`)
+  check('GET /media/:id/content: repassa o id pro acervo', aplicacao.chamadas.some((c) => c.nome === 'acervo.conteudo' && c.args[0] === 'abc123'))
+  check('GET /media/:id/content: devolve os bytes, não JSON', (await r14.clone().text()) === 'bytes-de-uma-foto')
+  check('GET /media/:id/content: usa o tipo que o acervo validou', r14.headers.get('content-type') === 'image/png')
+  check('GET /media/:id/content: proíbe o navegador de adivinhar outro tipo', r14.headers.get('x-content-type-options') === 'nosniff')
+  check('GET /media/:id/content: CSP neutraliza script em conteúdo embutido', /default-src 'none'/.test(r14.headers.get('content-security-policy') || ''))
+  check('GET /media/:id/content: imagem vai inline, para virar miniatura', /^inline/.test(r14.headers.get('content-disposition') || ''))
+  check('GET /media/:id/content: id apagado não fica em cache', r14.headers.get('cache-control') === 'no-store')
+
+  // PDF e texto não são renderizáveis com segurança na origem do painel: um
+  // PDF embutido executa JavaScript em alguns leitores. Vão como anexo.
+  const aplicacaoPdf = criarAplicacaoFake()
+  aplicacaoPdf.acervo.conteudo = () => ({ buffer: Buffer.from('%PDF-1.4'), mimetype: 'application/pdf', name: 'cardapio.pdf', kind: 'document' })
+  const servidorPdf = await iniciarServidorWeb({ host: '127.0.0.1', port: 0, aplicacao: aplicacaoPdf })
+  const r15 = await fetch(`http://127.0.0.1:${servidorPdf.port}/api/v1/media/x/content`)
+  check('GET /media/:id/content: PDF vai como anexo, não documento navegável', /^attachment/.test(r15.headers.get('content-disposition') || ''))
+
+  // O nome já foi saneado pelo acervo, mas aspas quebrariam o cabeçalho.
+  aplicacaoPdf.acervo.conteudo = () => ({ buffer: Buffer.from('x'), mimetype: 'image/png', name: 'a"b\nc.png', kind: 'image' })
+  const r16 = await fetch(`http://127.0.0.1:${servidorPdf.port}/api/v1/media/x/content`)
+  const disposicao = r16.headers.get('content-disposition') || ''
+  // O cabeçalho precisa continuar bem formado (aspa só nas pontas) E o nome
+  // de dentro precisa ter perdido a aspa e a quebra de linha.
+  const nomeNoCabecalho = (disposicao.match(/^\w+; filename="([^"]*)"$/) || [])[1]
+  check('GET /media/:id/content: nome com aspa/quebra não escapa do cabeçalho', nomeNoCabecalho === 'a_b_c.png', disposicao)
+  await servidorPdf.fechar()
 
   // --- erro do motor vira status HTTP correto, não 500 genérico ---
   const erroMotor = new Error('Automação já cadastrada: ping.')

@@ -102,6 +102,15 @@ export const api = {
   variables: {
     meta: () => request('/meta/variables')
   },
+  media: {
+    list: () => request('/media'),
+    upload: (body) => request('/media', { method: 'POST', body }),
+    describe: (id, description) => request(`/media/${segment(id)}`, { method: 'PUT', body: { description } }),
+    remove: (id) => request(`/media/${segment(id)}`, { method: 'DELETE' }),
+    setQuota: (quotaBytes) => request('/media-quota', { method: 'PUT', body: { quotaBytes } }),
+    // Endereço dos bytes, não uma chamada: vai direto no src da miniatura.
+    contentUrl: (id) => `/api/v1/media/${segment(id)}/content`
+  },
   entities: {
     list: (kind, id) => request(`/entities/${segment(kind)}/${segment(id)}/attributes`),
     set: (kind, id, key, value) => request(`/entities/${segment(kind)}/${segment(id)}/attributes/${segment(key)}`, { method: 'PUT', body: { value } }),
