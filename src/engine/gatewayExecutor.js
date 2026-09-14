@@ -112,7 +112,14 @@ async function executarRecover (client, comando, deps) {
   const buffer = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
   if (!buffer?.length) throw new Error('a mídia da visualização única veio vazia')
 
+  // O mimetype vem do nó original, e é OBRIGATÓRIO para vídeo: sem ele a
+  // biblioteca recusa o envio com "mimetype is required for video messages", e
+  // a recuperação falha depois de já ter baixado a mídia. Imagem e áudio também
+  // ganham, porque mandar o tipo certo é sempre melhor que deixar adivinhar.
   const conteudo = { type: entrada.tipo, media: buffer }
+  const mimetype = entrada.node?.mimetype
+  if (typeof mimetype === 'string' && mimetype) conteudo.mimetype = mimetype
+  else if (entrada.tipo === 'video') conteudo.mimetype = 'video/mp4'
   if (comando.payload.caption) conteudo.caption = comando.payload.caption
 
   await comTimeout(

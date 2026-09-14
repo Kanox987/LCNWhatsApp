@@ -294,6 +294,25 @@ const c3 = clienteFake()
 await executarComandos(c3, [{ id: 'c3', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'saved_messages', destinationId: null, mediaRef: 'ok', caption: 'oi' } }], engineFake, depsFig)
 check('gateway: recover resolve "saved_messages" para o JID próprio, sem o sufixo de dispositivo', c3.enviados[0]?.jid === '5511900000002@s.whatsapp.net')
 check('gateway: recover reenvia com o tipo real da mídia', c3.enviados[0]?.conteudo?.type === 'image')
+// Vídeo EXIGE mimetype: sem ele a biblioteca recusa com "mimetype is required
+// for video messages" — e a falha acontece depois de já ter baixado a mídia,
+// que é o pior momento. Achado num teste ao vivo: o recover de um vídeo de
+// visualização única falhava com a mídia na mão.
+const depsVideo = {
+  mediaRefCache: { resolver: () => ({ node: { mimetype: 'video/mp4' }, tipo: 'video', interno: {} }) },
+  baixarBuffer: async () => Buffer.from('video-cru'),
+  limiteBytes: 1000,
+  resolverJidProprio: () => '5511900000002@s.whatsapp.net'
+}
+const cVideo = clienteFake()
+await executarComandos(cVideo, [{ id: 'v1', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'same_chat', destinationId: CHAT, mediaRef: 'ok', mediaKind: 'video' } }], engineFake, depsVideo)
+check('gateway: recover de vídeo informa o mimetype', cVideo.enviados[0]?.conteudo?.mimetype === 'video/mp4', JSON.stringify(cVideo.enviados[0]?.conteudo?.mimetype))
+
+const depsSemMime = { ...depsVideo, mediaRefCache: { resolver: () => ({ node: {}, tipo: 'video', interno: {} }) } }
+const cSemMime = clienteFake()
+await executarComandos(cSemMime, [{ id: 'v2', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'same_chat', destinationId: CHAT, mediaRef: 'ok', mediaKind: 'video' } }], engineFake, depsSemMime)
+check('gateway: vídeo sem mimetype no nó ainda sai com um válido', cSemMime.enviados[0]?.conteudo?.mimetype === 'video/mp4')
+
 check('gateway: recover leva a legenda', c3.enviados[0]?.conteudo?.caption === 'oi')
 
 const c4 = clienteFake()
