@@ -102,6 +102,23 @@ check('figurinha sem mídia nenhuma: avisa por texto o que faltou', cmdSozinho?.
 const cmdLegendaComum = comandosDe(avaliarEvento(db, doAdaptador({ imageMessage: { url: 'z', caption: 'olha que foto linda' } })), 'fig')[0]
 check('foto com legenda comum não aciona o comando', cmdLegendaComum === undefined)
 
+// --- o token NÃO é legível como texto -------------------------------------
+// Não existe mais lista de campos permitidos no interpolador: o que está no
+// contexto é endereçável. Então a fronteira passou a ser o CONTEXTO, e é aqui
+// que ela é cobrada — token é capacidade (serve pro gateway buscar bytes), não
+// informação, e não pode acabar dentro de uma mensagem.
+publicar('vaza', [
+  { id: 'g', type: 'trigger.command', config: { command: '/vaza', match: 'exact_or_args', allowFrom: 'external' } },
+  { id: 'r', type: 'action.whatsapp.reply', config: { text: 'a=[{{message.mediaRef}}] b=[{{message.quotedMediaRef}}] tipo=[{{media.kind}}]' } }
+], [{ from: 'g', to: 'r', on: 'matched' }], { acceptedMessageKinds: ['text', 'image', 'video'] })
+
+const tentaVazar = doAdaptador({ imageMessage: { url: 'x', mimetype: 'image/jpeg', caption: '/vaza' } })
+const textoVazamento = comandosDe(avaliarEvento(db, tentaVazar), 'vaza')[0]?.payload?.text || ''
+check('token da mídia não é legível como texto', textoVazamento.includes('a=[{{message.mediaRef}}]'), textoVazamento)
+check('token da mídia citada também não', textoVazamento.includes('b=[{{message.quotedMediaRef}}]'), textoVazamento)
+check('mas o TIPO da mídia é legível — é dado, não segredo', textoVazamento.includes('tipo=[image]'), textoVazamento)
+check('nenhum token real aparece na mensagem', !textoVazamento.includes(tentaVazar.message.mediaRef))
+
 // --- recover: decide pelo token da mídia CITADA ---------------------------
 publicar('rec', [
   { id: 'g', type: 'trigger.command', config: { command: '/recover', match: 'exact_or_args', allowFrom: 'external' } },

@@ -649,16 +649,11 @@
               "const": "event"
             },
             "field": {
-              "enum": [
-                "message.text",
-                "message.kind",
-                "sender.id",
-                "chat.id",
-                "chat.kind",
-                "target.id",
-                "sender.isOwner",
-                "message.args"
-              ]
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$",
+              "description": "Caminho do campo no contexto do evento — o mesmo que se escreve entre chaves numa resposta, sem as chaves. Ex: sender.isAdmin, chat.kind, media.kind, now.hour."
             }
           }
         }

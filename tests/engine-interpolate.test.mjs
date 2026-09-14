@@ -36,10 +36,17 @@ check('substitui quem escreveu a mensagem respondida', interpolar('{{quoted.send
 check('substitui o número do próprio bot', interpolar('fale comigo em {{bot.id}}', contexto) === 'fale comigo em 5511777@s.whatsapp.net')
 check('substitui data e hora', interpolar('{{now.date}} às {{now.time}}', contexto) === '14/09/2026 às 10:31')
 
-// authoredBySelf viaja no evento mas NÃO é endereçável: expor a barreira do
-// gatilho automático como texto convidaria a montar comando em cima dela.
-check('campo do remetente fora da lista permitida fica literal', interpolar('{{sender.authoredBySelf}}', contexto) === '{{sender.authoredBySelf}}')
-check('campo de relógio inexistente fica literal', interpolar('{{now.semana}}', contexto) === '{{now.semana}}')
+// O que dá para escrever é o que está no CONTEXTO — não uma lista de nomes
+// mantida à parte. Uma lista dessas já divergiu do resolvedor da condição e
+// fez {{sender.isAdmin}} existir no texto e não na comparação. Campo que não
+// existe continua literal, que é o sinal de erro de sempre.
+check('campo inexistente fica literal', interpolar('{{now.semana}}', contexto) === '{{now.semana}}')
+check('caminho fundo que não existe fica literal', interpolar('{{chat.dono.nome}}', contexto) === '{{chat.dono.nome}}')
+
+// A fronteira que importa não é o nome do campo, é o que o contexto carrega:
+// prototype nunca é alcançável, e token de mídia não entra no contexto.
+check('prototype não é endereçável', interpolar('{{sender.constructor}}', contexto) === '{{sender.constructor}}')
+check('__proto__ não é endereçável', interpolar('{{sender.__proto__}}', contexto) === '{{sender.__proto__}}')
 
 // Nome ausente é o caso comum, e precisa aparecer em vez de sumir.
 const semNome = { ...contexto, sender: { id: '5511999@s.whatsapp.net' } }

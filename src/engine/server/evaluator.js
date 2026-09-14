@@ -5,7 +5,7 @@
 // uma "Etapa 3 modo sombra" separada.
 import crypto from 'crypto'
 import { ErroHttp } from './transport.js'
-import { interpolar } from './interpolate.js'
+import { interpolar, resolverCaminho } from './interpolate.js'
 import { valoresDeAgora } from './momento.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
@@ -91,6 +91,65 @@ function escopoCasa (db, refs, chat) {
   return refs.some((r) => r.direction === 'include' && refCasa(db, r, chat))
 }
 
+// O destino de um comando pode vir de uma VARIÁVEL, não só fixo no documento.
+//
+// É o que liga um comando comum ao comando de configuração: o de configuração
+// grava `var.global.recover_destino` na tabela, e o comum lê dali. Os dois se
+// encontram na mesma tabela dos marcadores (vip e afins), sem mecanismo novo.
+//
+// Três formas aceitas, porque é o que uma pessoa digita no WhatsApp:
+//   - um JID completo (5511...@s.whatsapp.net ou ...@g.us)
+//   - só os dígitos do número, que viram JID de contato
+//   - nada / variável não configurada -> null, e quem chamou avisa
+function resolverDestinoConfigurado (bruto, contexto) {
+  if (typeof bruto !== 'string' || !bruto) return null
+  const resolvido = interpolar(bruto, contexto).trim()
+  // Placeholder intacto = variável nunca gravada. Nunca tratar como endereço.
+  if (!resolvido || resolvido.includes('{{')) return null
+  if (/@(s\.whatsapp\.net|g\.us|lid)$/.test(resolvido)) return resolvido
+  const digitos = resolvido.replace(/\D/g, '')
+  return digitos.length >= 8 ? `${digitos}@s.whatsapp.net` : null
+}
+
+// Só os dígitos de um JID: 5511999999999@s.whatsapp.net -> 5511999999999.
+// É o que um link wa.me/<numero> precisa, e o que uma pessoa reconhece como
+// "o número" — o JID inteiro não serve para nenhum dos dois.
+// Tira do que vai virar texto as referências de mídia. Elas são tokens: servem
+// para o gateway buscar bytes, não para aparecer numa mensagem. O tipo e a
+// legenda da mídia seguem legíveis por `media.*`.
+function semTokens (mensagem) {
+  const { mediaRef, quotedMediaRef, ...resto } = mensagem || {}
+  return resto
+}
+
+function soDigitos (jid) {
+  if (typeof jid !== 'string' || !jid) return undefined
+  const digitos = jid.split('@')[0].split(':')[0].replace(/\D/g, '')
+  return digitos || undefined
+}
+
+// Tipo e legenda da mídia que o comando está tratando. A da própria mensagem
+// ganha da citada, na mesma ordem em que as ações a consomem.
+function dadosDaMidiaEmJogo (evento) {
+  const msg = evento?.message
+  if (msg?.mediaRef) {
+    return {
+      // `message.kind` de visualização única é literalmente 'view_once' e não
+      // diz se é foto, vídeo ou áudio. Por isso o tipo vem à parte.
+      kind: msg.mediaKind || msg.kind,
+      ...(msg.mediaCaption ? { caption: msg.mediaCaption } : {})
+    }
+  }
+  const citada = msg?.quotedMediaRef
+  if (citada?.token) {
+    return {
+      kind: citada.mediaKind,
+      ...(citada.caption ? { caption: citada.caption } : {})
+    }
+  }
+  return {}
+}
+
 function acharTrigger (documento) {
   return (documento?.flow?.nodes || []).find((n) => typeof n?.type === 'string' && n.type.startsWith('trigger.')) || null
 }
@@ -172,29 +231,16 @@ export function extrairArgumentos (texto, comando) {
   return ''
 }
 
-const CAMPOS_DE_EVENTO = {
-  'message.text': (evento) => evento?.message?.text,
-  'message.kind': (evento) => evento?.message?.kind,
-  'sender.id': (evento) => evento?.sender?.id,
-  'chat.id': (evento) => evento?.chat?.id,
-  'chat.kind': (evento) => evento?.chat?.kind,
-  'target.id': (evento) => resolverAlvo(evento) ?? undefined
-}
-
-// Campos que dependem do banco, resolvidos com o contexto já montado.
-const CAMPOS_DE_CONTEXTO = {
-  'sender.isOwner': (contexto) => contexto?.sender?.isOwner === true,
-  'message.args': (contexto) => contexto?.message?.args
-}
-
 // Resolve um operando para seu valor BRUTO (número continua número), nunca
 // para o texto já interpolado: comparar "10" com "3" como texto daria 10 < 3.
 function resolverOperando (db, operando, evento, contexto) {
   if (operando.source === 'literal') return operando.value
-  if (operando.source === 'event') {
-    if (CAMPOS_DE_CONTEXTO[operando.field]) return CAMPOS_DE_CONTEXTO[operando.field](contexto)
-    return CAMPOS_DE_EVENTO[operando.field]?.(evento)
-  }
+  // Mesmo contexto e mesmo resolvedor da interpolação, de propósito: eram dois
+  // mapas diferentes, e a divergência entre eles é o que fazia
+  // {{sender.isAdmin}} existir no texto e não existir na condição. Quem pode
+  // ser escrito numa resposta pode ser comparado numa condição — não havia
+  // razão para as duas coisas discordarem.
+  if (operando.source === 'event') return resolverCaminho(contexto, operando.field)
 
   const alvo = resolverEscopo(operando.scope, evento, { categoryKey: operando.categoryKey })
   if (!alvo) return undefined
@@ -315,24 +361,21 @@ function executarNo (db, no, evento, contexto, comandos) {
     }
 
     case 'action.whatsapp.recover': {
-      // O comando que deu origem ao projeto, agora configurável em vez de
-      // fixo no código. O motor decide COM BASE NUM TOKEN e num tipo — nunca
-      // recebe a mídia da visu única, que continua só na memória do gateway.
+      // O comando que deu origem ao projeto. O motor decide COM BASE NUM TOKEN
+      // e num tipo — nunca recebe a mídia da visu única, que continua só na
+      // memória do gateway.
+      //
+      // Duas origens de mídia, e as duas são necessárias:
+      //   - a visu única CITADA, que é o /recover clássico
+      //   - a visu única da PRÓPRIA mensagem, que é o que torna possível o
+      //     recover automático: a mídia chega e é recuperada sem ninguém
+      //     digitar nada.
       const citada = evento.message?.quotedMediaRef
-      // Exige visualização única EXPLICITAMENTE. A citação passou a carregar
-      // também mídia comum (é o que faz a figurinha funcionar respondendo uma
-      // foto), e recuperar uma foto que todo mundo ainda vê não é recuperar
-      // nada — o /recover existe para o que sumiu depois de aberto.
-      if (citada?.token && citada.kind !== 'view_once') {
-        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
-          comandos.push({
-            commandType: 'whatsapp.reply',
-            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
-          })
-        }
-        return 'success'
-      }
-      if (!citada?.token) {
+      const propria = evento.message?.kind === 'view_once' && evento.message?.mediaRef
+        ? { token: evento.message.mediaRef, kind: 'view_once', mediaKind: evento.message.mediaKind }
+        : null
+
+      const avisar = () => {
         if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
           comandos.push({
             commandType: 'whatsapp.reply',
@@ -342,13 +385,27 @@ function executarNo (db, no, evento, contexto, comandos) {
         return 'success'
       }
 
+      // Exige visualização única EXPLICITAMENTE. A citação passou a carregar
+      // também mídia comum (é o que faz a figurinha funcionar respondendo uma
+      // foto), e recuperar uma foto que todo mundo ainda vê não é recuperar
+      // nada — o /recover existe para o que sumiu depois de aberto.
+      const fonte = propria || (citada?.kind === 'view_once' ? citada : null)
+      if (!fonte?.token) return avisar()
+
       const destino = no.config?.destination || 'saved_messages'
       // 'saved_messages' vira null aqui de propósito: só o gateway sabe qual é
       // o JID da própria conta, e inventar isso no motor daria destino errado
       // quando o mesmo documento roda em números diferentes.
-      const chatDestino = destino === 'same_chat'
-        ? evento.chat.id
-        : (destino === 'fixed' ? (no.config?.destinationId || null) : null)
+      let chatDestino = null
+      if (destino === 'same_chat') {
+        chatDestino = evento.chat.id
+      } else if (destino === 'fixed') {
+        chatDestino = resolverDestinoConfigurado(no.config?.destinationId, contexto)
+        // Destino configurável que ainda não foi configurado: avisa em vez de
+        // mandar a mídia para um endereço inventado. É o caso de quem instalou
+        // o comando e ainda não rodou o de configuração.
+        if (!chatDestino) return avisar()
+      }
 
       comandos.push({
         commandType: 'whatsapp.recover',
@@ -356,8 +413,8 @@ function executarNo (db, no, evento, contexto, comandos) {
           chatId: evento.chat.id,
           destination: destino,
           destinationId: chatDestino,
-          mediaRef: citada.token,
-          mediaKind: citada.mediaKind,
+          mediaRef: fonte.token,
+          mediaKind: fonte.mediaKind,
           ...(typeof no.config?.caption === 'string' && no.config.caption
             ? { caption: interpolar(no.config.caption, contexto) }
             : {})
@@ -553,19 +610,32 @@ function executarFluxo (db, documento, triggerId, evento) {
   const comandos = []
   const alvo = resolverAlvo(evento)
   const contexto = {
-    message: { ...evento.message, args: extrairArgumentos(evento.message?.text, gatilho?.config?.command) },
+    // A FRONTEIRA DO QUE É LEGÍVEL É ESTE OBJETO.
+    //
+    // Não existe mais lista de campos permitidos no interpolador: o que está
+    // aqui dá para escrever num comando, o que não está, não. Então o que não
+    // pode ser lido tem que sair AQUI — e o que sai é token de mídia, que é
+    // capacidade, não informação. O tipo e a legenda da mídia continuam
+    // disponíveis, em `media.*`, porque são dados e não segredo.
+    message: semTokens({ ...evento.message, args: extrairArgumentos(evento.message?.text, gatilho?.config?.command) }),
     // isOwner entra como campo do remetente (e não como variável de usuário)
     // porque é uma propriedade do evento, não algo que a automação grava.
-    sender: { ...evento.sender, isOwner: ehDono(db, evento.sender?.id) },
-    chat: evento.chat,
+    sender: { ...evento.sender, isOwner: ehDono(db, evento.sender?.id), number: soDigitos(evento.sender?.id) },
+    chat: { ...evento.chat, number: soDigitos(evento.chat?.id) },
     // Sem menção nem citação não existe alvo — o ramo fica vazio e
     // {{target.id}} permanece literal no texto, sinalizando o erro de uso em
     // vez de mandar uma mensagem com um buraco no meio.
-    target: alvo ? { id: alvo } : {},
+    target: alvo ? { id: alvo, number: soDigitos(alvo) } : {},
     // Quem escreveu a mensagem RESPONDIDA. `target` prefere a menção quando
     // existem as duas; aqui é sempre o autor da citação, que é o que um
     // comando tipo "/apagar" respondendo alguém precisa saber.
-    quoted: evento.message?.quotedRef?.participant ? { sender: evento.message.quotedRef.participant } : {},
+    quoted: evento.message?.quotedRef?.participant
+      ? { sender: evento.message.quotedRef.participant, number: soDigitos(evento.message.quotedRef.participant) }
+      : {},
+    // A mídia em jogo: a da própria mensagem, ou a da mensagem citada. É o que
+    // permite uma resposta se explicar ("recuperei um áudio de fulano") sem o
+    // motor nunca tocar nos bytes — tipo e legenda não são segredo de mídia.
+    media: dadosDaMidiaEmJogo(evento),
     // O número da própria conta e se ela é admin do grupo. Vem preenchido pelo
     // gateway (accountId NÃO serve: é o id da instância, um UUID). Ausente
     // quando o gateway não soube dizer — placeholder fica literal.

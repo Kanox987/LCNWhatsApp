@@ -86,6 +86,26 @@ function construirMediaRef (msgBruta, msg, kind, marcadaComoViewOnce) {
   return undefined
 }
 
+// O nó de mídia da mensagem, para ler dele o que NÃO é segredo: o tipo real e a
+// legenda original. Fica separado do token de propósito — o token continua
+// opaco, e `mediaKey`/`directPath` continuam só na memória do gateway.
+//
+// O tipo importa porque `message.kind` de uma visualização única é literalmente
+// 'view_once': não diz se é foto, vídeo ou áudio, e uma legenda de mídia
+// recuperada precisa dizer. A legenda importa porque é o que a pessoa escreveu
+// junto com a mídia, e some com ela.
+function dadosDaMidia (msgBruta, msg, kind, marcadaComoViewOnce) {
+  if (kind === 'view_once') {
+    const achado = acharVisuUnica(msgBruta, marcadaComoViewOnce)
+    return achado ? { mediaKind: achado.tipo, caption: achado.node?.caption } : null
+  }
+  if (kind === 'image' || kind === 'video' || kind === 'audio') {
+    const node = msg?.[`${kind}Message`]
+    return node ? { mediaKind: kind, caption: node.caption } : null
+  }
+  return null
+}
+
 // Varre os campos da mensagem procurando contextInfo.quotedMessage — mesma
 // ideia de acharCitacaoGenerica (src/capture.js), mas devolvendo só
 // endereçamento (nunca o conteúdo da citação: /recover e visu única
@@ -135,7 +155,8 @@ function construirQuotedMediaRef (msg) {
       return {
         token: mediaRefCache.criar({ node: achado.node, tipo: achado.tipo, interno: achado.interno }),
         kind: visu ? 'view_once' : 'media',
-        mediaKind: achado.tipo
+        mediaKind: achado.tipo,
+        ...(typeof achado.node?.caption === 'string' && achado.node.caption ? { caption: achado.node.caption } : {})
       }
     }
   }
@@ -246,7 +267,12 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
   const texto = extrairTexto(msg)
   if (typeof texto === 'string' && texto) mensagem.text = texto
   const mediaRef = construirMediaRef(msgBruta, msg, kind, key.isViewOnce === true)
-  if (mediaRef) mensagem.mediaRef = mediaRef
+  if (mediaRef) {
+    mensagem.mediaRef = mediaRef
+    const dados = dadosDaMidia(msgBruta, msg, kind, key.isViewOnce === true)
+    if (dados?.mediaKind) mensagem.mediaKind = dados.mediaKind
+    if (typeof dados?.caption === 'string' && dados.caption) mensagem.mediaCaption = dados.caption
+  }
   const quotedRef = construirQuotedRef(msg)
   if (quotedRef) mensagem.quotedRef = quotedRef
   const mencoes = construirMencoes(msg)

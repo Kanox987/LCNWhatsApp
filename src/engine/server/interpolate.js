@@ -1,26 +1,16 @@
-import { CAMPOS_DE_AGORA } from './momento.js'
-
-const NAMESPACES_EMBUTIDOS = {
-  message: new Set(['text', 'kind', 'args']),
-  // `name` é o nome que a própria pessoa escolheu exibir no WhatsApp. Nem
-  // toda mensagem traz — quando não vem, o placeholder fica literal.
-  // `isAdmin` só existe em grupo, e só quando o gateway conseguiu consultar os
-  // dados dele. Ausente é ausente: nunca vira `false`, senão falha de rede
-  // viraria decisão de permissão em silêncio.
-  sender: new Set(['id', 'name', 'isOwner', 'isAdmin']),
-  chat: new Set(['id', 'kind', 'name', 'size', 'onlyAdmins']),
-  // Quem o comando mira: o primeiro @mencionado ou o autor da mensagem
-  // citada. Fica vazio (placeholder intacto) quando não há alvo nenhum.
-  target: new Set(['id']),
-  // A mensagem RESPONDIDA. Diferente de `target`, que prefere a menção:
-  // aqui é sempre quem escreveu a mensagem citada, mencionada ou não.
-  quoted: new Set(['sender']),
-  // O próprio número que está executando a automação, e se ele é admin do
-  // grupo — sem ser admin não dá para apagar mensagem nem remover ninguém.
-  bot: new Set(['id', 'isAdmin']),
-  // Relógio da máquina no instante da avaliação (ver momento.js).
-  now: new Set(CAMPOS_DE_AGORA)
-}
+// O QUE DÁ PARA ESCREVER NUM COMANDO É O QUE ESTÁ NO CONTEXTO — ponto.
+//
+// Isto era uma lista de nomes permitidos por namespace, e a lista era o
+// problema: o dado chegava no evento, aparecia no JSON, e mesmo assim o
+// placeholder ficava literal até alguém lembrar de acrescentar o nome ao
+// conjunto. Pior, a mesma lista existia em três lugares (aqui, no mapa de
+// campos da condição e no enum do schema) e eles saíam de sincronia — foi assim
+// que {{sender.isAdmin}} passou a existir no texto e NÃO na condição.
+//
+// A fronteira de verdade é outra, e sempre foi: o CONTEXTO. Quem monta o
+// contexto (evaluator.js) decide o que é legível, e já tira de lá o que não
+// pode ser lido — token de mídia, principalmente. Então o que está no contexto
+// é endereçável, sem segunda lista para manter em dia.
 
 // Escopos de variável endereçáveis por {{var.<escopo>.<chave>}}. 'category'
 // fica de fora porque leva um segmento a mais: {{var.category.<qual>.<chave>}}.
@@ -56,15 +46,25 @@ function obterValorDeEscopo (contexto, campo) {
   return undefined
 }
 
+// Caminho com pontos dentro do contexto: "sender.isAdmin", "media.caption".
+// Só percorre propriedade própria — nunca prototype, então "constructor" e
+// "__proto__" não levam a lugar nenhum.
+export function resolverCaminho (contexto, caminho) {
+  if (!contexto || typeof caminho !== 'string' || !caminho) return undefined
+  let atual = contexto
+  for (const parte of caminho.split('.')) {
+    if (atual === null || typeof atual !== 'object' || !Object.hasOwn(atual, parte)) return undefined
+    atual = atual[parte]
+  }
+  return typeof atual === 'function' ? undefined : atual
+}
+
 // Variável de usuário tem UM endereço só: {{var.<escopo>.<chave>}}. Qualquer
 // apelido que resolvesse para o mesmo valor com outro nome esconderia o
 // escopo — e escopo é justamente o que decide de quem é aquele valor.
 function obterValor (contexto, namespace, campo) {
   if (namespace === 'var') return obterValorDeEscopo(contexto, campo)
-
-  if (!NAMESPACES_EMBUTIDOS[namespace]?.has(campo)) return undefined
-  const origem = contexto?.[namespace]
-  return origem && Object.hasOwn(origem, campo) ? origem[campo] : undefined
+  return resolverCaminho(contexto, `${namespace}.${campo}`)
 }
 
 function converterParaTexto (valor) {
