@@ -5,10 +5,10 @@ const check = (nome, ok) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '�
 
 const contexto = {
   message: { text: '/ping agora', kind: 'text' },
-  sender: { id: '5511999@s.whatsapp.net', name: 'Ana Maria', authoredBySelf: false },
-  chat: { id: '120363000@g.us', kind: 'group' },
+  sender: { id: '5511999@s.whatsapp.net', name: 'Ana Maria', isAdmin: true, authoredBySelf: false },
+  chat: { id: '120363000@g.us', kind: 'group', name: 'Turma do Churrasco', size: 12, onlyAdmins: false },
   quoted: { sender: '5511888@s.whatsapp.net' },
-  bot: { id: '5511777@s.whatsapp.net' },
+  bot: { id: '5511777@s.whatsapp.net', isAdmin: false },
   now: { greeting: 'Bom dia', date: '14/09/2026', time: '10:31' },
   var: { chat: { vip: true, apelido: 'Ana', perfil: { nivel: 3 } } }
 }
@@ -44,6 +44,18 @@ check('campo de relógio inexistente fica literal', interpolar('{{now.semana}}',
 // Nome ausente é o caso comum, e precisa aparecer em vez de sumir.
 const semNome = { ...contexto, sender: { id: '5511999@s.whatsapp.net' } }
 check('sem nome de exibição o placeholder fica visível, não vira vazio', interpolar('Oi, {{sender.name}}!', semNome) === 'Oi, {{sender.name}}!')
+
+// --- dados do grupo ------------------------------------------------------
+check('substitui o nome do grupo', interpolar('Bem-vindo ao {{chat.name}}!', contexto) === 'Bem-vindo ao Turma do Churrasco!')
+check('substitui o tamanho do grupo', interpolar('somos {{chat.size}}', contexto) === 'somos 12')
+check('substitui se quem enviou é admin', interpolar('admin={{sender.isAdmin}}', contexto) === 'admin=true')
+check('substitui se o próprio bot é admin', interpolar('eu sou admin? {{bot.isAdmin}}', contexto) === 'eu sou admin? false')
+
+// "Não consegui saber" e "não é admin" são coisas diferentes: sem o campo o
+// texto fica visível, em vez de um false inventado decidir permissão.
+const semGrupo = { ...contexto, sender: { id: '5511999@s.whatsapp.net' }, chat: { id: '5511999@s.whatsapp.net', kind: 'direct' } }
+check('fora de grupo isAdmin fica literal, nunca vira false', interpolar('{{sender.isAdmin}}', semGrupo) === '{{sender.isAdmin}}')
+check('fora de grupo o nome do grupo fica literal', interpolar('{{chat.name}}', semGrupo) === '{{chat.name}}')
 
 check('nunca toca no placeholder de latência sem ponto', interpolar('pong ({{latencyMs}}ms)', contexto) === 'pong ({{latencyMs}}ms)')
 check('substitui múltiplas ocorrências no mesmo texto', interpolar('{{var.chat.apelido}}/{{var.chat.apelido}}/{{chat.kind}}', contexto) === 'Ana/Ana/group')

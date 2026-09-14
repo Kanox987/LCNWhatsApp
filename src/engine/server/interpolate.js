@@ -4,16 +4,20 @@ const NAMESPACES_EMBUTIDOS = {
   message: new Set(['text', 'kind', 'args']),
   // `name` é o nome que a própria pessoa escolheu exibir no WhatsApp. Nem
   // toda mensagem traz — quando não vem, o placeholder fica literal.
-  sender: new Set(['id', 'name', 'isOwner']),
-  chat: new Set(['id', 'kind']),
+  // `isAdmin` só existe em grupo, e só quando o gateway conseguiu consultar os
+  // dados dele. Ausente é ausente: nunca vira `false`, senão falha de rede
+  // viraria decisão de permissão em silêncio.
+  sender: new Set(['id', 'name', 'isOwner', 'isAdmin']),
+  chat: new Set(['id', 'kind', 'name', 'size', 'onlyAdmins']),
   // Quem o comando mira: o primeiro @mencionado ou o autor da mensagem
   // citada. Fica vazio (placeholder intacto) quando não há alvo nenhum.
   target: new Set(['id']),
   // A mensagem RESPONDIDA. Diferente de `target`, que prefere a menção:
   // aqui é sempre quem escreveu a mensagem citada, mencionada ou não.
   quoted: new Set(['sender']),
-  // O próprio número que está executando a automação.
-  bot: new Set(['id']),
+  // O próprio número que está executando a automação, e se ele é admin do
+  // grupo — sem ser admin não dá para apagar mensagem nem remover ninguém.
+  bot: new Set(['id', 'isAdmin']),
   // Relógio da máquina no instante da avaliação (ver momento.js).
   now: new Set(CAMPOS_DE_AGORA)
 }

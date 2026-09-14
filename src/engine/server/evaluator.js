@@ -500,9 +500,10 @@ function executarFluxo (db, documento, triggerId, evento) {
     // existem as duas; aqui é sempre o autor da citação, que é o que um
     // comando tipo "/apagar" respondendo alguém precisa saber.
     quoted: evento.message?.quotedRef?.participant ? { sender: evento.message.quotedRef.participant } : {},
-    // O número que está executando. Serve para o bot se apresentar sem a
-    // pessoa precisar digitar o próprio número dentro da resposta.
-    bot: evento.accountId ? { id: evento.accountId } : {},
+    // O número da própria conta e se ela é admin do grupo. Vem preenchido pelo
+    // gateway (accountId NÃO serve: é o id da instância, um UUID). Ausente
+    // quando o gateway não soube dizer — placeholder fica literal.
+    bot: evento.bot || {},
     now: valoresDeAgora(),
     var: carregarVariaveis(db, evento)
   }

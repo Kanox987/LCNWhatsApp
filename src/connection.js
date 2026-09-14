@@ -27,6 +27,7 @@ import { construirEventoDeMensagem, construirEventoDeIndisponivel } from './engi
 import { emitirEventoDebug } from './engine/eventSink.js'
 import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
+import * as groupInfo from './engine/groupInfo.js'
 import { executarComandos } from './engine/gatewayExecutor.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
@@ -38,13 +39,31 @@ const SESSION_ID = 'default'
 // Embora sink/executor sejam defensivos por conta própria, o catch final
 // protege o event emitter contra qualquer regressão futura nesses módulos.
 function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico) {
-  void enviarEventoAoMotor(clienteEngine, eventoCanonico).then(async (resultado) => {
+  // O enriquecimento de grupo (nome, tamanho, quem é admin) acontece aqui e
+  // não na construção do evento porque é chamada de rede: fica no caminho já
+  // assíncrono, sem atrasar a captura legada nem o handler da mensagem. Falha
+  // aberto — sem os dados, o evento segue como estava.
+  void groupInfo.enriquecerEvento(client, eventoCanonico)
+    .catch(() => eventoCanonico)
+    .then((evento) => enviarEventoAoMotor(clienteEngine, evento))
+    .then(async (resultado) => {
     if (!resultado.ok) return
     for (const avaliacao of resultado.results || []) {
       const comandos = (avaliacao.commands || []).filter((comando) => comando.status === 'pending')
       if (comandos.length) await executarComandos(client, comandos, clienteEngine)
     }
   }).catch(() => {})
+}
+
+// O JID da própria conta. Mesma normalização de capture.js: meJid vem com
+// sufixo de dispositivo (":12@"), e é a forma sem ele que endereça a pessoa.
+function jidProprio (client) {
+  try {
+    const meJid = client.getCredentials?.()?.meJid
+    return meJid ? meJid.replace(/:\d+@/, '@') : null
+  } catch {
+    return null
+  }
 }
 
 // Alimenta o diretório de contatos conhecidos (usado pelas telas de seleção
@@ -238,6 +257,14 @@ export async function iniciar () {
       if (cfg.hardware?.debug) log('mutation:', JSON.stringify(event).slice(0, 500))
     })
 
+    // Promoveu, rebaixou, entrou, saiu, mudou o nome do grupo: o cache de
+    // dados daquele grupo cai na hora. É o que impede {{sender.isAdmin}} de
+    // decidir permissão com informação velha — o TTL lá dentro é só rede de
+    // segurança para o caso de uma dessas notificações se perder.
+    client.on('group', (event) => {
+      try { groupInfo.invalidar(event?.groupJid || event?.chatJid) } catch {}
+    })
+
     client.on('message', async (event) => {
       // Capturado antes de qualquer outro trabalho: é o t0 usado por
       // automações como /ping pra medir latência de ponta a ponta
@@ -248,7 +275,7 @@ export async function iniciar () {
       // O motor é opcional: construção, debug e envio ficam isolados; o
       // pipeline legado abaixo roda sempre, mesmo sem socket do motor.
       try {
-        const eventoCanonico = construirEventoDeMensagem(event, { accountId, recebidoEmMs })
+        const eventoCanonico = construirEventoDeMensagem(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
         emitirEventoDebug(eventoCanonico, cfg, log)
         encaminharEventoAoMotor(client, clienteEngine, eventoCanonico)
       } catch (e) {
@@ -261,7 +288,7 @@ export async function iniciar () {
       const recebidoEmMs = Date.now()
       if (cfg.hardware?.debug) log(`message_unavailable kind=${event.kind} resendRequested=${event.resendRequested}`)
       try {
-        const eventoCanonico = construirEventoDeIndisponivel(event, { accountId, recebidoEmMs })
+        const eventoCanonico = construirEventoDeIndisponivel(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
         emitirEventoDebug(eventoCanonico, cfg, log)
         encaminharEventoAoMotor(client, clienteEngine, eventoCanonico)
       } catch (e) {

@@ -51,6 +51,16 @@ check('DM texto: receivedAtMs repassa o valor do gateway (t0 pra latência)', ev
 // tinha de onde sair.
 check('DM texto: sender.name vem do pushName', eventoTexto.sender.name, 'Fulano')
 
+// --- número da própria conta ---------------------------------------------
+// accountId é o id da INSTÂNCIA (um UUID); o número só o gateway conhece, e
+// por isso chega como opção em vez de ser deduzido do evento.
+const comBot = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'BOT1', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { conversation: 'oi' }
+}, { accountId: 'acc-1', botId: '5511777@s.whatsapp.net' })
+check('bot.id traz o número da própria conta', comBot.bot.id, '5511777@s.whatsapp.net')
+checkBool('sem botId o campo bot nem existe (placeholder fica literal)', !('bot' in eventoTexto))
+
 const semNome = construirEventoDeMensagem({
   key: { remoteJid: '5511999@s.whatsapp.net', id: 'SEMNOME', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
   message: { conversation: 'oi' }

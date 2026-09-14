@@ -133,6 +133,10 @@ const rContexto = avaliarEvento(db, eventoBase({
   msgId: 'CTX1',
   chat: { id: scopeContexto, kind: 'direct' },
   sender: { id: scopeContexto, authoredBySelf: false, name: 'Ana' },
+  // O número da própria conta vem do gateway. accountId NÃO serve: é o id da
+  // instância, um UUID — mandar isso onde se promete telefone é pior que
+  // deixar o placeholder aparecendo.
+  bot: { id: '5511000@s.whatsapp.net' },
   message: {
     kind: 'text',
     text: '/ping',
@@ -141,7 +145,7 @@ const rContexto = avaliarEvento(db, eventoBase({
 }))
 const textoContexto = rContexto.results.find((r) => r.automationId === 'ping-contexto')?.commands[0]?.payload?.text || ''
 check('avaliador põe o nome de exibição no contexto', /, Ana!/.test(textoContexto))
-check('avaliador põe o número do próprio bot no contexto', /bot=acc-1/.test(textoContexto))
+check('avaliador põe o número do próprio bot no contexto', /bot=5511000@s\.whatsapp\.net/.test(textoContexto))
 check('avaliador põe o autor da mensagem citada no contexto', /citado=5511222@s\.whatsapp\.net/.test(textoContexto))
 check('avaliador resolve a saudação pela hora', /^(Bom dia|Boa tarde|Boa noite), /.test(textoContexto))
 check('avaliador resolve o dia da semana por extenso', /dia=\S+-feira|dia=(sábado|domingo)/.test(textoContexto))
@@ -157,6 +161,8 @@ const rSemCitacao = avaliarEvento(db, eventoBase({
 const textoSemCitacao = rSemCitacao.results.find((r) => r.automationId === 'ping-contexto')?.commands[0]?.payload?.text || ''
 check('sem citação o placeholder fica literal', textoSemCitacao.includes('citado={{quoted.sender}}'))
 check('sem nome de exibição o placeholder fica literal', textoSemCitacao.includes('{{sender.name}}'))
+// O evento sem `bot` é o caso de sessão que ainda não informou o número.
+check('sem o número da conta o placeholder fica literal, não vira UUID', textoSemCitacao.includes('bot={{bot.id}}'))
 
 // --- duas ações: a gravação atualiza o mesmo contexto usado pela resposta ---
 const scopeSetReply = '5511444@s.whatsapp.net'

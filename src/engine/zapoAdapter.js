@@ -180,7 +180,7 @@ function nomeExibido (event) {
   return limpo ? limpo.slice(0, 60) : null
 }
 
-export function construirEventoDeMensagem (event, { accountId, recebidoEmMs }) {
+export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, botId }) {
   const key = event.key || {}
   // Toda mensagem que passa ensina um par LID<->telefone. É de graça: os dois
   // formatos já vêm na chave, e é o que faz a menção funcionar depois.
@@ -218,6 +218,11 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs }) {
     sender: nomeDeQuemEnviou
       ? { id: senderId, authoredBySelf: key.fromMe === true, name: nomeDeQuemEnviou }
       : { id: senderId, authoredBySelf: key.fromMe === true },
+    // `bot` é o número da PRÓPRIA conta, que só este lado conhece — accountId
+    // é o id da instância (um UUID), não serve para se apresentar a ninguém.
+    // Ausente quando a sessão ainda não expôs as credenciais: {{bot.id}} fica
+    // literal, em vez de mandar um UUID no lugar de um telefone.
+    ...(botId ? { bot: { id: botId } } : {}),
     message: mensagem,
     providerRef: construirProviderRef(key)
   }
@@ -227,7 +232,7 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs }) {
 // WaIncomingUnavailableMessageEvent não tem esse campo) — por isso não tem
 // texto nem mediaRef possível, só o fato de que algo chegou e não pôde ser
 // processado.
-export function construirEventoDeIndisponivel (event, { accountId, recebidoEmMs }) {
+export function construirEventoDeIndisponivel (event, { accountId, recebidoEmMs, botId }) {
   const key = event.key || {}
   const chatKind = resolverChatKind(key)
   const chatId = resolverChatId(key, chatKind)
@@ -242,6 +247,7 @@ export function construirEventoDeIndisponivel (event, { accountId, recebidoEmMs 
     receivedAtMs: recebidoEmMs ?? Date.now(),
     chat: { id: chatId, kind: chatKind },
     sender: { id: senderId, authoredBySelf: key.fromMe === true },
+    ...(botId ? { bot: { id: botId } } : {}),
     message: { kind: 'unavailable' },
     providerRef: construirProviderRef(key)
   }
