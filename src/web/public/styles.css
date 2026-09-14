@@ -1176,3 +1176,83 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
   .acervo-campo-descricao { flex-direction: column; align-items: stretch; }
   .acervo-campo-descricao > .button { width: 100%; }
 }
+
+/* --- Referência de gatilhos, ações e condição ---
+   A página é longa de propósito (2 gatilhos, 11 ações, 8 operadores, 8 escopos,
+   6 destinos e 32 variáveis). O índice no topo existe por isso: sem ele, quem
+   abre procurando "como remover do grupo" rola até desistir. */
+.indice-referencia { padding: 14px 18px; }
+.indice-referencia > .field-help { margin: 0 0 8px; }
+.indice-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.indice-link {
+  display: inline-block;
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: 0.83rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--text-soft);
+  transition: border-color var(--speed) ease, color var(--speed) ease;
+}
+.indice-link:hover { border-color: var(--brand); color: var(--brand); }
+
+.familia-bloco + .familia-bloco { margin-top: 22px; }
+.familia-titulo {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.bloco-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+
+.bloco-card {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 15px 17px;
+}
+.bloco-cabeca { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.bloco-cabeca h3 { margin: 0 0 2px; font-size: 0.97rem; font-weight: 600; }
+.bloco-resumo { margin: 0; font-size: 0.87rem; line-height: 1.5; color: var(--text-soft); }
+.bloco-exemplo {
+  margin: 0;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  padding: 8px 11px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
+}
+.bloco-exemplo strong { color: var(--text-soft); }
+
+/* Cada campo mostra o nome técnico ao lado do rótulo humano: é o nome técnico
+   que a pessoa vai digitar se editar o JSON, e o humano que ela procura. */
+.campo-lista { display: flex; flex-direction: column; gap: 9px; margin-top: 3px; }
+.campo-linha {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.campo-linha > div:first-child { min-width: 0; }
+.campo-linha strong { font-size: 0.85rem; font-weight: 600; }
+.campo-linha .field-help { margin: 3px 0 0; font-size: 0.8rem; }
+.campo-chave {
+  margin-left: 7px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.campo-selos { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; max-width: 45%; }
+.campo-selos .badge { text-align: right; white-space: normal; line-height: 1.35; }
+
+@media (max-width: 700px) {
+  .bloco-grade { grid-template-columns: 1fr; }
+  .campo-linha { flex-direction: column; }
+  .campo-selos { flex-direction: row; flex-wrap: wrap; align-items: flex-start; max-width: 100%; }
+}

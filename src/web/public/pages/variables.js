@@ -1,5 +1,9 @@
 import { api } from '../api.js'
-import { button, copyText, el, notify, setPageHeader } from '../ui.js'
+import { badge, button, copyText, el, notify, setPageHeader } from '../ui.js'
+import {
+  ACOES, CONDICOES, DESTINOS, ESCOPOS, FAMILIAS, GATILHOS, OPERADORES,
+  ORIGENS_DE_OPERANDO, acharDefinicao, campoDoSchema
+} from '../logic/acoes.js'
 
 const TITULOS_NAMESPACE = {
   message: 'Mensagem recebida',
@@ -106,13 +110,105 @@ function grupoNamespace (namespace, variaveis) {
   ])
 }
 
+// Um campo de um gatilho ou ação. O TIPO vem do schema — este arquivo não sabe
+// e não deve saber se `by` é número ou se `match` tem quatro valores. Quando a
+// lista de valores existe, ela é mostrada, porque é o que a pessoa precisa
+// escolher entre.
+function linhaDeCampo (campo, definicao) {
+  const doSchema = definicao ? campoDoSchema(definicao, campo.chave) : null
+  const selos = []
+  if (doSchema?.obrigatorio) selos.push(badge('obrigatório', 'warning'))
+  if (doSchema?.valores?.length) selos.push(badge(doSchema.valores.join(' · '), 'neutral'))
+  else if (doSchema?.tipo && doSchema.tipo !== 'desconhecido') selos.push(badge(doSchema.tipo, 'neutral'))
+
+  return el('div', { className: 'campo-linha' }, [
+    el('div', {}, [
+      el('strong', { text: campo.rotulo }),
+      el('code', { className: 'campo-chave', text: campo.chave }),
+      campo.ajuda ? el('p', { className: 'field-help', text: campo.ajuda }) : null
+    ]),
+    selos.length ? el('div', { className: 'campo-selos' }, selos) : null
+  ])
+}
+
+// Um cartão de gatilho, ação ou condição.
+function cartaoDeBloco (entrada, documentSchema) {
+  const definicao = documentSchema ? acharDefinicao(documentSchema, entrada.tipo) : null
+  const corpo = [
+    el('div', { className: 'bloco-cabeca' }, [
+      el('div', {}, [
+        el('h3', { text: entrada.rotulo }),
+        el('code', { className: 'mono overline', text: entrada.tipo })
+      ]),
+      button('Copiar', {
+        variant: 'secondary',
+        onClick: async (evento) => {
+          const c = evento.currentTarget
+          await copyText(entrada.tipo)
+          c.textContent = 'Copiado!'
+          window.setTimeout(() => { c.textContent = 'Copiar' }, 1400)
+        }
+      })
+    ]),
+    el('p', { className: 'bloco-resumo', text: entrada.resumo }),
+    el('p', { className: 'bloco-exemplo' }, [el('strong', { text: 'Exemplo: ' }), entrada.exemplo])
+  ]
+  if (entrada.ressalva) corpo.push(avisoInline({ level: entrada.ressalva.level, text: entrada.ressalva.text }))
+  if (entrada.campos?.length) {
+    corpo.push(el('div', { className: 'campo-lista' }, entrada.campos.map((c) => linhaDeCampo(c, definicao))))
+  } else {
+    corpo.push(el('p', { className: 'field-help muted', text: 'Não tem nada para configurar — a ação age sobre a mensagem que acionou a automação.' }))
+  }
+  return el('article', { className: 'list-card bloco-card' }, corpo)
+}
+
+function painel (titulo, ajuda, filhos, id) {
+  return el('section', { className: 'panel', id }, [
+    el('div', { className: 'panel-heading' }, [
+      el('div', {}, [el('h2', { text: titulo }), el('p', { text: ajuda })])
+    ]),
+    ...filhos
+  ])
+}
+
+function listaSimples (itens, chaveRotulo = 'rotulo') {
+  return el('div', { className: 'variable-list' }, itens.map((item) => el('div', { className: 'variable-row' }, [
+    el('div', { className: 'variable-row-main' }, [
+      el('div', { className: 'bloco-cabeca' }, [
+        el('strong', { text: item[chaveRotulo] }),
+        el('code', { className: 'campo-chave', text: item.usoNoTexto || item.id })
+      ]),
+      item.ajuda ? el('p', { className: 'field-help', text: item.ajuda }) : null
+    ])
+  ])))
+}
+
+// Índice no topo: a página ficou longa de propósito (são 2 gatilhos, 11 ações,
+// 8 operadores, 8 escopos, 6 destinos e 32 variáveis). Sem um índice, quem abre
+// procurando "como remover do grupo" rola até desistir.
+function indice (secoes) {
+  return el('nav', { className: 'panel indice-referencia' }, [
+    el('p', { className: 'field-help', text: 'Ir direto para:' }),
+    el('div', { className: 'indice-links' }, secoes.map(([id, rotulo]) =>
+      el('a', { href: `#${id}`, className: 'indice-link', text: rotulo })))
+  ])
+}
+
 export async function renderVariables () {
-  const meta = await api.variables.meta()
+  // Duas rotas: as variáveis de interpolação, e o schema + capacidades do motor.
+  // O schema é o que dá o TIPO de cada campo — este arquivo nunca declara tipo.
+  // Se a segunda falhar, a página ainda abre com as variáveis: referência pela
+  // metade é melhor que tela de erro.
+  const [meta, editor] = await Promise.all([
+    api.variables.meta(),
+    api.automations.meta().catch(() => null)
+  ])
+  const documentSchema = editor?.documentSchema || null
 
   setPageHeader({
     eyebrow: 'Referência',
     title: 'Variáveis e funções do sistema',
-    description: 'O que você pode escrever dentro de um comando para o sistema preencher na hora: dados da mensagem, de quem enviou, e as variáveis e contadores que você mesmo cria.',
+    description: 'Tudo que dá para usar ao montar um comando: quando ele começa, o que ele faz, como ele decide, e o que você pode escrever dentro do texto.',
     actions: []
   })
 
@@ -167,5 +263,87 @@ export async function renderVariables () {
     ])
     : null
 
-  return el('div', { className: 'stack-lg' }, [comoUsar, declaradas, ...grupos, reservadas].filter(Boolean))
+  // --- as FUNÇÕES: o que o painel não mostrava --------------------------
+  // O motor executa 2 gatilhos, 11 ações e 1 condição, e esta aba mostrava zero
+  // dos três. Vêm antes das variáveis porque é a ordem em que a pessoa pensa:
+  // primeiro quando o comando começa, depois o que ele faz, e só então o texto.
+  const porFamilia = new Map()
+  for (const acao of ACOES) {
+    if (!porFamilia.has(acao.familia)) porFamilia.set(acao.familia, [])
+    porFamilia.get(acao.familia).push(acao)
+  }
+
+  const blocoGatilhos = painel(
+    'Quando o comando começa',
+    'Todo comando começa por um destes dois. Só pode haver um gatilho por automação.',
+    [el('div', { className: 'bloco-grade' }, GATILHOS.map((g) => cartaoDeBloco(g, documentSchema)))],
+    'gatilhos'
+  )
+
+  const blocoAcoes = painel(
+    'O que o comando faz',
+    'As ações acontecem em sequência. Um comando pode ter quantas quiser.',
+    [...porFamilia.entries()].map(([familia, acoes]) => el('div', { className: 'familia-bloco' }, [
+      el('h3', { className: 'familia-titulo', text: FAMILIAS[familia] || familia }),
+      el('div', { className: 'bloco-grade' }, acoes.map((a) => cartaoDeBloco(a, documentSchema)))
+    ])),
+    'acoes'
+  )
+
+  const blocoCondicao = painel(
+    'Como o comando decide',
+    'A condição é o único bloco que separa o comando em dois caminhos: um para quando a comparação dá certo, outro para quando não dá.',
+    [
+      el('div', { className: 'bloco-grade' }, CONDICOES.map((c) => cartaoDeBloco(c, documentSchema))),
+      el('h3', { className: 'familia-titulo', text: 'De onde vem cada lado da comparação' }),
+      listaSimples(ORIGENS_DE_OPERANDO),
+      el('h3', { className: 'familia-titulo', text: 'Comparações disponíveis' }),
+      listaSimples(OPERADORES)
+    ],
+    'condicao'
+  )
+
+  const blocoEscopos = painel(
+    'De quem é cada variável',
+    'O escopo decide a quem um valor pertence. É estrutural: nunca coloque o nome do grupo dentro do nome da variável — escolha o escopo certo.',
+    [listaSimples(ESCOPOS)],
+    'escopos'
+  )
+
+  const blocoDestinos = painel(
+    'Onde o comando pode rodar',
+    'Deixar em branco NUNCA significa "todos" — sem destino o comando não responde a ninguém. Para valer em todo lugar, escolha isso de propósito.',
+    [listaSimples(DESTINOS)],
+    'destinos'
+  )
+
+  const navegacao = indice([
+    ['gatilhos', 'Quando começa'],
+    ['acoes', 'O que faz'],
+    ['condicao', 'Como decide'],
+    ['escopos', 'Escopos'],
+    ['destinos', 'Destinos'],
+    ['variaveis', 'Variáveis de texto']
+  ])
+
+  const tituloVariaveis = el('div', { className: 'section-heading', id: 'variaveis' }, [
+    el('div', {}, [
+      el('h2', { text: 'O que escrever dentro do texto' }),
+      el('p', { text: 'Estas o sistema troca na hora do envio. Copie e cole no campo de resposta.' })
+    ])
+  ])
+
+  return el('div', { className: 'stack-lg' }, [
+    navegacao,
+    blocoGatilhos,
+    blocoAcoes,
+    blocoCondicao,
+    blocoEscopos,
+    blocoDestinos,
+    tituloVariaveis,
+    comoUsar,
+    declaradas,
+    ...grupos,
+    reservadas
+  ].filter(Boolean))
 }

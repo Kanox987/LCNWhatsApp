@@ -357,11 +357,10 @@
                   "image",
                   "video",
                   "document",
-                  "view_once",
-                  "unavailable",
-                  "unknown"
+                  "view_once"
                 ]
-              }
+              },
+              "description": "Tipos de mensagem que acionam a regra. Vazio = qualquer tipo. A lista é a MESMA de inputPolicy.acceptedMessageKinds de propósito: aquele portão é avaliado ANTES do gatilho, então um tipo que só existisse aqui produziria regra que nunca dispara, sem erro em lugar nenhum."
             },
             "containsLink": {
               "type": "boolean"
