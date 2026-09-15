@@ -95,6 +95,33 @@ try {
   check('listarContatos("bare"): lê o contatos.json do modo simples, não exige registro', contatosBare.items[0]?.label === 'Contato Bare')
   const gruposBare = serviceBare.listarGrupos('bare')
   check('listarGrupos("bare"): lê o grupos.json do modo simples', gruposBare.items[0]?.label === 'Grupo Bare')
+
+  // --- segundo número do modo simples ------------------------------------
+  // A tela LISTAVA a instância descoberta e a busca de contatos dela quebrava
+  // com "Instância não encontrada": este serviço tinha a própria resolução, que
+  // não conhecia a varredura por pasta. Agora reaproveita a mesma.
+  const pastaOutro = path.join(pastaTmpBare, 'instancias', 'pessoal')
+  fs.mkdirSync(pastaOutro, { recursive: true })
+  fs.writeFileSync(path.join(pastaOutro, 'state.json'), JSON.stringify({ conectado: true, numero: '5599999999999' }))
+  fs.writeFileSync(path.join(pastaOutro, 'contatos.json'), JSON.stringify([{ numero: '5511444444444', nome: 'Contato da Pessoal' }]))
+  fs.writeFileSync(path.join(pastaOutro, 'grupos.json'), JSON.stringify([{ id: '120363111111111111@g.us', nome: 'Grupo da Pessoal' }]))
+
+  const contatosOutro = serviceBare.listarContatos('simples:pessoal')
+  check('contatos da instância descoberta vêm da pasta dela', contatosOutro.items[0]?.label === 'Contato da Pessoal', contatosOutro.items[0]?.label)
+  const gruposOutro = serviceBare.listarGrupos('simples:pessoal')
+  check('grupos da instância descoberta também', gruposOutro.items[0]?.label === 'Grupo da Pessoal')
+
+  // Cada instância vê a AGENDA DELA — misturar seria mostrar contato de um
+  // número na busca do outro.
+  check('a agenda de uma não vaza na da outra', serviceBare.listarContatos('bare').items[0]?.label === 'Contato Bare')
+
+  let erroInventada
+  try { serviceBare.listarContatos('simples:nao-existe') } catch (e) { erroInventada = e }
+  check('instância descoberta inexistente é recusada', !!erroInventada)
+
+  let erroTravessia
+  try { serviceBare.listarContatos('simples:../../etc') } catch (e) { erroTravessia = e }
+  check('id com travessia de caminho é recusado', !!erroTravessia)
 } finally {
   fs.rmSync(pastaTmpBare, { recursive: true, force: true })
 }

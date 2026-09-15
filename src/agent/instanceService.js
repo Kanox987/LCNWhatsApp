@@ -133,9 +133,9 @@ export class InstanciaNaoEncontradaError extends Error {
 // O nome vem do NOME DA PASTA, nunca de entrada de usuário, e a lista é fechada:
 // `obter()` só aceita um id que apareça aqui, então não existe caminho para
 // montar diretório a partir de texto recebido.
-const PREFIXO_SIMPLES = 'simples:'
+export const PREFIXO_SIMPLES = 'simples:'
 
-function instanciasSimplesDescobertas (raizDados) {
+export function instanciasSimplesDescobertas (raizDados) {
   const pasta = path.join(raizDados, 'instancias')
   let nomes = []
   try {

@@ -14,7 +14,7 @@ import fs from 'fs'
 import path from 'path'
 import { buscarPorId, lerRegistro } from '../instances/registry.js'
 import { ARQ_CONTATOS as ARQ_CONTATOS_BARE, ARQ_GRUPOS as ARQ_GRUPOS_BARE } from '../paths.js'
-import { idValido, validarAlvoGerenciado, InstanciaNaoEncontradaError, ID_BARE } from './instanceService.js'
+import { idValido, validarAlvoGerenciado, InstanciaNaoEncontradaError, ID_BARE, PREFIXO_SIMPLES, instanciasSimplesDescobertas } from './instanceService.js'
 
 function lerListaJson (arquivo) {
   try {
@@ -55,6 +55,16 @@ export function criarDirectoryService ({
 } = {}) {
   function exigirInstancia (id) {
     if (id === ID_BARE) return { instanceId: ID_BARE, isBare: true }
+    // Instância do modo simples descoberta pela pasta. Reaproveita a MESMA
+    // varredura de instanceService — duas cópias do mesmo levantamento saem de
+    // sincronia, e foi por não conhecer estas que a busca de contatos quebrava
+    // numa instância que a lista mostrava normalmente.
+    if (typeof id === 'string' && id.startsWith(PREFIXO_SIMPLES)) {
+      const achada = instanciasSimplesDescobertas(path.dirname(bareArqContatos))
+        .find((i) => i.instanceId === id)
+      if (!achada) throw new InstanciaNaoEncontradaError(id)
+      return achada
+    }
     // Ver instanceService.js (idValido/validarAlvoGerenciado) — id="__proto__"
     // resolveria pra Object.prototype num lookup cru `registro.instances[id]`,
     // e um registro adulterado poderia apontar dataDir pra outro diretório.
@@ -65,11 +75,17 @@ export function criarDirectoryService ({
     return instancia
   }
 
+  // A instância descoberta guarda os arquivos na própria pasta, ao lado do
+  // state.json que a varredura encontrou.
+  const pastaDaDescoberta = (instancia) => path.dirname(instancia.arqEstado)
+
   function caminhoContatos (instancia) {
+    if (instancia.arqEstado) return path.join(pastaDaDescoberta(instancia), 'contatos.json')
     return instancia.isBare ? bareArqContatos : path.join(instancia.dataDir, 'data', 'contatos.json')
   }
 
   function caminhoGrupos (instancia) {
+    if (instancia.arqEstado) return path.join(pastaDaDescoberta(instancia), 'grupos.json')
     return instancia.isBare ? bareArqGrupos : path.join(instancia.dataDir, 'data', 'grupos.json')
   }
 
