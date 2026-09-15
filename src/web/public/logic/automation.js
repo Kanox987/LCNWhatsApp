@@ -85,6 +85,56 @@ export function automationSummary (state) {
   ]
 }
 
+// O assistente sabe montar UMA forma só: um comando digitado que responde um
+// texto. Tudo que ele gera passa por `buildAutomationDocument`, que emite
+// exatamente dois nós fixos.
+//
+// Isso vira DESTRUIÇÃO quando a automação aberta tem outra forma: abrir um
+// anti-link, uma figurinha ou uma regra de download e salvar reescreveria o
+// documento como um comando vazio respondendo texto vazio — a regra some sem
+// aviso, e quem salvou só queria trocar o nome.
+//
+// Por isso esta análise existe ANTES da tela: documento que o assistente não
+// consegue reproduzir fielmente é aberto em SOMENTE LEITURA. Perder capacidade
+// de edição é chato; perder a automação em silêncio é inaceitável.
+export function analisarForma (documento) {
+  const nos = documento?.flow?.nodes
+  if (!Array.isArray(nos) || !nos.length) return { suportada: false, motivo: 'O documento não tem nenhum passo.' }
+
+  const gatilhos = nos.filter((n) => typeof n?.type === 'string' && n.type.startsWith('trigger.'))
+  const gatilho = gatilhos[0]
+
+  if (gatilhos.length !== 1) {
+    return { suportada: false, motivo: 'A automação tem mais de um gatilho.' }
+  }
+  if (gatilho?.type !== 'trigger.command') {
+    return { suportada: false, motivo: 'Esta automação começa sozinha, sem alguém digitar um comando — o assistente só monta comando digitado.' }
+  }
+  if (nos.length !== 2) {
+    return { suportada: false, motivo: `A automação tem ${nos.length} passos, e o assistente só monta dois (o comando e uma resposta de texto).` }
+  }
+
+  const acao = nos.find((n) => n !== gatilho)
+  if (acao?.type !== 'action.whatsapp.reply') {
+    return { suportada: false, motivo: 'A automação faz algo além de responder texto, e o assistente ainda não sabe montar isso.' }
+  }
+
+  const tipos = documento?.inputPolicy?.acceptedMessageKinds
+  if (!Array.isArray(tipos) || tipos.length !== 1 || tipos[0] !== 'text') {
+    return { suportada: false, motivo: 'A automação olha outros tipos de mensagem além de texto.' }
+  }
+  if (gatilho.config?.allowFrom && gatilho.config.allowFrom !== 'external') {
+    return { suportada: false, motivo: 'A automação também responde às mensagens do próprio número, e o assistente ainda não tem esse campo.' }
+  }
+  if (gatilho.config?.requireOwner === true) {
+    return { suportada: false, motivo: 'A automação é restrita ao dono, e o assistente ainda não tem esse campo.' }
+  }
+  if (Array.isArray(documento?.scope?.exclude) && documento.scope.exclude.length) {
+    return { suportada: false, motivo: 'A automação tem destinos EXCLUÍDOS, e o assistente só sabe listar os autorizados.' }
+  }
+  return { suportada: true, motivo: null }
+}
+
 export function stateFromDocument (document, labels = new Map()) {
   const trigger = document?.flow?.nodes?.find((node) => node.type === 'trigger.command')
   const reply = document?.flow?.nodes?.find((node) => node.type === 'action.whatsapp.reply')
@@ -99,6 +149,9 @@ export function stateFromDocument (document, labels = new Map()) {
     match: trigger?.config?.match || 'exact_or_args',
     scopeInclude: (document?.scope?.include || []).map((item) => ({ ...item, label: labels.get(item.id) || item.id })),
     poolId: document?.responder?.poolId || '',
-    replyText: reply?.config?.text || ''
+    replyText: reply?.config?.text || '',
+    // Vai junto do estado para a tela decidir se abre para edição ou só para
+    // leitura — a decisão não pode depender de quem chama lembrar de perguntar.
+    ...analisarForma(document)
   }
 }

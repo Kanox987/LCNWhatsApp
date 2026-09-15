@@ -55,23 +55,26 @@ async function confirmarFailOpen (clienteEngine, comando, status) {
 
 // Responder MARCANDO a mensagem que originou a conversa.
 //
-// A biblioteca aceita isso em `contextInfo.quoted`, com a chave da mensagem
-// alvo. O motor manda só o endereçamento (`replyTo`), nunca o conteúdo — a
-// mesma fronteira de sempre.
+// A citação é OPÇÃO DE ENVIO (terceiro argumento do `send`), não campo do
+// conteúdo. A versão anterior punha `contextInfo: { quoted: { key } }` dentro
+// do conteúdo, e `quoted` não existe no contrato da biblioteca — os campos são
+// `quotedMessageId`/`quotedParticipant`/`quotedRemoteJid`. Campo desconhecido é
+// descartado sem erro, então TODA citação deste bot era silenciosamente
+// ignorada: as mensagens saíam soltas e nada indicava o problema.
 //
-// Sem `replyTo`, a mensagem sai solta, que é o comportamento de antes: nenhum
-// comando existente muda de forma por causa disto.
-function comCitacao (conteudo, replyTo) {
-  if (!replyTo?.id || !replyTo?.remoteJid) return conteudo
-  const key = { remoteJid: replyTo.remoteJid, id: replyTo.id, fromMe: replyTo.fromMe === true }
-  if (replyTo.participant) key.participant = replyTo.participant
-  return { ...conteudo, contextInfo: { ...(conteudo.contextInfo || {}), quoted: { key } } }
+// O motor manda só o endereçamento (`replyTo`), nunca o conteúdo — a mesma
+// fronteira de sempre. Sem `replyTo`, a mensagem sai solta de propósito.
+function opcoesDeCitacao (replyTo) {
+  if (!replyTo?.id || !replyTo?.remoteJid) return undefined
+  const quote = { id: replyTo.id, remoteJid: replyTo.remoteJid, fromMe: replyTo.fromMe === true }
+  if (replyTo.participant) quote.participant = replyTo.participant
+  return { quote }
 }
 
 async function executarResposta (client, comando) {
   const texto = resolverTextoComLatencia(comando.payload.text, comando.payload.receivedAtMs)
   await comTimeout(
-    () => client.message.send(comando.payload.chatId, comCitacao({ type: 'text', text: texto }, comando.payload.replyTo)),
+    () => client.message.send(comando.payload.chatId, { type: 'text', text: texto }, opcoesDeCitacao(comando.payload.replyTo)),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar o comando ${comando.id}`
   )
@@ -158,11 +161,28 @@ async function executarDownload (client, comando, deps) {
   const { criarBaixador, cfg } = deps
   const { chatId, url, modo, replyTo, ackText, caption, errorText } = comando.payload
 
+  // Depois de prometer "estou baixando", qualquer desfecho ruim precisa virar
+  // mensagem. Ficar com o aviso pendurado e nada depois é o pior resultado: não
+  // dá nem para saber se o comando funcionou.
+  const avisar = async (motivo) => {
+    const texto = (errorText || 'Não consegui baixar essa mídia: {{erro}}').replaceAll('{{erro}}', motivo)
+    try {
+      await comTimeout(
+        () => client.message.send(chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar a falha do download do comando ${comando.id}`
+      )
+    } catch (erro) {
+      // Já estamos num caminho de erro; o throw de quem chamou é o que importa.
+      console.warn(`[engine] Não consegui nem avisar a falha do download: ${mensagemDoErro(erro)}`)
+    }
+  }
+
   if (ackText) {
     // Aviso é cortesia, não a entrega: se ele falhar, o download continua.
     try {
       await comTimeout(
-        () => client.message.send(chatId, comCitacao({ type: 'text', text: ackText }, replyTo)),
+        () => client.message.send(chatId, { type: 'text', text: ackText }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
         `timeout ao avisar o início do download do comando ${comando.id}`
       )
@@ -175,18 +195,9 @@ async function executarDownload (client, comando, deps) {
   try {
     midia = await criarBaixador({ cfg }).baixar(url, modo)
   } catch (erro) {
-    // Falhou depois de prometer: explicar é obrigatório. E o registro fica como
-    // falha mesmo assim — a pessoa recebeu uma mensagem, mas não recebeu o que
-    // pediu, e o histórico não pode dizer que deu certo.
-    const texto = (errorText || 'Não consegui baixar essa mídia: {{erro}}')
-      .replaceAll('{{erro}}', mensagemDoErro(erro))
-    try {
-      await comTimeout(
-        () => client.message.send(chatId, comCitacao({ type: 'text', text: texto }, replyTo)),
-        TIMEOUT_ENVIO_MS,
-        `timeout ao avisar a falha do download do comando ${comando.id}`
-      )
-    } catch { /* já estamos num caminho de erro; o throw abaixo é o que importa */ }
+    // O registro fica como falha mesmo assim — a pessoa recebeu uma mensagem,
+    // mas não recebeu o que pediu, e o histórico não pode dizer que deu certo.
+    await avisar(mensagemDoErro(erro))
     throw erro
   }
 
@@ -197,11 +208,24 @@ async function executarDownload (client, comando, deps) {
   const legenda = caption || midia.descricao
   if (legenda && midia.tipo !== 'audio') conteudo.caption = legenda
 
-  await comTimeout(
-    () => client.message.send(chatId, comCitacao(conteudo, replyTo)),
-    TIMEOUT_ENVIO_MS * 4,
-    `timeout ao enviar a mídia baixada do comando ${comando.id}`
-  )
+  try {
+    await comTimeout(
+      () => client.message.send(chatId, conteudo, opcoesDeCitacao(replyTo)),
+      TIMEOUT_ENVIO_MS * 4,
+      `timeout ao enviar a mídia baixada do comando ${comando.id}`
+    )
+  } catch (erro) {
+    // ESTE é o caso que deixou o dono olhando "⏳ Baixando…" para sempre: o
+    // arquivo veio inteiro e o envio ao WhatsApp é que falhou. O tamanho entra
+    // na mensagem porque é a causa mais provável — o serviço aceita arquivo
+    // muito maior do que o WhatsApp entrega.
+    await avisar(`baixei ${formatarMB(midia.buffer.length)} mas não consegui enviar aqui (${mensagemDoErro(erro)})`)
+    throw erro
+  }
+}
+
+function formatarMB (bytes) {
+  return `${(Number(bytes || 0) / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
 }
 
 // Menu com botões. A lib não expõe um `type: 'menu'` pronto, mas aceita
@@ -454,7 +478,12 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         status = (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_RESULTADO_INCERTO')
           ? 'outcome_unknown'
           : 'failed'
-        console.warn(`[engine] Falha ao executar o comando ${comando.id}: ${mensagemDoErro(erro)}`)
+        // O nome e a origem entram porque "The operation was aborted" sozinho
+        // não diz de qual camada veio — e foi exatamente esse log cego que
+        // custou uma investigação inteira para achar o envio do download.
+        console.warn(`[engine] Falha ao executar o comando ${comando.id} (${comando.commandType}): ${erro?.name || 'Erro'}: ${mensagemDoErro(erro)}`)
+        const origem = String(erro?.stack || '').split('\n')[1]
+        if (origem) console.warn(`[engine]   origem:${origem.replace(/^\s*at\s*/, ' ')}`)
       }
     }
 

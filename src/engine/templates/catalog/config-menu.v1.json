@@ -38,6 +38,10 @@
     "schemaVersion": 1,
     "enabled": true,
     "name": "Configurar menu (pelo WhatsApp)",
+    "display": {
+      "menuLabel": "{{params.command}}",
+      "menuDescription": "Muda o texto do menu desta conversa (só o dono)"
+    },
     "scope": {
       "include": [],
       "exclude": []

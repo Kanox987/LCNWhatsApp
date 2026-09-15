@@ -6,6 +6,7 @@ import {
   stateFromDocument,
   suggestAutomationId
 } from '../logic/automation.js'
+import { ACOES, CONDICOES, GATILHOS } from '../logic/acoes.js'
 import { badge, button, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
 
 const MATCH_DESCRIPTIONS = {
@@ -106,6 +107,51 @@ function localProblem (state) {
   return null
 }
 
+// O assistente monta uma forma só. Abrir nele uma automação de outra forma e
+// salvar reescreveria o documento inteiro — a regra vira um comando vazio
+// respondendo texto vazio, sem erro nenhum na tela.
+//
+// Enquanto o assistente não souber montar N passos, a saída certa é NÃO ABRIR:
+// mostrar o que a automação faz e o documento de verdade. Quem precisa editar
+// hoje edita pelo arquivo; quem só clicou em "Editar" por curiosidade não perde
+// a automação por isso.
+function renderSomenteLeitura ({ atual, motivo, navigate }) {
+  const documento = atual?.draft?.document
+  const nos = documento?.flow?.nodes || []
+
+  setPageHeader({
+    eyebrow: `Editando ${atual.id}`,
+    title: documento?.name || atual.id,
+    description: 'Esta automação é mais do que o assistente sabe montar, então ela abre em somente leitura.',
+    actions: [button('← Voltar para a lista', { onClick: () => navigate('/automations') })]
+  })
+
+  return el('div', { className: 'stack' }, [
+    el('div', { className: 'notice notice-warning' }, [
+      el('strong', { text: 'Somente leitura — o assistente não conseguiria salvar isto sem estragar.' }),
+      el('p', { text: motivo }),
+      el('p', { text: 'Se o assistente abrisse esta automação, salvar iria reescrevê-la como um comando simples e o que ela faz hoje seria perdido. Por isso ele não abre.' })
+    ]),
+    el('section', { className: 'card' }, [
+      el('h2', { text: 'O que ela faz' }),
+      el('ol', { className: 'stack' }, nos.map((no) => el('li', {}, [
+        el('strong', { text: rotuloDoNo(no.type) }),
+        el('span', { className: 'muted', text: ` · ${no.type}` })
+      ])))
+    ]),
+    el('section', { className: 'card' }, [
+      el('h2', { text: 'Documento' }),
+      el('pre', { className: 'json-view compact-json', text: JSON.stringify(documento, null, 2) })
+    ])
+  ])
+}
+
+// Rótulo humano vindo do catálogo, que já é a fonte única desses nomes.
+function rotuloDoNo (tipo) {
+  const achado = [...GATILHOS, ...ACOES, ...CONDICOES].find((x) => x.tipo === tipo)
+  return achado?.rotulo || tipo
+}
+
 async function renderWizard ({ query, navigate }) {
   const editId = query.get('edit')
   const [meta, pools, instances, current] = await Promise.all([
@@ -123,6 +169,7 @@ async function renderWizard ({ query, navigate }) {
         scopeInclude: [], poolId: '', replyText: ''
       }
   const state = { ...initial }
+  if (state.suportada === false) return renderSomenteLeitura({ atual: current, motivo: state.motivo, navigate })
   let etag = current?.draft?.etag
   let persisted = Boolean(current)
   let step = 0

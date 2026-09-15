@@ -54,6 +54,10 @@
     "schemaVersion": 1,
     "enabled": true,
     "name": "Menu de comandos",
+    "display": {
+      "menuLabel": "{{params.command}}",
+      "menuDescription": "Mostra esta lista de comandos"
+    },
     "scope": {
       "include": [],
       "exclude": []

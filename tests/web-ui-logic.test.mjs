@@ -130,5 +130,53 @@ check('valorParaCampo mostra número sem aspas', valorParaCampo(3) === '3')
 check('descreverValor explica vazio em vez de mostrar nada', descreverValor('') === '(vazio)')
 check('descreverValor traduz booleano', descreverValor(true) === 'sim' && descreverValor(false) === 'não')
 
+
+// --- o editor não pode destruir o que não sabe montar ---------------------
+// `buildAutomationDocument` emite DOIS nós fixos. Abrir nele qualquer automação
+// de outra forma e salvar reescreveria a regra inteira, em silêncio: o anti-link
+// vira um comando vazio respondendo texto vazio. Nenhum erro, nenhum aviso, a
+// automação some.
+//
+// Estes casos são o portão: forma que o assistente não reproduz fielmente tem
+// que ser marcada ANTES de a tela abrir.
+{
+  const { analisarForma } = await import('../src/web/public/logic/automation.js')
+  const simples = {
+    inputPolicy: { acceptedMessageKinds: ['text'] },
+    flow: {
+      nodes: [
+        { id: 'g', type: 'trigger.command', config: { command: '/oi', match: 'exact_or_args', allowFrom: 'external' } },
+        { id: 'r', type: 'action.whatsapp.reply', config: { text: 'olá' } }
+      ]
+    }
+  }
+  check('o comando simples que o assistente monta continua editável', analisarForma(simples).suportada === true,
+    analisarForma(simples).motivo)
+
+  const foraDaForma = [
+    ['gatilho automático', { ...simples, flow: { nodes: [{ ...simples.flow.nodes[0], type: 'trigger.message' }, simples.flow.nodes[1]] } }],
+    ['ação que não é responder texto', { ...simples, flow: { nodes: [simples.flow.nodes[0], { id: 'x', type: 'action.media.download', config: {} }] } }],
+    ['mais de dois passos', { ...simples, flow: { nodes: [...simples.flow.nodes, { id: 'c', type: 'action.variable.increment', config: {} }] } }],
+    ['olha foto além de texto', { ...simples, inputPolicy: { acceptedMessageKinds: ['text', 'image'] } }],
+    ['responde o próprio número', { ...simples, flow: { nodes: [{ ...simples.flow.nodes[0], config: { ...simples.flow.nodes[0].config, allowFrom: 'any' } }, simples.flow.nodes[1]] } }],
+    ['restrita ao dono', { ...simples, flow: { nodes: [{ ...simples.flow.nodes[0], config: { ...simples.flow.nodes[0].config, requireOwner: true } }, simples.flow.nodes[1]] } }],
+    ['tem destino excluído', { ...simples, scope: { exclude: [{ kind: 'contact', id: '1@s.whatsapp.net' }] } }],
+    ['documento vazio', { flow: { nodes: [] } }]
+  ]
+  for (const [nome, doc] of foraDaForma) {
+    const f = analisarForma(doc)
+    check(`"${nome}" abre em somente leitura`, f.suportada === false, f.motivo)
+    check(`e diz o porquê em português: ${nome}`, typeof f.motivo === 'string' && f.motivo.length > 20)
+  }
+
+  // A marca precisa chegar no estado que a tela lê — analisar certo e não
+  // repassar seria o mesmo defeito com um passo a mais.
+  const { stateFromDocument } = await import('../src/web/public/logic/automation.js')
+  check('o estado da tela carrega a marca de forma não suportada',
+    stateFromDocument(foraDaForma[0][1]).suportada === false)
+  check('e o comando simples chega marcado como editável',
+    stateFromDocument(simples).suportada === true)
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LÓGICA DO PAINEL PASSARAM')
 process.exit(falhas ? 1 : 0)

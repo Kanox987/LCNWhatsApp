@@ -60,16 +60,27 @@ const SESSION_ID = 'default'
 // Dispara o caminho novo sem bloquear nem substituir a captura existente.
 // Embora sink/executor sejam defensivos por conta própria, o catch final
 // protege o event emitter contra qualquer regressão futura nesses módulos.
-function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico) {
+// `cfg` vem por PARÂMETRO, não por closure: a configuração é recarregada a
+// quente dentro de `iniciar()`, e esta função mora fora dela. Ler `cfg` aqui
+// como variável livre não é "pegar a versão atual" — é ReferenceError, e foi
+// exatamente o que quebrou TODAS as automações que produzem comando: o motor
+// casava, gravava o comando, e o gateway estourava antes de executar.
+export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log) {
   // O enriquecimento de grupo (nome, tamanho, quem é admin) acontece aqui e
   // não na construção do evento porque é chamada de rede: fica no caminho já
   // assíncrono, sem atrasar o processamento da mensagem. Falha aberto — sem os
   // dados, o evento segue como estava.
-  void groupInfo.enriquecerEvento(client, eventoCanonico)
+  return groupInfo.enriquecerEvento(client, eventoCanonico)
     .catch(() => eventoCanonico)
     .then((evento) => enviarEventoAoMotor(clienteEngine, evento))
     .then(async (resultado) => {
-    if (!resultado.ok) return
+    // Motor fora do ar ou lento passa por aqui: `enviarEventoAoMotor` falha
+    // aberto e devolve `ok: false`. Sem esta linha, "o bot parou de responder"
+    // não deixa rastro em lugar nenhum.
+    if (!resultado.ok) {
+      try { log?.(`[engine] evento não avaliado: ${resultado.motivo}`) } catch {}
+      return
+    }
     for (const avaliacao of resultado.results || []) {
       const comandos = (avaliacao.commands || []).filter((comando) => comando.status === 'pending')
       // O `cfg` chega ao executor porque ações como o download leem
@@ -77,7 +88,12 @@ function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico) {
       // lacuna que também travava a transcrição.
       if (comandos.length) await executarComandos(client, comandos, clienteEngine, { cfg })
     }
-  }).catch(() => {})
+  // Engolir o erro aqui deixou o bot mudo por duas horas sem uma linha de log:
+  // o comando ficava `pending` para sempre e não havia onde olhar. Continua
+  // falhando aberto — o event emitter não pode cair —, mas agora DIZ.
+  }).catch((e) => {
+    try { log?.(`[engine] falha ao entregar comando: ${e?.message || e}`) } catch {}
+  })
 }
 
 // O JID da própria conta. meJid vem com
@@ -307,7 +323,7 @@ export async function iniciar () {
       try {
         const eventoCanonico = construirEventoDeMensagem(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
         emitirEventoDebug(eventoCanonico, cfg, log)
-        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico)
+        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico, cfg, log)
       } catch (e) {
         if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
       }
@@ -319,7 +335,7 @@ export async function iniciar () {
       try {
         const eventoCanonico = construirEventoDeIndisponivel(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
         emitirEventoDebug(eventoCanonico, cfg, log)
-        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico)
+        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico, cfg, log)
       } catch (e) {
         if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
       }
