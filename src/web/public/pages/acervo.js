@@ -241,8 +241,7 @@ function painelDeUso (uso) {
       ]),
       semTeto ? badge('Sem limite', 'warning') : badge(`Limite: ${formatarBytes(uso.quotaBytes)}`, 'info')
     ]),
-    barra,
-    el('p', { className: 'field-help', text: 'O limite é definido na instalação, junto de memória e CPU — pela variável LCN_ACERVO_LIMITE ou pelo campo container.disk do runtime.json. Não é ajustável por aqui.' })
+    barra
   ])
 }
 

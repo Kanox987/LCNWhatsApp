@@ -68,7 +68,16 @@ escreverEstado({
 escreverConfig({ hardware: { bandwidthLimit: { downloadBytesPerSecond: 0, uploadBytesPerSecond: 0 } }, confiabilidade: { falhasConsecutivasParaQuarentena: 15 } })
 
 const { exec, chamadas } = criarExecFake()
-const service = criarInstanceService({ exec, obterRegistro: registroFixture, caminhoInstanciaFn, nomeContainerFn })
+// `bareArqEstado` isolado de propósito: sem ele este serviço leria o
+// data/state.json REAL do checkout e varreria o data/instancias/ real — um teste
+// que muda de resultado conforme o que o dono tem instalado na máquina.
+const estadoBareIsolado = path.join(pastaTmp, 'bare-isolado', 'state.json')
+fs.mkdirSync(path.dirname(estadoBareIsolado), { recursive: true })
+fs.writeFileSync(estadoBareIsolado, JSON.stringify({ conectado: false }))
+const service = criarInstanceService({
+  exec, obterRegistro: registroFixture, caminhoInstanciaFn, nomeContainerFn,
+  bareArqEstado: estadoBareIsolado
+})
 
 // --- listar/obter ---
 // listar() sempre inclui a instância virtual "bare" (modo simples) além
@@ -229,6 +238,39 @@ check('pareamento("bare"): também gera qrDataUrl', barePareamento.qrDataUrl ===
 // reexecutava o processo atual (inseguro a partir do painel, que não é o
 // binário do bot) e hoje executa index.js destacado. É o que permite conectar
 // um número sem abrir terminal — a ação principal de quem acabou de instalar.
+// --- segundo número no modo simples aparece na lista ---------------------
+// `LCN_INSTANCIA=pessoal node index.js` cria uma pasta e passa a rodar outro
+// número ali. Nada registra isso: a PASTA é a verdade. Sem a varredura, o
+// painel mostrava só o principal — e o dono perguntou, com razão, cadê o outro.
+const fsDesc = await import('fs')
+const pathDesc = await import('path')
+const raizDesc = pathDesc.dirname(bareArqEstado)
+const pastaOutro = pathDesc.join(raizDesc, 'instancias', 'outro')
+fsDesc.mkdirSync(pastaOutro, { recursive: true })
+fsDesc.writeFileSync(pathDesc.join(pastaOutro, 'state.json'),
+  JSON.stringify({ conectado: true, numero: '5599999999999', saude: { status: 'saudavel' } }))
+
+const comDescoberta = serviceBare.listar()
+const descoberta = comDescoberta.find((i) => i.instanceId === 'simples:outro')
+check('o segundo número do modo simples aparece na lista', !!descoberta)
+check('e traz o número dele, lido da própria pasta', descoberta?.phoneNumber === '5599999999999', descoberta?.phoneNumber)
+check('sem pid próprio, aparece como parado', descoberta?.unitStatus === 'parado', descoberta?.unitStatus)
+check('o principal continua na lista, separado', comDescoberta.some((i) => i.instanceId === 'bare'))
+
+check('obter() resolve a instância descoberta', serviceBare.obter('simples:outro')?.instanceId === 'simples:outro')
+
+// Id inventado não pode virar leitura de arquivo: a lista é fechada pela
+// varredura, então nada é montado a partir do texto recebido.
+let erroInventado
+try { serviceBare.obter('simples:nao-existe') } catch (e) { erroInventado = e }
+check('id de instância inexistente é recusado', !!erroInventado)
+
+let erroTravessia
+try { serviceBare.obter('simples:../../etc') } catch (e) { erroTravessia = e }
+check('id com travessia de caminho é recusado', !!erroTravessia)
+
+fsDesc.rmSync(pathDesc.join(raizDesc, 'instancias'), { recursive: true, force: true })
+
 const iniciouBare = serviceBare.iniciar('bare')
 check('iniciar("bare"): liga o bot pelo painel, sem exigir terminal', iniciouBare.ok === true && iniciouBare.action === 'start')
 check('iniciar("bare"): usa o iniciarBot do runtime, não systemctl', bareServicoFake.chamadas.includes('iniciar'))

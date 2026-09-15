@@ -79,6 +79,10 @@ const FORMATO_ID = /^wa-\d{6,}$/
 // revisão, corrigido aqui e não em registry.js pra não mexer no
 // comportamento já em uso pela CLI de terminal sem necessidade.
 export function idValido (id) {
+  if (typeof id === 'string' && id.startsWith('simples:')) {
+    // Só o formato aqui; quem confirma que existe é a varredura em obter().
+    return /^simples:[\w.-]+$/.test(id)
+  }
   return id === ID_BARE || (typeof id === 'string' && FORMATO_ID.test(id))
 }
 
@@ -119,6 +123,54 @@ export class InstanciaNaoEncontradaError extends Error {
   }
 }
 
+// Instâncias do modo simples descobertas PELA PASTA.
+//
+// `LCN_INSTANCIA=pessoal node index.js` cria `data/instancias/pessoal/` e passa
+// a rodar um segundo número ali. Nada registra isso em lugar nenhum — a pasta é
+// a verdade. Sem esta varredura o painel mostrava só o número principal e o
+// dono perguntava, com razão, por que o segundo não aparecia.
+//
+// O nome vem do NOME DA PASTA, nunca de entrada de usuário, e a lista é fechada:
+// `obter()` só aceita um id que apareça aqui, então não existe caminho para
+// montar diretório a partir de texto recebido.
+const PREFIXO_SIMPLES = 'simples:'
+
+function instanciasSimplesDescobertas (raizDados) {
+  const pasta = path.join(raizDados, 'instancias')
+  let nomes = []
+  try {
+    nomes = fs.readdirSync(pasta, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && /^[\w.-]+$/.test(e.name))
+      .map((e) => e.name)
+  } catch {
+    return []
+  }
+  return nomes.map((nome) => ({
+    instanceId: `${PREFIXO_SIMPLES}${nome}`,
+    label: `Número "${nome}" (modo simples)`,
+    isBare: true,
+    nomeSimples: nome,
+    arqEstado: path.join(pasta, nome, 'state.json'),
+    arqPid: path.join(pasta, nome, 'bot.pid'),
+    expectedPhoneE164: null,
+    resources: { memory: null, cpus: null },
+    createdAt: null
+  }))
+}
+
+// Um processo com este pid está vivo? É como o modo simples sabe se o bot está
+// de pé — cada instância grava o próprio bot.pid na própria pasta.
+function pidVivoDe (arquivo) {
+  try {
+    const pid = parseInt(fs.readFileSync(arquivo, 'utf8').trim(), 10)
+    if (!pid) return false
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function instanciaBareVirtual () {
   return {
     instanceId: ID_BARE,
@@ -156,6 +208,8 @@ export function criarInstanceService ({
   gerarQrDataUrl = (texto) => QRCode.toDataURL(texto)
 } = {}) {
   function caminhoEstado (instancia) {
+    // Instância descoberta traz o próprio arquivo; o bare clássico usa o fixo.
+    if (instancia.arqEstado) return instancia.arqEstado
     return instancia.isBare ? bareArqEstado : path.join(instancia.dataDir, 'data', 'state.json')
   }
 
@@ -168,6 +222,8 @@ export function criarInstanceService ({
   }
 
   function statusUnit (instancia) {
+    // Descoberta: o estado vem do pid dela, não do bot principal.
+    if (instancia.arqPid) return pidVivoDe(instancia.arqPid) ? 'rodando' : 'parado'
     if (instancia.isBare) {
       try { return bareStatusServico() } catch { return 'indisponivel' }
     }
@@ -181,6 +237,13 @@ export function criarInstanceService ({
 
   function exigir (id) {
     if (id === ID_BARE) return instanciaBareVirtual()
+    // Lista FECHADA: o id só resolve se aparecer na varredura. Nunca se monta
+    // caminho a partir do texto recebido — é o que impede um id inventado
+    // ("simples:../../etc") de virar leitura de arquivo.
+    if (typeof id === 'string' && id.startsWith(PREFIXO_SIMPLES)) {
+      const achada = instanciasSimplesDescobertas(raizDeDados()).find((i) => i.instanceId === id)
+      if (achada) return achada
+    }
     if (!idValido(id)) throw new InstanciaNaoEncontradaError(id)
     const registro = obterRegistro()
     const instancia = buscarPorId(registro, id)
@@ -203,11 +266,19 @@ export function criarInstanceService ({
     }
   }
 
+  // A raiz de dados sai do próprio caminho do state.json do bare — assim o
+  // teste injeta um diretório temporário e nunca varre o data/ real.
+  const raizDeDados = () => path.dirname(bareArqEstado)
+
   function listar () {
     // A instância "bare" sempre aparece — representa o número único do
     // modo simples, que é como o projeto roda antes de alguém migrar pra
     // multi-instância (Parte A). Não depende de nenhum registro existir.
-    return [resumir(instanciaBareVirtual()), ...listarInstanciasRegistro(obterRegistro()).map(resumir)]
+    return [
+      resumir(instanciaBareVirtual()),
+      ...instanciasSimplesDescobertas(raizDeDados()).map(resumir),
+      ...listarInstanciasRegistro(obterRegistro()).map(resumir)
+    ]
   }
 
   function obter (id) {
