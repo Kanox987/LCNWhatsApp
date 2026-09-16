@@ -21,6 +21,10 @@ PASTA_ENGINE="${HOME}/.local/share/lcnwhatsapp/engine"
 SOCKET="${PASTA_ENGINE}/run/engine.sock"
 mkdir -p "${PASTA_ENGINE}/run"
 
+# Segurável por ambiente: quem estiver depurando não quer esperar um minuto
+# a cada tentativa.
+ESPERA_APOS_FALHA="${LCN_ESPERA_APOS_FALHA:-60}"
+
 log () { echo "[lcn] $*"; }
 
 log "motor…"
@@ -65,4 +69,19 @@ wait -n
 CODIGO=$?
 log "um dos processos saiu (código ${CODIGO}) — derrubando o resto para reiniciar inteiro"
 encerrar
+
+# Espera ANTES de sair quando a saída foi por falha.
+#
+# Sem isto o conjunto "container cai -> restart sobe -> falha de novo" vira um
+# laço apertado. Custou caro uma vez: uma falha de pareamento gerou 19 pedidos
+# de código ao WhatsApp em 2min16s, um a cada 7 segundos. O backoff do próprio
+# Docker não segura isso — ele conta reinício, não a gravidade do que falhou.
+#
+# Falha de autenticação não se resolve tentando de novo rápido; ela precisa de
+# gente. A espera não conserta nada, mas transforma um martelo em uma batida
+# por minuto, que é a diferença entre "tentou de novo" e "parece ataque".
+if [ "${CODIGO}" -ne 0 ]; then
+  log "esperando ${ESPERA_APOS_FALHA}s antes de sair — evita marretar o servidor num laço de reinício"
+  sleep "${ESPERA_APOS_FALHA}"
+fi
 exit "${CODIGO}"
