@@ -23,6 +23,7 @@ import { classificarFechamento, mensagemParaClasse, codigoParaClasse } from './c
 import { EXIT_QUARANTINED } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel } from './engine/zapoAdapter.js'
+import { tipoPodeCasar } from './engine/canonicalEvent.js'
 import { emitirEventoDebug } from './engine/eventSink.js'
 import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
@@ -89,6 +90,22 @@ const SESSION_ID = 'default'
 // exatamente o que quebrou TODAS as automações que produzem comando: o motor
 // casava, gravava o comando, e o gateway estourava antes de executar.
 export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log) {
+  // Esboço não vai ao motor.
+  //
+  // A mesma mensagem chega duas vezes: primeiro sem conteúdo decifrado
+  // (`unknown`), depois inteira. As duas geram o MESMO eventId, então o
+  // at-most-once devolve o resultado da primeira — e a primeira não casa com
+  // nada, porque o tipo dela nem está na política de entrada. Resultado: a
+  // mensagem real é descartada calada.
+  //
+  // Foi assim que um "/ping" em grupo não respondeu, e por que 39% dos eventos
+  // gravados eram lixo que ainda por cima atrapalhava.
+  if (!tipoPodeCasar(eventoCanonico?.message?.kind)) {
+    if (cfg?.hardware?.debug) {
+      log?.(`[engine] ignorado: ${eventoCanonico?.message?.kind} não casa com automação (esboço antes de decifrar)`)
+    }
+    return Promise.resolve()
+  }
   // O enriquecimento de grupo (nome, tamanho, quem é admin) acontece aqui e
   // não na construção do evento porque é chamada de rede: fica no caminho já
   // assíncrono, sem atrasar o processamento da mensagem. Falha aberto — sem os

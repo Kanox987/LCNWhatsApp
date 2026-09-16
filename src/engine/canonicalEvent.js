@@ -17,6 +17,30 @@ export function calcularEventId ({ accountId, chatId, senderId, providerMessageI
 // (viewOnceMessageV2Extension, envelopes ephemeralMessage/deviceSentMessage)
 // que já foram acertados e testados ali; duplicar essa lógica aqui seria
 // convidar regressão.
+// Os tipos que uma automação consegue casar.
+//
+// Espelha `inputPolicy.acceptedMessageKinds` do schema — e um teste falha se as
+// duas listas divergirem, porque a divergência aqui é invisível: a automação
+// salva, valida, publica e nunca dispara.
+//
+// Existe para o GATEWAY poder descartar o que nunca casaria, e isso não é
+// economia de tráfego: é correção. O WhatsApp entrega a mesma mensagem em duas
+// etapas — um esboço antes de decifrar (`unknown`), e depois o conteúdo. Os
+// dois viram evento com o MESMO eventId, derivado do id da mensagem.
+//
+// Aí o at-most-once faz exatamente o que promete: vê o id repetido e devolve o
+// resultado da primeira avaliação. Como a primeira foi o esboço vazio, o
+// comando de verdade é descartado em silêncio. Num teste real, 39% dos eventos
+// eram esses esboços, e um "/ping" mandado em grupo simplesmente não respondia.
+//
+// `unavailable` entra pelo mesmo motivo: chega antes do reenvio da mensagem
+// real e ocuparia o id do mesmo jeito.
+export const TIPOS_QUE_CASAM = Object.freeze(['text', 'audio', 'image', 'video', 'document', 'view_once'])
+
+export function tipoPodeCasar (kind) {
+  return TIPOS_QUE_CASAM.includes(kind)
+}
+
 export function classificarMensagem (message, { marcadaComoViewOnce = false } = {}) {
   if (!message) return 'unknown'
   if (acharVisuUnica(message, marcadaComoViewOnce)) return 'view_once'

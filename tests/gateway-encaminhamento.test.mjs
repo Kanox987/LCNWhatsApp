@@ -95,5 +95,54 @@ const cfg = { hardware: {}, download: {} }
   check('sem função de log, o erro ainda é engolido em vez de derrubar', estourou === false)
 }
 
+// --- esboço antes de decifrar NÃO vai ao motor ---------------------------
+// O WhatsApp entrega a mesma mensagem duas vezes: um esboço sem conteúdo
+// (`unknown`) e depois ela inteira. Como o eventId sai do id da mensagem, os
+// dois são o MESMO evento para o at-most-once — que então devolve o resultado
+// da primeira avaliação. A primeira não casa com nada (o tipo dela nem está na
+// política de entrada), e a mensagem real morre em silêncio.
+//
+// Foi exatamente assim que um "/ping" mandado num grupo não respondeu, com 39%
+// dos eventos gravados sendo esses esboços.
+{
+  const esboco = { ...evento, message: { kind: 'unknown' } }
+  const c = cenario([comandoPendente])
+  let enviouAoMotor = false
+  c.clienteEngine.eventos.enviar = async () => { enviouAoMotor = true; return { results: [{ commands: [comandoPendente] }] } }
+  await encaminharEventoAoMotor(c.client, c.clienteEngine, esboco, cfg, () => {})
+  check('esboço "unknown" não chega ao motor', enviouAoMotor === false)
+  check('e nada é enviado no WhatsApp por causa dele', c.enviadas.length === 0)
+
+  // `unavailable` chega antes do reenvio da mensagem real e ocuparia o mesmo id.
+  const indisponivel = { ...evento, message: { kind: 'unavailable' } }
+  const c2 = cenario([comandoPendente])
+  let enviou2 = false
+  c2.clienteEngine.eventos.enviar = async () => { enviou2 = true; return { results: [] } }
+  await encaminharEventoAoMotor(c2.client, c2.clienteEngine, indisponivel, cfg, () => {})
+  check('"unavailable" também não chega ao motor', enviou2 === false)
+
+  // E o que casa continua passando — a correção não pode calar o bot.
+  for (const kind of ['text', 'image', 'video', 'audio', 'document', 'view_once']) {
+    const c3 = cenario([])
+    let passou = false
+    c3.clienteEngine.eventos.enviar = async () => { passou = true; return { results: [] } }
+    await encaminharEventoAoMotor(c3.client, c3.clienteEngine, { ...evento, message: { kind } }, cfg, () => {})
+    check(`"${kind}" continua chegando ao motor`, passou === true)
+  }
+}
+
+// --- a lista do gateway tem que bater com a do schema --------------------
+// Divergir aqui é invisível: a automação salva, valida, publica e nunca
+// dispara — ou, do outro lado, o gateway cala uma mensagem que casaria.
+{
+  const fs = await import('fs')
+  const { TIPOS_QUE_CASAM } = await import('../src/engine/canonicalEvent.js')
+  const schema = JSON.parse(fs.readFileSync(new URL('../src/engine/server/schema/automation.v1.schema.json', import.meta.url), 'utf8'))
+  const doSchema = schema.properties.inputPolicy.properties.acceptedMessageKinds.items.enum
+  check('os tipos que o gateway deixa passar são exatamente os que o motor aceita',
+    JSON.stringify([...TIPOS_QUE_CASAM].sort()) === JSON.stringify([...doSchema].sort()),
+    `gateway=${[...TIPOS_QUE_CASAM].sort().join(',')} schema=${[...doSchema].sort().join(',')}`)
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO ENCAMINHAMENTO PASSARAM')
 process.exit(falhas ? 1 : 0)
