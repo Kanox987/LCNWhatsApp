@@ -39,7 +39,17 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
 //
 //   node index.js --code=5522999999999
 //   LCN_PAIR_NUMBER=5522999999999 node index.js --code
-const USAR_CODIGO = process.argv.some((a) => a === '--code' || a.startsWith('--code='))
+// O que decide entre código de pareamento e QR.
+//
+// `LCN_PAIR_NUMBER` já era lido por `numeroDoArgumento()`, mas sozinho NUNCA
+// ligava o modo: a variável parecia suportada, entregava o número a ninguém, e
+// a conexão caía no QR sem dizer por quê. Meio caminho é pior que não ter.
+export function querPareamentoPorCodigo (argv = process.argv, env = process.env) {
+  if (argv.some((a) => a === '--code' || a.startsWith('--code='))) return true
+  return String(env.LCN_PAIR_NUMBER || '').replace(/\D/g, '').length >= 8
+}
+
+const USAR_CODIGO = querPareamentoPorCodigo()
 
 // Aparelho por argumento/ambiente, com a mesma lógica do --code: quem conecta
 // escolhe na hora, sem editar arquivo. O config.json é o padrão de quem não

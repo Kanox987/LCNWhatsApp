@@ -60,5 +60,20 @@ check('todo aparelho que oferecemos é entendido pela biblioteca',
   naoEntendidos.length === 0,
   naoEntendidos.length ? `viram UNKNOWN: ${naoEntendidos.join(', ')}` : '')
 
+// --- código de pareamento x QR ------------------------------------------
+// LCN_PAIR_NUMBER era lido para PEGAR o número, mas não ligava o modo: a
+// variável parecia suportada, e a conexão caía no QR calada. Quem subia um
+// container sem terminal ficava esperando um código que nunca vinha.
+{
+  const { querPareamentoPorCodigo: quer } = await import('../src/connection.js')
+  check('--code=<numero> pede código', quer(['node', 'index.js', '--code=5522981197896'], {}))
+  check('--code sozinho também', quer(['node', 'index.js', '--code'], {}))
+  check('LCN_PAIR_NUMBER sozinho LIGA o modo', quer(['node', 'index.js'], { LCN_PAIR_NUMBER: '628977791132' }))
+  check('número curto demais não liga (evita pedir código para lixo)', quer(['node', 'index.js'], { LCN_PAIR_NUMBER: '123' }) === false)
+  check('com máscara, os dígitos é que contam', quer(['node', 'index.js'], { LCN_PAIR_NUMBER: '+55 (22) 98119-7896' }))
+  check('sem nada, continua no QR', quer(['node', 'index.js'], {}) === false)
+  check('variável vazia continua no QR', quer(['node', 'index.js'], { LCN_PAIR_NUMBER: '' }) === false)
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE APARELHO PASSARAM')
 process.exit(falhas ? 1 : 0)
