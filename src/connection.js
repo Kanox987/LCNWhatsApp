@@ -28,6 +28,7 @@ import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
 import { executarComandos } from './engine/gatewayExecutor.js'
+import { APARELHOS, resolverAparelho } from './aparelho.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -39,6 +40,18 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
 //   node index.js --code=5522999999999
 //   LCN_PAIR_NUMBER=5522999999999 node index.js --code
 const USAR_CODIGO = process.argv.some((a) => a === '--code' || a.startsWith('--code='))
+
+// Aparelho por argumento/ambiente, com a mesma lógica do --code: quem conecta
+// escolhe na hora, sem editar arquivo. O config.json é o padrão de quem não
+// escolhe nada.
+function aparelhoDoArgumento () {
+  const pegar = (nome, env) => {
+    const arg = process.argv.find((a) => a.startsWith(`--${nome}=`))
+    const bruto = arg ? arg.slice(nome.length + 3) : (process.env[env] || '')
+    return String(bruto).trim()
+  }
+  return { navegador: pegar('aparelho', 'LCN_APARELHO'), sistema: pegar('sistema', 'LCN_APARELHO_SISTEMA') }
+}
 
 function numeroDoArgumento () {
   const arg = process.argv.find((a) => a.startsWith('--code='))
@@ -181,6 +194,26 @@ function criarStore () {
 export async function iniciar () {
   garantirPastas()
   let cfg = carregar()
+
+  // Precedência: o que foi passado na hora de conectar vence o config.json,
+  // que vence o padrão. Resolvido UMA vez, aqui, e não a cada reconexão: o
+  // rótulo é gravado no pareamento, então mudá-lo no meio da vida da sessão
+  // não teria efeito nenhum e só confundiria quem lesse o log.
+  const escolha = aparelhoDoArgumento()
+  let aparelho
+  try {
+    aparelho = resolverAparelho({
+      navegador: escolha.navegador || cfg.hardware?.aparelho?.navegador,
+      sistema: escolha.sistema || cfg.hardware?.aparelho?.sistema
+    })
+  } catch (erro) {
+    // Recusa clara em vez do aparelho sem nome que a biblioteca produziria.
+    console.error(erro.message)
+    console.error(`Opções: ${APARELHOS.map((a) => `${a.id} (${a.rotulo})`).join(' · ')}`)
+    throw erro
+  }
+  log(`aparelho: ${aparelho.rotulo}`)
+
   let assinatura = assinaturaSocket(cfg)
   let falhas = 0
   let clienteAtual = null
@@ -278,8 +311,8 @@ export async function iniciar () {
     const client = new WaClient({
       store,
       sessionId: SESSION_ID,
-      deviceBrowser: 'chrome',
-      deviceOsDisplayName: USAR_CODIGO ? 'Ubuntu' : 'macOS',
+      deviceBrowser: aparelho.deviceBrowser,
+      deviceOsDisplayName: aparelho.deviceOsDisplayName,
       markOnlineOnConnect: cfg.hardware?.markOnline === true,
       // Equivalente a syncFullHistory:false da Baileys: sync leve (só o
       // recente), não o histórico completo.

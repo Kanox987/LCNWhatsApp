@@ -22,7 +22,11 @@ export const PADRAO = {
       uploadBytesPerSecond: 0
     },
     modoEconomia: true,
-    debug: false
+    debug: false,
+    // Como a conexão aparece em "Aparelhos conectados" no celular. Só rótulo e
+    // ícone — não muda o que a conexão é. Gravado no pareamento: trocar depois
+    // não renomeia sessão existente. Ver src/aparelho.js para a lista.
+    aparelho: { navegador: 'chrome', sistema: '' }
   },
   transcricao: {
     provedor: 'off',
