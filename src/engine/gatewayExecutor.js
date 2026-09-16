@@ -1,3 +1,5 @@
+import * as enviadas from '../enviadas.js'
+
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
 
@@ -64,6 +66,19 @@ async function confirmarFailOpen (clienteEngine, comando, status) {
 //
 // O motor manda só o endereçamento (`replyTo`), nunca o conteúdo — a mesma
 // fronteira de sempre. Sem `replyTo`, a mensagem sai solta de propósito.
+// Envia e ANOTA o id no registro de "mandado por nós".
+//
+// Toda saída passa por aqui de propósito: é esse registro que deixa o gatilho
+// automático separar a resposta do próprio bot — que não pode reagir a si
+// mesma, sob pena de laço — de uma mensagem digitada por uma pessoa no celular
+// do bot, que pode e deve disparar automação. Um envio que escape daqui volta
+// a parecer "digitado por alguém".
+async function enviarERegistrar (client, destino, conteudo, opcoes) {
+  const resultado = await client.message.send(destino, conteudo, opcoes)
+  enviadas.registrar(resultado?.id)
+  return resultado
+}
+
 function opcoesDeCitacao (replyTo) {
   if (!replyTo?.id || !replyTo?.remoteJid) return undefined
   const quote = { id: replyTo.id, remoteJid: replyTo.remoteJid, fromMe: replyTo.fromMe === true }
@@ -74,7 +89,7 @@ function opcoesDeCitacao (replyTo) {
 async function executarResposta (client, comando) {
   const texto = resolverTextoComLatencia(comando.payload.text, comando.payload.receivedAtMs)
   await comTimeout(
-    () => client.message.send(comando.payload.chatId, { type: 'text', text: texto }, opcoesDeCitacao(comando.payload.replyTo)),
+    () => enviarERegistrar(client, comando.payload.chatId, { type: 'text', text: texto }, opcoesDeCitacao(comando.payload.replyTo)),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar o comando ${comando.id}`
   )
@@ -103,7 +118,7 @@ async function executarFigurinha (client, comando, deps) {
   const figurinha = await converterParaFigurinha(bruto, { animada: ehAnimada(entrada.tipo) })
 
   await comTimeout(
-    () => client.message.send(comando.payload.chatId, { type: 'sticker', media: figurinha }),
+    () => enviarERegistrar(client, comando.payload.chatId, { type: 'sticker', media: figurinha }),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar a figurinha do comando ${comando.id}`
   )
@@ -141,7 +156,7 @@ async function executarRecover (client, comando, deps) {
   if (comando.payload.caption) conteudo.caption = comando.payload.caption
 
   await comTimeout(
-    () => client.message.send(destino, conteudo),
+    () => enviarERegistrar(client, destino, conteudo),
     TIMEOUT_ENVIO_MS,
     `timeout ao reenviar a mídia recuperada do comando ${comando.id}`
   )
@@ -168,7 +183,7 @@ async function executarDownload (client, comando, deps) {
     const texto = (errorText || 'Não consegui baixar essa mídia: {{erro}}').replaceAll('{{erro}}', motivo)
     try {
       await comTimeout(
-        () => client.message.send(chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
+        () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
         `timeout ao avisar a falha do download do comando ${comando.id}`
       )
@@ -182,7 +197,7 @@ async function executarDownload (client, comando, deps) {
     // Aviso é cortesia, não a entrega: se ele falhar, o download continua.
     try {
       await comTimeout(
-        () => client.message.send(chatId, { type: 'text', text: ackText }, opcoesDeCitacao(replyTo)),
+        () => enviarERegistrar(client, chatId, { type: 'text', text: ackText }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
         `timeout ao avisar o início do download do comando ${comando.id}`
       )
@@ -210,7 +225,7 @@ async function executarDownload (client, comando, deps) {
 
   try {
     await comTimeout(
-      () => client.message.send(chatId, conteudo, opcoesDeCitacao(replyTo)),
+      () => enviarERegistrar(client, chatId, conteudo, opcoesDeCitacao(replyTo)),
       TIMEOUT_ENVIO_MS * 4,
       `timeout ao enviar a mídia baixada do comando ${comando.id}`
     )
@@ -264,7 +279,7 @@ async function executarMenu (client, comando) {
   const payload = comando.payload
   try {
     await comTimeout(
-      () => client.message.send(payload.chatId, montarMenuInterativo(payload)),
+      () => enviarERegistrar(client, payload.chatId, montarMenuInterativo(payload)),
       TIMEOUT_ENVIO_MS,
       `timeout ao enviar o menu do comando ${comando.id}`
     )
@@ -274,7 +289,7 @@ async function executarMenu (client, comando) {
     // Cair para texto é melhor que a pessoa ficar sem menu nenhum.
     console.warn(`[engine] Menu interativo recusado, enviando como texto: ${mensagemDoErro(erro)}`)
     await comTimeout(
-      () => client.message.send(payload.chatId, { type: 'text', text: payload.fallbackText }),
+      () => enviarERegistrar(client, payload.chatId, { type: 'text', text: payload.fallbackText }),
       TIMEOUT_ENVIO_MS,
       `timeout ao enviar o menu em texto do comando ${comando.id}`
     )
@@ -293,7 +308,7 @@ async function executarApagar (client, comando) {
     ...(ref.participant ? { participant: ref.participant } : {})
   }
   await comTimeout(
-    () => client.message.send(comando.payload.chatId, { type: 'revoke', target }),
+    () => enviarERegistrar(client, comando.payload.chatId, { type: 'revoke', target }),
     TIMEOUT_ENVIO_MS,
     `timeout ao apagar a mensagem do comando ${comando.id}`
   )
@@ -396,7 +411,7 @@ async function executarMensagemRica (client, comando) {
   const payload = comando.payload
   try {
     await comTimeout(
-      () => client.message.send(payload.chatId, montarMensagemRica(payload)),
+      () => enviarERegistrar(client, payload.chatId, montarMensagemRica(payload)),
       TIMEOUT_ENVIO_MS,
       `timeout ao enviar a mensagem formatada do comando ${comando.id}`
     )
@@ -406,7 +421,7 @@ async function executarMensagemRica (client, comando) {
     // automação útil em vez de simplesmente parar de responder.
     console.warn(`[engine] Mensagem formatada recusada, enviando como texto: ${mensagemDoErro(erro)}`)
     await comTimeout(
-      () => client.message.send(payload.chatId, { type: 'text', text: payload.fallbackText }),
+      () => enviarERegistrar(client, payload.chatId, { type: 'text', text: payload.fallbackText }),
       TIMEOUT_ENVIO_MS,
       `timeout ao enviar o texto de reserva do comando ${comando.id}`
     )
@@ -425,7 +440,7 @@ async function executarEnvioDeArquivo (client, comando, deps) {
   if (!registro) {
     if (payload.notFoundText) {
       await comTimeout(
-        () => client.message.send(payload.chatId, { type: 'text', text: payload.notFoundText }),
+        () => enviarERegistrar(client, payload.chatId, { type: 'text', text: payload.notFoundText }),
         TIMEOUT_ENVIO_MS,
         `timeout ao avisar do arquivo ausente no comando ${comando.id}`
       )
@@ -445,7 +460,7 @@ async function executarEnvioDeArquivo (client, comando, deps) {
   if (conteudo.type === 'document') conteudo.fileName = registro.name
 
   await comTimeout(
-    () => client.message.send(payload.chatId, conteudo),
+    () => enviarERegistrar(client, payload.chatId, conteudo),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar o arquivo do comando ${comando.id}`
   )

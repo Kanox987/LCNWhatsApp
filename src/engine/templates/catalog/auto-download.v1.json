@@ -26,6 +26,13 @@
   ],
   "parameters": [
     {
+      "key": "allowFrom",
+      "type": "string",
+      "default": "any",
+      "help": "\"any\" também baixa os links que VOCÊ manda do próprio número do bot. \"external\" ignora o próprio número. A resposta que o bot produz nunca dispara nada, nos dois casos — isso não é configurável.",
+      "label": "Também baixar meus próprios links"
+    },
+    {
       "key": "modo",
       "label": "O que baixar",
       "type": "string",
@@ -77,7 +84,7 @@
           "id": "gatilho-link",
           "type": "trigger.message",
           "config": {
-            "allowFrom": "external",
+            "allowFrom": "{{params.allowFrom}}",
             "containsLink": true
           }
         },

@@ -348,7 +348,12 @@
           ],
           "properties": {
             "allowFrom": {
-              "const": "external"
+              "enum": [
+                "external",
+                "any"
+              ],
+              "default": "external",
+              "description": "Quem pode acionar a regra automática. \"external\" (padrão) ignora o próprio número. \"any\" também reage às mensagens DIGITADAS no celular do bot — é o que faz o download automático funcionar quando o próprio dono manda o link. Não abre a porta para laço: a resposta que o BOT produziu continua barrada sempre, e isso não é configurável — o gateway marca o que ele mesmo enviou (sender.authoredByBot) e a barreira usa essa marca, não o fromMe cru."
             },
             "messageKinds": {
               "type": "array",

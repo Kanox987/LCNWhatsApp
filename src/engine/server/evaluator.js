@@ -261,7 +261,20 @@ function eventoCasaGatilhoDeMensagem (evento, config) {
 // reagir às próprias mensagens do bot nem a status/transmissão, sob risco de
 // laço entre bots e de tempestade de execuções.
 function barreiraDeGatilhoAutomatico (evento) {
-  if (evento.sender?.authoredBySelf === true) return false
+  // O que esta barreira existe para impedir é LAÇO: o bot responde, a resposta
+  // volta como evento, ele responde de novo. Isso continua não sendo
+  // configurável.
+  //
+  // O que ela NÃO deve impedir é o dono usar as próprias automações do número
+  // dele. O WhatsApp marca `fromMe` nas duas situações, e tratar as duas igual
+  // era o motivo de mandar um link do próprio número e o download automático
+  // não fazer nada.
+  //
+  // `authoredByBot` é a distinção: só o gateway sabe qual mensagem ELE enviou.
+  // Mensagem digitada por uma pessoa segue a regra normal de `allowFrom`, logo
+  // abaixo — o padrão `external` continua ignorando o próprio número, então
+  // nada muda para quem não pedir.
+  if (evento.sender?.authoredByBot === true) return false
   const chatId = evento.chat?.id || ''
   if (chatId.endsWith('@broadcast') || chatId.endsWith('@newsletter')) return false
   if (evento.chat?.kind === 'channel') return false

@@ -7,6 +7,7 @@ import { calcularEventId, classificarMensagem } from './canonicalEvent.js'
 import * as mediaRefCache from './mediaRefCache.js'
 import * as lidMap from '../lidMap.js'
 import { nomeDe, registrarContato } from '../directory.js'
+import * as enviadas from '../enviadas.js'
 
 // participantAlt/remoteJidAlt têm prioridade sobre o LID cru — mesma
 // normalização já usada inline em connection.js, reaproveitada
@@ -265,6 +266,11 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
   const msg = desembrulhar(msgBruta) || msgBruta
   const kind = classificarMensagem(msgBruta, { marcadaComoViewOnce: key.isViewOnce === true })
   const nomeDeQuemEnviou = resolverNome(event, senderId)
+  // `fromMe` do WhatsApp mistura duas coisas: mensagem que o BOT produziu e
+  // mensagem que uma PESSOA digitou no celular do bot. Só este processo sabe a
+  // diferença — ele recebeu o id de volta ao enviar. Sem isso, impedir o laço
+  // (necessário) e ignorar o dono (indesejado) viram a mesma regra.
+  const authoredByBot = enviadas.foiEnviadaPorNos(key.id)
 
   const mensagem = { kind }
   // Sem amarrar a `kind === 'text'`: uma foto com legenda É uma mensagem com
@@ -298,8 +304,8 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
     // chega, por isso entra só quando existe: sem o campo, {{sender.name}}
     // fica literal no texto em vez de mandar saudação com um buraco no meio.
     sender: nomeDeQuemEnviou
-      ? { id: senderId, authoredBySelf: key.fromMe === true, name: nomeDeQuemEnviou }
-      : { id: senderId, authoredBySelf: key.fromMe === true },
+      ? { id: senderId, authoredBySelf: key.fromMe === true, authoredByBot, name: nomeDeQuemEnviou }
+      : { id: senderId, authoredBySelf: key.fromMe === true, authoredByBot },
     // `bot` é o número da PRÓPRIA conta, que só este lado conhece — accountId
     // é o id da instância (um UUID), não serve para se apresentar a ninguém.
     // Ausente quando a sessão ainda não expôs as credenciais: {{bot.id}} fica
@@ -328,7 +334,7 @@ export function construirEventoDeIndisponivel (event, { accountId, recebidoEmMs,
     replay: event.offline === true,
     receivedAtMs: recebidoEmMs ?? Date.now(),
     chat: { id: chatId, kind: chatKind },
-    sender: { id: senderId, authoredBySelf: key.fromMe === true },
+    sender: { id: senderId, authoredBySelf: key.fromMe === true, authoredByBot: enviadas.foiEnviadaPorNos(key.id) },
     ...(botId ? { bot: { id: botId } } : {}),
     message: { kind: 'unavailable' },
     providerRef: construirProviderRef(key)
