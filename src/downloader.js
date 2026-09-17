@@ -30,7 +30,7 @@ const TIPO_WHATSAPP = { video: 'video', audio: 'audio', imagem: 'image' }
 export class ErroDeDownload extends Error {}
 
 export function traduzirErroDeDownload (erro) {
-  const texto = typeof erro === 'string' ? erro : ''
+  const texto = typeof erro === 'string' ? erro.replace(/\s+/g, ' ').trim() : ''
 
   // O segundo motor pode recusar a URL mesmo quando o primeiro explicou a
   // causa real. No bloqueio do YouTube em produção, priorizar essa recusa

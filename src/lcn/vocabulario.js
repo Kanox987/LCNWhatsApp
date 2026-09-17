@@ -184,3 +184,33 @@ export function acaoPorPalavra (linha) {
   const candidatas = [...ACOES].sort((a, b) => b.palavra.length - a.palavra.length)
   return candidatas.find((a) => linha === a.palavra || linha.startsWith(`${a.palavra} `)) || null
 }
+
+// --- tipos de configuração ------------------------------------------------
+//
+// O que quem ESCREVE o comando declara para quem vai USÁ-LO configurar pelo
+// painel, sem abrir arquivo nenhum. Os quatro tipos são o pedido do dono:
+// digitar livremente, escolher da lista, número, e liga/desliga.
+//
+// `string` e `number` são os nomes que os templates já usam no JSON — a
+// linguagem só dá a eles nome em português. `enum` e `booleano` são novos.
+export const TIPOS_DE_CONFIG = Object.freeze({
+  string: 'texto',
+  number: 'número',
+  enum: 'opção',
+  boolean: 'liga/desliga'
+})
+
+// --- níveis de aviso ------------------------------------------------------
+export const NIVEIS_DE_AVISO = Object.freeze({
+  info: 'nota',
+  requirement: 'exige',
+  compatibility: 'compatibilidade',
+  unofficial: 'não oficial'
+})
+
+// --- tipos de valor de variável declarada --------------------------------
+export const TIPOS_DE_VALOR = Object.freeze({
+  text: 'texto',
+  number: 'número',
+  boolean: 'sim/não'
+})

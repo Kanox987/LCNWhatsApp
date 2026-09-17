@@ -71,6 +71,99 @@ function primeiraDiferenca (a, b) {
   return ''
 }
 
+// --- o TEMPLATE inteiro também volta igual -------------------------------
+// Um template é mais que o documento: carrega o formulário que quem instala
+// preenche, as variáveis que o comando usa e os avisos. Se a linguagem perdesse
+// o formulário, converter os templates para .lcn transformaria comando
+// configurável em comando fixo — sem ninguém notar até tentar instalar.
+{
+  const { carregarCatalogo } = await import('../src/engine/templates/catalog.js')
+  const catalogo = [...carregarCatalogo().values()]
+  check('o catálogo carrega', catalogo.length >= 20, String(catalogo.length))
+
+  let iguais = 0
+  const problemas = []
+  for (const t of catalogo) {
+    try {
+      const volta = compilar(descompilar(t.documentTemplate, t))
+      const reconstruido = { ...volta.template, documentTemplate: volta.documentTemplate }
+      if (mesmo(t, reconstruido)) iguais++
+      else problemas.push(`${t.templateId}: ${primeiraDiferenca(t, reconstruido)}`)
+    } catch (e) {
+      problemas.push(`${t.templateId}: ${e.message}`)
+    }
+  }
+  check('todo template do catálogo vira .lcn e volta IGUAL',
+    iguais === catalogo.length, problemas.slice(0, 3).join(' | '))
+}
+
+// --- o formulário declarado no .lcn --------------------------------------
+// É o que deixa quem NÃO programa configurar o comando pelo painel: quem
+// escreve declara o esquema, quem usa preenche.
+{
+  const { template } = compilar(`template exemplo v1
+  nome: Exemplo
+  descrição: Mostra os quatro tipos de configuração
+  categoria: utilitarios
+
+comando /exemplo
+  nome: Exemplo
+  onde: em qualquer lugar
+  pool: p1
+  tipos: texto
+  casa: exato
+  de: externo
+
+  responde "oi"
+
+configurável
+  frase: texto = "olá"
+    rótulo: O que responder
+    ajuda: Escreva o que quiser
+  limite: número = 3
+    rótulo: Quantas vezes
+  formato: opção (texto, botões) = texto
+    rótulo: Como mostrar
+  ligado: liga/desliga = sim
+    rótulo: Começa ligado?
+`)
+  const porChave = Object.fromEntries(template.parameters.map((p) => [p.key, p]))
+  check('digitar livremente vira texto', porChave.frase?.type === 'string' && porChave.frase.default === 'olá')
+  check('número mantém o tipo', porChave.limite?.type === 'number' && porChave.limite.default === 3,
+    JSON.stringify(porChave.limite))
+  check('escolher da lista guarda as opções',
+    porChave.formato?.type === 'enum' && JSON.stringify(porChave.formato.options) === '["texto","botões"]',
+    JSON.stringify(porChave.formato))
+  check('liga/desliga vira booleano', porChave.ligado?.type === 'boolean' && porChave.ligado.default === true,
+    JSON.stringify(porChave.ligado))
+  check('o rótulo do formulário chega', porChave.frase?.label === 'O que responder')
+  check('a ajuda do formulário chega', porChave.frase?.help === 'Escreva o que quiser')
+}
+
+// --- bloco de template em arquivo que não é template é RECUSADO ----------
+// Cair num objeto descartado perderia a configuração inteira em silêncio: o
+// formulário simplesmente não apareceria, e ninguém saberia por quê.
+{
+  let e
+  try {
+    compilar(`comando /x
+  nome: X
+  onde: em qualquer lugar
+  pool: p
+  tipos: texto
+  casa: exato
+  de: externo
+
+  responde "oi"
+
+configurável
+  a: texto = "b"
+`)
+  } catch (erro) { e = erro }
+  check('bloco de template fora de template é recusado',
+    e instanceof ErroDeSintaxe && /só existe em arquivo de template/.test(e.message), e?.message)
+}
+
 // --- toda ação que o motor executa tem palavra na linguagem --------------
 // Sem isto, uma ação nova nasce impossível de escrever — o mesmo defeito que
 // deixou `sendFile` invisível no painel por semanas.

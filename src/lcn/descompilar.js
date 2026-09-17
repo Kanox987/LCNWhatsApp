@@ -6,7 +6,10 @@
 // editar seja perigoso, mas porque a tela não consegue REPRESENTÁ-LAS.
 //
 // Com o texto, qualquer documento vira algo que uma pessoa lê e edita.
-import { ACOES, CASAMENTOS, DESTINOS, ORIGENS, OPERADORES, TIPOS_DE_MENSAGEM, acaoPorTipo } from './vocabulario.js'
+import {
+  ACOES, CASAMENTOS, DESTINOS, NIVEIS_DE_AVISO, ORIGENS, OPERADORES,
+  TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo
+} from './vocabulario.js'
 
 const IDENT = '  '
 
@@ -98,7 +101,7 @@ function cabecalhoDoGatilho (gatilho) {
   return { titulo: 'ao receber mensagem', cfg }
 }
 
-export function descompilar (documento) {
+export function descompilar (documento, template = null) {
   const nos = documento?.flow?.nodes || []
   const arestas = documento?.flow?.edges || []
   const mapa = new Map(nos.map((n) => [n.id, n]))
@@ -106,11 +109,31 @@ export function descompilar (documento) {
   if (!gatilho) throw new Error('O documento não tem gatilho.')
 
   const { titulo, cfg } = cabecalhoDoGatilho(gatilho)
-  const linhas = [titulo]
+  const linhas = []
+
+  // Cabeçalho de template vem ANTES do comando: é o que identifica o arquivo.
+  if (template) {
+    linhas.push(`template ${template.templateId} v${template.templateVersion}`)
+    if (template.name) linhas.push(`${IDENT}nome: ${template.name}`)
+    if (template.description) linhas.push(`${IDENT}descrição: ${template.description}`)
+    if (template.category) linhas.push(`${IDENT}categoria: ${template.category}`)
+    // Só aparece quando não é 1 — é o padrão do schema, e escrever "motor: 1"
+    // em vinte arquivos não informa nada a ninguém.
+    if (template.minEngineVersion !== undefined && template.minEngineVersion !== 1) {
+      linhas.push(`${IDENT}motor: ${template.minEngineVersion}`)
+    }
+    for (const d of template.dependsOn || []) linhas.push(`${IDENT}depende de: ${d}`)
+    for (const c of template.requiredCapabilities || []) linhas.push(`${IDENT}exige: ${c}`)
+    linhas.push('')
+  }
+
+  linhas.push(titulo)
   const h = (texto) => linhas.push(`${IDENT}${texto}`)
 
-  h(`id: ${documento.id}`)
-  if (documento.revision !== undefined) h(`revisão: ${documento.revision}`)
+  if (!template) {
+    h(`id: ${documento.id}`)
+    if (documento.revision !== undefined) h(`revisão: ${documento.revision}`)
+  }
   h(`nome: ${documento.name}`)
   if (documento.display?.menuLabel) {
     const desc = documento.display.menuDescription
@@ -155,6 +178,40 @@ export function descompilar (documento) {
       const ramo = cadeia(mapa, arestas, seguir(mapa, arestas, condicao.id, rotulo))
       if (rotulo === 'false') linhas.push(`${IDENT}senão`)
       for (const no of ramo.acoes) for (const l of linhaDeAcao(no)) linhas.push(`${IDENT}${IDENT}${l}`)
+    }
+  }
+
+  // --- blocos de template -------------------------------------------------
+  // Um `.lcn` representa tanto uma automação solta quanto um template. O que é
+  // do template sai DEPOIS do corpo: quem abre o arquivo quer ler o que o
+  // comando faz, não o formulário de instalação.
+  if (template) {
+    if (template.parameters?.length) {
+      linhas.push('')
+      linhas.push('configurável')
+      for (const p of template.parameters) {
+        const tipo = TIPOS_DE_CONFIG[p.type] || p.type
+        const opcoes = p.options?.length ? ` (${p.options.join(', ')})` : ''
+        const padrao = p.default === undefined || p.default === null
+          ? ''
+          : ` = ${typeof p.default === 'string' ? citar(p.default) : String(p.default)}`
+        linhas.push(`${IDENT}${p.key}: ${tipo}${opcoes}${padrao}`)
+        if (p.label) linhas.push(`${IDENT}${IDENT}rótulo: ${p.label}`)
+        if (p.help) linhas.push(`${IDENT}${IDENT}ajuda: ${p.help}`)
+      }
+    }
+    if (template.variables?.length) {
+      linhas.push('')
+      linhas.push('declara')
+      for (const v of template.variables) {
+        linhas.push(`${IDENT}${v.scope} ${v.key}: ${TIPOS_DE_VALOR[v.valueType] || v.valueType}`)
+        if (v.description) linhas.push(`${IDENT}${IDENT}${v.description}`)
+      }
+    }
+    for (const a of template.warnings || []) {
+      linhas.push('')
+      linhas.push(`avisa ${NIVEIS_DE_AVISO[a.level] || a.level}`)
+      linhas.push(`${IDENT}${a.text}`)
     }
   }
 

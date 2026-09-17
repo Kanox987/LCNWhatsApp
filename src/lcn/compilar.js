@@ -6,7 +6,8 @@
 // o mesmo portão do JSON escrito à mão. É isto que deixa a linguagem existir
 // sem reabrir a decisão de não executar código de usuário.
 import {
-  ACOES, CASAMENTOS, DESTINOS, OPERADORES, ORIGENS, TIPOS_DE_MENSAGEM,
+  ACOES, CASAMENTOS, DESTINOS, NIVEIS_DE_AVISO, OPERADORES, ORIGENS,
+  TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
 
@@ -22,6 +23,23 @@ const ORIGEM_POR_PALAVRA = inverter(ORIGENS)
 const TIPO_POR_PALAVRA = inverter(TIPOS_DE_MENSAGEM)
 const OPERADOR_POR_SIMBOLO = inverter(OPERADORES)
 const DESTINO_POR_PALAVRA = inverter(DESTINOS)
+const CONFIG_POR_PALAVRA = inverter(TIPOS_DE_CONFIG)
+const AVISO_POR_PALAVRA = inverter(NIVEIS_DE_AVISO)
+const VALOR_POR_PALAVRA = inverter(TIPOS_DE_VALOR)
+
+// Num TEMPLATE, onde a automação teria um valor fechado há um marcador
+// (`{{params.allowFrom}}`) — quem instala é que escolhe. Validar o enum aqui
+// recusaria todo template parametrizado; deixar passar qualquer coisa
+// esconderia erro de digitação. Marcador passa, o resto é conferido.
+const ehMarcador = (texto) => /^\{\{[^{}]+\}\}$/.test(String(texto).trim())
+
+function traduzir (mapa, valor, oQue, linha) {
+  const limpo = String(valor).trim()
+  if (ehMarcador(limpo)) return limpo
+  const codigo = mapa[limpo]
+  if (!codigo) throw new ErroDeSintaxe(`${oQue} desconhecid${oQue.endsWith('a') ? 'a' : 'o'}: "${limpo}"`, linha)
+  return codigo
+}
 
 function descitar (bruto, linha) {
   const texto = bruto.trim()
@@ -135,9 +153,124 @@ function lerAcao (linha, filhas) {
   return { type: def.tipo, config }
 }
 
+// Lê os blocos que pertencem ao TEMPLATE, não à automação: o formulário que
+// quem instala preenche, as variáveis que o comando usa, e os avisos.
+//
+// O bloco `configurável` é o pedido do dono: quem escreve o comando declara o
+// esquema, e quem usa configura pelo painel sem abrir arquivo nenhum. Os quatro
+// tipos são os que ele pediu — digitar livremente, escolher da lista, número, e
+// liga/desliga.
+function lerBlocosDeTemplate (linhas, inicio, template) {
+  let i = inicio
+  const filhasDe = (indentAlvo) => {
+    const out = []
+    while (i < linhas.length && linhas[i].indent === indentAlvo) { out.push(linhas[i]); i++ }
+    return out
+  }
+
+  while (i < linhas.length) {
+    const l = linhas[i]
+    if (l.indent !== 0) break
+
+    if (l.texto === 'configurável') {
+      i++
+      while (i < linhas.length && linhas[i].indent === 1) {
+        const decl = linhas[i]; i++
+        const m = decl.texto.match(/^(\S+):\s*([^=(]+?)\s*(?:\(([^)]*)\))?\s*(?:=\s*(.+))?$/)
+        if (!m) throw new ErroDeSintaxe(`esperava "chave: tipo [= padrão]"`, decl.n)
+        const tipo = CONFIG_POR_PALAVRA[m[2].trim()]
+        if (!tipo) throw new ErroDeSintaxe(`tipo de configuração desconhecido: "${m[2].trim()}"`, decl.n)
+        const param = { key: m[1], type: tipo }
+        if (m[3] !== undefined) param.options = m[3].split(',').map((o) => o.trim()).filter(Boolean)
+        if (m[4] !== undefined) {
+          const cru = m[4].trim()
+          if (tipo === 'number') param.default = Number(cru)
+          else if (tipo === 'boolean') param.default = cru === 'sim' || cru === 'true'
+          else if (cru.startsWith('"')) param.default = descitar(cru, decl.n)
+          else param.default = cru
+        }
+        for (const f of filhasDe(2)) {
+          const sep = f.texto.indexOf(':')
+          if (sep < 0) throw new ErroDeSintaxe(`esperava "rótulo:" ou "ajuda:"`, f.n)
+          const chave = f.texto.slice(0, sep).trim()
+          const valor = f.texto.slice(sep + 1).trim()
+          if (chave === 'rótulo') param.label = valor
+          else if (chave === 'ajuda') param.help = valor
+          else throw new ErroDeSintaxe(`configuração não tem campo "${chave}"`, f.n)
+        }
+        template.parameters.push(param)
+      }
+      continue
+    }
+
+    if (l.texto === 'declara') {
+      i++
+      while (i < linhas.length && linhas[i].indent === 1) {
+        const decl = linhas[i]; i++
+        const m = decl.texto.match(/^(\S+)\s+(\S+):\s*(.+)$/)
+        if (!m) throw new ErroDeSintaxe('esperava "<escopo> <chave>: <tipo>"', decl.n)
+        const valueType = VALOR_POR_PALAVRA[m[3].trim()]
+        if (!valueType) throw new ErroDeSintaxe(`tipo de valor desconhecido: "${m[3].trim()}"`, decl.n)
+        const variavel = { scope: m[1], key: m[2], valueType }
+        const descricao = filhasDe(2).map((f) => f.texto).join(' ')
+        if (descricao) variavel.description = descricao
+        template.variables.push(variavel)
+      }
+      continue
+    }
+
+    const aviso = l.texto.match(/^avisa\s+(.+)$/)
+    if (aviso) {
+      i++
+      const nivel = AVISO_POR_PALAVRA[aviso[1].trim()]
+      if (!nivel) throw new ErroDeSintaxe(`nível de aviso desconhecido: "${aviso[1].trim()}"`, l.n)
+      const texto = filhasDe(1).map((f) => f.texto).join(' ')
+      template.warnings.push({ level: nivel, text: texto })
+      continue
+    }
+
+    throw new ErroDeSintaxe(`não conheço o bloco "${l.texto}"`, l.n)
+  }
+  return i
+}
+
 export function compilar (texto) {
   const { linhas, nomes } = tokenizar(texto)
   if (!linhas.length) throw new ErroDeSintaxe('arquivo vazio')
+
+  // Cabeçalho de template, quando existe. `template x v1` identifica o arquivo
+  // como algo instalável, não como uma automação já publicada.
+  let template = null
+  let base = 0
+  const cabTemplate = linhas[0].texto.match(/^template\s+(\S+)\s+v(\d+)$/)
+  if (cabTemplate) {
+    template = {
+      templateId: cabTemplate[1],
+      templateVersion: Number(cabTemplate[2]),
+      dependsOn: [],
+      requiredCapabilities: [],
+      variables: [],
+      warnings: [],
+      parameters: [],
+      minEngineVersion: 1
+    }
+    base = 1
+    while (base < linhas.length && linhas[base].indent === 1) {
+      const l = linhas[base]; base++
+      const sep = l.texto.indexOf(':')
+      if (sep < 0) throw new ErroDeSintaxe(`não entendi "${l.texto}"`, l.n)
+      const chave = l.texto.slice(0, sep).trim()
+      const valor = l.texto.slice(sep + 1).trim()
+      if (chave === 'nome') template.name = valor
+      else if (chave === 'descrição') template.description = valor
+      else if (chave === 'categoria') template.category = valor
+      else if (chave === 'motor') template.minEngineVersion = Number(valor)
+      else if (chave === 'depende de') template.dependsOn.push(valor)
+      else if (chave === 'exige') template.requiredCapabilities.push(valor)
+      else throw new ErroDeSintaxe(`template não tem campo "${chave}"`, l.n)
+    }
+    linhas.splice(0, base)
+  }
 
   const cabeca = linhas[0]
   if (cabeca.indent !== 0) throw new ErroDeSintaxe('a primeira linha precisa começar na margem', cabeca.n)
@@ -201,31 +334,12 @@ export function compilar (texto) {
       case 'pool': doc.responder.poolId = valor; break
       case 'histórico': doc.inputPolicy.historyPolicy = valor; break
       case 'tipos':
-        doc.inputPolicy.acceptedMessageKinds = valor.split(',').map((t) => {
-          const limpo = t.trim()
-          const cod = TIPO_POR_PALAVRA[limpo]
-          if (!cod) throw new ErroDeSintaxe(`tipo de mensagem desconhecido: "${limpo}"`, l.n)
-          return cod
-        })
+        doc.inputPolicy.acceptedMessageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
         break
-      case 'casa': {
-        const cod = CASAMENTO_POR_PALAVRA[valor]
-        if (!cod) throw new ErroDeSintaxe(`modo de casamento desconhecido: "${valor}"`, l.n)
-        gatilhoConfig.match = cod
-        break
-      }
-      case 'de': {
-        const cod = ORIGEM_POR_PALAVRA[valor]
-        if (!cod) throw new ErroDeSintaxe(`origem desconhecida: "${valor}"`, l.n)
-        gatilhoConfig.allowFrom = cod
-        break
-      }
+      case 'casa': gatilhoConfig.match = traduzir(CASAMENTO_POR_PALAVRA, valor, 'modo de casamento', l.n); break
+      case 'de': gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'origem', l.n); break
       case 'quando for':
-        gatilhoConfig.messageKinds = valor.split(',').map((t) => {
-          const cod = TIPO_POR_PALAVRA[t.trim()]
-          if (!cod) throw new ErroDeSintaxe(`tipo desconhecido: "${t.trim()}"`, l.n)
-          return cod
-        })
+        gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
         break
       case 'palavras':
         gatilhoConfig.keywords = valor.split(',').map((p) => descitar(p, l.n))
@@ -333,7 +447,18 @@ export function compilar (texto) {
     emCadeia(null, ramoFalse, condicao.id, 'false')
   }
 
+  // Bloco de template só faz sentido em arquivo de template. Deixar cair num
+  // objeto descartado seria perder a configuração inteira sem avisar — o
+  // formulário simplesmente não apareceria e ninguém saberia por quê.
+  if (i < linhas.length) {
+    if (!template) {
+      throw new ErroDeSintaxe(
+        `"${linhas[i].texto}" só existe em arquivo de template (comece com "template <id> v1")`, linhas[i].n)
+    }
+    lerBlocosDeTemplate(linhas, i, template)
+  }
+
   doc.flow.nodes = nos
   doc.flow.edges = arestas
-  return doc
+  return template ? { template, documentTemplate: doc } : doc
 }
