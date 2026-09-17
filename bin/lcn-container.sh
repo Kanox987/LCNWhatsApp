@@ -46,40 +46,50 @@ log "motor no ar"
 
 # O painel é opcional para o funcionamento, mas é a única janela para ver
 # Execuções — sem ele, diagnosticar é ler log cru.
+# Mantém um processo de pé sem derrubar o resto.
+#
+# O motor é o NÚCLEO: sem ele o gateway recebe mensagem e não decide nada. O
+# gateway e o painel são substituíveis — a falha de um não pode levar o motor
+# junto.
+#
+# Isso custou caro: o gateway do número não pareado não conseguiu buscar a
+# versão do WhatsApp Web ("failed to fetch sw.js") e, como qualquer saída
+# derrubava o container, o MOTOR caiu junto. O outro número, que estava
+# conectado e funcionando, parou de responder — e o painel, que é onde se
+# diagnostica isso, sumiu no mesmo movimento.
+manter_vivo () {
+  local nome="$1"; shift
+  local espera=5
+  while true; do
+    "$@"
+    log "${nome} saiu (código $?) — subindo de novo em ${espera}s"
+    sleep "${espera}"
+    if [ "${espera}" -lt 60 ]; then espera=$(( espera * 2 )); fi
+  done
+}
+
 log "painel…"
-node src/web/runServer.js &
+manter_vivo "painel" node src/web/runServer.js &
 PID_PAINEL=$!
 
-# O gateway em primeiro plano seria o normal, mas então a morte do motor
-# passaria despercebida. Com todos em segundo plano e `wait -n`, a saída de
-# QUALQUER um derruba o container — e o `restart: unless-stopped` sobe os três
-# de novo, juntos e na ordem certa.
 log "gateway…"
-sh bin/lock-and-run.sh data/instance.lock node index.js &
+manter_vivo "gateway" sh bin/lock-and-run.sh data/instance.lock node index.js &
 PID_GATEWAY=$!
 
 encerrar () {
   log "encerrando…"
   kill "$PID_GATEWAY" "$PID_PAINEL" "$PID_MOTOR" 2>/dev/null
-  wait
+  wait 2>/dev/null
 }
 trap encerrar TERM INT
 
-wait -n
+# Espera o MOTOR, e só ele. Gateway e painel se reerguem sozinhos; se o motor
+# cai, não há sistema, e aí sim o container inteiro reinicia.
+wait "${PID_MOTOR}"
 CODIGO=$?
-log "um dos processos saiu (código ${CODIGO}) — derrubando o resto para reiniciar inteiro"
+log "o motor saiu (código ${CODIGO}) — sem ele não há sistema, reiniciando tudo"
 encerrar
 
-# Espera ANTES de sair quando a saída foi por falha.
-#
-# Sem isto o conjunto "container cai -> restart sobe -> falha de novo" vira um
-# laço apertado. Custou caro uma vez: uma falha de pareamento gerou 19 pedidos
-# de código ao WhatsApp em 2min16s, um a cada 7 segundos. O backoff do próprio
-# Docker não segura isso — ele conta reinício, não a gravidade do que falhou.
-#
-# Falha de autenticação não se resolve tentando de novo rápido; ela precisa de
-# gente. A espera não conserta nada, mas transforma um martelo em uma batida
-# por minuto, que é a diferença entre "tentou de novo" e "parece ataque".
 if [ "${CODIGO}" -ne 0 ]; then
   log "esperando ${ESPERA_APOS_FALHA}s antes de sair — evita marretar o servidor num laço de reinício"
   sleep "${ESPERA_APOS_FALHA}"
