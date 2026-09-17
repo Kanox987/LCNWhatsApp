@@ -82,8 +82,11 @@ export function criarRoteadorWeb (aplicacao) {
   // comando que responde um texto), e as automações instaladas estão todas
   // fora dela. Elas abriam em somente leitura não porque editar fosse
   // perigoso, mas porque a tela não conseguia REPRESENTÁ-LAS.
-  roteador.get('/api/v1/automations/:id/lcn', ({ params }) => {
-    const atual = automacoes().obter(params.id)
+  roteador.get('/api/v1/automations/:id/lcn', async ({ params }) => {
+    // `obter` fala com o motor por socket, então é assíncrono. Ler o resultado
+    // sem esperar devolve a Promise, e `atual?.draft` vira undefined — a rota
+    // respondia "automação sem rascunho" para automações que têm rascunho.
+    const atual = await automacoes().obter(params.id)
     const documento = atual?.draft?.document
     if (!documento) throw new ErroHttp(404, `Automação sem rascunho: ${params.id}.`)
     try {

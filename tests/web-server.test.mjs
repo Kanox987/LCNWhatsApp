@@ -17,6 +17,11 @@ function criarAplicacaoFake () {
     if (retorno instanceof Error) throw retorno
     return retorno
   }
+  // O motor fala por SOCKET: todo método dele é assíncrono. Um mock síncrono
+  // deixa passar rota que lê o resultado sem esperar — foi o que aconteceu com
+  // a rota de texto, que respondia "automação sem rascunho" para automação com
+  // rascunho, com o teste verde do lado de cá.
+  const registrarAsync = (nome, retorno) => async (...args) => registrar(nome, retorno)(...args)
   return {
     chamadas,
     instancias: {
@@ -31,13 +36,13 @@ function criarAplicacaoFake () {
       listar: registrar('diretorio.listar', { items: [], nextCursor: null })
     },
     motor: {
-      saude: registrar('motor.saude', { ok: true }),
+      saude: registrarAsync('motor.saude', { ok: true }),
       automacoes: {
-        obterMeta: registrar('automacoes.obterMeta', { schemaVersion: 1 }),
-        listar: registrar('automacoes.listar', []),
+        obterMeta: registrarAsync('automacoes.obterMeta', { schemaVersion: 1 }),
+        listar: registrarAsync('automacoes.listar', []),
         // Documento real o bastante para virar texto e voltar — a rota de
         // .lcn traduz de verdade, não devolve o que o mock mandar.
-        obter: registrar('automacoes.obter', {
+        obter: registrarAsync('automacoes.obter', {
           id: 'ping',
           draft: {
             revision: 4,
@@ -61,13 +66,13 @@ function criarAplicacaoFake () {
             }
           }
         }),
-        salvarRascunho: registrar('automacoes.salvarRascunho', { id: 1 }),
-        obterProvenance: registrar('automacoes.obterProvenance', { installedFromTemplate: false })
+        salvarRascunho: registrarAsync('automacoes.salvarRascunho', { id: 1 }),
+        obterProvenance: registrarAsync('automacoes.obterProvenance', { installedFromTemplate: false })
       },
       templates: {
-        listar: registrar('templates.listar', [{ templateId: 'ping' }]),
-        obter: registrar('templates.obter', { templateId: 'ping', documentTemplate: {} }),
-        instalar: registrar('templates.instalar', { installed: [{ id: 'ping' }] })
+        listar: registrarAsync('templates.listar', [{ templateId: 'ping' }]),
+        obter: registrarAsync('templates.obter', { templateId: 'ping', documentTemplate: {} }),
+        instalar: registrarAsync('templates.instalar', { installed: [{ id: 'ping' }] })
       },
       execucoes: {
         listar: registrar('execucoes.listar', { items: [], nextCursor: null })
