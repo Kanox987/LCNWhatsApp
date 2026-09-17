@@ -115,35 +115,121 @@ function localProblem (state) {
 // mostrar o que a automação faz e o documento de verdade. Quem precisa editar
 // hoje edita pelo arquivo; quem só clicou em "Editar" por curiosidade não perde
 // a automação por isso.
-function renderSomenteLeitura ({ atual, motivo, navigate }) {
+// Editar a automação como TEXTO.
+//
+// O assistente monta uma forma só (um comando que responde um texto), e as
+// automações instaladas estão todas fora dela — o /ping inclusive. Elas abriam
+// em somente leitura não porque editar fosse perigoso, mas porque a tela não
+// conseguia REPRESENTÁ-LAS.
+//
+// O texto resolve pela representação: qualquer documento que o motor executa
+// vira algo que uma pessoa lê e edita. E continua sem executar código de
+// usuário — o texto COMPILA para o mesmo grafo auditado de sempre, e o que sai
+// passa pelo mesmo schema e pelo mesmo publish.
+async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
   const documento = atual?.draft?.document
-  const nos = documento?.flow?.nodes || []
 
   setPageHeader({
     eyebrow: `Editando ${atual.id}`,
     title: documento?.name || atual.id,
-    description: 'Esta automação é mais do que o assistente sabe montar, então ela abre em somente leitura.',
+    description: 'Esta automação é mais do que o assistente monta, então ela abre como texto.',
     actions: [button('← Voltar para a lista', { onClick: () => navigate('/automations') })]
   })
 
-  return el('div', { className: 'stack' }, [
-    el('div', { className: 'notice notice-warning' }, [
-      el('strong', { text: 'Somente leitura — o assistente não conseguiria salvar isto sem estragar.' }),
-      el('p', { text: motivo }),
-      el('p', { text: 'Se o assistente abrisse esta automação, salvar iria reescrevê-la como um comando simples e o que ela faz hoje seria perdido. Por isso ele não abre.' })
-    ]),
-    el('section', { className: 'card' }, [
-      el('h2', { text: 'O que ela faz' }),
-      el('ol', { className: 'stack' }, nos.map((no) => el('li', {}, [
-        el('strong', { text: rotuloDoNo(no.type) }),
-        el('span', { className: 'muted', text: ` · ${no.type}` })
-      ])))
-    ]),
-    el('section', { className: 'card' }, [
-      el('h2', { text: 'Documento' }),
-      el('pre', { className: 'json-view compact-json', text: JSON.stringify(documento, null, 2) })
+  let lido
+  try {
+    lido = await api.automations.lerLcn(atual.id)
+  } catch (erro) {
+    return el('div', { className: 'stack' }, [
+      errorState('Não consegui mostrar esta automação como texto.', erro.message),
+      el('section', { className: 'card' }, [
+        el('h2', { text: 'Documento' }),
+        el('pre', { className: 'json-view compact-json', text: JSON.stringify(documento, null, 2) })
+      ])
     ])
+  }
+
+  let etag = lido.etag
+  const area = el('textarea', {
+    className: 'lcn-editor',
+    rows: String(Math.max(14, lido.texto.split('\n').length + 2)),
+    spellcheck: 'false',
+    autocapitalize: 'off',
+    autocomplete: 'off'
+  }, lido.texto)
+
+  const aviso = el('div', {})
+  const limparAviso = () => { aviso.textContent = '' }
+  area.addEventListener('input', limparAviso)
+
+  const salvar = button('Salvar rascunho', {
+    variant: 'primary',
+    onClick: async () => {
+      limparAviso()
+      setBusy(salvar, true)
+      try {
+        const resultado = await api.automations.salvarLcn(atual.id, area.value, etag)
+        etag = resultado?.draft?.etag ?? etag
+        notify('Rascunho salvo.')
+        // Recarrega do servidor: o texto que volta é o que o documento virou de
+        // verdade. Se a linguagem normalizou algo, quem editou precisa VER —
+        // achar que salvou uma coisa e ter salvo outra é o pior resultado.
+        const novo = await api.automations.lerLcn(atual.id)
+        area.value = novo.texto
+        etag = novo.etag
+      } catch (erro) {
+        const linha = erro.details?.linha
+        aviso.replaceChildren(el('div', { className: 'notice notice-danger' }, [
+          el('strong', { text: linha ? `Erro na linha ${linha}` : 'Não consegui salvar' }),
+          el('p', { text: erro.message })
+        ]))
+        if (linha) marcarLinha(area, linha)
+      } finally {
+        setBusy(salvar, false)
+      }
+    }
+  })
+
+  const publicar = button('Publicar', {
+    onClick: async () => {
+      limparAviso()
+      setBusy(publicar, true)
+      try {
+        const atualizado = await api.automations.get(atual.id)
+        await api.automations.publish(atual.id, atualizado.draft.revision)
+        notify('Publicada.')
+        refresh?.()
+      } catch (erro) {
+        aviso.replaceChildren(el('div', { className: 'notice notice-danger' }, [
+          el('strong', { text: 'Não consegui publicar' }),
+          el('p', { text: erro.message })
+        ]))
+      } finally {
+        setBusy(publicar, false)
+      }
+    }
+  })
+
+  return el('div', { className: 'stack' }, [
+    el('div', { className: 'notice notice-info' }, [
+      el('strong', { text: 'Editando como texto' }),
+      el('p', { text: motivo }),
+      el('p', { text: 'O texto vira exatamente o mesmo documento que o motor executa. Salvar cria um rascunho; publicar é que coloca no ar.' })
+    ]),
+    el('section', { className: 'card' }, [area]),
+    aviso,
+    el('div', { className: 'wizard-footer' }, [salvar, publicar])
   ])
+}
+
+// Leva o cursor para a linha do erro. Dizer "linha 7" e deixar a pessoa contar
+// linhas num texto de quarenta é metade do trabalho.
+function marcarLinha (area, linha) {
+  const linhas = area.value.split('\n')
+  const inicio = linhas.slice(0, Math.max(0, linha - 1)).reduce((n, l) => n + l.length + 1, 0)
+  const fim = inicio + (linhas[linha - 1]?.length ?? 0)
+  area.focus()
+  try { area.setSelectionRange(inicio, fim) } catch { /* navegador antigo */ }
 }
 
 // Rótulo humano vindo do catálogo, que já é a fonte única desses nomes.
@@ -152,7 +238,7 @@ function rotuloDoNo (tipo) {
   return achado?.rotulo || tipo
 }
 
-async function renderWizard ({ query, navigate }) {
+async function renderWizard ({ query, navigate, refresh }) {
   const editId = query.get('edit')
   const [meta, pools, instances, current] = await Promise.all([
     api.automations.meta(),
@@ -169,7 +255,7 @@ async function renderWizard ({ query, navigate }) {
         scopeInclude: [], poolId: '', replyText: ''
       }
   const state = { ...initial }
-  if (state.suportada === false) return renderSomenteLeitura({ atual: current, motivo: state.motivo, navigate })
+  if (state.suportada === false) return renderEditorDeTexto({ atual: current, motivo: state.motivo, navigate, refresh })
   let etag = current?.draft?.etag
   let persisted = Boolean(current)
   let step = 0

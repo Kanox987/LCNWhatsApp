@@ -35,6 +35,32 @@ function criarAplicacaoFake () {
       automacoes: {
         obterMeta: registrar('automacoes.obterMeta', { schemaVersion: 1 }),
         listar: registrar('automacoes.listar', []),
+        // Documento real o bastante para virar texto e voltar — a rota de
+        // .lcn traduz de verdade, não devolve o que o mock mandar.
+        obter: registrar('automacoes.obter', {
+          id: 'ping',
+          draft: {
+            revision: 4,
+            etag: 'etag-1',
+            document: {
+              schemaVersion: 1,
+              id: 'ping',
+              revision: 4,
+              enabled: true,
+              name: 'Ping',
+              scope: { include: [{ kind: 'everywhere' }], exclude: [] },
+              inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
+              responder: { strategy: 'weighted_rendezvous', poolId: 'p1' },
+              flow: {
+                nodes: [
+                  { id: 'gatilho', type: 'trigger.command', config: { command: '/ping', match: 'exact', allowFrom: 'any' } },
+                  { id: 'resposta', type: 'action.whatsapp.reply', config: { text: 'pong' } }
+                ],
+                edges: [{ from: 'gatilho', to: 'resposta', on: 'matched' }]
+              }
+            }
+          }
+        }),
         salvarRascunho: registrar('automacoes.salvarRascunho', { id: 1 }),
         obterProvenance: registrar('automacoes.obterProvenance', { installedFromTemplate: false })
       },
@@ -187,6 +213,61 @@ try {
     check('motor inalcançável (sem .status): 502, não 500', rFora.status === 502)
   } finally {
     await servidorMotorFora.fechar()
+  }
+
+  // --- a automação como texto ----------------------------------------------
+  // Esta base já viu teste unitário verde e 502 no navegador porque a camada de
+  // aplicação não expunha o que a rota chamava. Por isso estes casos passam pelo
+  // servidor HTTP de verdade.
+  {
+    const rTexto = await fetch(`${base}/api/v1/automations/ping/lcn`)
+    const corpo = await rTexto.json()
+    check('GET /lcn responde 200', rTexto.status === 200)
+    check('e devolve a automação escrita em português',
+      typeof corpo.texto === 'string' && corpo.texto.startsWith('comando /ping'))
+    check('o texto traz a resposta', (corpo.texto || '').includes('responde "pong"'))
+    check('e o etag, para salvar sem sobrescrever edição alheia', corpo.etag === 'etag-1')
+
+    const rSalvo = await fetch(`${base}/api/v1/automations/ping/lcn`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', 'If-Match': 'etag-1' },
+      body: JSON.stringify({ texto: corpo.texto })
+    })
+    check('PUT /lcn com texto válido responde 200', rSalvo.status === 200)
+    const chamada = aplicacao.chamadas.filter((c) => c.nome === 'automacoes.salvarRascunho').pop()
+    check('o documento chega compilado ao serviço, não o texto',
+      chamada?.args?.[1]?.flow?.nodes?.length === 2, JSON.stringify(chamada?.args?.[1]).slice(0, 80))
+    check('o if-match é repassado', chamada?.args?.[2] === 'etag-1')
+
+    // Erro de escrita é 422 com a LINHA: sem isso a pessoa procura o erro num
+    // texto de quarenta linhas.
+    const rErro = await fetch(`${base}/api/v1/automations/ping/lcn`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ texto: 'comando /x\n  nomee: errado\n' })
+    })
+    const erroCorpo = await rErro.json()
+    check('erro de escrita responde 422, não 500', rErro.status === 422)
+    check('e diz a linha', erroCorpo.details?.linha === 2, JSON.stringify(erroCorpo))
+
+    // O id vem da ROTA. Deixar o texto renomear criaria uma segunda automação
+    // pelo caminho de salvar a primeira.
+    const rRenomeia = await fetch(`${base}/api/v1/automations/ping/lcn`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ texto: corpo.texto.replace('id: ping', 'id: outro') })
+    })
+    check('texto tentando renomear ainda salva no id da rota', rRenomeia.status === 200)
+    const ultima = aplicacao.chamadas.filter((c) => c.nome === 'automacoes.salvarRascunho').pop()
+    check('e o documento guardado mantém o id da rota', ultima?.args?.[1]?.id === 'ping', ultima?.args?.[1]?.id)
+
+    // Template não é automação: instalar é outro caminho.
+    const rTemplate = await fetch(`${base}/api/v1/automations/ping/lcn`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ texto: 'template x v1\n  nome: X\n\ncomando /x\n  nome: X\n  onde: em qualquer lugar\n  pool: p\n  tipos: texto\n  casa: exato\n  de: externo\n\n  responde "oi"\n' })
+    })
+    check('texto de template é recusado na rota de automação', rTemplate.status === 422)
   }
 } finally {
   await fechar()

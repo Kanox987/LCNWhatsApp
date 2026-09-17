@@ -1256,3 +1256,23 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
   .campo-linha { flex-direction: column; }
   .campo-selos { flex-direction: row; flex-wrap: wrap; align-items: flex-start; max-width: 100%; }
 }
+
+/* Editor da automação como texto. Monoespaçada porque a indentação CARREGA
+   significado aqui: o que está sob a condição é o ramo dela. */
+.lcn-editor {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+.lcn-editor:focus { outline: 2px solid var(--brand); outline-offset: -1px; }

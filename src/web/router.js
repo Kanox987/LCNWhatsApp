@@ -4,7 +4,9 @@
 // Módulos 1/2) — este arquivo só faz o mapeamento HTTP → chamada de método,
 // de propósito explícito rota por rota (nunca um proxy cru de path pro
 // motor) pra manter controlado o que o navegador pode alcançar.
-import { criarRoteador, resposta } from '../engine/server/transport.js'
+import { criarRoteador, ErroHttp, resposta } from '../engine/server/transport.js'
+import { compilar, ErroDeSintaxe } from '../lcn/compilar.js'
+import { descompilar } from '../lcn/descompilar.js'
 import { respostaBinaria } from './binario.js'
 
 function queryObjeto (query) {
@@ -69,6 +71,47 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.put('/api/v1/automations/:id/enabled', ({ params, body }) => automacoes().definirHabilitada(params.id, body?.enabled))
   roteador.put('/api/v1/automations/:id/deployment-mode', ({ params, body }) => automacoes().definirModo(params.id, body?.mode))
   roteador.get('/api/v1/automations/:id/provenance', ({ params }) => automacoes().obterProvenance(params.id))
+
+  // --- a automação como TEXTO ---------------------------------------------
+  //
+  // O motor nunca ouve falar da linguagem: ele continua recebendo e guardando
+  // documento. A tradução mora aqui porque é apresentação — a mesma automação,
+  // numa forma que uma pessoa lê.
+  //
+  // É isto que destrava a edição. O assistente do painel monta UMA forma (um
+  // comando que responde um texto), e as automações instaladas estão todas
+  // fora dela. Elas abriam em somente leitura não porque editar fosse
+  // perigoso, mas porque a tela não conseguia REPRESENTÁ-LAS.
+  roteador.get('/api/v1/automations/:id/lcn', ({ params }) => {
+    const atual = automacoes().obter(params.id)
+    const documento = atual?.draft?.document
+    if (!documento) throw new ErroHttp(404, `Automação sem rascunho: ${params.id}.`)
+    try {
+      return { texto: descompilar(documento), etag: atual.draft.etag, revision: atual.draft.revision }
+    } catch (erro) {
+      // Documento que a linguagem ainda não sabe escrever não pode virar 500:
+      // a tela precisa conseguir dizer POR QUE não dá para editar.
+      throw new ErroHttp(422, `Esta automação ainda não vira texto: ${erro.message}`)
+    }
+  })
+
+  roteador.put('/api/v1/automations/:id/lcn', ({ params, body, req }) => {
+    let documento
+    try {
+      documento = compilar(String(body?.texto ?? ''))
+    } catch (erro) {
+      if (!(erro instanceof ErroDeSintaxe)) throw erro
+      // 422 com a linha: erro de escrita é do texto, não do servidor.
+      throw new ErroHttp(422, erro.message, { linha: erro.linha })
+    }
+    if (documento.template) {
+      throw new ErroHttp(422, 'Isto é um template, não uma automação. Instale pelo Catálogo.')
+    }
+    // O id vem da ROTA, não do texto: deixar o texto renomear a automação
+    // criaria uma segunda pelo caminho de salvar a primeira.
+    documento.id = params.id
+    return automacoes().salvarRascunho(params.id, documento, req?.headers?.['if-match'])
+  })
 
   // --- pools (coordenação multi-bot) ---
   roteador.get('/api/v1/pools', () => pools().listar())

@@ -78,7 +78,15 @@ export const api = {
     validate: (id, document) => request(`/automations/${segment(id)}/validate`, { method: 'POST', body: document }),
     publish: (id, revision) => request(`/automations/${segment(id)}/publish`, { method: 'POST', body: { revision } }),
     enable: (id, enabled) => request(`/automations/${segment(id)}/enabled`, { method: 'PUT', body: { enabled } }),
-    setMode: (id, mode) => request(`/automations/${segment(id)}/deployment-mode`, { method: 'PUT', body: { mode } })
+    setMode: (id, mode) => request(`/automations/${segment(id)}/deployment-mode`, { method: 'PUT', body: { mode } }),
+    // A automação como texto. O documento continua sendo a verdade guardada;
+    // isto é a mesma coisa numa forma que dá pra ler e editar.
+    lerLcn: (id) => request(`/automations/${segment(id)}/lcn`),
+    salvarLcn: (id, texto, etag) => request(`/automations/${segment(id)}/lcn`, {
+      method: 'PUT',
+      body: { texto },
+      headers: etag ? { 'If-Match': etag } : {}
+    })
   },
   pools: {
     list: () => request('/pools'),
