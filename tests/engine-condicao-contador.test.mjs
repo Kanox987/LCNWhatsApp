@@ -19,6 +19,14 @@ const GRUPO_A = '120000000000000001@g.us'
 const GRUPO_B = '120000000000000002@g.us'
 const PESSOA = '5511900000001@s.whatsapp.net'
 
+// Em grupo o bot só age depois que o dono autoriza — senão ficaria avaliando
+// conversa de gente que nem sabe que ele está ali. Estes casos são sobre
+// condição e contador, não sobre o portão, então os grupos entram autorizados.
+for (const g of [GRUPO_A, GRUPO_B]) {
+  db.prepare('INSERT OR REPLACE INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?,?,?,?,?)')
+    .run('group', g, 'grupo_ativo', '"sim"', agora)
+}
+
 function publicar (id, doc, { scopeKind = 'group', scopeId = GRUPO_A, deploymentMode = 'live' } = {}) {
   db.prepare('INSERT INTO automations (id, schema_version, enabled, deployment_mode, created_at, updated_at) VALUES (?, 1, 1, ?, ?, ?)')
     .run(id, deploymentMode, agora, agora)

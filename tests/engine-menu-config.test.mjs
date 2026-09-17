@@ -15,6 +15,14 @@ db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, 
 
 const GRUPO_TESTES = '120000000000000001@g.us'
 const GRUPO_CLIENTES = '120000000000000002@g.us'
+
+// Em grupo o bot só age depois que o dono autoriza. Estes casos são sobre a
+// configuração do MENU por conversa, não sobre o portão — os grupos entram
+// autorizados para o menu ser o que está sendo medido.
+for (const g of [GRUPO_TESTES, GRUPO_CLIENTES]) {
+  db.prepare('INSERT OR REPLACE INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?,?,?,?,?)')
+    .run('group', g, 'grupo_ativo', '"sim"', agora)
+}
 const PRIVADO = '5511900000001@s.whatsapp.net'
 
 function publicarComando (id, comando, escopo, label, descricao) {

@@ -54,6 +54,29 @@ function conversaMarcada (db, chat, chave) {
   }
 }
 
+// A marca que diz "o dono autorizou o bot a agir NESTE grupo".
+//
+// Grupo é diferente de conversa direta: quem manda mensagem lá não escolheu
+// falar com o bot, e muitas vezes nem sabe que ele está ali. Por isso o padrão
+// em grupo é o bot ficar inerte até alguém com autoridade dizer que pode.
+//
+// A marca é um atributo comum da conversa, igual às outras marcas — assim o
+// comando que a liga é uma automação como qualquer outra, criada por template,
+// e não uma regra escondida dentro do motor.
+export const CHAVE_GRUPO_ATIVO = 'grupo_ativo'
+
+// Num grupo sem autorização, só comando restrito ao dono é avaliado — senão
+// não haveria como ligar o bot lá de dentro, e a única saída seria o painel.
+//
+// Isso NÃO é uma segunda regra de escopo: escopo diz onde a automação PODE
+// valer; isto diz onde o bot foi autorizado a existir. Uma automação com
+// escopo "em qualquer lugar" continua não agindo em grupo não autorizado.
+function grupoBloqueado (db, evento, trigger) {
+  if (evento?.chat?.kind !== 'group') return false
+  if (trigger?.config?.requireOwner === true) return false
+  return !conversaMarcada(db, evento.chat, CHAVE_GRUPO_ATIVO)
+}
+
 // Um destino casa com a conversa do evento?
 //
 // `contact`/`group` continuam sendo o endereço exato de uma conversa. Os outros
@@ -926,6 +949,14 @@ export function avaliarEvento (db, evento) {
 
       const documento = jsonOuNull(candidato.doc_json)
       const trigger = documento && acharTrigger(documento)
+
+      // Grupo não autorizado: nem avalia, e nem grava execução.
+      //
+      // Não gravar é de propósito. Com 166 grupos, registrar "não casou" para
+      // cada automação a cada mensagem enche a aba Execuções de ruído e some
+      // com o que importa. E o dono pediu que o bot não ficasse lendo conversa
+      // de grupo onde ninguém o chamou.
+      if (trigger && grupoBloqueado(db, evento, trigger)) continue
       let status = 'no_match'
       let comandosGerados = []
       let detalheErro = null

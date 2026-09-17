@@ -22,6 +22,15 @@ const BRUNO = '5511900000002@s.whatsapp.net'
 const G1 = '120363000000000001@g.us'
 const G2 = '120363000000000002@g.us'
 
+// Estes casos são sobre ESCOPO — onde a automação pode valer. O portão de grupo
+// é outra coisa: onde o bot foi autorizado a existir. Um grupo sem autorização
+// não casa com nada, nem com "todos os grupos", então autorizamos os dois aqui
+// para o escopo ser o que está sendo medido.
+for (const g of [G1, G2]) {
+  db.prepare('INSERT OR REPLACE INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?,?,?,?,?)')
+    .run('group', g, 'grupo_ativo', '"sim"', agora)
+}
+
 function publicar (id, destinos) {
   const doc = {
     schemaVersion: 1,

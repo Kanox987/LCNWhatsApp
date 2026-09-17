@@ -17,6 +17,12 @@ const agora = new Date().toISOString()
 db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p1', 'Pool', agora, agora)
 
 const GRUPO = '120000000000000009@g.us'
+
+// Em grupo o bot só age depois que o dono autoriza. Estes casos são sobre
+// moderação (anti-link, apagar, remover), não sobre o portão — o grupo entra
+// autorizado para a moderação ser o que está sendo medido.
+db.prepare('INSERT OR REPLACE INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?,?,?,?,?)')
+  .run('group', GRUPO, 'grupo_ativo', '"sim"', agora)
 const PESSOA = '5511900000123@s.whatsapp.net'
 const DONO = '5511900000999@s.whatsapp.net'
 

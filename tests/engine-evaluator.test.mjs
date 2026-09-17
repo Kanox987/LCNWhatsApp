@@ -193,6 +193,11 @@ check('set não gera comando de saída; só reply aparece', resultSetReply?.comm
 // --- sender em grupo: persiste na pessoa, nunca no identificador do grupo ---
 const grupoSender = '120363000000001@g.us'
 const pessoaSender = '5511333@s.whatsapp.net'
+// Em grupo o bot só age depois que o dono autoriza — senão ele ficaria
+// avaliando conversa de gente que nem sabe que ele está ali. Este teste é sobre
+// escopo de variável, não sobre o portão, então o grupo já entra autorizado.
+db.prepare('INSERT OR REPLACE INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?,?,?,?,?)')
+  .run('group', grupoSender, 'grupo_ativo', '"sim"', new Date().toISOString())
 criarAutomacaoComFluxo({
   id: 'set-sender-grupo',
   scopeId: grupoSender,
