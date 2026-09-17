@@ -155,6 +155,7 @@ export function descompilar (documento, template = null) {
     h(`casa: ${CASAMENTOS[cfg.match] || cfg.match}`)
   } else {
     if (cfg.containsLink === true) h('com link')
+    if (cfg.mediaLinkOnly === true) h('só link de mídia')
     if (Array.isArray(cfg.messageKinds) && cfg.messageKinds.length) {
       h(`quando for: ${cfg.messageKinds.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
     }

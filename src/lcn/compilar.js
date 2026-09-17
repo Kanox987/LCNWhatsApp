@@ -307,6 +307,7 @@ export function compilar (texto) {
 
     if (l.texto === 'só dono') { gatilhoConfig.requireOwner = true; continue }
     if (l.texto === 'com link') { gatilhoConfig.containsLink = true; continue }
+    if (l.texto === 'só link de mídia') { gatilhoConfig.mediaLinkOnly = true; continue }
     if (l.texto === 'desligada') { doc.enabled = false; continue }
 
     const sep = l.texto.indexOf(':')

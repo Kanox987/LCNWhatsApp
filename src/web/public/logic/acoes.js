@@ -59,6 +59,7 @@ export const GATILHOS = Object.freeze([
     campos: [
       { chave: 'messageKinds', rotulo: 'Só nestes tipos', ajuda: 'Deixe vazio para qualquer tipo. Marque para reagir só a foto, só a áudio, só a visualização única…' },
       { chave: 'containsLink', rotulo: 'Tem link?', ajuda: 'sim = só mensagens com link · não = só mensagens SEM link. O detector é fechado: não aceita expressão sua, e não marca "etc..." nem "3.5" como link.' },
+      { chave: 'mediaLinkOnly', rotulo: 'Só link de mídia', ajuda: 'Reage só a POST de rede conhecida: reel e foto do Instagram, Shorts e vídeo do YouTube, TikTok, Pinterest, Facebook, X, Reddit. Link de loja, notícia, arquivo em nuvem ou post de comunidade é ignorado em silêncio — sem isso o bot promete "baixando…" antes de descobrir que não há mídia ali.' },
       { chave: 'keywords', rotulo: 'Contém alguma destas palavras', ajuda: 'Dispara se o texto tiver qualquer uma delas, sem diferenciar maiúscula.' },
       { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'A barreira acima vale de qualquer jeito.' },
       { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot.' }

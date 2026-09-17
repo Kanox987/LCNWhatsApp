@@ -6,6 +6,7 @@
 import crypto from 'crypto'
 import { ErroHttp } from './transport.js'
 import { interpolar, resolverCaminho } from './interpolate.js'
+import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
@@ -268,6 +269,18 @@ function eventoCasaGatilhoDeMensagem (evento, config) {
 
   if (config?.containsLink === true && !contemLink(texto)) return false
   if (config?.containsLink === false && contemLink(texto)) return false
+
+  // Só posts de mídia de rede conhecida.
+  //
+  // Sem isto, o download automático reage a QUALQUER link: loja, notícia,
+  // arquivo em nuvem, post de comunidade do YouTube. Nenhum tem mídia para
+  // baixar, mas o bot já mandou "⏳ Baixando…" antes de descobrir — e a pessoa
+  // recebe uma promessa seguida de um pedido de desculpa.
+  //
+  // Vale só para o gatilho AUTOMÁTICO. O comando manual continua tentando
+  // qualquer link: ali a pessoa pediu de propósito, e recusar seria decidir
+  // por ela.
+  if (config?.mediaLinkOnly === true && !ehLinkDeMidia(primeiroLink(texto))) return false
 
   if (Array.isArray(config?.keywords) && config.keywords.length) {
     const baixo = texto.toLowerCase()

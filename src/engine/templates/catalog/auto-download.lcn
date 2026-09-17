@@ -1,6 +1,6 @@
 template auto-download v1
   nome: Baixar links automaticamente
-  descrição: Baixa sozinho toda mídia de link que chegar, sem ninguém digitar comando. Instale escolhendo o destino "conversas marcadas" com o marcador auto_download, e ligue conversa por conversa pelo /autodow.
+  descrição: Baixa sozinho reel e foto do Instagram, Shorts e vídeo do YouTube, TikTok, Pinterest e outras redes conhecidas, sem ninguém digitar comando. Link que não é post de mídia — loja, notícia, arquivo em nuvem — é ignorado em silêncio, sem prometer nada. Instale escolhendo o destino "conversas marcadas" com o marcador auto_download, e ligue conversa por conversa pelo /autodow.
   categoria: modulos-especializados
 
 ao receber mensagem
@@ -8,6 +8,7 @@ ao receber mensagem
   pool: {{params.poolId}}
   tipos: texto
   com link
+  só link de mídia
   de: {{params.allowFrom}}
 
   baixa "{{message.link}}"
@@ -41,5 +42,8 @@ avisa nota
 
 avisa exige
   Precisa do serviço de download configurado no config.json.
+
+avisa nota
+  Só reage a link que é post de mídia de rede conhecida. Link de outro tipo é ignorado sem responder nada — assim o bot não promete "baixando…" para descobrir depois que não há mídia. A lista de redes fica em src/engine/linkDeMidia.js.
 
 # nós: gatilho-link, baixar

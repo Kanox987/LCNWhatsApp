@@ -373,6 +373,10 @@
             "containsLink": {
               "type": "boolean"
             },
+            "mediaLinkOnly": {
+              "type": "boolean",
+              "description": "Só reage quando o link é um POST DE MÍDIA de rede conhecida (reel e foto do Instagram, Shorts e vídeo do YouTube, TikTok, Pinterest, Facebook, X, Reddit…). Link de loja, notícia, arquivo em nuvem ou post de comunidade é IGNORADO em vez de tentado — sem isto o bot promete \"baixando…\" antes de descobrir que não há mídia. Use com containsLink. A lista fechada vive em src/engine/linkDeMidia.js."
+            },
             "keywords": {
               "type": "array",
               "maxItems": 50,
