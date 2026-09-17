@@ -2,6 +2,7 @@
 import fs from 'fs'
 import path from 'path'
 import { abrirBanco } from './db.js'
+import { fecharPendentesAntigos } from './evaluator.js'
 import { criarApi } from './api.js'
 import { iniciarTransport } from './transport.js'
 import { ARQ_DB, ARQ_PID_ENGINE, PASTA_RUN, SOCKET_PATH } from '../paths.js'
@@ -22,6 +23,10 @@ function removerPidProprio () {
 
 async function main () {
   const db = abrirBanco(ARQ_DB)
+  // Comando pendente de horas atrás não está em andamento em lugar nenhum.
+  // Deixá-lo assim é o motor mentindo que algo ainda está acontecendo.
+  const fechados = fecharPendentesAntigos(db)
+  if (fechados) console.log(`[engine] ${fechados} comando(s) pendente(s) antigo(s) foram fechados`)
   let transport
   try {
     transport = await iniciarTransport(criarApi(db), { socketPath: SOCKET_PATH })

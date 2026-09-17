@@ -1036,6 +1036,25 @@ export function avaliarEvento (db, evento) {
   return { eventId: evento.eventId, results: transacao() }
 }
 
+// Fecha comando pendente ANTIGO demais para ainda estar em andamento.
+//
+// O gateway fecha os órfãos DELE ao conectar, e esse é o caminho normal. Mas
+// ele fecha por `accountId`, e reparear um número gera um accountId NOVO — os
+// comandos da conta anterior ficam sem ninguém para reivindicá-los, presos em
+// `pending` para sempre e invisíveis na aba Execuções.
+//
+// O corte por idade é largo de propósito: um comando de horas atrás não está
+// mais em execução em lugar nenhum, então não há corrida com um gateway vivo.
+// Nada é reenviado — só deixa de mentir que ainda está acontecendo.
+export function fecharPendentesAntigos (db, { idadeMaximaMs = 24 * 60 * 60 * 1000, agora = Date.now() } = {}) {
+  const limite = new Date(agora - idadeMaximaMs).toISOString()
+  const resultado = db.prepare(
+    `UPDATE outbound_commands SET status = 'outcome_unknown', resolved_at = ?
+     WHERE status = 'pending' AND created_at < ?`
+  ).run(new Date(agora).toISOString(), limite)
+  return resultado.changes
+}
+
 export function registrarResultadoExecucao (db, commandId, { status, detail } = {}) {
   if (!['sent', 'failed', 'outcome_unknown'].includes(status)) {
     throw new ErroHttp(400, "status deve ser 'sent', 'failed' ou 'outcome_unknown'.")

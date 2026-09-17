@@ -102,5 +102,50 @@ const download = (extra = {}) => ({
   check('sem accountId não sai mensagem nem confirmação', r.fechados === 0 && c.enviadas.length === 0)
 }
 
+// --- órfão de conta APOSENTADA ------------------------------------------
+// O gateway fecha os órfãos dele por accountId. Mas reparear um número gera um
+// accountId NOVO, e os comandos da conta anterior ficam sem ninguém para
+// reivindicá-los — presos em `pending` para sempre. Aconteceu de verdade na
+// migração para a VPS: três comandos de uma conta que não existe mais.
+{
+  const { abrirBanco } = await import('../src/engine/server/db.js')
+  const { fecharPendentesAntigos } = await import('../src/engine/server/evaluator.js')
+  const db = abrirBanco(':memory:')
+  const agora = Date.now()
+  // O comando aponta para a execução que o gerou, que aponta para o evento e a
+  // revisão. Montar essa corrente é o preço de testar contra o banco de
+  // verdade, e é o que faz o caso valer: um UPDATE só passa aqui se a tabela
+  // for mesmo a que o motor usa.
+  const iso = new Date().toISOString()
+  db.prepare(`INSERT INTO inbound_events (id, account_id, chat_id, chat_kind, sender_id, message_kind, replay, raw_json, received_at)
+    VALUES ('e1','conta','c1','direct','s1','text',0,'{}',?)`).run(iso)
+  db.prepare(`INSERT INTO automations (id, schema_version, enabled, deployment_mode, created_at, updated_at)
+    VALUES ('a1', 1, 1, 'live', ?, ?)`).run(iso, iso)
+  const rev = db.prepare(`INSERT INTO automation_revisions (automation_id, revision, status, doc_json, created_at)
+    VALUES ('a1', 1, 'active', '{}', ?)`).run(iso)
+  const run = db.prepare(`INSERT INTO automation_runs
+    (event_id, automation_id, automation_revision_id, deployment_mode, status, created_at)
+    VALUES ('e1', 'a1', ?, 'live', 'matched_live', ?)`).run(rev.lastInsertRowid, iso)
+  const inserir = db.prepare(`INSERT INTO outbound_commands
+    (id, run_id, target_account_id, command_type, payload_json, status, created_at)
+    VALUES (?, ${run.lastInsertRowid}, ?, ?, ?, 'pending', ?)`)
+
+  const emIso = (ms) => new Date(ms).toISOString()
+  inserir.run('velho', 'conta-morta', 'whatsapp.reply', '{}', emIso(agora - 48 * 3600 * 1000))
+  inserir.run('recente', 'conta-viva', 'whatsapp.reply', '{}', emIso(agora - 60 * 1000))
+
+  const fechados = fecharPendentesAntigos(db, { agora })
+  check('comando antigo de conta aposentada é fechado', fechados === 1, String(fechados))
+
+  const lido = (id) => db.prepare('SELECT status, resolved_at FROM outbound_commands WHERE id = ?').get(id)
+  check('fechado como "não sei", nunca como falha', lido('velho').status === 'outcome_unknown')
+  check('e ganha o horário em que foi fechado', Boolean(lido('velho').resolved_at))
+
+  // O corte é largo de propósito: um comando de um minuto atrás PODE estar em
+  // execução num gateway vivo, e fechá-lo seria o motor contradizendo quem
+  // está executando.
+  check('comando recente NÃO é tocado', lido('recente').status === 'pending')
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE COMANDO ÓRFÃO PASSARAM')
 process.exit(falhas ? 1 : 0)
