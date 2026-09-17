@@ -56,10 +56,10 @@
   "documentTemplate": {
     "schemaVersion": 1,
     "enabled": true,
-    "name": "Interruptor da recuperação automática",
+    "name": "Ativar o bot neste grupo",
     "display": {
       "menuLabel": "{{params.command}}",
-      "menuDescription": "Liga/desliga a recuperação automática aqui"
+      "menuDescription": "Liga/desliga o bot neste grupo (só dono)"
     },
     "scope": {
       "include": [],
