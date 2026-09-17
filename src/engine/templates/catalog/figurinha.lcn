@@ -1,0 +1,37 @@
+template figurinha v1
+  nome: Figurinha
+  descrição: Transforma uma imagem ou vídeo curto em figurinha do WhatsApp. A pessoa manda a mídia com o comando na legenda, ou responde uma mídia com o comando. Precisa do ffmpeg instalado na máquina que roda o número.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Figurinha
+  menu: {{params.command}} — Transforma imagem ou vídeo em figurinha
+  pool: {{params.poolId}}
+  tipos: texto, foto, vídeo
+  casa: exato ou com argumentos
+  de: {{params.allowFrom}}
+
+  figurinha
+    sem mídia: "{{params.notFoundText}}"
+
+configurável
+  command: texto = "/fig"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita pra transformar a mídia em figurinha.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. "external" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando.
+  notFoundText: texto = "Manda uma imagem ou vídeo curto junto com o comando pra eu virar figurinha."
+    rótulo: Aviso quando não vier mídia
+    ajuda: Texto enviado quando o comando chega sem nenhuma imagem ou vídeo para converter.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando.
+
+avisa exige
+  Exige o ffmpeg instalado na máquina que roda este número. Sem ele, o comando responde com erro em vez de gerar a figurinha.
+
+avisa compatibilidade
+  Vídeos viram figurinha animada e são cortados nos primeiros segundos — é limite do próprio WhatsApp, não do sistema.
+
+# nós: gatilho-comando, gerar-figurinha

@@ -1,0 +1,34 @@
+template config-menu v1
+  nome: Configurar menu (pelo WhatsApp)
+  descrição: Permite mudar o texto do menu direto pela conversa, sem abrir o painel. Cada grupo guarda a própria configuração: o mesmo comando usado em dois grupos configura cada um separadamente. Restrito ao dono do bot.
+  categoria: configuracoes
+
+comando {{params.command}}
+  nome: Configurar menu (pelo WhatsApp)
+  menu: {{params.command}} — Muda o texto do menu desta conversa (só o dono)
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato ou com argumentos
+  de: externo
+  só dono
+
+  configura menu
+    campo: header
+    como usar: "Escreva o texto do menu depois do comando. Exemplo: {{params.command}} Bem-vindo!"
+    confirma: "{{params.confirmText}}"
+
+configurável
+  command: texto = "/configmenu"
+    rótulo: Comando de configuração
+    ajuda: Digite este comando seguido do texto novo. Exemplo: /configmenu Bem-vindo ao nosso grupo!
+  confirmText: texto = "Menu deste grupo atualizado."
+    rótulo: Confirmação
+    ajuda: Resposta enviada quando a configuração é salva.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa este comando.
+
+avisa nota
+  Restrito ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número consegue usar este comando (mandando mensagem para si mesmo) — é por aí que se cadastra o primeiro dono. Estranhos nunca alcançam, mesmo antes de configurar.
+
+# nós: gatilho-comando, configurar

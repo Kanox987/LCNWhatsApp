@@ -1,0 +1,38 @@
+template codigo-formatado v1
+  nome: Responder com código colorido
+  descrição: Responde com o texto formatado como bloco de código com cores, em vez de texto simples. Útil para mandar trechos de código, tabelas ou fórmulas de forma legível.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Responder com código colorido
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato ou com argumentos
+  de: {{params.allowFrom}}
+
+  responde rico "{{message.args}}"
+    formato: code
+    linguagem: {{params.language}}
+    senão: "{{message.args}}"
+
+configurável
+  command: texto = "/codigo"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita, seguida do texto a formatar.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. "external" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando.
+  language: texto = "javascript"
+    rótulo: Linguagem
+    ajuda: Usada para colorir as palavras-chave. Exemplos: javascript, python, sql.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responde este comando.
+
+avisa não oficial
+  Este comando usa um caminho NÃO OFICIAL do WhatsApp. Não existe API de mensagem formatada para bots: para o aplicativo aceitar a formatação, a mensagem precisa viajar marcada como conteúdo da Meta AI. Como isso não é documentado, a Meta pode desativar a qualquer momento — e nesse dia o comando passa a responder em texto simples sozinho, sem quebrar.
+
+avisa compatibilidade
+  Pode não aparecer formatado em versões antigas do aplicativo nem no WhatsApp Business. Nesses casos chega como texto comum.
+
+# nós: gatilho-comando, responder-formatado

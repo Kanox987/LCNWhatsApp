@@ -1,0 +1,42 @@
+template x9 v1
+  nome: X9 — recuperar na mesma conversa
+  descrição: Irmão do /recover: responda uma mídia de visualização única e ela volta NA MESMA CONVERSA, à vista de todo mundo que está ali. O /recover manda para a conversa que você configurou; o /x9 entrega no lugar.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: X9 — recuperar na mesma conversa
+  menu: {{params.command}} — Recupera visualização única na própria conversa
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato ou com argumentos
+  de: {{params.allowFrom}}
+
+  recupera
+    para: same_chat
+    legenda: "{{params.caption}}"
+    sem mídia: "{{params.notFoundText}}"
+
+configurável
+  command: texto = "/x9"
+    rótulo: Comando
+    ajuda: A palavra que você digita respondendo a mídia de visualização única.
+  allowFrom: texto = "any"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também quando VOCÊ mandou a mídia do número onde o bot roda — é o normal para um comando pessoal. Use "external" se quiser que o bot ignore as próprias mensagens.
+  caption: texto = "👁 *VISUALIZAÇÃO ÚNICA CAPTURADA*\n\n👤 Nome: {{sender.name}}\n📱 Número: wa.me/{{sender.number}}\n🗂 Tipo: {{media.kind}}\n🕒 {{now.date}} {{now.time}}"
+    rótulo: Legenda da mídia recuperada
+    ajuda: Texto que acompanha a mídia reenviada. Aceita as variáveis do sistema — {{media.kind}} diz se é foto, vídeo ou áudio, e {{media.caption}} traz a legenda original (deixe de fora se a mídia costuma vir sem legenda: variável ausente aparece do jeito que está, e é assim de propósito, para o erro não passar batido).
+  notFoundText: texto = "Responda uma visualização única com este comando pra eu recuperar aqui mesmo."
+    rótulo: Aviso quando não achar
+    ajuda: Texto enviado quando o comando é usado sem responder uma visualização única.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa nota
+  Reenvia NA CONVERSA onde o comando foi usado. Num grupo, todo mundo vê — é essa a intenção do comando. Se você quer receber em silêncio, use o /recover.
+
+avisa nota
+  Só funciona respondendo uma mídia de visualização única. O WhatsApp não entrega esse conteúdo direto ao bot: a cópia recuperável só existe dentro da mensagem respondida.
+
+# nós: gatilho-comando, recuperar

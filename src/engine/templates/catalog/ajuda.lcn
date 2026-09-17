@@ -1,0 +1,29 @@
+template ajuda v1
+  nome: Ajuda (texto fixo)
+  descrição: Responde um comando com um texto de ajuda fixo, escrito por você. Serve como lista manual de comandos disponíveis até o menu dinâmico por grupo existir.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Ajuda (texto fixo)
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato
+  de: {{params.allowFrom}}
+
+  responde "{{params.texto}}"
+
+configurável
+  command: texto = "/ajuda"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita pra ver a ajuda.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. "external" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando.
+  texto: texto = "Comandos disponíveis: /ping"
+    rótulo: Texto de ajuda
+    ajuda: O texto exato que a automação responde.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um pool na aba Automações antes de instalar, se ainda não tiver um.
+
+# nós: gatilho-comando, resposta-whatsapp

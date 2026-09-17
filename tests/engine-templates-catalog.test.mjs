@@ -28,46 +28,71 @@ check('obterTemplate de id inexistente lança erro claro', lancouTemplateInexist
 // --- catálogo de fixture isolado, pra testar dependsOn/ciclo sem tocar no catálogo real ---
 const pastaFixture = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-catalog-fixture-'))
 try {
-  const templateMinimo = (templateId, dependsOn = []) => ({
-    templateId,
-    templateVersion: 1,
-    name: templateId,
-    description: 'fixture de teste',
-    category: 'utilitarios',
-    dependsOn,
-    requiredCapabilities: [],
-    parameters: [],
-    documentTemplate: { schemaVersion: 1 }
-  })
+  // O catálogo é escrito em .lcn, então o fixture também. Antes ele montava um
+  // `documentTemplate` sem gatilho — algo que o carregador real nunca aceitaria
+  // e que a linguagem nem representa. Fixture que não é o formato de verdade
+  // testa o fixture, não o sistema.
+  const templateMinimo = (templateId, dependeDe = []) => [
+    `template ${templateId} v1`,
+    `  nome: ${templateId}`,
+    '  descrição: fixture de teste',
+    '  categoria: utilitarios',
+    ...dependeDe.map((d) => `  depende de: ${d}`),
+    '',
+    `comando /${templateId}`,
+    `  nome: ${templateId}`,
+    '  onde: em qualquer lugar',
+    '  pool: p1',
+    '  tipos: texto',
+    '  casa: exato',
+    '  de: externo',
+    '',
+    '  responde "oi"',
+    ''
+  ].join('\n')
 
-  fs.writeFileSync(path.join(pastaFixture, 'raiz.json'), JSON.stringify(templateMinimo('raiz', ['folha'])))
-  fs.writeFileSync(path.join(pastaFixture, 'folha.json'), JSON.stringify(templateMinimo('folha')))
+  fs.writeFileSync(path.join(pastaFixture, 'raiz.lcn'), templateMinimo('raiz', ['folha']))
+  fs.writeFileSync(path.join(pastaFixture, 'folha.lcn'), templateMinimo('folha'))
   const catalogoFixture = carregarCatalogo({ pastaCatalogo: pastaFixture })
   check('catálogo de fixture carrega os 2 templates', catalogoFixture.size === 2)
   const ordem = resolverOrdemInstalacao(catalogoFixture, 'raiz')
   check('dependência (folha) vem ANTES de quem depende dela (raiz) na ordem de instalação', JSON.stringify(ordem) === JSON.stringify(['folha', 'raiz']))
 
   let lancouDependenciaInexistente = false
-  fs.writeFileSync(path.join(pastaFixture, 'quebrado.json'), JSON.stringify(templateMinimo('quebrado', ['fantasma'])))
+  fs.writeFileSync(path.join(pastaFixture, 'quebrado.lcn'), templateMinimo('quebrado', ['fantasma']))
   const catalogoComDependenciaQuebrada = carregarCatalogo({ pastaCatalogo: pastaFixture })
   try { resolverOrdemInstalacao(catalogoComDependenciaQuebrada, 'quebrado') } catch { lancouDependenciaInexistente = true }
   check('dependsOn apontando pra template inexistente lança erro (não instala parcial)', lancouDependenciaInexistente)
-  fs.rmSync(path.join(pastaFixture, 'quebrado.json'))
+  fs.rmSync(path.join(pastaFixture, 'quebrado.lcn'))
 
-  fs.writeFileSync(path.join(pastaFixture, 'a.json'), JSON.stringify(templateMinimo('a', ['b'])))
-  fs.writeFileSync(path.join(pastaFixture, 'b.json'), JSON.stringify(templateMinimo('b', ['a'])))
+  fs.writeFileSync(path.join(pastaFixture, 'a.lcn'), templateMinimo('a', ['b']))
+  fs.writeFileSync(path.join(pastaFixture, 'b.lcn'), templateMinimo('b', ['a']))
   const catalogoComCiclo = carregarCatalogo({ pastaCatalogo: pastaFixture })
   let lancouCiclo = false
   try { resolverOrdemInstalacao(catalogoComCiclo, 'a') } catch { lancouCiclo = true }
   check('ciclo de dependência (a->b->a) é detectado e lança erro', lancouCiclo)
 
-  fs.writeFileSync(path.join(pastaFixture, 'invalido.json'), JSON.stringify({ templateId: 'invalido' }))
-  let lancouTemplateInvalido = false
-  try { carregarCatalogo({ pastaCatalogo: pastaFixture }) } catch { lancouTemplateInvalido = true }
-  check('template que não bate com o schema (faltam campos obrigatórios) lança erro ao carregar', lancouTemplateInvalido)
-  fs.rmSync(path.join(pastaFixture, 'invalido.json'))
+  // Arquivo que não compila: o carregador tem que recusar, não carregar meio
+  // template. E a mensagem precisa dizer QUAL arquivo — num catálogo de vinte,
+  // "template inválido" sozinho não ajuda ninguém.
+  fs.writeFileSync(path.join(pastaFixture, 'invalido.lcn'), 'isto não é uma automação\n')
+  let erroInvalido = null
+  try { carregarCatalogo({ pastaCatalogo: pastaFixture }) } catch (e) { erroInvalido = e }
+  check('arquivo que não compila lança erro ao carregar', erroInvalido !== null)
+  check('e o erro nomeia o arquivo', /invalido\.lcn/.test(erroInvalido?.message || ''), erroInvalido?.message)
+  fs.rmSync(path.join(pastaFixture, 'invalido.lcn'))
 
-  fs.writeFileSync(path.join(pastaFixture, 'duplicado.json'), JSON.stringify(templateMinimo('raiz')))
+  // Compila, mas não é template: falta o cabeçalho. Sem esta checagem viraria
+  // um objeto sem templateId no catálogo.
+  fs.writeFileSync(path.join(pastaFixture, 'sem-cabecalho.lcn'),
+    'comando /x\n  nome: X\n  onde: em qualquer lugar\n  pool: p\n  tipos: texto\n  casa: exato\n  de: externo\n\n  responde "oi"\n')
+  let erroSemCabecalho = null
+  try { carregarCatalogo({ pastaCatalogo: pastaFixture }) } catch (e) { erroSemCabecalho = e }
+  check('automação sem cabeçalho de template é recusada', erroSemCabecalho !== null,
+    erroSemCabecalho?.message)
+  fs.rmSync(path.join(pastaFixture, 'sem-cabecalho.lcn'))
+
+  fs.writeFileSync(path.join(pastaFixture, 'duplicado.lcn'), templateMinimo('raiz'))
   let lancouDuplicado = false
   try { carregarCatalogo({ pastaCatalogo: pastaFixture }) } catch { lancouDuplicado = true }
   check('dois arquivos com o mesmo templateId lança erro (nunca sobrescreve em silêncio)', lancouDuplicado)

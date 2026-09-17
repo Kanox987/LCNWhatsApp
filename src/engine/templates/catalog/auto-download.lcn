@@ -1,0 +1,45 @@
+template auto-download v1
+  nome: Baixar links automaticamente
+  descrição: Baixa sozinho toda mídia de link que chegar, sem ninguém digitar comando. Instale escolhendo o destino "conversas marcadas" com o marcador auto_download, e ligue conversa por conversa pelo /autodow.
+  categoria: modulos-especializados
+
+ao receber mensagem
+  nome: Baixar links automaticamente
+  pool: {{params.poolId}}
+  tipos: texto
+  com link
+  de: {{params.allowFrom}}
+
+  baixa "{{message.link}}"
+    modo: {{params.modo}}
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  allowFrom: texto = "any"
+    rótulo: Também baixar meus próprios links
+    ajuda: "any" também baixa os links que VOCÊ manda do próprio número do bot. "external" ignora o próprio número. A resposta que o bot produz nunca dispara nada, nos dois casos — isso não é configurável.
+  modo: texto = "auto"
+    rótulo: O que baixar
+    ajuda: auto, video, audio ou thumbnail.
+  ackText: texto = "⏳ Baixando seu arquivo de mídia…"
+    rótulo: Aviso ao começar
+    ajuda: Marcando a mensagem do link.
+  errorText: texto = "Não consegui baixar essa mídia: {{erro}}"
+    rótulo: Se falhar
+    ajuda: {{erro}} vira o motivo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  chat auto_download: texto
+    Liga o download automático NESTA conversa. Preenchido liga, vazio desliga — o mesmo tipo de marcador do VIP.
+
+avisa nota
+  Instale escolhendo o destino "conversas marcadas" com o marcador auto_download. Assim nasce desligado e vale só onde você ligar — um grupo movimentado baixaria tudo que passa.
+
+avisa exige
+  Precisa do serviço de download configurado no config.json.
+
+# nós: gatilho-link, baixar

@@ -1,0 +1,39 @@
+template menu v1
+  nome: Menu de comandos
+  descrição: Lista os comandos disponíveis naquela conversa. Cada grupo vê só o que vale nele, e o texto pode ser diferente em cada grupo. Vem junto com o comando de configuração, que permite mudar esse texto pelo próprio WhatsApp.
+  categoria: utilitarios
+  depende de: config-menu
+
+comando {{params.command}}
+  nome: Menu de comandos
+  menu: {{params.command}} — Mostra esta lista de comandos
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato
+  de: {{params.allowFrom}}
+
+  mostra menu
+    cabeçalho: "{{params.header}}"
+    vazio: "{{params.emptyText}}"
+
+configurável
+  command: texto = "/menu"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para ver a lista de comandos.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. "external" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando.
+  header: texto = "Comandos disponíveis:"
+    rótulo: Primeira linha do menu
+    ajuda: Pode ser trocada depois, por conversa, usando o comando de configuração.
+  emptyText: texto = "Nenhum comando disponível por aqui ainda."
+    rótulo: Quando não houver comando
+    ajuda: Resposta quando nenhuma automação está publicada para aquela conversa.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responde este comando.
+
+avisa compatibilidade
+  No formato com botões, o menu NÃO aparece no WhatsApp Business e pode não aparecer em versões antigas do aplicativo. Nesses casos o sistema envia o menu como texto automaticamente, então ninguém fica sem resposta.
+
+# nós: gatilho-comando, mostrar-menu

@@ -1,0 +1,41 @@
+template anti-link v1
+  nome: Anti-link
+  descrição: Apaga mensagens com link automaticamente, sem precisar de comando. Você escolhe quantos avisos a pessoa recebe antes de ser removida do grupo. O contador é por pessoa e por grupo: avisos num grupo não somam com os de outro. O dono do bot nunca é removido.
+  categoria: modulos-especializados
+
+ao receber mensagem
+  nome: Anti-link
+  pool: {{params.poolId}}
+  tipos: texto
+  com link
+  quando for: texto
+  de: externo
+
+  apaga mensagem
+  soma group_member links_apagados = 1
+  se var group_member links_apagados >= "{{params.limite}}"
+    remove do grupo
+      quem: sender
+      nunca o dono: true
+  senão
+    responde "{{params.aviso}} (aviso {{var.member.links_apagados}})"
+
+configurável
+  limite: número = 3
+    rótulo: Avisos antes de remover
+    ajuda: Quantas vezes a pessoa pode mandar link antes de ser removida do grupo. Use um número alto (ex: 999) se quiser só apagar e avisar, sem nunca remover.
+  aviso: texto = "Link não é permitido neste grupo."
+    rótulo: Texto do aviso
+    ajuda: Enviado toda vez que um link é apagado, antes de a pessoa atingir o limite.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa esta regra.
+
+declara
+  member links_apagados: número
+    Quantas mensagens com link desta pessoa já foram apagadas NESTE grupo. Zere para perdoar alguém.
+
+avisa exige
+  Para apagar mensagens e remover pessoas, o número precisa ser ADMINISTRADOR do grupo. Sem isso o WhatsApp recusa a ação e ela aparece como falha no histórico.
+
+# nós: detectar-link, apagar, contar, passou-do-limite, remover, avisar

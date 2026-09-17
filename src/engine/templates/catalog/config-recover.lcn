@@ -1,0 +1,36 @@
+template config-recover v1
+  nome: Configurar destino do recover
+  descrição: Escolhe, pelo próprio WhatsApp, para qual conversa o /recover manda a mídia recuperada. Escreva o número depois do comando, ou "aqui" para usar a conversa atual. O valor fica guardado numa variável do sistema, que o /recover lê na hora de enviar — é o mesmo lugar onde moram os marcadores tipo VIP.
+  categoria: configuracoes
+
+comando {{params.command}}
+  nome: Configurar destino do recover
+  menu: {{params.command}} — Escolhe para onde o recover envia
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato ou com argumentos
+  de: externo
+  só dono
+
+  define global recover_destino = "{{message.args}}"
+  responde "{{params.confirmText}}"
+
+configurável
+  command: texto = "/configrecover"
+    rótulo: Comando
+    ajuda: Digite o comando seguido do número (ex: /configrecover 5511999999999).
+  confirmText: texto = "Pronto. A partir de agora o recover manda para: {{message.args}}"
+    rótulo: Confirmação
+    ajuda: Resposta depois de gravar o destino.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  global recover_destino: texto
+    Para qual conversa o /recover manda a mídia recuperada. Aceita o número com DDI ou um JID completo. Vazio = mensagens salvas.
+
+avisa nota
+  Restrito ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número do bot consegue usar.
+
+# nós: gatilho-comando, gravar, confirmar

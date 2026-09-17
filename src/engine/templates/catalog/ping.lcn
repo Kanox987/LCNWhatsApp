@@ -1,0 +1,26 @@
+template ping v1
+  nome: Ping (teste de latência)
+  descrição: Responde a um comando com "pong" e o tempo real de processamento em milissegundos. Bom primeiro teste pra confirmar que uma automação nova está publicada e respondendo de verdade.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Ping (teste de latência)
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato
+  de: {{params.allowFrom}}
+
+  responde "pong ({{latencyMs}}ms)"
+
+configurável
+  command: texto = "/ping"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita pra acionar esta automação.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. "external" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um pool na aba Automações antes de instalar, se ainda não tiver um.
+
+# nós: gatilho-comando, resposta-whatsapp

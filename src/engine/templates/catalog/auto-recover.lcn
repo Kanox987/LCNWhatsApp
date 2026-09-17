@@ -1,0 +1,36 @@
+template auto-recover v1
+  nome: Recuperar automaticamente
+  descrição: Recupera TODA visualização única que chegar, sem ninguém digitar comando. Instale escolhendo o destino "conversas marcadas com auto_recover" e ligue conversa por conversa — pelo comando /autorecover ou marcando na aba Dados — assim ele vale só onde você quiser.
+  categoria: modulos-especializados
+
+ao receber mensagem
+  nome: Recuperar automaticamente
+  pool: {{params.poolId}}
+  tipos: visualização única
+  quando for: visualização única
+  de: externo
+
+  recupera
+    para: fixed
+    destino: "{{var.global.recover_destino}}"
+    legenda: "{{params.caption}}"
+
+configurável
+  caption: texto = "👁 *VISUALIZAÇÃO ÚNICA CAPTURADA*\n\n👤 Nome: {{sender.name}}\n📱 Número: wa.me/{{sender.number}}\n🗂 Tipo: {{media.kind}}\n🕒 {{now.date}} {{now.time}}"
+    rótulo: Legenda da mídia recuperada
+    ajuda: Aceita as variáveis do sistema. {{media.kind}} diz se é foto, vídeo ou áudio.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  chat auto_recover: texto
+    Liga a recuperação automática NESTA conversa. Qualquer valor preenchido liga; vazio desliga. É o mesmo tipo de marcador do VIP.
+
+avisa nota
+  Instale escolhendo o destino "conversas marcadas" com o marcador auto_recover. Assim a regra fica desligada por padrão e só vale onde você ligar.
+
+avisa nota
+  Recupera sozinho, sem comando. Em grupo isso é visível para quem receber a mídia no destino configurado — pense onde ligar.
+
+# nós: gatilho-visu, recuperar

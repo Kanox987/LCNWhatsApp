@@ -8,6 +8,7 @@ import fs from 'fs'
 import path from 'path'
 import Ajv from 'ajv'
 import { fileURLToPath } from 'url'
+import { compilar } from '../../lcn/compilar.js'
 
 const PASTA_TEMPLATES = path.dirname(fileURLToPath(import.meta.url))
 const PASTA_CATALOGO = path.join(PASTA_TEMPLATES, 'catalog')
@@ -16,8 +17,28 @@ const schemaTemplate = JSON.parse(fs.readFileSync(arquivoSchema, 'utf8'))
 const ajv = new Ajv({ allErrors: true, strict: false, useDefaults: true })
 const validarSchemaTemplate = ajv.compile(schemaTemplate)
 
+// O catálogo é escrito em `.lcn` — a mesma linguagem que o painel mostra ao
+// editar. Um formato só para o comando, do arquivo à tela.
+//
+// O JSON continua sendo a forma EXECUTADA: o `.lcn` compila para ele aqui, no
+// carregamento, e a partir daí nada mais no sistema sabe que a linguagem
+// existe. O motor não ganhou um interpretador — ganhou um formato de arquivo.
+//
+// A validação de schema continua valendo depois de compilar, pelo mesmo motivo
+// de sempre: o compilador pode ter um defeito, e o portão não pode depender de
+// quem ele guarda.
 function carregarArquivo (pastaCatalogo, nomeArquivo) {
-  const bruto = JSON.parse(fs.readFileSync(path.join(pastaCatalogo, nomeArquivo), 'utf8'))
+  const texto = fs.readFileSync(path.join(pastaCatalogo, nomeArquivo), 'utf8')
+  let compilado
+  try {
+    compilado = compilar(texto)
+  } catch (erro) {
+    throw new Error(`Template inválido em ${nomeArquivo}: ${erro.message}`)
+  }
+  if (!compilado?.template) {
+    throw new Error(`Template inválido em ${nomeArquivo}: falta o cabeçalho "template <id> v<n>".`)
+  }
+  const bruto = { ...compilado.template, documentTemplate: compilado.documentTemplate }
   if (!validarSchemaTemplate(bruto)) {
     const detalhe = validarSchemaTemplate.errors.map((e) => `${e.instancePath || '/'} ${e.message}`).join('; ')
     throw new Error(`Template inválido em ${nomeArquivo}: ${detalhe}`)
@@ -32,7 +53,7 @@ function carregarArquivo (pastaCatalogo, nomeArquivo) {
 export function carregarCatalogo ({ pastaCatalogo = PASTA_CATALOGO } = {}) {
   if (!fs.existsSync(pastaCatalogo)) return new Map()
   const catalogo = new Map()
-  for (const nomeArquivo of fs.readdirSync(pastaCatalogo).filter((n) => n.endsWith('.json')).sort()) {
+  for (const nomeArquivo of fs.readdirSync(pastaCatalogo).filter((n) => n.endsWith('.lcn')).sort()) {
     const template = carregarArquivo(pastaCatalogo, nomeArquivo)
     if (catalogo.has(template.templateId)) throw new Error(`templateId duplicado no catálogo: ${template.templateId}`)
     catalogo.set(template.templateId, template)

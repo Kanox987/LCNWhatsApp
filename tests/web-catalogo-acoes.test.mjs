@@ -134,9 +134,10 @@ check('todo escopo mostra o modo de uso pronto para copiar',
 // `sendFile` ficou invisível justamente por não ter um. Um teste que só olha o
 // catálogo não pegaria isso: a ação estaria documentada e continuaria sem
 // nenhum exemplo instalável.
-const catalogo = fs.readdirSync(new URL('../src/engine/templates/catalog/', import.meta.url))
-  .filter((f) => f.endsWith('.json'))
-  .map((f) => JSON.parse(fs.readFileSync(new URL(`../src/engine/templates/catalog/${f}`, import.meta.url), 'utf8')))
+// Pelo CARREGADOR, não lendo a pasta: o catálogo é escrito em .lcn e compilado
+// no carregamento. Um teste que lê arquivo cru mede o formato, não o conteúdo.
+const { carregarCatalogo } = await import('../src/engine/templates/catalog.js')
+const catalogo = [...carregarCatalogo().values()]
 
 const usadas = new Set()
 for (const t of catalogo) for (const no of t.documentTemplate?.flow?.nodes || []) usadas.add(no.type)

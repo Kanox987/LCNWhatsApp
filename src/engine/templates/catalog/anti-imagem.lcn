@@ -1,0 +1,40 @@
+template anti-imagem v1
+  nome: Anti-imagem
+  descrição: Apaga automaticamente toda mensagem de imagem enviada no grupo, sem precisar de comando. Você escolhe quantos avisos a pessoa recebe antes de ser removida. O contador é por pessoa e por grupo, e o dono do bot nunca é removido.
+  categoria: modulos-especializados
+
+ao receber mensagem
+  nome: Anti-imagem
+  pool: {{params.poolId}}
+  tipos: foto
+  quando for: foto
+  de: externo
+
+  apaga mensagem
+  soma group_member anti-imagem_apagados = 1
+  se var group_member anti-imagem_apagados >= "{{params.limite}}"
+    remove do grupo
+      quem: sender
+      nunca o dono: true
+  senão
+    responde "{{params.aviso}}"
+
+configurável
+  limite: número = 3
+    rótulo: Avisos antes de remover
+    ajuda: Use um número alto (ex: 999) se quiser só apagar e avisar, sem nunca remover ninguém.
+  aviso: texto = "Imagens não são permitidas neste grupo."
+    rótulo: Texto do aviso
+    ajuda: Enviado toda vez que uma mensagem é apagada, antes de a pessoa atingir o limite.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa esta regra.
+
+declara
+  member anti-imagem_apagados: número
+    Quantas imagens desta pessoa já foram apagadas NESTE grupo.
+
+avisa exige
+  Para apagar mensagens e remover pessoas, o número precisa ser ADMINISTRADOR do grupo.
+
+# nós: detectar, apagar, contar, passou, remover, avisar

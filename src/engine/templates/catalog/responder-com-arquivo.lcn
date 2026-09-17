@@ -1,0 +1,41 @@
+template responder-com-arquivo v1
+  nome: Responder com um arquivo do acervo
+  descrição: Um comando que responde sempre com o mesmo arquivo — cardápio em PDF, tabela de preços, áudio de boas-vindas, foto de produto. Você sobe o arquivo uma vez na aba Acervo, copia o identificador dele e cola aqui; o arquivo não é reenviado do seu celular a cada uso.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Responder com um arquivo do acervo
+  menu: {{params.command}} — Recebe um arquivo guardado no acervo
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato
+  de: {{params.allowFrom}}
+
+  envia arquivo "{{params.fileId}}"
+    legenda: "{{params.caption}}"
+    sem arquivo: "{{params.notFoundText}}"
+
+configurável
+  command: texto = "/cardapio"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para receber o arquivo.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda. "external" faz o bot ignorar o próprio número.
+  fileId: texto
+    rótulo: Identificador do arquivo
+    ajuda: Os 24 caracteres que aparecem no cartão do arquivo, na aba Acervo. Use o botão "Copiar id" lá.
+  caption: texto = ""
+    rótulo: Legenda
+    ajuda: Texto que acompanha o arquivo. Aceita variáveis — {{sender.name}} cumprimenta pelo nome. Arquivo de texto vira mensagem e não leva legenda.
+  notFoundText: texto = "Esse arquivo não está mais disponível. Avise o dono do bot."
+    rótulo: Se o arquivo sumiu
+    ajuda: Enviado se o arquivo for apagado do acervo depois de o comando ser publicado — melhor avisar que ficar mudo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa nota
+  Suba o arquivo na aba Acervo ANTES de instalar: é lá que nasce o identificador que este comando pede. O botão "Copiar id" fica no cartão do arquivo.
+
+# nós: gatilho-comando, enviar-arquivo

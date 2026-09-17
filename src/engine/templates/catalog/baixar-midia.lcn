@@ -1,0 +1,53 @@
+template baixar-midia v1
+  nome: Baixar mídia de um link
+  descrição: Responda uma mensagem que tenha link e use o comando: o bot baixa o vídeo, o áudio ou a foto e manda de volta, marcando a mensagem do link. Também funciona colando o link junto do comando. Serve para YouTube, TikTok, Instagram, Facebook e as outras redes que o serviço suportar.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Baixar mídia de um link
+  menu: {{params.command}} — Baixa o vídeo ou a foto de um link
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato ou com argumentos
+  de: {{params.allowFrom}}
+
+  baixa "{{quoted.link}} {{message.link}}"
+    modo: {{params.modo}}
+    avisa: "{{params.ackText}}"
+    legenda: "{{params.caption}}"
+    sem mídia: "{{params.notFoundText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/dow"
+    rótulo: Comando
+    ajuda: Use respondendo uma mensagem com link, ou colando o link logo depois do comando.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda. "external" faz o bot ignorar o próprio número.
+  modo: texto = "auto"
+    rótulo: O que baixar
+    ajuda: auto deixa o serviço escolher · video traz imagem e som · audio traz só a trilha · thumbnail traz só a capa.
+  ackText: texto = "⏳ Baixando seu arquivo de mídia…"
+    rótulo: Aviso ao começar
+    ajuda: Enviado na hora, marcando a mensagem do link. Download demora — sem aviso, parece que o comando não funcionou.
+  caption: texto = ""
+    rótulo: Legenda da mídia
+    ajuda: Deixe vazio para usar a descrição que o serviço trouxer (título do vídeo, por exemplo).
+  notFoundText: texto = "Responda uma mensagem que tenha link, ou mande o link junto com o comando."
+    rótulo: Se não houver link
+    ajuda: Enviado quando não há link nenhum por perto.
+  errorText: texto = "Não consegui baixar essa mídia: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo — link não suportado, arquivo grande demais, serviço fora do ar.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Precisa de um serviço de download configurado no config.json (download.api e download.tokenArquivo). Sem isso o comando responde explicando o que falta, em vez de ficar mudo.
+
+avisa nota
+  O WhatsApp recusa arquivo grande. O limite de envio é download.limiteMB (64 MB por padrão) — acima dele o bot avisa o tamanho em vez de tentar e falhar.
+
+# nós: gatilho-comando, baixar

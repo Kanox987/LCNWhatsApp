@@ -1,0 +1,48 @@
+template recuperar-visu-unica v1
+  nome: Recuperar visualização única
+  descrição: O comando que deu origem a este projeto: responda uma mídia de visualização única e ela é reenviada como mídia normal para a conversa que você escolheu no /configrecover. Sem nada configurado, vai para as suas mensagens salvas. Para recuperar NA PRÓPRIA conversa, use o /x9.
+  categoria: utilitarios
+  depende de: config-recover
+
+comando {{params.command}}
+  nome: Recuperar visualização única
+  menu: {{params.command}} — Recupera mídia de visualização única
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato ou com argumentos
+  de: {{params.allowFrom}}
+
+  recupera
+    para: {{params.destination}}
+    destino: "{{var.global.recover_destino}}"
+    legenda: "{{params.caption}}"
+    sem mídia: "{{params.notFoundText}}"
+
+configurável
+  command: texto = "/recover"
+    rótulo: Comando
+    ajuda: A palavra que você digita respondendo a mídia de visualização única.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. "external" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando.
+  destination: texto = "configured"
+    rótulo: Para onde reenviar
+    ajuda: "configured" usa a conversa gravada pelo /configrecover (e cai para mensagens salvas enquanto ninguém configurou). "saved_messages" força as mensagens salvas; "same_chat" reenvia na própria conversa.
+  caption: texto = "👁 *VISUALIZAÇÃO ÚNICA CAPTURADA*\n\n👤 Nome: {{sender.name}}\n📱 Número: wa.me/{{sender.number}}\n🗂 Tipo: {{media.kind}}\n🕒 {{now.date}} {{now.time}}"
+    rótulo: Legenda da mídia recuperada
+    ajuda: Texto que acompanha a mídia reenviada. Aceita as variáveis do sistema — {{media.kind}} diz se é foto, vídeo ou áudio.
+  notFoundText: texto = "Responda uma mídia de visualização única com este comando pra eu recuperar."
+    rótulo: Aviso quando não achar
+    ajuda: Texto enviado quando o comando é usado sem responder uma visualização única.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  global recover_destino: texto
+    Para qual conversa o /recover manda a mídia recuperada. Configurável pelo WhatsApp com o /configrecover, ou aqui na aba Dados.
+
+avisa nota
+  Só funciona respondendo a mídia de visualização única. O WhatsApp não entrega o conteúdo direto ao bot — a cópia recuperável só existe dentro da mensagem respondida.
+
+# nós: gatilho-comando, recuperar

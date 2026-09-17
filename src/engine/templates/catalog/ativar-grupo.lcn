@@ -1,0 +1,46 @@
+template ativar-grupo v1
+  nome: Ativar o bot neste grupo
+  descrição: Autoriza o bot a agir NESTE grupo, alternando a cada uso. Sem isso, em grupo o bot fica inerte: nenhuma automação é avaliada e nada é registrado — só comandos restritos ao dono passam, que é como este aqui consegue funcionar. Em conversa direta não é preciso: lá quem escreveu escolheu falar com o bot.
+  categoria: configuracoes
+
+comando {{params.command}}
+  nome: Ativar o bot neste grupo
+  menu: {{params.command}} — Liga/desliga o bot neste grupo (só dono)
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato
+  de: externo
+  só dono
+
+  se var chat grupo_ativo == "sim"
+    define chat grupo_ativo = ""
+    responde "{{params.desligadoText}}"
+  senão
+    define chat grupo_ativo = "sim"
+    responde "{{params.ligadoText}}"
+
+configurável
+  command: texto = "/ativar"
+    rótulo: Comando
+    ajuda: Comando que o dono usa dentro do grupo para ligar e desligar o bot ali.
+  ligadoText: texto = "✅ Bot ATIVADO neste grupo.\nAgora os comandos funcionam aqui. Use o mesmo comando para desativar."
+    rótulo: Resposta ao ligar
+    ajuda: Resposta quando o comando liga.
+  desligadoText: texto = "🚫 Bot DESATIVADO neste grupo.\nParei de avaliar as mensagens daqui. Use o mesmo comando para ativar de novo."
+    rótulo: Resposta ao desligar
+    ajuda: Resposta quando o comando desliga.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  chat grupo_ativo: texto
+    Marca deste grupo. Preenchida = o dono autorizou o bot a agir aqui.
+
+avisa nota
+  Restrito ao dono. Vale só para o grupo onde o comando for usado.
+
+avisa nota
+  Desativar não apaga nada: o bot volta a ficar inerte no grupo, e as automações continuam publicadas para os outros lugares.
+
+# nós: gatilho-comando, esta-ligado, desligar, avisar-desligado, ligar, avisar-ligado

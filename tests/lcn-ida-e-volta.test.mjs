@@ -30,34 +30,24 @@ const canon = (v) => Array.isArray(v)
 const mesmo = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b))
 
 // --- ida e volta com TODO o catálogo -------------------------------------
-const pasta = new URL('../src/engine/templates/catalog/', import.meta.url)
-const arquivos = fs.readdirSync(pasta).filter((f) => f.endsWith('.json')).sort()
-check('o catálogo tem templates para exercitar', arquivos.length >= 15, String(arquivos.length))
+// O catálogo agora É .lcn. A ida e volta que importa passou a ser a do
+// carregador: o arquivo compila, e compilar de novo o texto que ele gera
+// devolve a mesma coisa. Se a linguagem perdesse um campo, o template
+// instalaria diferente do que está escrito.
+const { carregarCatalogo } = await import('../src/engine/templates/catalog.js')
+const catalogoLcn = [...carregarCatalogo().values()]
+check('o catálogo tem templates para exercitar', catalogoLcn.length >= 20, String(catalogoLcn.length))
 
-for (const arquivo of arquivos) {
-  const template = JSON.parse(fs.readFileSync(new URL(arquivo, pasta), 'utf8'))
-  // Renderiza com os padrões: é o documento que a instalação produziria.
-  // Parâmetro obrigatório sem padrão (poolId, fileId…) precisa de algum valor
-  // para o template render; qual valor é irrelevante, o que está sendo medido é
-  // a linguagem.
-  const parametros = {}
-  for (const p of template.parameters || []) {
-    if (p.default === undefined || p.default === null) parametros[p.key] = 'x1'
-  }
-  const documento = renderizarTemplate(template, parametros)
+for (const template of catalogoLcn) {
+  const documento = renderizarTemplate(template, Object.fromEntries(
+    (template.parameters || []).filter((p) => p.default === undefined || p.default === null).map((p) => [p.key, 'x1'])
+  ))
   documento.id = template.templateId
   documento.revision = 1
 
-  let texto, volta, erro
-  try {
-    texto = descompilar(documento)
-    volta = compilar(texto)
-  } catch (e) { erro = e }
-
-  if (erro) {
-    check(`${template.templateId}: ida e volta`, false, erro.message)
-    continue
-  }
+  let volta, erro
+  try { volta = compilar(descompilar(documento)) } catch (e) { erro = e }
+  if (erro) { check(`${template.templateId}: ida e volta`, false, erro.message); continue }
   check(`${template.templateId}: o documento volta igual`, mesmo(documento, volta),
     mesmo(documento, volta) ? '' : primeiraDiferenca(documento, volta))
 }

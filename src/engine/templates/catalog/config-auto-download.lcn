@@ -1,0 +1,43 @@
+template config-auto-download v1
+  nome: Interruptor do download automático
+  descrição: Liga e desliga o download automático NESTA conversa, alternando a cada uso e respondendo em que estado ficou. Ele só marca a conversa — quem baixa é a regra "Baixar links automaticamente".
+  categoria: configuracoes
+
+comando {{params.command}}
+  nome: Interruptor do download automático
+  menu: {{params.command}} — Liga/desliga o download automático aqui
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato
+  de: externo
+  só dono
+
+  se var chat auto_download == "sim"
+    define chat auto_download = ""
+    responde "{{params.desligadoText}}"
+  senão
+    define chat auto_download = "sim"
+    responde "{{params.ligadoText}}"
+
+configurável
+  command: texto = "/autodow"
+    rótulo: Comando
+    ajuda: Digite sozinho: cada uso inverte o estado nesta conversa.
+  ligadoText: texto = "✅ Download automático LIGADO nesta conversa.\nTodo link que chegar aqui será baixado."
+    rótulo: Resposta ao ligar
+    ajuda: Resposta quando liga.
+  desligadoText: texto = "⛔ Download automático DESLIGADO nesta conversa."
+    rótulo: Resposta ao desligar
+    ajuda: Resposta quando desliga.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  chat auto_download: texto
+    Marcador desta conversa. Preenchido = download automático ligado aqui.
+
+avisa nota
+  Restrito ao dono do bot. Marca só a conversa onde o comando for usado.
+
+# nós: gatilho-comando, esta-ligado, desligar, avisar-desligado, ligar, avisar-ligado

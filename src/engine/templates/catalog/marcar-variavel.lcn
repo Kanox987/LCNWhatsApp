@@ -1,0 +1,40 @@
+template marcar-variavel v1
+  nome: Marcar remetente com uma variável
+  descrição: Quando alguém manda o comando, grava uma variável customizada nesse contato (ex: marcar como "vip") e confirma por mensagem — sem precisar editar cada contato manualmente na aba Dados.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Marcar remetente com uma variável
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato
+  de: {{params.allowFrom}}
+
+  define sender {{params.variavel}} = "{{params.valor}}"
+  responde "{{params.confirmacao}}"
+
+configurável
+  command: texto = "/vip"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita pra acionar esta automação.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal. "external" faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando.
+  variavel: texto = "vip"
+    rótulo: Nome da variável
+    ajuda: Fica disponível em outras automações como {{var.sender.<nome>}} — vale em qualquer conversa com essa pessoa.
+  valor: texto = "true"
+    rótulo: Valor gravado
+    ajuda: O valor salvo na variável quando o comando é usado.
+  confirmacao: texto = "Pronto, variável registrada!"
+    rótulo: Mensagem de confirmação
+    ajuda: O texto de resposta depois de gravar a variável.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um pool na aba Automações antes de instalar, se ainda não tiver um.
+
+declara
+  sender {{params.variavel}}: texto
+    Marca gravada em quem usou o comando. Vale em qualquer conversa com essa pessoa.
+
+# nós: gatilho-comando, gravar-variavel, resposta-whatsapp
