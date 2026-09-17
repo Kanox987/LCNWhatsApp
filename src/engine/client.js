@@ -61,7 +61,10 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
     execucoes: {
       listar: (filtros) => requisitar('GET', `/executions${montarQueryExecucoes(filtros)}`),
       obter: (runId) => requisitar('GET', caminho('/executions', runId)),
-      confirmar: (id, body) => requisitar('POST', `${caminho('/commands', id)}/result`, body)
+      confirmar: (id, body) => requisitar('POST', `${caminho('/commands', id)}/result`, body),
+      // O que ficou sem resposta nesta conta — ver a rota no motor.
+      pendentes: (accountId, limite = 20) =>
+        requisitar('GET', `/commands/pending?accountId=${encodeURIComponent(accountId)}&limit=${limite}`)
     },
     meta: {
       obterVariaveis: () => requisitar('GET', '/meta/variables')

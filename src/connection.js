@@ -24,6 +24,7 @@ import { EXIT_QUARANTINED } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel } from './engine/zapoAdapter.js'
 import { tipoPodeCasar } from './engine/canonicalEvent.js'
+import { fecharOrfaos } from './engine/orfaos.js'
 import { emitirEventoDebug } from './engine/eventSink.js'
 import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
@@ -421,6 +422,12 @@ export async function iniciar () {
         groupInfo.aquecer(client)
           .then((n) => { if (n) log(`dados de ${n} grupo(s) carregados`) })
           .catch(() => {})
+        // Fecha o que ficou pendurado de uma queda anterior. Se este gateway
+        // acabou de conectar, nada dele está em andamento — o que sobrou
+        // `pending` morreu no meio. O caso que dói é o download: ele promete
+        // "⏳ Baixando…" antes de baixar, e sem isto a pessoa fica esperando
+        // para sempre uma mídia que nunca vem.
+        fecharOrfaos(client, clienteEngine, accountId, { log }).catch(() => {})
         state.definirConexao({
           conectado: true,
           numero: jid ? jid.split('@')[0].split(':')[0] : null,

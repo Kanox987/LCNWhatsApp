@@ -219,4 +219,34 @@ export function registrarRotasExecutions (roteador, db) {
   roteador.post('/commands/:commandId/result', ({ params, body }) => {
     return registrarResultadoExecucao(db, params.commandId, body || {})
   })
+
+  // Comandos desta conta que ficaram sem resposta.
+  //
+  // Quem executa comando de uma conta é UM processo só: o gateway dela. Então,
+  // quando esse gateway acaba de subir, nada dele está em andamento — o que
+  // sobrou `pending` foi interrompido no meio (reinício, queda, deploy).
+  //
+  // Ficavam presos para sempre, invisíveis. O pior caso é o download: ele
+  // manda "⏳ Baixando…" ANTES de baixar, então a pessoa fica esperando uma
+  // mídia que nunca vem, sem nada dizendo que falhou.
+  roteador.get('/commands/pending', ({ query }) => {
+    const accountId = query.get('accountId')
+    if (!accountId) throw new ErroHttp(400, 'Falta accountId.')
+    const limite = Math.min(50, Math.max(1, Number(query.get('limit')) || 20))
+    const linhas = db.prepare(`SELECT id, run_id, target_account_id, command_type, payload_json, status, created_at
+      FROM outbound_commands
+      WHERE status = 'pending' AND target_account_id = ?
+      ORDER BY rowid DESC LIMIT ?`).all(accountId, limite)
+    return linhas.map((row) => ({
+      id: row.id,
+      runId: row.run_id,
+      targetAccountId: row.target_account_id,
+      commandType: row.command_type,
+      payload: jsonOuNull(row.payload_json),
+      status: row.status,
+      // Sem isto o corte por idade nunca se aplica, e uma queda de ontem
+      // ressuscitaria a conversa com um aviso que não ajuda mais ninguém.
+      createdAt: row.created_at
+    }))
+  })
 }
