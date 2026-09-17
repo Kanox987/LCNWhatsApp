@@ -212,7 +212,12 @@ async function executarDownload (client, comando, deps) {
   } catch (erro) {
     // O registro fica como falha mesmo assim — a pessoa recebeu uma mensagem,
     // mas não recebeu o que pediu, e o histórico não pode dizer que deu certo.
-    await avisar(mensagemDoErro(erro))
+    //
+    // `paraPessoa` quando existe: o erro cru carrega endereço do serviço,
+    // caminho do arquivo de token e nome de campo do config.json. Nada disso é
+    // acionável por quem só mandou um link, e parte disso nem deveria sair
+    // daqui. O detalhe continua inteiro no log, para o dono.
+    await avisar(erro?.paraPessoa || mensagemDoErro(erro))
     throw erro
   }
 

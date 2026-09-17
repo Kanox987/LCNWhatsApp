@@ -22,7 +22,7 @@ gallery-dl: Unsupported URL 'http://youtube.com/post/Ugk...?si=7E7IoqJnbf2khemG'
 
 const generico = 'Não foi possível baixar a mídia desse link agora. Tente novamente mais tarde ou envie outro link.'
 const casos = [
-  ['bloqueio real do YouTube', bloqueio, /YouTube bloqueou.*servidor.*Não é um problema com o seu link.*Tente novamente/s],
+  ['bloqueio real do YouTube', bloqueio, /YouTube.*bloqueando.*servidor.*Não é problema do seu link.*tente de novo/s],
   ['post real de comunidade', comunidade, /não tem vídeo nem foto.*Envie um link direto/s],
   ['URL recusada pelos dois motores', "[ytdlp] ERROR: Unsupported URL: https://example.com/ | [gallerydl] gallery-dl: Unsupported URL 'https://example.com/'", /não tem vídeo nem foto.*Envie um link direto/s],
   ['vídeo removido', '[ytdlp] ERROR: [youtube] He5KEaJlKfw: Video unavailable. This video has been removed by the uploader', /privado.*removido.*link de vídeo público/s],

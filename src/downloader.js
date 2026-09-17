@@ -27,7 +27,28 @@ const EM_ANDAMENTO = new Set(['na_fila', 'baixando'])
 // O que o serviço chama de tipo, traduzido para o que o WhatsApp aceita.
 const TIPO_WHATSAPP = { video: 'video', audio: 'audio', imagem: 'image' }
 
-export class ErroDeDownload extends Error {}
+// Duas faces, de propósito.
+//
+// `message` é para o LOG: detalhada, com endereço, caminho de arquivo e nome de
+// campo de configuração — é o que o dono precisa para consertar.
+//
+// `paraPessoa` é o que chega ao WhatsApp. Sem essa separação, quem mandou um
+// link recebia "Defina download.api no config.json" ou o caminho do arquivo de
+// token — instrução que ela não pode seguir, sobre um sistema que ela não
+// administra, com detalhe interno que ela não deveria ver.
+//
+// Quando não é dito, a mensagem já era para a pessoa.
+export class ErroDeDownload extends Error {
+  constructor (mensagem, { paraPessoa } = {}) {
+    super(mensagem)
+    this.paraPessoa = paraPessoa || mensagem
+  }
+}
+
+// O que a pessoa ouve quando o problema é do lado de cá. Ela não tem o que
+// fazer além de tentar de novo, e fingir que tem seria pior.
+const FORA_DO_AR = 'O download está indisponível agora. Tente de novo em alguns minutos.'
+const PRECISA_DE_AJUSTE = 'O download não está disponível agora. Avise o dono do bot.'
 
 export function traduzirErroDeDownload (erro) {
   const texto = typeof erro === 'string' ? erro.replace(/\s+/g, ' ').trim() : ''
@@ -36,7 +57,11 @@ export function traduzirErroDeDownload (erro) {
   // causa real. No bloqueio do YouTube em produção, priorizar essa recusa
   // faria um vídeo válido parecer um link sem mídia.
   if (/sign in to confirm you['’]re not a bot/i.test(texto)) {
-    return 'O YouTube bloqueou o acesso do nosso servidor. Não é um problema com o seu link. Tente novamente mais tarde ou envie o arquivo aqui na conversa.'
+    // Não peça o arquivo a quem pediu o arquivo: se a pessoa tivesse o vídeo,
+    // ela não teria mandado o link. Dizer o que ELA pode fazer, e quando nada
+    // pode ser feito por ela, dizer isso também — em vez de inventar uma
+    // tarefa impossível para parecer prestativo.
+    return 'O YouTube está bloqueando os downloads deste servidor agora. Não é problema do seu link — tente de novo mais tarde.'
   }
   if (/age-restricted|sign in to confirm your age/i.test(texto)) {
     return 'Esse vídeo tem restrição de idade e não pode ser baixado por aqui. Envie outro vídeo sem essa restrição.'
@@ -104,13 +129,14 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
 
   function exigirConfiguracao () {
     if (!conf.api) {
-      throw new ErroDeDownload('O serviço de download não está configurado. Defina download.api no config.json.')
+      throw new ErroDeDownload('O serviço de download não está configurado. Defina download.api no config.json.', { paraPessoa: PRECISA_DE_AJUSTE })
     }
     if (!conf.token) {
       throw new ErroDeDownload(
         conf.tokenArquivo
           ? `Não consegui ler o token em ${conf.tokenArquivo}. Confira o caminho e a permissão do arquivo.`
-          : 'Falta o token do serviço de download. Aponte download.tokenArquivo para o arquivo que o contém.'
+          : 'Falta o token do serviço de download. Aponte download.tokenArquivo para o arquivo que o contém.',
+        { paraPessoa: PRECISA_DE_AJUSTE }
       )
     }
   }
@@ -127,7 +153,7 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
     } catch (erro) {
       // Serviço fora do ar é a causa mais comum, e o erro cru de rede não diz
       // isso para quem só mandou um link no WhatsApp.
-      throw new ErroDeDownload(`Não consegui falar com o serviço de download (${conf.api}).`)
+      throw new ErroDeDownload(`Não consegui falar com o serviço de download (${conf.api}).`, { paraPessoa: FORA_DO_AR })
     } finally {
       clearTimeout(timer)
     }
@@ -135,15 +161,15 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
 
   async function jsonOuErro (resposta, oQue) {
     if (resposta.status === 401 || resposta.status === 403) {
-      throw new ErroDeDownload('O serviço de download recusou o token. Ele pode ter sido trocado.')
+      throw new ErroDeDownload('O serviço de download recusou o token. Ele pode ter sido trocado.', { paraPessoa: PRECISA_DE_AJUSTE })
     }
     if (!resposta.ok) {
-      throw new ErroDeDownload(`O serviço de download respondeu ${resposta.status} ao ${oQue}.`)
+      throw new ErroDeDownload(`O serviço de download respondeu ${resposta.status} ao ${oQue}.`, { paraPessoa: FORA_DO_AR })
     }
     try {
       return await resposta.json()
     } catch {
-      throw new ErroDeDownload(`O serviço de download devolveu uma resposta inesperada ao ${oQue}.`)
+      throw new ErroDeDownload(`O serviço de download devolveu uma resposta inesperada ao ${oQue}.`, { paraPessoa: FORA_DO_AR })
     }
   }
 
@@ -155,8 +181,12 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
       estado = await jsonOuErro(await chamar(`/jobs/${encodeURIComponent(job)}`), 'acompanhar o download')
       if (!EM_ANDAMENTO.has(estado?.estado)) return estado
     }
+    // "vale olhar por lá" era instrução interna vazando: quem está no WhatsApp
+    // não tem onde olhar. O prazo continua explícito porque é informação útil
+    // (diz que houve espera, não recusa imediata), mas a orientação agora é
+    // algo que a pessoa consegue mesmo fazer.
     throw new ErroDeDownload(
-      `O download passou de ${Math.round(conf.esperaMaximaMs / 1000)}s e desisti de esperar. O serviço pode ter terminado depois — vale olhar por lá.`
+      `Esse download passou de ${Math.round(conf.esperaMaximaMs / 1000)}s e parei de esperar. Pode ser arquivo grande ou fila cheia — tente de novo em alguns minutos.`
     )
   }
 
@@ -179,7 +209,7 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
       body: JSON.stringify({ url, modo: modo || conf.modoPadrao })
     }), 'pedir o download')
 
-    if (!pedido?.job) throw new ErroDeDownload('O serviço aceitou o pedido mas não devolveu um trabalho para acompanhar.')
+    if (!pedido?.job) throw new ErroDeDownload('O serviço aceitou o pedido mas não devolveu um trabalho para acompanhar.', { paraPessoa: FORA_DO_AR })
 
     const estado = await esperarTrabalho(pedido.job)
     if (estado?.estado === 'erro') {

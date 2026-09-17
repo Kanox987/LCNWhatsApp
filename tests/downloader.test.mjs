@@ -161,6 +161,50 @@ const carrossel = servico({
 const escolhida = await criarBaixador({ cfg: cfgOk, buscar: carrossel.buscar, dormir: semDormir }).baixar('https://x.com/a')
 check('com vídeo e imagem juntos, manda o vídeo', escolhida.nome === 'video.mp4', escolhida.nome)
 
+// --- o que a PESSOA vê não é o que o LOG registra -----------------------
+// O erro cru carrega endereço do serviço, caminho do arquivo de token e nome
+// de campo do config.json. Quem mandou um link no WhatsApp não administra esse
+// sistema, não pode agir sobre nada disso, e parte é detalhe interno que não
+// deveria sair da máquina.
+{
+  const pessoal = (e) => e?.paraPessoa || e?.message || ''
+  const vazou = (texto) => /config\.json|tokenArquivo|download\.api|https?:\/\/|\/home\/|127\.0\.0\.1|\.token/i.test(texto)
+
+  const casos = []
+  const pegar = async (rotulo, fn) => { try { await fn() } catch (e) { casos.push([rotulo, e]) } }
+
+  await pegar('sem api configurada', () => criarBaixador({ cfg: { download: {} } }).baixar('https://x.com/a'))
+  await pegar('token ilegível', () => criarBaixador({ cfg: comToken({ tokenArquivo: '/home/alguem/.token' }) }).baixar('https://x.com/a'))
+  await pegar('serviço fora do ar', () => criarBaixador({ cfg: cfgOk, buscar: async () => { throw new Error('ECONNREFUSED') }, dormir: semDormir }).baixar('https://x.com/a'))
+  await pegar('token recusado', () => criarBaixador({ cfg: cfgOk, buscar: servico({ status: { '/download': 401 } }).buscar, dormir: semDormir }).baixar('https://x.com/a'))
+  await pegar('serviço respondeu 500', () => criarBaixador({ cfg: cfgOk, buscar: servico({ status: { '/download': 500 } }).buscar, dormir: semDormir }).baixar('https://x.com/a'))
+
+  check('todos os casos internos foram exercitados', casos.length === 5, String(casos.length))
+  for (const [rotulo, erro] of casos) {
+    check(`${rotulo}: a pessoa não vê detalhe interno`, !vazou(pessoal(erro)), pessoal(erro))
+    // O dono precisa do detalhe: esconder dos dois lados troca um problema por outro.
+    check(`${rotulo}: o log mantém o diagnóstico`, erro.message.length > 20 && erro.message !== pessoal(erro),
+      erro.message)
+  }
+
+  // O prazo estourado é da pessoa, então ela vê a mensagem inteira — mas sem
+  // mandar ninguém "olhar por lá", que é lugar ao qual ela não tem acesso.
+  let relogioP = 0
+  let erroEsperaP
+  try {
+    await criarBaixador({
+      cfg: comToken({ tokenArquivo: arquivoToken, esperaMaximaSegundos: 5 }),
+      buscar: servico({ estados: ['baixando'] }).buscar,
+      dormir: async () => { relogioP += 1500 },
+      agora: () => relogioP
+    }).baixar('https://x.com/a')
+  } catch (e) { erroEsperaP = e }
+  check('a espera estourada diz o prazo', /passou de 5s/.test(pessoal(erroEsperaP)), pessoal(erroEsperaP))
+  check('e orienta algo que a pessoa consegue fazer',
+    /tente de novo/i.test(pessoal(erroEsperaP)) && !/olhar por lá|por lá/i.test(pessoal(erroEsperaP)),
+    pessoal(erroEsperaP))
+}
+
 fs.rmSync(pasta, { recursive: true, force: true })
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE DOWNLOAD PASSARAM')
 process.exit(falhas ? 1 : 0)
