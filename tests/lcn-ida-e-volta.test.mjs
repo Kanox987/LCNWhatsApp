@@ -1,0 +1,168 @@
+// A linguagem `.lcn` tem que representar TUDO que o motor executa.
+//
+// Este arquivo existe por causa de um problema concreto: a tela de criação do
+// painel monta uma forma só (um comando que responde um texto), e as automações
+// instaladas estão todas fora dela — o /ping inclusive. Elas abriam em somente
+// leitura porque a tela não consegue REPRESENTÁ-LAS, não porque editar fosse
+// perigoso.
+//
+// O caso que vale por todos é a ida e volta: pegar cada template do catálogo,
+// virar texto, voltar a documento, e o documento precisa ser o MESMO. Se a
+// linguagem perder um campo pelo caminho, editar pelo texto apagaria esse campo
+// em silêncio — exatamente o defeito que o modo somente-leitura evita hoje.
+import fs from 'fs'
+import { compilar, ErroDeSintaxe } from '../src/lcn/compilar.js'
+import { descompilar } from '../src/lcn/descompilar.js'
+import { ACOES } from '../src/lcn/vocabulario.js'
+import { renderizarTemplate } from '../src/engine/templates/render.js'
+import { ACOES_SUPORTADAS } from '../src/engine/server/runtimeCapabilities.js'
+
+let falhas = 0
+const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
+
+// Ordem de chave em objeto JSON não é informação — o que precisa bater é o
+// significado.
+const canon = (v) => Array.isArray(v)
+  ? v.map(canon)
+  : (v && typeof v === 'object')
+      ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])]))
+      : v
+const mesmo = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b))
+
+// --- ida e volta com TODO o catálogo -------------------------------------
+const pasta = new URL('../src/engine/templates/catalog/', import.meta.url)
+const arquivos = fs.readdirSync(pasta).filter((f) => f.endsWith('.json')).sort()
+check('o catálogo tem templates para exercitar', arquivos.length >= 15, String(arquivos.length))
+
+for (const arquivo of arquivos) {
+  const template = JSON.parse(fs.readFileSync(new URL(arquivo, pasta), 'utf8'))
+  // Renderiza com os padrões: é o documento que a instalação produziria.
+  // Parâmetro obrigatório sem padrão (poolId, fileId…) precisa de algum valor
+  // para o template render; qual valor é irrelevante, o que está sendo medido é
+  // a linguagem.
+  const parametros = {}
+  for (const p of template.parameters || []) {
+    if (p.default === undefined || p.default === null) parametros[p.key] = 'x1'
+  }
+  const documento = renderizarTemplate(template, parametros)
+  documento.id = template.templateId
+  documento.revision = 1
+
+  let texto, volta, erro
+  try {
+    texto = descompilar(documento)
+    volta = compilar(texto)
+  } catch (e) { erro = e }
+
+  if (erro) {
+    check(`${template.templateId}: ida e volta`, false, erro.message)
+    continue
+  }
+  check(`${template.templateId}: o documento volta igual`, mesmo(documento, volta),
+    mesmo(documento, volta) ? '' : primeiraDiferenca(documento, volta))
+}
+
+function primeiraDiferenca (a, b) {
+  const ca = canon(a); const cb = canon(b)
+  for (const k of new Set([...Object.keys(ca), ...Object.keys(cb)])) {
+    const x = JSON.stringify(ca[k]); const y = JSON.stringify(cb[k])
+    if (x !== y) return `${k}: era ${String(x).slice(0, 120)} / veio ${String(y).slice(0, 120)}`
+  }
+  return ''
+}
+
+// --- toda ação que o motor executa tem palavra na linguagem --------------
+// Sem isto, uma ação nova nasce impossível de escrever — o mesmo defeito que
+// deixou `sendFile` invisível no painel por semanas.
+{
+  const naLinguagem = new Set(ACOES.map((a) => a.tipo))
+  const faltando = [...ACOES_SUPORTADAS].filter((t) => !naLinguagem.has(t))
+  check('toda ação executável tem palavra na linguagem', faltando.length === 0, faltando.join(', '))
+
+  const suportadas = new Set(ACOES_SUPORTADAS)
+  const sobrando = [...naLinguagem].filter((t) => !suportadas.has(t))
+  check('a linguagem não oferece ação que o motor não executa', sobrando.length === 0, sobrando.join(', '))
+}
+
+// --- o texto é legível por gente -----------------------------------------
+{
+  const doc = compilar(`comando /oi
+  id: oi
+  nome: Saudação
+  onde: em qualquer lugar
+  pool: p1
+  tipos: texto
+  casa: exato
+  de: externo
+
+  responde "olá!"
+`)
+  check('um .lcn escrito à mão compila', doc.flow.nodes.length === 2)
+  check('o gatilho sai certo', doc.flow.nodes[0].type === 'trigger.command' && doc.flow.nodes[0].config.command === '/oi')
+  check('a ação sai certa', doc.flow.nodes[1].type === 'action.whatsapp.reply' && doc.flow.nodes[1].config.text === 'olá!')
+  check('a aresta liga gatilho e ação', doc.flow.edges.length === 1 && doc.flow.edges[0].on === 'matched')
+  // Sem rodapé de nomes, o compilador gera — quem escreve automação não pensa
+  // em id de nó.
+  check('os nós ganham nome sozinhos', doc.flow.nodes.every((n) => typeof n.id === 'string' && n.id.length > 0),
+    JSON.stringify(doc.flow.nodes.map((n) => n.id)))
+}
+
+// --- condição com dois ramos ---------------------------------------------
+{
+  const doc = compilar(`comando /alterna
+  id: alterna
+  nome: Alterna
+  onde: em qualquer lugar
+  pool: p1
+  tipos: texto
+  casa: exato
+  de: externo
+  só dono
+
+  se var chat ligado == "sim"
+    define chat ligado = ""
+    responde "desliguei"
+  senão
+    define chat ligado = "sim"
+    responde "liguei"
+`)
+  const tipos = doc.flow.nodes.map((n) => n.type)
+  check('a condição vira condition.compare', tipos.includes('condition.compare'))
+  check('os dois ramos existem',
+    doc.flow.edges.some((e) => e.on === 'true') && doc.flow.edges.some((e) => e.on === 'false'))
+  check('cada ramo encadeia as ações com "success"',
+    doc.flow.edges.filter((e) => e.on === 'success').length === 2,
+    JSON.stringify(doc.flow.edges))
+  check('"só dono" chega ao gatilho', doc.flow.nodes[0].config.requireOwner === true)
+}
+
+// --- erro de escrita é RECUSADO, com a linha ------------------------------
+// Um `.lcn` que compila "mais ou menos" produziria automação que salva, publica
+// e não faz o que está escrito.
+{
+  const casos = [
+    ['', 'arquivo vazio'],
+    ['responde "oi"', 'começa com'],
+    ['comando /x\n  nomee: errado\n', 'não conheço o campo'],
+    ['comando /x\n  casa: torto\n', 'modo de casamento desconhecido'],
+    ['comando /x\n  onde: no além\n', 'destino desconhecido'],
+    ['comando /x\n  tipos: hologramas\n', 'tipo de mensagem desconhecido'],
+    ['comando /x\n\n  dança "oi"\n', 'não conheço a ação'],
+    ['comando /x\n\n  responde sem aspas\n', 'esperava texto entre aspas'],
+    ['comando /x\n\n  responde "oi"\n    cor: "azul"\n', 'não tem campo'],
+    ['comando /x\n\n  se var chat a b\n', 'precisa de um operador']
+  ]
+  for (const [fonte, esperado] of casos) {
+    let e
+    try { compilar(fonte) } catch (erro) { e = erro }
+    check(`recusa: ${esperado}`, e instanceof ErroDeSintaxe && e.message.includes(esperado),
+      e ? e.message : '(não recusou)')
+  }
+
+  let comLinha
+  try { compilar('comando /x\n  nomee: errado\n') } catch (e) { comLinha = e }
+  check('o erro diz em que linha está', /linha 2/.test(comLinha?.message || ''), comLinha?.message)
+}
+
+console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LINGUAGEM PASSARAM')
+process.exit(falhas ? 1 : 0)

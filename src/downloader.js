@@ -29,6 +29,38 @@ const TIPO_WHATSAPP = { video: 'video', audio: 'audio', imagem: 'image' }
 
 export class ErroDeDownload extends Error {}
 
+export function traduzirErroDeDownload (erro) {
+  const texto = typeof erro === 'string' ? erro : ''
+
+  // O segundo motor pode recusar a URL mesmo quando o primeiro explicou a
+  // causa real. No bloqueio do YouTube em produção, priorizar essa recusa
+  // faria um vídeo válido parecer um link sem mídia.
+  if (/sign in to confirm you['’]re not a bot/i.test(texto)) {
+    return 'O YouTube bloqueou o acesso do nosso servidor. Não é um problema com o seu link. Tente novamente mais tarde ou envie o arquivo aqui na conversa.'
+  }
+  if (/age-restricted|sign in to confirm your age/i.test(texto)) {
+    return 'Esse vídeo tem restrição de idade e não pode ser baixado por aqui. Envie outro vídeo sem essa restrição.'
+  }
+  if (/this live event will begin in/i.test(texto)) {
+    return 'Essa transmissão ainda não começou. Tente novamente depois que ela terminar.'
+  }
+  if (/video unavailable|private video/i.test(texto)) {
+    return 'Esse vídeo está indisponível: pode ser privado ou ter sido removido. Confira se ele abre para você e envie um link de vídeo público disponível.'
+  }
+
+  const errosDosMotores = texto.split(/\|\s*(?=\[(?:ytdlp|gallerydl)\])/i)
+  const ambosRecusaram = ['ytdlp', 'gallerydl'].every((motor) =>
+    errosDosMotores.some((parte) => parte.trim().toLowerCase().startsWith(`[${motor}]`) && /unsupported url/i.test(parte))
+  )
+  if (/does not have a\s+.+?\s+tab/i.test(texto) || ambosRecusaram) {
+    return 'Esse link não tem vídeo nem foto para baixar por aqui. Envie um link direto de um vídeo ou de uma foto.'
+  }
+
+  // Erros novos precisam continuar visíveis para a pessoa, sem transformar
+  // instruções internas de autenticação e diagnóstico em resposta no WhatsApp.
+  return 'Não foi possível baixar a mídia desse link agora. Tente novamente mais tarde ou envie outro link.'
+}
+
 function expandirTil (caminho) {
   if (typeof caminho !== 'string' || !caminho) return null
   return caminho.startsWith('~') ? path.join(os.homedir(), caminho.slice(1)) : caminho
@@ -151,7 +183,8 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
 
     const estado = await esperarTrabalho(pedido.job)
     if (estado?.estado === 'erro') {
-      throw new ErroDeDownload(estado.erro || 'O serviço não conseguiu baixar esse link.')
+      console.warn('[download] Falha informada pelo serviço:', estado.erro || '(sem detalhes)')
+      throw new ErroDeDownload(traduzirErroDeDownload(estado.erro))
     }
 
     const midia = escolherMidia(estado?.midias)

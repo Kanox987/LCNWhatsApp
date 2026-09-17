@@ -180,7 +180,7 @@ async function executarDownload (client, comando, deps) {
   // mensagem. Ficar com o aviso pendurado e nada depois é o pior resultado: não
   // dá nem para saber se o comando funcionou.
   const avisar = async (motivo) => {
-    const texto = (errorText || 'Não consegui baixar essa mídia: {{erro}}').replaceAll('{{erro}}', motivo)
+    const texto = (errorText || '{{erro}}').replaceAll('{{erro}}', motivo)
     try {
       await comTimeout(
         () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),

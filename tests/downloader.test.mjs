@@ -111,11 +111,12 @@ check('arquivo acima do limite é recusado', erroGrande instanceof ErroDeDownloa
 check('a recusa diz o tamanho e o limite', /900,0 MB.*64,0 MB/.test(erroGrande?.message || ''), erroGrande?.message)
 check('e recusa SEM baixar o arquivo', !grande.chamadas.some((c) => c.caminho.startsWith('/media/')))
 
-// --- o erro do serviço chega a quem pediu ---------------------------------
+// --- erro desconhecido continua visível sem repassar detalhes internos ----
 const comErro = servico({ estados: ['erro'], erroDoJob: 'vídeo indisponível nesta região' })
 let erroDoServico
 try { await criarBaixador({ cfg: cfgOk, buscar: comErro.buscar, dormir: semDormir }).baixar('https://x.com/a') } catch (e) { erroDoServico = e }
-check('o motivo que o serviço deu é repassado', /indisponível nesta região/.test(erroDoServico?.message || ''), erroDoServico?.message)
+check('erro desconhecido orienta a tentar novamente sem repetir o texto cru',
+  erroDoServico instanceof ErroDeDownload && /Tente novamente/.test(erroDoServico.message) && !erroDoServico.message.includes('indisponível nesta região'), erroDoServico?.message)
 
 // --- estado desconhecido não vira laço infinito ---------------------------
 const estranho = servico({ estados: ['coisa_nova'], midias: [] })
