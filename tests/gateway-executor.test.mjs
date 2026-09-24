@@ -134,7 +134,12 @@ check('falha ao confirmar no motor nunca lança', lancouConfirmacao === false)
       replyTo: { remoteJid: '5511999@s.whatsapp.net', id: 'LINK1', fromMe: false }
     }
   }
-  const midiaFalsa = { tipo: 'video', mime: 'video/mp4', nome: 'v.mp4', descricao: null, buffer: Buffer.alloc(3 * 1024 * 1024) }
+  // O contrato de baixar() é uma LISTA de mídias — um post pode trazer várias.
+  const midiaFalsa = {
+    midias: [{ tipo: 'video', mime: 'video/mp4', nome: 'v.mp4', buffer: Buffer.alloc(3 * 1024 * 1024) }],
+    foraPorTamanho: 0,
+    descricao: null
+  }
   const deps = { mediaRefCache: {}, criarBaixador: () => ({ baixar: async () => midiaFalsa }) }
 
   // Envio da mídia falha; o aviso inicial (texto) passa.
@@ -172,7 +177,11 @@ check('falha ao confirmar no motor nunca lança', lancouConfirmacao === false)
   const confirmacoes = []
   const deps = {
     mediaRefCache: {},
-    criarBaixador: () => ({ baixar: async () => ({ tipo: 'video', mime: 'video/mp4', nome: 'v.mp4', descricao: 'Título', buffer: Buffer.alloc(10) }) })
+    criarBaixador: () => ({ baixar: async () => ({
+      midias: [{ tipo: 'video', mime: 'video/mp4', nome: 'v.mp4', buffer: Buffer.alloc(10) }],
+      foraPorTamanho: 0,
+      descricao: 'Título'
+    }) })
   }
   await executarComandos(client, [{
     id: 'cmd-ok',

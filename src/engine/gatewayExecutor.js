@@ -1,4 +1,5 @@
 import * as enviadas from '../enviadas.js'
+import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -9,6 +10,19 @@ function mensagemDoErro (erro) {
   } catch {
     return 'falha desconhecida'
   }
+}
+
+// O que pode ir para o WhatsApp. `ErroDeDownload` carrega duas versões do mesmo
+// problema: `message` é o diagnóstico (endereço do serviço, caminho do token,
+// status HTTP) e `paraPessoa` é a frase limpa. O log fica com a primeira, a
+// conversa com a segunda — quem mandou um link não tem o que fazer com endereço
+// interno, e mostrar isso vaza a topologia para qualquer um.
+//
+// Nomeado em vez de repetido inline porque são DOIS caminhos de falha, e o
+// segundo (envio falhando depois do download) estava mandando o erro cru.
+function mensagemParaPessoa (erro) {
+  const limpa = erro?.paraPessoa
+  return typeof limpa === 'string' && limpa ? limpa : mensagemDoErro(erro)
 }
 
 // "Não sei se aconteceu" é diferente de "não aconteceu", e o invariante 3 diz
@@ -174,7 +188,7 @@ async function executarRecover (client, comando, deps) {
 // conversa andou no meio do caminho.
 async function executarDownload (client, comando, deps) {
   const { criarBaixador, cfg } = deps
-  const { chatId, url, modo, replyTo, ackText, caption, errorText } = comando.payload
+  const { chatId, url, modo, entrega, replyTo, ackText, caption, errorText } = comando.payload
 
   // Depois de prometer "estou baixando", qualquer desfecho ruim precisa virar
   // mensagem. Ficar com o aviso pendurado e nada depois é o pior resultado: não
@@ -190,6 +204,23 @@ async function executarDownload (client, comando, deps) {
     } catch (erro) {
       // Já estamos num caminho de erro; o throw de quem chamou é o que importa.
       console.warn(`[engine] Não consegui nem avisar a falha do download: ${mensagemDoErro(erro)}`)
+    }
+  }
+
+  // Nota informativa DEPOIS de uma entrega que deu certo. Separada de `avisar`
+  // de propósito: aquela é o canal de ERRO e embrulha o texto no `errorText`
+  // configurado, então usá-la aqui mandaria "erro: ..." para quem acabou de
+  // receber as fotos com sucesso.
+  const nota = async (texto) => {
+    try {
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao mandar a nota do download do comando ${comando.id}`
+      )
+    } catch (erro) {
+      // A entrega principal já aconteceu; não estragar o comando por causa da nota.
+      console.warn(`[engine] Não consegui mandar a nota do download: ${mensagemDoErro(erro)}`)
     }
   }
 
@@ -217,30 +248,95 @@ async function executarDownload (client, comando, deps) {
     // caminho do arquivo de token e nome de campo do config.json. Nada disso é
     // acionável por quem só mandou um link, e parte disso nem deveria sair
     // daqui. O detalhe continua inteiro no log, para o dono.
-    await avisar(erro?.paraPessoa || mensagemDoErro(erro))
+    await avisar(mensagemParaPessoa(erro))
     throw erro
   }
 
-  const conteudo = { type: midia.tipo, media: midia.buffer, mimetype: midia.mime }
-  if (midia.tipo === 'document') conteudo.fileName = midia.nome
   // A descrição vinda do serviço (título do vídeo, autor) só entra quando o
   // comando não trouxe legenda própria — quem configurou manda.
   const legenda = caption || midia.descricao
-  if (legenda && midia.tipo !== 'audio') conteudo.caption = legenda
+  const midias = midia.midias
+  const bytesTotais = midias.reduce((n, m) => n + m.buffer.length, 0)
 
   try {
-    await comTimeout(
-      () => enviarERegistrar(client, chatId, conteudo, opcoesDeCitacao(replyTo)),
-      TIMEOUT_ENVIO_MS * 4,
-      `timeout ao enviar a mídia baixada do comando ${comando.id}`
-    )
+    // Quem montou o comando escolheu; "album" é só o padrão.
+    if (entrega !== 'separate' && podeVirarAlbum(midias)) {
+      await enviarComoAlbum(client, chatId, midias, legenda, opcoesDeCitacao(replyTo), comando.id)
+    } else {
+      await enviarEmSequencia(client, chatId, midias, legenda, opcoesDeCitacao(replyTo), comando.id)
+    }
   } catch (erro) {
     // ESTE é o caso que deixou o dono olhando "⏳ Baixando…" para sempre: o
     // arquivo veio inteiro e o envio ao WhatsApp é que falhou. O tamanho entra
     // na mensagem porque é a causa mais provável — o serviço aceita arquivo
     // muito maior do que o WhatsApp entrega.
-    await avisar(`baixei ${formatarMB(midia.buffer.length)} mas não consegui enviar aqui (${mensagemDoErro(erro)})`)
+    await avisar(`baixei ${formatarMB(bytesTotais)} mas não consegui enviar aqui (${mensagemParaPessoa(erro)})`)
     throw erro
+  }
+
+  // Entregar 8 de 10 fotos calado faria a pessoa achar que o post tinha 8.
+  if (midia.foraPorTamanho > 0) {
+    const n = midia.foraPorTamanho
+    await nota(n === 1
+      ? '⚠️ Um dos arquivos era grande demais para o WhatsApp e ficou de fora.'
+      : `⚠️ ${n} arquivos eram grandes demais para o WhatsApp e ficaram de fora.`)
+  }
+}
+
+// Uma mídia por mensagem, na ordem. É o que sempre funciona, e é a queda do
+// álbum — nunca há caminho em que as mídias simplesmente não chegam.
+async function enviarEmSequencia (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
+  for (const [i, m] of midias.entries()) {
+    const conteudo = { type: m.tipo, media: m.buffer, mimetype: m.mime }
+    if (m.tipo === 'document') conteudo.fileName = m.nome
+    // Legenda só na primeira: repetida em cada uma, o mesmo texto apareceria
+    // dez vezes seguidas.
+    if (i === 0 && legenda && m.tipo !== 'audio') conteudo.caption = legenda
+    await comTimeout(
+      // Citar só a primeira: dez respostas citando a mesma mensagem poluem a
+      // conversa sem informar nada a mais.
+      () => enviarERegistrar(client, chatId, conteudo, i === 0 ? opcoesCitacao : undefined),
+      TIMEOUT_ENVIO_MS * 4,
+      `timeout ao enviar a mídia ${i + 1}/${midias.length} do comando ${comandoId}`
+    )
+  }
+}
+
+// Álbum de verdade: um "pai" declarando quantas fotos e vídeos vêm, e cada
+// mídia pendurada nele por `messageAssociation`. Ver src/engine/album.js para
+// por que isto é proto cru e por que a queda abaixo é parte do desenho.
+async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
+  let pai
+  try {
+    pai = await comTimeout(
+      () => enviarERegistrar(client, chatId, montarPai(midias), opcoesCitacao),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao abrir o álbum do comando ${comandoId}`
+    )
+    if (!pai?.id) throw new Error('o servidor não devolveu o id do álbum')
+
+    for (const [i, m] of midias.entries()) {
+      const upload = await client.message.upload(m.buffer, {
+        type: m.tipo === 'video' ? 'video' : 'image',
+        mimetype: m.mime
+      })
+      const filho = montarFilho(m, upload, { chatId, paiId: pai.id, indice: i + 1, legenda })
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, filho),
+        TIMEOUT_ENVIO_MS * 4,
+        `timeout ao enviar a mídia ${i + 1}/${midias.length} do álbum do comando ${comandoId}`
+      )
+    }
+  } catch (erro) {
+    // Queda para sequência, e ela é DELIBERADA: o protocolo tem álbum, mas nada
+    // garante que o servidor aceite de um bot ou que o app de quem recebe
+    // agrupe. Igual ao menu com botões — o conteúdo sempre chega de algum jeito.
+    //
+    // O risco aceito aqui é entregar o álbum pela metade e repetir as mídias já
+    // enviadas. Preferir isso a não entregar nada é a mesma escolha do
+    // outcome_unknown: melhor duplicar do que sumir em silêncio.
+    console.warn(`[engine] Álbum não foi aceito (${mensagemDoErro(erro)}) — enviando as mídias em sequência.`)
+    await enviarEmSequencia(client, chatId, midias, legenda, opcoesCitacao, comandoId)
   }
 }
 

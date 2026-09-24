@@ -81,11 +81,13 @@ const s1 = servico({
   estados: ['na_fila', 'baixando', 'pronto'],
   midias: [{ id: 'm1', nome: 'video.mp4', tipo: 'video', mime: 'video/mp4', bytes: 1024, url: '/media/m1' }]
 })
-const midia = await criarBaixador({ cfg: cfgOk, buscar: s1.buscar, dormir: semDormir }).baixar('https://youtu.be/abc', 'video')
+const primeiro = await criarBaixador({ cfg: cfgOk, buscar: s1.buscar, dormir: semDormir }).baixar('https://youtu.be/abc', 'video')
+const midia = primeiro.midias[0]
+check('devolve uma LISTA de mídias, mesmo quando só veio uma', Array.isArray(primeiro.midias) && primeiro.midias.length === 1)
 check('devolve os bytes do arquivo', midia.buffer.toString() === 'bytes-do-video')
 check('traduz o tipo do serviço para o do WhatsApp', midia.tipo === 'video')
 check('preserva o mimetype', midia.mime === 'video/mp4')
-check('traz a descrição do serviço para virar legenda', midia.descricao === 'Título do vídeo')
+check('traz a descrição do serviço para virar legenda', primeiro.descricao === 'Título do vídeo')
 check('espera o trabalho terminar antes de buscar o arquivo',
   s1.chamadas.filter((c) => c.caminho.startsWith('/jobs/')).length === 3, String(s1.chamadas.length))
 check('o token do arquivo é usado no cabeçalho', s1.chamadas.every((c) => c.auth === 'Bearer segredo-abc'))
@@ -95,7 +97,7 @@ check('o pedido de download é POST', s1.chamadas[0].metodo === 'POST' && s1.cha
 for (const [doServico, noWhats] of [['imagem', 'image'], ['audio', 'audio'], ['outro', 'document']]) {
   const s = servico({ estados: ['pronto'], midias: [{ id: 'm', nome: 'a', tipo: doServico, mime: 'x/y', bytes: 10, url: '/media/m' }] })
   const r = await criarBaixador({ cfg: cfgOk, buscar: s.buscar, dormir: semDormir }).baixar('https://x.com/a')
-  check(`tipo "${doServico}" vira "${noWhats}"`, r.tipo === noWhats, r.tipo)
+  check(`tipo "${doServico}" vira "${noWhats}"`, r.midias[0].tipo === noWhats, r.midias[0].tipo)
 }
 
 // --- arquivo grande demais: recusa ANTES de transferir --------------------
@@ -150,7 +152,12 @@ let erroRede
 try { await criarBaixador({ cfg: cfgOk, buscar: foraDoAr.buscar, dormir: semDormir }).baixar('https://x.com/a') } catch (e) { erroRede = e }
 check('serviço fora do ar vira mensagem legível, não erro de rede cru', /Não consegui falar com o serviço/.test(erroRede?.message || ''), erroRede?.message)
 
-// --- vários arquivos: escolhe o que a pessoa espera ----------------------
+// --- vários arquivos: entrega TODOS -------------------------------------
+//
+// Este caso guardava o comportamento antigo — "com vídeo e imagem juntos, manda
+// o vídeo" — e era justamente o defeito: um post de 10 fotos do Instagram
+// baixava as 10 e entregava 1, e num post misto as fotos sumiam sem aviso.
+// Isso vinha sendo confundido com bloqueio de IP.
 const carrossel = servico({
   estados: ['pronto'],
   midias: [
@@ -158,8 +165,27 @@ const carrossel = servico({
     { id: 'b', nome: 'video.mp4', tipo: 'video', mime: 'video/mp4', bytes: 20, url: '/media/b' }
   ]
 })
-const escolhida = await criarBaixador({ cfg: cfgOk, buscar: carrossel.buscar, dormir: semDormir }).baixar('https://x.com/a')
-check('com vídeo e imagem juntos, manda o vídeo', escolhida.nome === 'video.mp4', escolhida.nome)
+const varias = await criarBaixador({ cfg: cfgOk, buscar: carrossel.buscar, dormir: semDormir }).baixar('https://x.com/a')
+check('com vídeo e imagem juntos, entrega os DOIS', varias.midias.length === 2, String(varias.midias.length))
+// A ordem do serviço é a ordem em que a pessoa publicou; reordenar por tipo
+// embaralharia o álbum.
+check('na ordem em que o serviço devolveu, não reordenado por tipo',
+  varias.midias.map((m) => m.nome).join(',') === 'capa.jpg,video.mp4',
+  varias.midias.map((m) => m.nome).join(','))
+
+// --- um arquivo grande no meio não leva os outros junto ------------------
+const misto = servico({
+  estados: ['pronto'],
+  midias: [
+    { id: 'a', nome: 'foto1.jpg', tipo: 'imagem', mime: 'image/jpeg', bytes: 10, url: '/media/a' },
+    { id: 'b', nome: 'filmao.mp4', tipo: 'video', mime: 'video/mp4', bytes: 900 * 1024 * 1024, url: '/media/b' },
+    { id: 'c', nome: 'foto2.jpg', tipo: 'imagem', mime: 'image/jpeg', bytes: 12, url: '/media/c' }
+  ]
+})
+const parcial = await criarBaixador({ cfg: comToken({ tokenArquivo: arquivoToken, limiteMB: 64 }), buscar: misto.buscar, dormir: semDormir }).baixar('https://x.com/a')
+check('vídeo grande demais fica de fora, as fotos seguem', parcial.midias.length === 2, String(parcial.midias.length))
+// Entregar 2 de 3 calado faria a pessoa achar que o post tinha 2.
+check('e quem entrega sabe quantas ficaram de fora', parcial.foraPorTamanho === 1, String(parcial.foraPorTamanho))
 
 // --- o que a PESSOA vê não é o que o LOG registra -----------------------
 // O erro cru carrega endereço do serviço, caminho do arquivo de token e nome
