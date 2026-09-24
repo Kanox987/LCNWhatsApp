@@ -123,10 +123,68 @@ export function validarAutomacao (db, documento) {
   })
 
   const connectionExiste = db.prepare('SELECT 1 FROM connections WHERE id = ?')
+  const conexaoCompleta = db.prepare('SELECT config_json FROM connections WHERE id = ?')
   nodes.forEach((node, indice) => {
     const ref = node?.type === 'action.http' ? node.config?.connectionRef : null
     if (typeof ref === 'string' && ref && !connectionExiste.get(ref)) {
       erros.push({ path: `/flow/nodes/${indice}/config/connectionRef`, message: `conexão inexistente: ${ref}` })
+    }
+  })
+
+  // A chamada de função é conferida CONTRA A DECLARAÇÃO, na publicação.
+  //
+  // O portão importa porque o erro seria caro do outro lado: uma função com nome
+  // trocado ou uma entrada obrigatória faltando só apareceria quando alguém
+  // usasse o comando, e o serviço recusaria com uma mensagem que ninguém liga à
+  // automação. Recusar aqui transforma isso em erro de publicação, com caminho.
+  nodes.forEach((node, indice) => {
+    if (node?.type !== 'action.connection.call') return
+    const caminho = `/flow/nodes/${indice}/config`
+    const ref = node.config?.connectionRef
+    const linha = typeof ref === 'string' && ref ? conexaoCompleta.get(ref) : null
+    if (!linha) {
+      erros.push({ path: `${caminho}/connectionRef`, message: `conexão inexistente: ${ref}` })
+      return
+    }
+    let config = null
+    try { config = JSON.parse(linha.config_json) } catch { config = null }
+    const funcoes = Array.isArray(config?.funcoes) ? config.funcoes : []
+    const funcao = funcoes.find((f) => f.nome === node.config?.function)
+    if (!funcao) {
+      const disponiveis = funcoes.map((f) => f.nome).join(', ') || 'nenhuma declarada'
+      erros.push({
+        path: `${caminho}/function`,
+        message: `a conexão "${ref}" não tem a função "${node.config?.function}". Declaradas: ${disponiveis}.`
+      })
+      return
+    }
+
+    const informadas = node.config?.inputs && typeof node.config.inputs === 'object' ? node.config.inputs : {}
+    for (const entrada of funcao.entradas || []) {
+      const temValor = Object.hasOwn(informadas, entrada.nome) && String(informadas[entrada.nome] ?? '').trim()
+      const temPadrao = entrada.padrao !== undefined && entrada.padrao !== null && entrada.padrao !== ''
+      if (entrada.obrigatoria !== false && !temValor && !temPadrao) {
+        erros.push({ path: `${caminho}/inputs/${entrada.nome}`, message: `a função "${funcao.nome}" precisa da entrada "${entrada.nome}".` })
+      }
+      // Valor FIXO fora da lista é erro agora; valor com variável só dá para
+      // conferir em tempo de execução, e recusar aqui impediria o uso legítimo.
+      if (entrada.tipo === 'opção' && temValor) {
+        const valor = String(informadas[entrada.nome]).trim()
+        if (!valor.includes('{{') && !(entrada.opcoes || []).includes(valor)) {
+          erros.push({
+            path: `${caminho}/inputs/${entrada.nome}`,
+            message: `"${valor}" não é uma escolha de "${entrada.nome}" (${(entrada.opcoes || []).join(', ')}).`
+          })
+        }
+      }
+    }
+    const declaradas = new Set((funcao.entradas || []).map((e) => e.nome))
+    for (const nome of Object.keys(informadas)) {
+      // Entrada que a função não declara seria descartada em silêncio, e quem
+      // escreveu ficaria esperando um efeito que nunca vem.
+      if (!declaradas.has(nome)) {
+        erros.push({ path: `${caminho}/inputs/${nome}`, message: `a função "${funcao.nome}" não recebe "${nome}".` })
+      }
     }
   })
 

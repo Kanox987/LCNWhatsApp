@@ -16,6 +16,19 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.whatsapp.rich',
   'action.whatsapp.sendFile',
   'action.media.download'
+  // `action.connection.call` NÃO entra aqui ainda, e a ausência é deliberada.
+  //
+  // Esta lista é o portão do invariante 7: ela diz o que o RUNTIME executa, e o
+  // publish a impõe. O runtime são os dois lados — o motor já sabe emitir
+  // `connection.call` (evaluator.js, com validação em validate.js), mas o
+  // gateway ainda não sabe executá-lo: essa parte ficou de fora por causa do
+  // trabalho não commitado de outro agente nos mesmos arquivos.
+  //
+  // Declarar agora deixaria publicar uma automação que casa, gera comando, e
+  // morre na entrega — a tela dizendo que funciona algo que não funciona, que é
+  // o defeito que esta rodada inteira passou caçando.
+  //
+  // A linha entra junto com o executor do gateway, num movimento só.
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([
