@@ -175,6 +175,9 @@
               },
               {
                 "$ref": "#/definitions/actionMediaDownload"
+              },
+              {
+                "$ref": "#/definitions/actionConnectionCall"
               }
             ]
           }
@@ -372,6 +375,11 @@
             },
             "containsLink": {
               "type": "boolean"
+            },
+            "alsoOnCommands": {
+              "type": "boolean",
+              "default": false,
+              "description": "Reagir TAMBÉM a mensagens que já casaram com um comando explícito. Padrão false, e o motivo é um defeito medido em produção: \"/dow <link>\" é comando E é mensagem com link, então a regra automática de download baixava o MESMO link uma segunda vez e o bot respondia duas vezes. Quem digita um comando endereçou o bot; regra automática existe para a mensagem que ninguém endereçou a ele. Fica configurável porque auditoria — uma regra que registra tudo que passa — é caso legítimo de querer ver o comando também."
             },
             "mediaLinkOnly": {
               "type": "boolean",
@@ -834,7 +842,9 @@
             },
             "key": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "pattern": "^(?!__)",
+              "description": "Chave da variável. O prefixo __ é reservado do sistema (__owner__, __menu_config__) e é recusado aqui, na ação e na rota de atributos."
             },
             "by": {
               "type": "integer",
@@ -888,7 +898,9 @@
             },
             "key": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "pattern": "^(?!__)",
+              "description": "Chave da variável. O prefixo __ é reservado do sistema (__owner__, __menu_config__) e é recusado aqui, na ação e na rota de atributos."
             },
             "value": {
               "type": "string"
@@ -1009,6 +1021,58 @@
         }
       }
     },
+    "actionConnectionCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.connection.call" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["connectionRef", "function"],
+          "properties": {
+            "connectionRef": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A conexão declarada na aba Conexões. O endereço, o método e a autenticação vêm de lá — nunca do comando. É isso que impede uma automação de apontar para onde quiser."
+            },
+            "function": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Qual função daquela conexão chamar. As funções são declaradas pelo dono; o publish recusa uma que não exista."
+            },
+            "inputs": {
+              "type": "object",
+              "additionalProperties": { "type": "string" },
+              "description": "O que a função recebe, por nome de entrada. Os valores aceitam variáveis ({{message.link}}) e são interpolados antes de sair. Entrada obrigatória que faltar é recusada na publicação, não na hora da chamada."
+            },
+            "ackText": {
+              "type": "string",
+              "description": "Avisa que começou. Chamada externa demora, e silêncio parece que não funcionou."
+            },
+            "caption": {
+              "type": "string",
+              "description": "Legenda, quando a resposta vier como mídia. Aceita variáveis."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "O que responder se a chamada falhar. Escreva {{erro}} onde quiser que apareça o motivo."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "O que responder quando falta o que a função precisa (por exemplo, nenhum link na mensagem)."
+            },
+            "delivery": {
+              "enum": ["album", "separate"],
+              "default": "album",
+              "description": "Como entregar quando a resposta traz VÁRIAS mídias. \"album\" agrupa num carrossel; \"separate\" manda uma por mensagem. Em qualquer caso todas são entregues."
+            }
+          }
+        }
+      }
+    },
     "actionMediaDownload": {
       "description": "Baixa a mídia de um link (YouTube, TikTok, Instagram…) por um serviço externo configurado e envia no WhatsApp. O motor NÃO fala com a rede: ele decide e passa a URL; quem chama o serviço, espera o trabalho terminar e envia os bytes é o gateway — a mesma fronteira do recover e da figurinha.",
       "type": "object",
@@ -1046,6 +1110,14 @@
                 "thumbnail"
               ],
               "description": "auto deixa o serviço escolher; audio traz só a trilha; thumbnail traz a capa."
+            },
+            "delivery": {
+              "enum": [
+                "album",
+                "separate"
+              ],
+              "default": "album",
+              "description": "Como entregar quando o post tem VÁRIAS mídias (carrossel do Instagram, post de várias fotos do Pinterest). \"album\" agrupa num carrossel só — o WhatsApp tem álbum de verdade, com contagem separada de foto e vídeo. \"separate\" manda uma mensagem por arquivo. Em qualquer caso TODAS as mídias são entregues: antes o bot baixava as 10 fotos e mandava 1, e num post misto o vídeo ganhava e as fotos sumiam sem aviso. Se o servidor recusar o álbum, a entrega cai sozinha para uma por uma — o conteúdo nunca deixa de chegar."
             },
             "ackText": {
               "type": "string",

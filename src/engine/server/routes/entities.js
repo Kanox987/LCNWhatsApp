@@ -1,5 +1,6 @@
 import { ErroHttp } from '../transport.js'
 import { ID_GLOBAL, separarIdMembro } from '../attributeScopes.js'
+import { ehChaveReservada, motivoDeRecusa } from '../chavesReservadas.js'
 
 // Os cinco escopos que a tabela aceita desde a migração 008. Antes daqui só
 // 'contact' e 'group' passavam, então contador de membro, de categoria e do
@@ -22,6 +23,14 @@ function normalizarId (kind, id) {
     throw new ErroHttp(400, 'Para membro de grupo, o id é "<grupo>|<pessoa>".')
   }
   return id
+}
+
+// Esta rota é genérica de propósito — ela edita a mesma tabela que a aba Dados
+// mostra. O que ela NUNCA pode fazer é alcançar as chaves do sistema: sem isto,
+// um PUT em .../attributes/__owner__ promovia qualquer contato a dono.
+function recusarChaveReservada (chave) {
+  if (ehChaveReservada(chave)) throw new ErroHttp(400, motivoDeRecusa(chave))
+  return chave
 }
 
 function serializarValor (body) {
@@ -72,11 +81,11 @@ export function registrarRotasEntities (roteador, db) {
 
   roteador.put('/entities/:kind/:id/attributes/:key', ({ params, body }) => {
     const kind = validarKind(params.kind)
-    return definir(kind, normalizarId(kind, params.id), params.key, body)
+    return definir(kind, normalizarId(kind, params.id), recusarChaveReservada(params.key), body)
   })
 
   roteador.delete('/entities/:kind/:id/attributes/:key', ({ params }) => {
     const kind = validarKind(params.kind)
-    return remover(kind, normalizarId(kind, params.id), params.key)
+    return remover(kind, normalizarId(kind, params.id), recusarChaveReservada(params.key))
   })
 }

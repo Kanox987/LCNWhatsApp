@@ -9,6 +9,7 @@ import { interpolar, resolverCaminho } from './interpolate.js'
 import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
+import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
 import {
   ErroDeContador,
@@ -66,6 +67,28 @@ function conversaMarcada (db, chat, chave) {
 // e não uma regra escondida dentro do motor.
 export const CHAVE_GRUPO_ATIVO = 'grupo_ativo'
 
+// A política de entrada de uma revisão, ou null se ela estiver torta.
+//
+// Estes campos eram lidos direto — `documento.inputPolicy.historyPolicy` — e o
+// laço inteiro roda dentro de uma transação. Uma revisão sem `inputPolicy`
+// (documento antigo, inserção nativa, registro adulterado) lançava TypeError,
+// abortava a transação, e NENHUMA automação daquele evento era avaliada: uma
+// regra quebrada calava o bot inteiro, com 500 na cara de quem chamou.
+//
+// `jsonOuNull` devolve o que estiver no banco, e nem toda revisão passou por
+// `validarAutomacao` — então "isso não acontece" não era garantia de nada.
+//
+// Conferir a estrutura, em vez de alargar o catch: catch largo engole também o
+// defeito de programação do próximo mês. Foi exatamente assim que um
+// `.catch(() => {})` escondeu por horas o bug que fazia o gateway não entregar
+// mensagem nenhuma.
+function politicaDeEntrada (documento) {
+  const politica = documento?.inputPolicy
+  if (!politica || typeof politica !== 'object') return null
+  if (!Array.isArray(politica.acceptedMessageKinds)) return null
+  return politica
+}
+
 // Num grupo sem autorização, só comando restrito ao dono é avaliado — senão
 // não haveria como ligar o bot lá de dentro, e a única saída seria o painel.
 //
@@ -76,6 +99,28 @@ function grupoBloqueado (db, evento, trigger) {
   if (evento?.chat?.kind !== 'group') return false
   if (trigger?.config?.requireOwner === true) return false
   return !conversaMarcada(db, evento.chat, CHAVE_GRUPO_ATIVO)
+}
+
+// O dono usando um comando restrito DENTRO do grupo já é a autorização.
+//
+// Sem isto o portão produzia uma mentira: o dono mandava /autodow num grupo não
+// autorizado, o comando rodava (comando restrito sempre passa, ver acima),
+// gravava o marcador e respondia "✅ LIGADO" — mas a regra que realmente baixa
+// não é restrita ao dono, então seguia barrada. O dono lia "ligado" e o bot não
+// fazia nada, sem erro em lugar nenhum.
+//
+// Não afrouxa o portão para terceiros: continua valendo só para quem já passou
+// por `podeUsarComandoRestrito`. O /ativar segue existindo para quem quer
+// autorizar o grupo sem ligar mais nada.
+//
+// Só em execução AO VIVO: em sombra, gravar contrariaria o invariante 2 — o
+// modo existe justamente para não deixar rastro.
+function autorizarGrupoPeloDono (db, evento, trigger) {
+  if (evento?.chat?.kind !== 'group') return false
+  if (trigger?.config?.requireOwner !== true) return false
+  if (conversaMarcada(db, evento.chat, CHAVE_GRUPO_ATIVO)) return false
+  gravarAtributo(db, { scopeKind: 'group', scopeId: evento.chat.id }, CHAVE_GRUPO_ATIVO, 'sim')
+  return true
 }
 
 // Um destino casa com a conversa do evento?
@@ -507,6 +552,61 @@ function executarNo (db, no, evento, contexto, comandos) {
           chatId: evento.chat.id,
           url,
           modo: no.config?.modo || null,
+          // Como entregar quando o post tem VÁRIAS mídias. O padrão é o
+          // carrossel; "separate" existe para quem prefere uma mensagem por
+          // arquivo — decisão de quem monta o comando, não do código.
+          entrega: no.config?.delivery || 'album',
+          replyTo: referenciaDoLink(evento),
+          ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
+          ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
+          ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+        }
+      })
+      return 'success'
+    }
+
+    // Chamar uma FUNÇÃO declarada numa conexão.
+    //
+    // A fronteira é a mesma do download: o motor NÃO fala com a rede. Ele
+    // resolve as entradas, diz qual conexão e qual função, e passa adiante. Quem
+    // monta a requisição, aplica a autenticação e espera a resposta é o gateway.
+    //
+    // E é por isso que isto funciona agora, enquanto o `action.http` continuou
+    // parado: aquele foi desenhado como chamada SÍNCRONA no meio do fluxo, e o
+    // gateway desiste de esperar o motor em 1,5 s. Uma função declarada encerra
+    // a cadeia — vira comando terminal, e o gateway leva o tempo que precisar.
+    case 'action.connection.call': {
+      const entradas = {}
+      for (const [nome, valor] of Object.entries(no.config?.inputs || {})) {
+        // Placeholder que não resolveu é APAGADO, não deixado no texto: é o que
+        // permite uma entrada aceitar as duas formas ("{{quoted.link}}
+        // {{message.link}}" funciona marcando uma mensagem OU colando o link).
+        // Deixar "{{quoted.link}}" viajar para o serviço mandaria lixo.
+        const bruto = interpolar(String(valor ?? ''), contexto).replace(/\{\{[^}]*\}\}/g, ' ').trim()
+        if (bruto) entradas[nome] = bruto
+      }
+
+      // Falta o que a função precisa (o caso comum: nenhum link por perto).
+      // Avisar é melhor que chamar o serviço com entrada vazia e deixar ele
+      // recusar com uma mensagem que ninguém entende.
+      if (!Object.keys(entradas).length && no.config?.notFoundText) {
+        comandos.push({
+          commandType: 'whatsapp.reply',
+          payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto), replyTo: referenciaDoLink(evento) }
+        })
+        return 'success'
+      }
+
+      comandos.push({
+        commandType: 'connection.call',
+        payload: {
+          chatId: evento.chat.id,
+          conexao: no.config.connectionRef,
+          funcao: no.config.function,
+          // O que a FUNÇÃO recebe fica separado de como a resposta é
+          // APRESENTADA: um é contrato com o serviço, o outro é conversa.
+          entradas,
+          entrega: no.config?.delivery || 'album',
           replyTo: referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
           ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
@@ -729,6 +829,10 @@ function executarNo (db, no, evento, contexto, comandos) {
     }
 
     case 'action.variable.set': {
+      // Vira ErroDeFluxo: status 'error' visível na aba Execuções, com o motivo.
+      // Ignorar em silêncio seria pior — quem escreveu a automação ficaria
+      // procurando por que a variável "não grava".
+      if (ehChaveReservada(no.config.key)) throw new ErroDeFluxo(motivoDeRecusa(no.config.key))
       const alvo = resolverEscopo(no.config.scope, evento, { categoryKey: no.config.categoryKey })
       // Escopo que não existe neste evento (ex: group_member numa conversa
       // direta) é ignorado, não é erro: a mesma automação pode valer nos dois
@@ -742,6 +846,7 @@ function executarNo (db, no, evento, contexto, comandos) {
     }
 
     case 'action.variable.increment': {
+      if (ehChaveReservada(no.config.key)) throw new ErroDeFluxo(motivoDeRecusa(no.config.key))
       const alvo = resolverEscopo(no.config.scope, evento, { categoryKey: no.config.categoryKey })
       if (alvo) {
         const novo = incrementarAtributo(db, alvo, no.config.key, no.config.by)
@@ -949,7 +1054,25 @@ export function avaliarEvento (db, evento) {
     const novo = inserirEvento(db, evento)
     const resultados = []
 
-    for (const candidato of candidatosPublicados(db)) {
+    // COMANDO PRIMEIRO, regra automática depois — e a ordem aqui é o que
+    // sustenta a precedência logo abaixo.
+    //
+    // O defeito que isto conserta foi medido em produção: "/dow <link>" num
+    // grupo com download automático ligado casava com DUAS automações, porque a
+    // mensagem é comando E é mensagem com link. O bot baixava o mesmo link duas
+    // vezes e respondia duas vezes. O at-most-once não pega isso: ele é por
+    // (evento, revisão), e são revisões diferentes — o que faltava era alguém
+    // ter dito quem tem precedência.
+    const ordenados = [...candidatosPublicados(db)].sort((a, b) => {
+      const peso = (c) => {
+        const t = acharTrigger(jsonOuNull(c.doc_json))
+        return t?.type === 'trigger.command' ? 0 : 1
+      }
+      return peso(a) - peso(b)
+    })
+    let algumComandoCasou = false
+
+    for (const candidato of ordenados) {
       const existente = novo ? null : jaAvaliado(db, evento.eventId, candidato.revision_id)
       if (existente) {
         resultados.push({
@@ -974,11 +1097,25 @@ export function avaliarEvento (db, evento) {
       let comandosGerados = []
       let detalheErro = null
 
-      if (documento && trigger) {
+      // `trigger.config` é lido campo a campo logo abaixo e tem exatamente o
+      // mesmo problema da inputPolicy: gatilho sem config derrubava o evento
+      // inteiro em vez de só a automação torta.
+      const estrutura = documento && trigger
+        ? (politicaDeEntrada(documento) && trigger.config && typeof trigger.config === 'object'
+            ? { politica: politicaDeEntrada(documento) }
+            : null)
+        : null
+
+      if (documento && trigger && !estrutura) {
+        // Só ESTA automação vira erro; o laço segue para as outras.
+        status = 'error'
+        detalheErro = { message: 'A revisão publicada está malformada (inputPolicy.acceptedMessageKinds precisa ser uma lista, e o gatilho precisa de config). Republique a automação.' }
+      } else if (documento && trigger) {
+        const politica = estrutura.politica
         const refs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?').all(candidato.revision_id)
         const passaEscopo = passaEscopoPara(db, candidato, refs, evento.chat)
-        const passaHistoria = documento.inputPolicy.historyPolicy !== 'live_only' || evento.replay !== true
-        const passaTipo = documento.inputPolicy.acceptedMessageKinds.includes(evento.message.kind)
+        const passaHistoria = politica.historyPolicy !== 'live_only' || evento.replay !== true
+        const passaTipo = politica.acceptedMessageKinds.includes(evento.message.kind)
         // Comando restrito é o canal de administração pelo WhatsApp, então
         // mensagem do PRÓPRIO número precisa passar mesmo com
         // allowFrom:'external' — é assim que quem está com a conta na mão
@@ -1000,8 +1137,21 @@ export function avaliarEvento (db, evento) {
         const passaDono = trigger.config.requireOwner !== true ||
           podeUsarComandoRestrito(db, evento.sender.id, { souEuMesmo: evento.sender.authoredBySelf === true })
 
-        if (passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
+        // A mensagem que virou COMANDO já foi endereçada ao bot; regra automática
+        // existe para a mensagem que ninguém endereçou a ele. Sem isto, o
+        // mesmo link era baixado duas vezes (ver o comentário da ordenação).
+        //
+        // Configurável, e não travado: auditoria — uma regra que registra tudo
+        // que passa — é caso legítimo de querer ver o comando também.
+        const cedeAoComando = ehAutomatico && algumComandoCasou &&
+          trigger.config.alsoOnCommands !== true
+
+        if (!cedeAoComando && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
           status = candidato.deployment_mode === 'live' ? 'matched_live' : 'matched_shadow'
+          // Vale para sombra também: o comando CASOU, e é isso que consome a
+          // mensagem. Só ao vivo aqui faria o mesmo evento se comportar
+          // diferente conforme o modo de uma automação vizinha.
+          if (!ehAutomatico) algumComandoCasou = true
           if (status === 'matched_live') {
             try {
               // Savepoint por automação (transação aninhada do better-sqlite3):
@@ -1009,6 +1159,10 @@ export function avaliarEvento (db, evento) {
               // gravado voltam atrás. Sem isso, "incrementou o aviso e só
               // depois quebrou" deixaria o contador adiantado para sempre.
               comandosGerados = db.transaction(() => executarFluxo(db, documento, trigger.id, evento))()
+              // Depois do fluxo, e só se ele foi até o fim: o comando do dono
+              // que ROLOU num grupo autoriza o bot ali. Antes do fluxo seria
+              // pior — um comando que falhou no meio deixaria o grupo aberto.
+              autorizarGrupoPeloDono(db, evento, trigger)
             } catch (erro) {
               // Fluxo inconsistente ou contador corrompido não pode derrubar a
               // avaliação das OUTRAS automações do mesmo evento: vira erro

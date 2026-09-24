@@ -125,5 +125,52 @@ check('em conversa direta o comando funciona sem ativar',
     JSON.stringify(resultado(r, 'ativar')))
 }
 
+// --- o comando do dono no grupo JÁ É a autorização -----------------------
+//
+// Este bloco existe por causa de uma mentira que o bot contava: o dono mandava
+// /autodow num grupo não autorizado, o comando rodava (comando restrito sempre
+// passa), gravava o marcador e respondia "LIGADO" — mas a regra que realmente
+// baixa não é restrita ao dono, então seguia barrada pelo portão. O dono lia
+// "ligado" e nada acontecia, sem erro em lugar nenhum.
+const docInterruptor = JSON.parse(JSON.stringify(docComum))
+docInterruptor.name = 'Interruptor'
+docInterruptor.flow.nodes[0].config = { command: '/autodow', match: 'exact', allowFrom: 'external', requireOwner: true }
+docInterruptor.flow.nodes[1] = { id: 'r', type: 'action.variable.set', config: { scope: 'chat', key: 'auto_download', value: 'sim' } }
+servico.criarEPublicar({ id: 'autodow', document: docInterruptor })
+db.prepare('UPDATE automations SET deployment_mode = ? WHERE id = ?').run('live', 'autodow')
+
+{
+  const grupo = { id: '777@g.us', kind: 'group' }
+  check('o grupo começa sem autorização', !casou(avaliarEvento(db, evento(grupo, '/ping')), 'ping'))
+
+  const r = avaliarEvento(db, evento(grupo, '/autodow'))
+  check('o interruptor do dono roda no grupo não autorizado', casou(r, 'autodow'),
+    JSON.stringify(resultado(r, 'autodow')))
+
+  // O que o bloco inteiro existe para provar: não basta o interruptor rodar.
+  check('e o grupo passa a estar autorizado, sem precisar de /ativar',
+    casou(avaliarEvento(db, evento(grupo, '/ping')), 'ping'))
+}
+
+// --- mas SOMBRA não grava nada (invariante 2) ----------------------------
+{
+  const grupo = { id: '888@g.us', kind: 'group' }
+  db.prepare('UPDATE automations SET deployment_mode = ? WHERE id = ?').run('shadow', 'autodow')
+  const r = avaliarEvento(db, evento(grupo, '/autodow'))
+  check('em sombra o interruptor só registra',
+    resultado(r, 'autodow')?.status === 'matched_shadow', JSON.stringify(resultado(r, 'autodow')))
+  check('e NÃO autoriza o grupo — sombra não deixa rastro',
+    !casou(avaliarEvento(db, evento(grupo, '/ping')), 'ping'))
+  db.prepare('UPDATE automations SET deployment_mode = ? WHERE id = ?').run('live', 'autodow')
+}
+
+// --- e continua valendo só para quem é dono ------------------------------
+{
+  const grupo = { id: '666@g.us', kind: 'group' }
+  const r = avaliarEvento(db, evento(grupo, '/autodow', '5599@s.whatsapp.net'))
+  check('estranho não roda o interruptor', !casou(r, 'autodow'))
+  check('e o grupo continua fechado', !casou(avaliarEvento(db, evento(grupo, '/ping')), 'ping'))
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE GRUPO ATIVO PASSARAM')
 process.exit(falhas ? 1 : 0)

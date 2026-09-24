@@ -82,7 +82,11 @@ check('remover o que não existe devolve false', removerDeclaracao(db, 'member',
 // Estes três existiam no motor desde a migração 008 mas a rota só aceitava
 // contato e grupo — eram invisíveis e ineditáveis pelo painel.
 await api.resolver('PUT', '/entities/global/x/attributes/total', ctx({ value: 7 }))
-check('escopo global é editável', (await api.resolver('GET', '/entities/global/qualquer/attributes', ctx()))[0]?.value === 7)
+// Procura pela CHAVE, não por posição: o escopo global também guarda marcas do
+// sistema (donos já inicializados, conexões prontas já semeadas), e `[0]`
+// quebrava assim que alguma delas passasse a existir.
+check('escopo global é editável',
+  (await api.resolver('GET', '/entities/global/qualquer/attributes', ctx())).find((a) => a.key === 'total')?.value === 7)
 
 const idMembro = '120000000000000001@g.us|5511900000001@s.whatsapp.net'
 await api.resolver('PUT', `/entities/group_member/${idMembro}/attributes/avisos`, ctx({ value: 2 }))

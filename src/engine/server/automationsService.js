@@ -204,10 +204,17 @@ export function criarServicoAutomacoes (db) {
   // funções .transaction() chamadas de dentro de outra (usa savepoint), por
   // isso o instalador do catálogo consegue envolver N chamadas a esta
   // função numa única `db.transaction(...)` externa sem duplicar lógica.
-  const criarEPublicar = (body) => {
+  //
+  // A transação aqui não é decoração: sem ela, `criar` commita e só depois
+  // `publicar` valida — uma automação recusada pela validação ficava CRIADA e
+  // não publicada, e a tentativa seguinte com o mesmo id batia em 409 "já
+  // cadastrada" sem nada no ar. O comentário acima já prometia atomicidade; era
+  // verdade só quando quem chamava envolvia tudo (o instalador de templates faz
+  // isso), e mentira no caminho direto.
+  const criarEPublicar = db.transaction((body) => {
     const criada = criar(body)
     return publicar(criada.id)
-  }
+  })
 
   return {
     obterAutomation,
