@@ -27,7 +27,7 @@ export const ACOES = Object.freeze([
     tipo: 'action.whatsapp.rich',
     campos: [
       { chave: 'text', inline: true, tipo: 'texto' },
-      { chave: 'richKind', rotulo: 'formato', tipo: 'palavra' },
+      { chave: 'richKind', rotulo: 'formato', tipo: 'palavra', palavras: { code: 'código', latex: 'fórmula', text: 'texto' } },
       { chave: 'language', rotulo: 'linguagem', tipo: 'palavra' },
       { chave: 'fallbackText', rotulo: 'senão', tipo: 'texto' }
     ]
@@ -41,7 +41,7 @@ export const ACOES = Object.freeze([
     palavra: 'recupera',
     tipo: 'action.whatsapp.recover',
     campos: [
-      { chave: 'destination', rotulo: 'para', tipo: 'palavra' },
+      { chave: 'destination', rotulo: 'para', tipo: 'palavra', palavras: { same_chat: 'esta conversa', saved_messages: 'mensagens salvas', fixed: 'número fixo', configured: 'o número configurado' } },
       { chave: 'destinationId', rotulo: 'destino', tipo: 'texto' },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
       { chave: 'notFoundText', rotulo: 'sem mídia', tipo: 'texto' }
@@ -52,7 +52,12 @@ export const ACOES = Object.freeze([
     tipo: 'action.media.download',
     campos: [
       { chave: 'url', inline: true, tipo: 'texto' },
-      { chave: 'modo', rotulo: 'modo', tipo: 'palavra' },
+      { chave: 'modo', rotulo: 'modo', tipo: 'palavra', palavras: { auto: 'automático', video: 'vídeo', audio: 'áudio', thumbnail: 'capa' } },
+      // Como entregar quando o post tem VÁRIAS mídias. `palavras` traduz o
+      // código do documento para a palavra escrita no .lcn, nos dois sentidos —
+      // a linguagem é em português, e "album"/"separate" no meio do texto
+      // seriam as únicas palavras estrangeiras do arquivo.
+      { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { album: 'carrossel', separate: 'separado' } },
       { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
       { chave: 'notFoundText', rotulo: 'sem mídia', tipo: 'texto' },
@@ -77,7 +82,7 @@ export const ACOES = Object.freeze([
     palavra: 'remove do grupo',
     tipo: 'action.group.remove',
     campos: [
-      { chave: 'who', rotulo: 'quem', tipo: 'palavra' },
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
       { chave: 'neverRemoveOwner', rotulo: 'nunca o dono', tipo: 'booleano' }
     ]
   },
@@ -85,7 +90,7 @@ export const ACOES = Object.freeze([
     palavra: 'mostra menu',
     tipo: 'action.menu.render',
     campos: [
-      { chave: 'format', rotulo: 'formato', tipo: 'palavra' },
+      { chave: 'format', rotulo: 'formato', tipo: 'palavra', palavras: { text: 'texto', interactive: 'com botões' } },
       { chave: 'header', rotulo: 'cabeçalho', tipo: 'texto' },
       { chave: 'footer', rotulo: 'rodapé', tipo: 'texto' },
       { chave: 'emptyText', rotulo: 'vazio', tipo: 'texto' },
@@ -96,7 +101,7 @@ export const ACOES = Object.freeze([
     palavra: 'configura menu',
     tipo: 'action.menu.config',
     campos: [
-      { chave: 'field', rotulo: 'campo', tipo: 'palavra' },
+      { chave: 'field', rotulo: 'campo', tipo: 'palavra', palavras: { header: 'cabeçalho', footer: 'rodapé', emptyText: 'texto de vazio', buttonTitle: 'título do botão', format: 'formato' } },
       { chave: 'usageText', rotulo: 'como usar', tipo: 'texto' },
       { chave: 'confirmText', rotulo: 'confirma', tipo: 'texto' }
     ]

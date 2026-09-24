@@ -12,7 +12,7 @@ comando {{params.command}}
   de: {{params.allowFrom}}
 
   recupera
-    para: same_chat
+    para: esta conversa
     legenda: "{{params.caption}}"
     sem mídia: "{{params.notFoundText}}"
 

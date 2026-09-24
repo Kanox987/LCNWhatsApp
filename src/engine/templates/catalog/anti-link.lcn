@@ -15,7 +15,7 @@ ao receber mensagem
   soma group_member links_apagados = 1
   se var group_member links_apagados >= "{{params.limite}}"
     remove do grupo
-      quem: sender
+      quem: quem enviou
       nunca o dono: true
   senão
     responde "{{params.aviso}} (aviso {{var.member.links_apagados}})"

@@ -17,12 +17,12 @@ ao receber mensagem
     erro: "{{params.errorText}}"
 
 configurável
-  allowFrom: texto = "any"
+  allowFrom: opção (any, external) = "any"
     rótulo: Também baixar meus próprios links
     ajuda: "any" também baixa os links que VOCÊ manda do próprio número do bot. "external" ignora o próprio número. A resposta que o bot produz nunca dispara nada, nos dois casos — isso não é configurável.
-  modo: texto = "auto"
+  modo: opção (auto, video, audio, thumbnail) = "auto"
     rótulo: O que baixar
-    ajuda: auto, video, audio ou thumbnail.
+    ajuda: O que trazer quando o link tem mais de uma forma.
   ackText: texto = "⏳ Baixando seu arquivo de mídia…"
     rótulo: Aviso ao começar
     ajuda: Marcando a mensagem do link.

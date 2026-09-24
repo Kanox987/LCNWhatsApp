@@ -90,6 +90,33 @@ try {
   }))
   const docMarcarVip = marcarVip.body.installed[0].draft.document
   check('template com múltiplas ações em cadeia instala o flow inteiro (gatilho -> variável -> resposta)', docMarcarVip.flow.nodes.length === 3 && docMarcarVip.flow.edges.length === 2)
+
+  // --- em que modo a instalação NASCE -------------------------------------
+  //
+  // A coluna tem DEFAULT 'shadow' e a rota nunca definia o campo, então toda
+  // instalação nascia muda: registrava "teria executado" e não enviava nada.
+  // Já fez anunciarmos duas vezes um comando "no ar" que estava mudo.
+  const modoDe = (id) => db.prepare('SELECT deployment_mode FROM automations WHERE id = ?').get(id)?.deployment_mode
+
+  check('instalação nasce AO VIVO por padrão — não muda', modoDe('meu-ping') === 'live', modoDe('meu-ping'))
+
+  const emSombra = await api.resolver('POST', '/templates/ping/install', contexto({
+    automationIds: { ping: 'ping-sombra' },
+    parameters: { ping: { command: '/ping-sombra', poolId: 'pool-teste' } },
+    scope: { include: [{ kind: 'contact', id: '5511999999999@s.whatsapp.net' }] },
+    deploymentMode: 'shadow'
+  }))
+  check('quem PEDE sombra recebe sombra', modoDe('ping-sombra') === 'shadow', modoDe('ping-sombra'))
+  check('e a resposta diz em que modo nasceu', emSombra.body.deploymentMode === 'shadow')
+
+  const modoInvalido = await capturarErro('POST', '/templates/ping/install', {
+    automationIds: { ping: 'ping-invalido' },
+    parameters: { ping: { command: '/x', poolId: 'pool-teste' } },
+    scope: { include: [{ kind: 'contact', id: '5511999999999@s.whatsapp.net' }] },
+    deploymentMode: 'talvez'
+  })
+  check('modo desconhecido -> 400, em vez de cair no default calado', modoInvalido?.status === 400)
+  check('e nada foi instalado pela tentativa inválida', modoDe('ping-invalido') === undefined)
 } catch (erro) {
   falhas++
   console.error('❌ erro inesperado nas rotas de templates:', erro)

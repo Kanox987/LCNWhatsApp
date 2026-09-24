@@ -59,7 +59,9 @@ function linhaDeAcao (no) {
     // Ausente continua ausente: inventar um valor aqui faria o texto prometer
     // configuração que o documento não tem.
     if (valor === undefined || valor === null) continue
-    const escrito = campo.tipo === 'texto' ? citar(valor) : String(valor)
+    const escrito = campo.tipo === 'texto'
+      ? citar(valor)
+      : String(campo.palavras?.[valor] ?? valor)
     linhas.push(`${IDENT}${campo.rotulo}: ${escrito}`)
   }
   return linhas
@@ -156,6 +158,7 @@ export function descompilar (documento, template = null) {
   } else {
     if (cfg.containsLink === true) h('com link')
     if (cfg.mediaLinkOnly === true) h('só link de mídia')
+    if (cfg.alsoOnCommands === true) h('também em comandos')
     if (Array.isArray(cfg.messageKinds) && cfg.messageKinds.length) {
       h(`quando for: ${cfg.messageKinds.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
     }

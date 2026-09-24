@@ -12,13 +12,28 @@
 const PLACEHOLDER_EXATO = /^\{\{params\.([^{}.]+)\}\}$/
 const PLACEHOLDER_QUALQUER = /\{\{params\.([^{}.]+)\}\}/g
 
-function converterTipo (valor, tipo, chave) {
+// Recebe a DEFINIÇÃO inteira, não só o tipo: sem ela o enum não teria contra o
+// que conferir, e "escolha da lista" viraria texto livre com outro nome.
+function converterTipo (valor, definicao) {
+  const { type: tipo, key: chave } = definicao
   if (tipo === 'number') {
     const numero = Number(valor)
     if (!Number.isFinite(numero)) throw new Error(`Parâmetro "${chave}" precisa ser numérico.`)
     return numero
   }
   if (tipo === 'boolean') return valor === true || valor === 'true'
+  if (tipo === 'enum') {
+    const texto = String(valor)
+    const opcoes = Array.isArray(definicao.options) ? definicao.options : []
+    // Recusar aqui, na instalação, é o ponto certo: um valor fora da lista
+    // geraria um documento que passa no schema e não faz nada — o marcador que
+    // ninguém lê, o modo de download que não existe. Falha silenciosa é o que
+    // este tipo existe para evitar, então ele não pode nascer sendo uma.
+    if (!opcoes.includes(texto)) {
+      throw new Error(`Parâmetro "${chave}" precisa ser uma destas opções: ${opcoes.join(', ')}. Recebi: "${texto}".`)
+    }
+    return texto
+  }
   return String(valor)
 }
 
@@ -29,7 +44,7 @@ function resolverParametros (template, parametrosFornecidos) {
       ? parametrosFornecidos[definicao.key]
       : definicao.default
     if (bruto === undefined) throw new Error(`Parâmetro obrigatório não informado: ${definicao.key}.`)
-    resolvidos[definicao.key] = converterTipo(bruto, definicao.type, definicao.key)
+    resolvidos[definicao.key] = converterTipo(bruto, definicao)
   }
   return resolvidos
 }

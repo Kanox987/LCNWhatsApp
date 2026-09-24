@@ -13,7 +13,7 @@ comando {{params.command}}
   só dono
 
   configura menu
-    campo: header
+    campo: cabeçalho
     como usar: "Escreva o texto do menu depois do comando. Exemplo: {{params.command}} Bem-vindo!"
     confirma: "{{params.confirmText}}"
 

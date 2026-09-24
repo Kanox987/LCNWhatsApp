@@ -11,7 +11,7 @@ comando {{params.command}}
   de: {{params.allowFrom}}
 
   responde rico "{{message.args}}"
-    formato: code
+    formato: código
     linguagem: {{params.language}}
     senão: "{{message.args}}"
 

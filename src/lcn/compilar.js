@@ -148,7 +148,27 @@ function lerAcao (linha, filhas) {
     if (campo.tipo === 'texto') config[campo.chave] = descitar(valor, filha.n)
     else if (campo.tipo === 'booleano') config[campo.chave] = valor === 'sim' || valor === 'true'
     else if (campo.tipo === 'numero') config[campo.chave] = Number(valor)
-    else config[campo.chave] = valor
+    else if (campo.palavras) {
+      // `{{params.x}}` num template NÃO é palavra da lista: é o buraco que quem
+      // instala preenche. Traduzir aqui recusaria o catálogo inteiro na carga —
+      // `auto-download.lcn` escreve exatamente `modo: {{params.modo}}`.
+      if (ehMarcador(valor)) { config[campo.chave] = valor; continue }
+      // Aceita a palavra legível OU o código do documento.
+      //
+      // Escrever é que é opinativo: o descompilador sempre devolve a palavra em
+      // português. Aceitar o código na entrada custa nada e evita transformar
+      // cada tradução nova numa migração obrigatória de todos os .lcn que já
+      // existem — inclusive os que alguém escreveu fora deste repositório.
+      const porPalavra = Object.keys(campo.palavras).find((k) => campo.palavras[k] === valor)
+      const codigo = porPalavra || (campo.palavras[valor] ? valor : null)
+      if (!codigo) {
+        // Lista fechada: recusar o desconhecido aqui, com a linha, evita gerar
+        // um documento que o publish rejeitaria depois sem dizer onde foi.
+        const validas = Object.values(campo.palavras).join(', ')
+        throw new ErroDeSintaxe(`"${rotulo}" aceita: ${validas} — veio "${valor}"`, filha.n)
+      }
+      config[campo.chave] = codigo
+    } else config[campo.chave] = valor
   }
   return { type: def.tipo, config }
 }
@@ -182,6 +202,19 @@ function lerBlocosDeTemplate (linhas, inicio, template) {
         if (!tipo) throw new ErroDeSintaxe(`tipo de configuração desconhecido: "${m[2].trim()}"`, decl.n)
         const param = { key: m[1], type: tipo }
         if (m[3] !== undefined) param.options = m[3].split(',').map((o) => o.trim()).filter(Boolean)
+        // As duas metades do "escolher da lista" precisam andar juntas.
+        //
+        // Sem isto o compilador aceitava `opção` e produzia { type: 'enum' },
+        // que o schema do template rejeitava — e como o catálogo valida TODO
+        // arquivo na carga, um único .lcn com `opção` derrubava o catálogo
+        // inteiro, não só ele mesmo. Recusar aqui, com o número da linha, é o
+        // que transforma isso num erro que se conserta em dez segundos.
+        if (tipo === 'enum' && !param.options?.length) {
+          throw new ErroDeSintaxe('"opção" precisa da lista de escolhas entre parênteses, ex.: modo: opção (auto, video)', decl.n)
+        }
+        if (tipo !== 'enum' && param.options) {
+          throw new ErroDeSintaxe(`lista de opções só vale com o tipo "${TIPOS_DE_CONFIG.enum}" — em "${m[2].trim()}" ela seria ignorada`, decl.n)
+        }
         if (m[4] !== undefined) {
           const cru = m[4].trim()
           if (tipo === 'number') param.default = Number(cru)
@@ -308,6 +341,11 @@ export function compilar (texto) {
     if (l.texto === 'só dono') { gatilhoConfig.requireOwner = true; continue }
     if (l.texto === 'com link') { gatilhoConfig.containsLink = true; continue }
     if (l.texto === 'só link de mídia') { gatilhoConfig.mediaLinkOnly = true; continue }
+    // Por padrão a regra automática CEDE quando a mensagem já virou comando —
+    // senão "/dow <link>" aciona o comando e a regra, e o mesmo link é baixado
+    // duas vezes. Esta linha é o jeito de dizer "quero ver o comando também",
+    // que é o que uma regra de auditoria precisa.
+    if (l.texto === 'também em comandos') { gatilhoConfig.alsoOnCommands = true; continue }
     if (l.texto === 'desligada') { doc.enabled = false; continue }
 
     const sep = l.texto.indexOf(':')

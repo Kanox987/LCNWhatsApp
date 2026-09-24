@@ -11,7 +11,7 @@ ao receber mensagem
   de: externo
 
   recupera
-    para: fixed
+    para: número fixo
     destino: "{{var.global.recover_destino}}"
     legenda: "{{params.caption}}"
 

@@ -14,7 +14,7 @@ ao receber mensagem
   soma group_member anti-audio_apagados = 1
   se var group_member anti-audio_apagados >= "{{params.limite}}"
     remove do grupo
-      quem: sender
+      quem: quem enviou
       nunca o dono: true
   senão
     responde "{{params.aviso}}"
