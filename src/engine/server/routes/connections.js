@@ -183,6 +183,42 @@ export function registrarRotasConnections (roteador, db) {
     jaCadastrada: Boolean(obter.get(c.id))
   })))
 
+  // A conexão RESOLVIDA, com a chave — só para o gateway.
+  //
+  // ESTA ROTA NÃO PODE SER EXPOSTA PELO PAINEL. O BFF lista rota por rota e
+  // nunca faz proxy cru de caminho (`src/web/router.js`), então não listá-la lá
+  // é o que a mantém dentro do socket Unix — diretório 0700, socket 0600.
+  //
+  // Por que ela precisa existir: quem fala com a rede é o GATEWAY, por regra do
+  // projeto, e a declaração com a chave vive no banco do MOTOR. Sem este
+  // caminho, a única alternativa seria mandar a chave dentro do comando — e
+  // comando é gravado em `outbound_commands.payload_json`, ou seja, o segredo
+  // iria para o disco a cada chamada e apareceria na aba Execuções.
+  //
+  // A chave é resolvida aqui porque as duas origens são resolvíveis aqui: a
+  // colada está no banco, a de arquivo está no disco da mesma máquina.
+  roteador.get('/connections/:id/resolvida', ({ params }) => {
+    const row = obter.get(params.id)
+    if (!row) throw new ErroHttp(404, `Conexão não encontrada: ${params.id}.`)
+    const config = jsonOuNull(row.config_json) || {}
+    const auth = config.autenticacao || { tipo: 'nenhuma' }
+    let chave = null
+    if (auth.tipo !== 'nenhuma') {
+      if (auth.origem === 'arquivo') {
+        try {
+          chave = fs.readFileSync(String(auth.arquivo || '').replace(/^~/, os.homedir()), 'utf8').trim() || null
+        } catch {
+          chave = null
+        }
+      } else {
+        const segredo = jsonOuNull(row.secret_json)
+        const valores = segredo && typeof segredo === 'object' ? Object.values(segredo) : []
+        chave = valores.find((v) => typeof v === 'string' && v) || null
+      }
+    }
+    return { id: row.id, endereco: config.endereco, autenticacao: auth, funcoes: config.funcoes || [], chave }
+  })
+
   roteador.post('/connections', ({ body }) => {
     const id = exigirTexto(body, 'id')
     const kind = exigirTexto(body, 'kind')

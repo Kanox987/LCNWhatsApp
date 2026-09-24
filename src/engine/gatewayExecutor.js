@@ -186,43 +186,53 @@ async function executarRecover (client, comando, deps) {
 // o comando não funcionou) e a mídia no fim. As duas marcam a mensagem que tinha
 // o link, que é a única forma de saber a qual link a resposta se refere quando a
 // conversa andou no meio do caminho.
-async function executarDownload (client, comando, deps) {
-  const { criarBaixador, cfg } = deps
-  const { chatId, url, modo, entrega, replyTo, ackText, caption, errorText } = comando.payload
-
-  // Depois de prometer "estou baixando", qualquer desfecho ruim precisa virar
-  // mensagem. Ficar com o aviso pendurado e nada depois é o pior resultado: não
-  // dá nem para saber se o comando funcionou.
-  const avisar = async (motivo) => {
+// Depois de prometer "estou fazendo", qualquer desfecho ruim precisa virar
+// mensagem. Ficar com o aviso pendurado e nada depois é o pior resultado: não
+// dá nem para saber se o comando funcionou.
+//
+// Extraído porque agora são dois caminhos que prometem e precisam cumprir — o
+// download e a chamada de conexão.
+function criarAvisador (client, comando, { chatId, replyTo, errorText }) {
+  return async (motivo) => {
     const texto = (errorText || '{{erro}}').replaceAll('{{erro}}', motivo)
     try {
       await comTimeout(
         () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
-        `timeout ao avisar a falha do download do comando ${comando.id}`
+        `timeout ao avisar a falha do comando ${comando.id}`
       )
     } catch (erro) {
       // Já estamos num caminho de erro; o throw de quem chamou é o que importa.
-      console.warn(`[engine] Não consegui nem avisar a falha do download: ${mensagemDoErro(erro)}`)
+      console.warn(`[engine] Não consegui nem avisar a falha: ${mensagemDoErro(erro)}`)
     }
   }
+}
 
-  // Nota informativa DEPOIS de uma entrega que deu certo. Separada de `avisar`
-  // de propósito: aquela é o canal de ERRO e embrulha o texto no `errorText`
-  // configurado, então usá-la aqui mandaria "erro: ..." para quem acabou de
-  // receber as fotos com sucesso.
-  const nota = async (texto) => {
+// Nota informativa DEPOIS de uma entrega que deu certo. Separada do avisador de
+// propósito: aquele é o canal de ERRO e embrulha o texto no `errorText`
+// configurado, então usá-lo aqui mandaria "erro: ..." para quem acabou de
+// receber as fotos com sucesso.
+function criarNotificador (client, comando, { chatId, replyTo }) {
+  return async (texto) => {
     try {
       await comTimeout(
         () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
-        `timeout ao mandar a nota do download do comando ${comando.id}`
+        `timeout ao mandar a nota do comando ${comando.id}`
       )
     } catch (erro) {
       // A entrega principal já aconteceu; não estragar o comando por causa da nota.
-      console.warn(`[engine] Não consegui mandar a nota do download: ${mensagemDoErro(erro)}`)
+      console.warn(`[engine] Não consegui mandar a nota: ${mensagemDoErro(erro)}`)
     }
   }
+}
+
+async function executarDownload (client, comando, deps) {
+  const { criarBaixador, cfg } = deps
+  const { chatId, url, modo, entrega, replyTo, ackText, caption, errorText } = comando.payload
+
+  const avisar = criarAvisador(client, comando, { chatId, replyTo, errorText })
+  const nota = criarNotificador(client, comando, { chatId, replyTo })
 
   if (ackText) {
     // Aviso é cortesia, não a entrega: se ele falhar, o download continua.
@@ -259,12 +269,9 @@ async function executarDownload (client, comando, deps) {
   const bytesTotais = midias.reduce((n, m) => n + m.buffer.length, 0)
 
   try {
-    // Quem montou o comando escolheu; "album" é só o padrão.
-    if (entrega !== 'separate' && podeVirarAlbum(midias)) {
-      await enviarComoAlbum(client, chatId, midias, legenda, opcoesDeCitacao(replyTo), comando.id)
-    } else {
-      await enviarEmSequencia(client, chatId, midias, legenda, opcoesDeCitacao(replyTo), comando.id)
-    }
+    await entregarMidias(client, chatId, midias, {
+      legenda, entrega, opcoesCitacao: opcoesDeCitacao(replyTo), comandoId: comando.id
+    })
   } catch (erro) {
     // ESTE é o caso que deixou o dono olhando "⏳ Baixando…" para sempre: o
     // arquivo veio inteiro e o envio ao WhatsApp é que falhou. O tamanho entra
@@ -336,6 +343,102 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
     // enviadas. Preferir isso a não entregar nada é a mesma escolha do
     // outcome_unknown: melhor duplicar do que sumir em silêncio.
     console.warn(`[engine] Álbum não foi aceito (${mensagemDoErro(erro)}) — enviando as mídias em sequência.`)
+    await enviarEmSequencia(client, chatId, midias, legenda, opcoesCitacao, comandoId)
+  }
+}
+
+// Chamar uma FUNÇÃO declarada numa conexão.
+//
+// O motor decidiu QUAL conexão e QUAL função e resolveu as entradas; aqui a
+// declaração é buscada no motor (pelo socket — o painel nunca expõe essa rota,
+// porque ela devolve a chave) e a chamada acontece.
+//
+// Isto é o que tira o `baixa` de dentro do compilador: endereço, método,
+// credencial e o formato da resposta passam a ser dado que o dono edita na aba
+// Conexões, em vez de código que só eu mexo.
+async function executarChamadaDeConexao (client, comando, deps) {
+  const { chatId, conexao, funcao, entradas, entrega, replyTo, ackText, caption, errorText } = comando.payload
+  const { clienteEngine, criarExecutorDeConexao } = deps
+  if (!clienteEngine?.conexoes?.resolvida) throw new Error('sem acesso ao motor para resolver a conexão')
+
+  const avisar = criarAvisador(client, comando, { chatId, replyTo, errorText })
+  const nota = criarNotificador(client, comando, { chatId, replyTo })
+
+  if (ackText) {
+    // Aviso é cortesia, não a entrega: se ele falhar, a chamada continua.
+    try {
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, { type: 'text', text: ackText }, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar o início da chamada do comando ${comando.id}`
+      )
+    } catch (erro) {
+      console.warn(`[engine] Não consegui avisar o início da chamada: ${mensagemDoErro(erro)}`)
+    }
+  }
+
+  let resultado
+  try {
+    const declaracao = await clienteEngine.conexoes.resolvida(conexao)
+    resultado = await criarExecutorDeConexao().executar(declaracao, funcao, entradas || {})
+  } catch (erro) {
+    await avisar(mensagemParaPessoa(erro))
+    throw erro
+  }
+
+  // Resposta de texto vai como texto. É o caso de uma IA, de uma consulta de
+  // preço, de qualquer coisa que responda em palavras.
+  if (resultado.forma === 'texto') {
+    const texto = typeof resultado.dados === 'string' ? resultado.dados : JSON.stringify(resultado.dados)
+    await comTimeout(
+      () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao responder a chamada do comando ${comando.id}`
+    )
+    return
+  }
+
+  // Resposta com arquivos: o executor já os buscou (ele tem o endereço e a
+  // credencial). Aqui só entrega, pelo mesmo caminho do download — álbum quando
+  // dá, sequência quando não dá.
+  const midias = resultado.midias || []
+  if (!midias.length) {
+    await avisar('a chamada terminou mas não veio arquivo nenhum')
+    throw new Error(`a chamada ${conexao}.${funcao} não devolveu arquivo`)
+  }
+
+  const bytesTotais = midias.reduce((n, m) => n + m.buffer.length, 0)
+  try {
+    await entregarMidias(client, chatId, midias, {
+      // A descrição do serviço (título do vídeo, autor) só entra quando o
+      // comando não trouxe legenda própria — quem configurou manda.
+      legenda: caption || resultado.descricao || null,
+      entrega,
+      opcoesCitacao: opcoesDeCitacao(replyTo),
+      comandoId: comando.id
+    })
+  } catch (erro) {
+    await avisar(`recebi ${formatarMB(bytesTotais)} mas não consegui enviar aqui (${mensagemParaPessoa(erro)})`)
+    throw erro
+  }
+  if (resultado.foraPorTamanho > 0) {
+    const n = resultado.foraPorTamanho
+    await nota(n === 1
+      ? '⚠️ Um dos arquivos era grande demais para o WhatsApp e ficou de fora.'
+      : `⚠️ ${n} arquivos eram grandes demais para o WhatsApp e ficaram de fora.`)
+  }
+}
+
+// A entrega de mídias, compartilhada pelo download e pela chamada de conexão.
+//
+// Estava embutida no download; virou função porque agora são dois caminhos que
+// terminam do mesmo jeito. Duplicar traria o problema de sempre: o dia em que
+// um for ajustado, o outro fica para trás sem ninguém notar.
+async function entregarMidias (client, chatId, midias, { legenda, entrega, opcoesCitacao, comandoId }) {
+  // Quem montou o comando escolheu; "album" é só o padrão.
+  if (entrega !== 'separate' && podeVirarAlbum(midias)) {
+    await enviarComoAlbum(client, chatId, midias, legenda, opcoesCitacao, comandoId)
+  } else {
     await enviarEmSequencia(client, chatId, midias, legenda, opcoesCitacao, comandoId)
   }
 }
@@ -580,7 +683,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       'group.remove': executarRemoverDoGrupo,
       'whatsapp.rich': executarMensagemRica,
       'whatsapp.sendFile': executarEnvioDeArquivo,
-      'media.download': executarDownload
+      'media.download': executarDownload,
+      'connection.call': executarChamadaDeConexao
     }[comando?.commandType]
 
     if (!executor) {
@@ -588,7 +692,10 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       status = 'outcome_unknown'
     } else {
       try {
-        await executor(client, comando, await resolverDependencias(deps))
+        // `clienteEngine` entra nas dependências porque a chamada de conexão
+        // precisa buscar a declaração no motor — é o único executor que
+        // consulta o motor em vez de só agir sobre o WhatsApp.
+        await executor(client, comando, { ...(await resolverDependencias(deps)), clienteEngine })
         status = 'sent'
       } catch (erro) {
         status = (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_RESULTADO_INCERTO')
@@ -614,16 +721,18 @@ let padroesCarregados = null
 async function resolverDependencias (deps) {
   if (deps.mediaRefCache) return deps
   if (!padroesCarregados) {
-    const [cache, visu, sticker, acervo, downloader] = await Promise.all([
+    const [cache, visu, sticker, acervo, downloader, conexao] = await Promise.all([
       import('./mediaRefCache.js'),
       import('../visu.js'),
       import('../sticker.js'),
       import('../mediaLibrary.js'),
-      import('../downloader.js')
+      import('../downloader.js'),
+      import('./conexaoExecutor.js')
     ])
     padroesCarregados = {
       mediaRefCache: cache,
       acervo,
+      criarExecutorDeConexao: conexao.criarExecutorDeConexao,
       baixarBuffer: visu.baixarBuffer,
       converterParaFigurinha: sticker.converterParaFigurinha,
       podeVirarFigurinha: sticker.podeVirarFigurinha,

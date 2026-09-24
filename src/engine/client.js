@@ -132,6 +132,9 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
     conexoes: {
       listar: () => requisitar('GET', '/connections'),
       prontas: () => requisitar('GET', '/connections-prontas'),
+      // Com a chave. Só o gateway chama isto, pelo socket — o painel NUNCA
+      // expõe esta rota (ver o comentário dela em routes/connections.js).
+      resolvida: (id) => requisitar('GET', `${caminho('/connections', id)}/resolvida`),
       criar: (dados) => requisitar('POST', '/connections', dados),
       obter: (id) => requisitar('GET', caminho('/connections', id)),
       atualizar: (id, dados) => requisitar('PUT', caminho('/connections', id), dados),

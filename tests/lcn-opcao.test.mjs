@@ -89,5 +89,53 @@ if (catalogo) {
     JSON.stringify(modoReal?.options) === '["auto","video","audio","thumbnail"]', JSON.stringify(modoReal?.options))
 }
 
+// --- `chama`: a conexão e a função na primeira linha ---------------------
+//
+// O defeito que isto conserta é o que o dono apontou no `baixa`: "baixar o
+// quê? para quem?". Aqui a primeira linha já diz de QUEM o comando depende, e
+// o bloco `com` diz o que vai — com o nome de cada entrada à vista.
+{
+  const fonteChama = `comando /dow
+  id: t
+  revisão: 1
+  nome: T
+  onde: em qualquer lugar
+  pool: p
+  tipos: texto
+  casa: exato
+  de: externo
+
+  chama midia.baixar
+    com
+      url: "{{message.link}}"
+      modo: auto
+    avisa: "baixando"
+`
+  const docChama = compilar(fonteChama)
+  const no = docChama.flow.nodes.find((n) => n.type === 'action.connection.call')
+  check('chama lê a conexão e a função da primeira linha',
+    no.config.connectionRef === 'midia' && no.config.function === 'baixar')
+  check('o bloco "com" vira as entradas, por nome',
+    JSON.stringify(no.config.inputs) === '{"url":"{{message.link}}","modo":"auto"}', JSON.stringify(no.config.inputs))
+  check('e os campos de apresentação ficam fora das entradas', no.config.inputs.avisa === undefined)
+
+  const voltaChama = descompilar(docChama)
+  check('a volta escreve "chama midia.baixar"', voltaChama.includes('chama midia.baixar'))
+  check('e recompila idêntico', JSON.stringify(compilar(voltaChama)) === JSON.stringify(docChama))
+
+  // Um template escreve `chama {{params.conexao}}.baixar`, e o primeiro ponto
+  // dali é o de DENTRO do marcador. Separar nele produzia a conexão "{{params"
+  // e a função "conexao}}.baixar" — documento errado, sem erro nenhum.
+  const comMarcador = compilar(fonteChama.replace('chama midia.baixar', 'chama {{params.conexao}}.baixar'))
+  const noMarcador = comMarcador.flow.nodes.find((n) => n.type === 'action.connection.call')
+  check('o ponto DENTRO de um marcador não separa a conexão da função',
+    noMarcador.config.connectionRef === '{{params.conexao}}' && noMarcador.config.function === 'baixar',
+    `${noMarcador.config.connectionRef} | ${noMarcador.config.function}`)
+
+  const semPonto = (() => { try { compilar(fonteChama.replace('chama midia.baixar', 'chama midia')); return null } catch (e) { return e } })()
+  check('chama sem "conexão.função" é recusado, com a forma esperada',
+    /conexão\.função/.test(semPonto?.message || ''), semPonto?.message)
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO TIPO OPÇÃO PASSARAM')
 process.exit(falhas ? 1 : 0)

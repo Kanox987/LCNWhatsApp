@@ -15,20 +15,16 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.group.remove',
   'action.whatsapp.rich',
   'action.whatsapp.sendFile',
-  'action.media.download'
-  // `action.connection.call` NÃO entra aqui ainda, e a ausência é deliberada.
+  'action.media.download',
+  // Chamar uma FUNÇÃO declarada numa conexão. Os DOIS lados existem: o motor
+  // emite `connection.call` (evaluator.js, validado em validate.js) e o gateway
+  // o executa pela declaração (conexaoExecutor.js).
   //
-  // Esta lista é o portão do invariante 7: ela diz o que o RUNTIME executa, e o
-  // publish a impõe. O runtime são os dois lados — o motor já sabe emitir
-  // `connection.call` (evaluator.js, com validação em validate.js), mas o
-  // gateway ainda não sabe executá-lo: essa parte ficou de fora por causa do
-  // trabalho não commitado de outro agente nos mesmos arquivos.
-  //
-  // Declarar agora deixaria publicar uma automação que casa, gera comando, e
-  // morre na entrega — a tela dizendo que funciona algo que não funciona, que é
-  // o defeito que esta rodada inteira passou caçando.
-  //
-  // A linha entra junto com o executor do gateway, num movimento só.
+  // Esta lista é o portão do invariante 7 — ela diz o que o RUNTIME executa, e
+  // runtime são os dois lados. Ela ficou de fora de propósito enquanto só o
+  // motor existia: declarar antes deixaria publicar uma automação que casa,
+  // gera comando e morre na entrega.
+  'action.connection.call'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([

@@ -92,6 +92,27 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.connection.call',
+    rotulo: 'Consultar um serviço externo',
+    familia: 'midia',
+    resumo: 'Chama uma função declarada na aba Conexões — baixar uma mídia, perguntar a uma IA, consultar qualquer API. O LCN não acessa a web sozinho: toda consulta passa por uma conexão que você declarou.',
+    exemplo: 'chama midia.baixar, com o link da mensagem.',
+    ressalva: {
+      level: 'requirement',
+      text: 'A conexão e a função precisam existir na aba Conexões. Quem escolhe o endereço, o método e a credencial é você, ali — o comando só nomeia a função, e é isso que impede uma automação de apontar para onde quiser.'
+    },
+    campos: [
+      { chave: 'connectionRef', rotulo: 'Qual serviço', ajuda: 'O identificador da conexão, como está na aba Conexões.' },
+      { chave: 'function', rotulo: 'Qual função', ajuda: 'O nome da função declarada naquela conexão. A publicação recusa uma que não exista, e diz quais existem.' },
+      { chave: 'inputs', rotulo: 'O que mandar', ajuda: 'As entradas que a função declarou, por nome. Aceitam variáveis: {{message.link}}, {{sender.name}}. Entrada obrigatória que faltar é recusada na publicação, não na hora da chamada.' },
+      { chave: 'ackText', rotulo: 'Aviso ao começar', ajuda: 'Consulta externa demora. Sem aviso, parece que o comando não funcionou.' },
+      { chave: 'caption', rotulo: 'Legenda', ajuda: 'Quando a resposta vier como arquivo. Vazio usa a descrição que o serviço trouxer.' },
+      { chave: 'notFoundText', rotulo: 'Se faltar o que mandar', ajuda: 'Resposta quando nenhuma entrada resolveu — por exemplo, nenhum link por perto.' },
+      { chave: 'errorText', rotulo: 'Se falhar', ajuda: 'Escreva {{erro}} onde quiser que apareça o motivo. Erro do serviço sobre o link chega inteiro; erro nosso vira uma frase limpa, sem endereço nem credencial.' },
+      { chave: 'delivery', rotulo: 'Como entregar quando vem mais de um arquivo', ajuda: 'Carrossel agrupa num álbum só; separado manda uma mensagem por arquivo. Nos dois casos todas as mídias são entregues.' }
+    ]
+  },
+  {
     tipo: 'action.media.download',
     rotulo: 'Baixar mídia de um link',
     familia: 'midia',

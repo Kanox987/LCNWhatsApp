@@ -64,6 +64,28 @@ export const ACOES = Object.freeze([
       { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
     ]
   },
+  // Chamar uma função declarada numa conexão.
+  //
+  // A única ação com campos ABERTOS: as entradas são o que a conexão declarou,
+  // e o compilador não pode conhecê-las de antemão — se conhecesse, a gente
+  // teria voltado ao problema que isto resolve, com o serviço fixo no meu
+  // código. Elas vão num bloco `com`, e o resto são campos normais.
+  //
+  // `mapa: 'inputs'` é o que diz ao compilador para tratar esse bloco assim.
+  {
+    palavra: 'chama',
+    tipo: 'action.connection.call',
+    // `midia.baixar` na mesma linha: a conexão e a função, separadas por ponto.
+    alvo: { conexao: 'connectionRef', funcao: 'function' },
+    mapa: { bloco: 'com', chave: 'inputs' },
+    campos: [
+      { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { album: 'carrossel', separate: 'separado' } },
+      { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },
+      { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem dados', tipo: 'texto' },
+      { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
+    ]
+  },
   {
     palavra: 'envia arquivo',
     tipo: 'action.whatsapp.sendFile',

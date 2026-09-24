@@ -134,11 +134,60 @@ function lerAcao (linha, filhas) {
   const inline = def.campos.find((c) => c.inline)
   const sobra = linha.texto.slice(def.palavra.length).trim()
   if (sobra) {
-    if (!inline) throw new ErroDeSintaxe(`"${def.palavra}" não recebe valor na mesma linha`, linha.n)
-    config[inline.chave] = descitar(sobra, linha.n)
+    // `chama midia.baixar` — a conexão e a função na mesma linha. Ler as duas
+    // juntas é o que faz a leitura dizer de cara de QUEM o comando depende, que
+    // era exatamente o que faltava no `baixa`.
+    if (def.alvo) {
+      // O ponto que separa precisa estar FORA de um marcador: um template
+      // escreve `chama {{params.conexao}}.baixar`, e o primeiro ponto dali é o
+      // de dentro do marcador. Separar nele produzia a conexão "{{params" e a
+      // função "conexao}}.baixar" — e o documento saía errado sem erro nenhum.
+      let profundidade = 0
+      let ponto = -1
+      for (let k = 0; k < sobra.length; k++) {
+        if (sobra.startsWith('{{', k)) { profundidade++; k++; continue }
+        if (sobra.startsWith('}}', k)) { profundidade--; k++; continue }
+        if (sobra[k] === '.' && profundidade === 0) { ponto = k; break }
+      }
+      if (ponto <= 0 || ponto === sobra.length - 1) {
+        throw new ErroDeSintaxe(`"${def.palavra}" espera "conexão.função", veio "${sobra}"`, linha.n)
+      }
+      config[def.alvo.conexao] = sobra.slice(0, ponto).trim()
+      config[def.alvo.funcao] = sobra.slice(ponto + 1).trim()
+    } else if (!inline) {
+      throw new ErroDeSintaxe(`"${def.palavra}" não recebe valor na mesma linha`, linha.n)
+    } else {
+      config[inline.chave] = descitar(sobra, linha.n)
+    }
+  } else if (def.alvo) {
+    throw new ErroDeSintaxe(`"${def.palavra}" precisa dizer qual conexão e qual função, como "chama midia.baixar"`, linha.n)
+  }
+
+  // O bloco de campos ABERTOS. As entradas são o que a conexão declarou, e o
+  // compilador não pode conhecê-las: se conhecesse, o serviço estaria fixo no
+  // código de novo.
+  const base = linha.indent + 1
+  if (def.mapa) {
+    const mapa = {}
+    let dentro = false
+    for (const filha of filhas) {
+      if (filha.indent === base && filha.texto === def.mapa.bloco) { dentro = true; continue }
+      if (filha.indent === base) { dentro = false; continue }
+      if (!dentro || filha.indent !== base + 1) continue
+      const sep = filha.texto.indexOf(':')
+      if (sep < 0) throw new ErroDeSintaxe(`esperava "entrada: valor", veio "${filha.texto}"`, filha.n)
+      // Entre aspas quando tem espaço ou marcador; palavra solta quando é um
+      // valor simples (`modo: auto`). Exigir aspas sempre encheria de cerimônia
+      // o caso mais comum.
+      const cru = filha.texto.slice(sep + 1).trim()
+      mapa[filha.texto.slice(0, sep).trim()] = cru.startsWith('"') ? descitar(cru, filha.n) : cru
+    }
+    if (Object.keys(mapa).length) config[def.mapa.chave] = mapa
   }
 
   for (const filha of filhas) {
+    // O bloco aberto já foi lido acima; suas linhas não são campos da ação.
+    if (def.mapa && (filha.texto === def.mapa.bloco || filha.indent > base)) continue
     const sep = filha.texto.indexOf(':')
     if (sep < 0) throw new ErroDeSintaxe(`esperava "campo: valor", veio "${filha.texto}"`, filha.n)
     const rotulo = filha.texto.slice(0, sep).trim()
@@ -402,7 +451,11 @@ export function compilar (texto) {
       if (l.texto.startsWith('se ') || l.texto === 'senão') break
       i++
       const filhas = []
-      while (i < ate && linhas[i].indent === indentAlvo + 1 && !acaoPorPalavra(linhas[i].texto)) {
+      // Desce MAIS de um nível: a chamada de conexão tem um bloco `com` cujas
+      // entradas ficam dois níveis abaixo da ação. Só uma ação irmã, no nível
+      // logo abaixo, encerra a coleta.
+      while (i < ate && linhas[i].indent > indentAlvo &&
+             !(linhas[i].indent === indentAlvo + 1 && acaoPorPalavra(linhas[i].texto))) {
         filhas.push(linhas[i]); i++
       }
       acoes.push(lerAcao(l, filhas))

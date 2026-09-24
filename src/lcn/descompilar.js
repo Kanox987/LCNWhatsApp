@@ -48,11 +48,27 @@ function linhaDeAcao (no) {
   }
 
   const inline = def.campos.find((c) => c.inline)
-  const cabeca = inline && cfg[inline.chave] !== undefined
-    ? `${def.palavra} ${citar(cfg[inline.chave])}`
-    : def.palavra
+  // `chama midia.baixar`: a conexão e a função voltam juntas na primeira linha,
+  // que é onde elas dizem de quem o comando depende.
+  const cabeca = def.alvo
+    ? `${def.palavra} ${cfg[def.alvo.conexao]}.${cfg[def.alvo.funcao]}`
+    : (inline && cfg[inline.chave] !== undefined ? `${def.palavra} ${citar(cfg[inline.chave])}` : def.palavra)
 
   const linhas = [cabeca]
+
+  // O bloco de campos abertos vem PRIMEIRO: as entradas são o que a função
+  // recebe, e ler isso antes dos textos de aviso é a ordem em que a pessoa
+  // pensa — o que eu mando, depois o que eu digo.
+  if (def.mapa && cfg[def.mapa.chave] && Object.keys(cfg[def.mapa.chave]).length) {
+    linhas.push(`${IDENT}${def.mapa.bloco}`)
+    for (const [nome, valor] of Object.entries(cfg[def.mapa.chave])) {
+      // Aspas só quando precisam: valor com espaço, marcador ou vazio. Palavra
+      // simples fica limpa, como foi escrita.
+      const texto = String(valor)
+      const precisaAspas = texto === '' || /[\s"{}]/.test(texto)
+      linhas.push(`${IDENT}${IDENT}${nome}: ${precisaAspas ? citar(texto) : texto}`)
+    }
+  }
   for (const campo of def.campos) {
     if (campo.inline) continue
     const valor = cfg[campo.chave]
