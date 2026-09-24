@@ -18,7 +18,18 @@ async function request (path, { method = 'GET', body, headers = {} } = {}) {
   try {
     response = await fetch(`/api/v1${path}`, options)
   } catch {
-    throw new ApiError('Não foi possível alcançar o painel local. Confirme se o servidor web está em execução.')
+    // Diz o FATO e para por aí.
+    //
+    // A mensagem antiga mandava "confirme se o servidor web está em execução" —
+    // orientação que só serve para quem tem a máquina na mão. Quem usa uma
+    // instalação hospedada não tem como conferir processo nenhum: para essa
+    // pessoa, o painel simplesmente caiu, e mandá-la verificar algo que ela não
+    // alcança é pior que não dizer nada — parece que a culpa é dela.
+    //
+    // Mesma regra que já vale para os erros de download: o detalhe acionável
+    // pelo dono vai para o log; o que chega a quem está olhando a tela é uma
+    // frase honesta e curta.
+    throw new ApiError('O painel está inacessível no momento.')
   }
 
   const text = await response.text()
@@ -79,8 +90,11 @@ export const api = {
     publish: (id, revision) => request(`/automations/${segment(id)}/publish`, { method: 'POST', body: { revision } }),
     enable: (id, enabled) => request(`/automations/${segment(id)}/enabled`, { method: 'PUT', body: { enabled } }),
     setMode: (id, mode) => request(`/automations/${segment(id)}/deployment-mode`, { method: 'PUT', body: { mode } }),
+    getReconfigure: (id) => request(`/automations/${segment(id)}/reconfigure`),
+    reconfigure: (id, parameters) => request(`/automations/${segment(id)}/reconfigure`, { method: 'PUT', body: { parameters } }),
     // A automação como texto. O documento continua sendo a verdade guardada;
     // isto é a mesma coisa numa forma que dá pra ler e editar.
+    criarLcn: (texto) => request('/automations/lcn', { method: 'POST', body: { texto } }),
     lerLcn: (id) => request(`/automations/${segment(id)}/lcn`),
     salvarLcn: (id, texto, etag) => request(`/automations/${segment(id)}/lcn`, {
       method: 'PUT',
@@ -103,6 +117,7 @@ export const api = {
   },
   connections: {
     list: () => request('/connections'),
+    prontas: () => request('/connections-prontas'),
     create: (body) => request('/connections', { method: 'POST', body }),
     update: (id, body) => request(`/connections/${segment(id)}`, { method: 'PUT', body }),
     remove: (id) => request(`/connections/${segment(id)}`, { method: 'DELETE' })

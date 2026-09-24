@@ -1,114 +1,545 @@
+// Conexões: as APIs externas que as automações podem consultar.
+//
+// POR QUE ESTA TELA FOI REESCRITA
+//
+// O dono olhou a aba e disse, com razão: "a conexão ainda está limpa, não está
+// aparecendo a API, muito menos a configuração dela. Mesmo que ela seja local,
+// a conexão ainda tem que aparecer. Senão tá escondido no código."
+//
+// Estava mesmo. O comando dizia `baixa "{{message.link}}"` e nada respondia às
+// perguntas dele: para ONDE vai essa URL? para QUEM? O serviço morava no
+// config.json, invisível, e a tela antiga mostrava um textarea de JSON cru —
+// que é esconder com mais passos.
+//
+// Então o que esta tela precisa deixar óbvio, nesta ordem:
+//   1. o ENDEREÇO — para quem a chamada vai;
+//   2. as FUNÇÕES — o que dá para pedir a esse serviço, com as entradas à vista;
+//   3. a CREDENCIAL — se existe, e para onde ela viaja (ou não).
 import { api } from '../api.js'
 import { badge, button, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
 
-function parseJson (value, label, { optional = false } = {}) {
-  const text = value.trim()
-  if (!text && optional) return undefined
-  if (!text) return null
+const METODOS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+const TIPOS = ['texto', 'número', 'opção', 'liga/desliga']
+const FORMAS = [
+  ['texto', 'Texto — a resposta já vem pronta'],
+  ['mídia', 'Mídia — a resposta traz arquivos'],
+  ['trabalho', 'Trabalho — o serviço devolve um identificador e a gente acompanha']
+]
+
+const ehUrlInteira = (caminho) => /^https?:\/\//i.test(String(caminho || ''))
+
+// Para onde a chamada REALMENTE vai, e se a credencial vai junto.
+//
+// É a mesma regra do motor (`resolverDestino`), repetida aqui só para MOSTRAR.
+// Quem edita precisa ver a consequência antes de salvar: trocar o caminho por
+// uma URL de outro host faz a credencial ficar para trás, e descobrir isso
+// depois, por uma chamada que falha com 401, é caro.
+function destinoDe (endereco, funcao) {
+  if (!ehUrlInteira(funcao.caminho)) {
+    return { url: `${endereco || ''}${funcao.caminho || ''}`, levaSegredo: true }
+  }
   try {
-    return JSON.parse(text)
+    return { url: funcao.caminho, levaSegredo: new URL(endereco).origin === new URL(funcao.caminho).origin }
   } catch {
-    throw new Error(`${label} precisa ser um JSON válido.`)
+    return { url: funcao.caminho, levaSegredo: false }
   }
 }
 
-function connectionForm ({ connection = null, close, refresh }) {
-  const editing = Boolean(connection)
-  const idInput = el('input', { type: 'text', value: connection?.id || '', placeholder: 'api-atendimento', disabled: editing })
-  const kindInput = el('input', { type: 'text', value: connection?.kind || '', placeholder: 'http' })
-  const configInput = el('textarea', { rows: '9', spellcheck: 'false' }, JSON.stringify(connection?.config ?? {}, null, 2))
-  const secretInput = el('textarea', { rows: '5', spellcheck: 'false', placeholder: '{\n  "token": "..."\n}' })
-  const message = el('div')
-  const submit = button(editing ? 'Salvar conexão' : 'Criar conexão', { variant: 'primary', type: 'submit' })
-  const form = el('form', { className: 'panel stack-lg' }, [
-    el('div', { className: 'panel-heading' }, [
-      el('div', {}, [el('h2', { text: editing ? `Editar ${connection.id}` : 'Nova conexão' }), el('p', { text: 'Conexões guardam a configuração de integrações externas no motor.' })]),
-      close ? button('Fechar', { variant: 'quiet', 'aria-label': 'Fechar o formulário de conexão', onClick: close }) : null
+// --- editor de uma entrada ------------------------------------------------
+function linhaDeEntrada (entrada, aoRemover) {
+  const nome = el('input', { type: 'text', value: entrada?.nome || '', placeholder: 'url' })
+  const tipo = el('select', {}, TIPOS.map((t) => el('option', { value: t, selected: (entrada?.tipo || 'texto') === t, text: t })))
+  const opcoes = el('input', { type: 'text', value: (entrada?.opcoes || []).join(', '), placeholder: 'auto, video, audio' })
+  const obrigatoria = el('input', { type: 'checkbox', checked: entrada?.obrigatoria !== false })
+
+  // O PADRÃO TEM DUAS CARAS, e é isso que o dono apontou: onde existe uma lista,
+  // ele não pode ser caixa de texto.
+  //
+  // O `modo` do download tem quatro escolhas, e o padrão dele era campo livre —
+  // dava para digitar "gif" e salvar. O motor recusa isso agora, mas oferecer o
+  // campo errado transforma uma escolha de três cliques num erro de digitação
+  // que só aparece na hora da chamada.
+  const padraoTexto = el('input', { type: 'text', value: entrada?.padrao ?? '', placeholder: 'sem padrão' })
+  const padraoLista = el('select', {})
+  const encherPadraoLista = () => {
+    const atual = padraoLista.value || entrada?.padrao || ''
+    const escolhas = opcoes.value.split(',').map((o) => o.trim()).filter(Boolean)
+    padraoLista.replaceChildren(
+      el('option', { value: '', text: 'sem padrão' }),
+      ...escolhas.map((o) => el('option', { value: o, selected: o === atual, text: o }))
+    )
+  }
+  opcoes.addEventListener('input', encherPadraoLista)
+
+  const campoOpcoes = field('Escolhas', opcoes, 'Separadas por vírgula.')
+  const campoPadraoTexto = field('Padrão', padraoTexto, 'Usado quando a automação não informa.')
+  const campoPadraoLista = field('Padrão', padraoLista, 'Usado quando a automação não informa.')
+  const ehLista = () => tipo.value === 'opção'
+  const atualizarResumoRef = {}
+  const sincronizar = () => {
+    campoOpcoes.hidden = !ehLista()
+    // manter o resumo honesto quando o tipo muda
+    if (typeof atualizarResumoRef.fn === 'function') atualizarResumoRef.fn()
+    campoPadraoLista.hidden = !ehLista()
+    campoPadraoTexto.hidden = ehLista()
+    if (ehLista()) encherPadraoLista()
+  }
+  tipo.addEventListener('change', sincronizar)
+  sincronizar()
+
+  // FECHADA POR PADRÃO.
+  //
+  // O dono olhou este formulário e disse "tem muita coisa aqui, cara". Tinha:
+  // cada entrada ocupava um painel inteiro, então uma função com duas entradas
+  // enchia a tela de campos que quase nunca se mexe. Uma linha por entrada, que
+  // abre quando precisa, mostra a mesma informação sem exigir leitura.
+  //
+  // O resumo é gerado do estado real e atualizado enquanto se digita — resumo
+  // que descola do conteúdo é pior que não ter resumo.
+  const resumo = el('summary')
+  const atualizarResumo = () => {
+    const n = nome.value.trim() || '(sem nome)'
+    const detalhe = ehLista()
+      ? opcoes.value.split(',').map((o) => o.trim()).filter(Boolean).join(' · ') || 'sem escolhas'
+      : tipo.value
+    const marca = obrigatoria.checked ? '' : ' · opcional'
+    resumo.textContent = `${n} — ${detalhe}${marca}`
+  }
+  for (const campo of [nome, opcoes, padraoTexto]) campo.addEventListener('input', atualizarResumo)
+  for (const campo of [tipo, padraoLista, obrigatoria]) campo.addEventListener('change', atualizarResumo)
+  atualizarResumoRef.fn = atualizarResumo
+
+  const linha = el('details', { className: 'panel stack' }, [
+    resumo,
+    el('div', { className: 'form-grid' }, [
+      field('Nome', nome, 'É por ele que a automação passa o valor.'),
+      field('Tipo', tipo)
+    ]),
+    campoOpcoes,
+    el('div', { className: 'form-grid' }, [
+      campoPadraoTexto,
+      campoPadraoLista,
+      field('Obrigatória', obrigatoria)
+    ]),
+    el('div', { className: 'button-row' }, [button('Remover entrada', { variant: 'danger-quiet', onClick: () => aoRemover(linha) })])
+  ])
+  atualizarResumo()
+  // Entrada nova nasce ABERTA: quem acabou de clicar em "adicionar" quer
+  // preencher, não abrir de novo.
+  if (!entrada) linha.open = true
+  linha.ler = () => {
+    const saida = { nome: nome.value.trim(), tipo: tipo.value, obrigatoria: obrigatoria.checked }
+    const padrao = (ehLista() ? padraoLista.value : padraoTexto.value).trim()
+    if (ehLista()) saida.opcoes = opcoes.value.split(',').map((o) => o.trim()).filter(Boolean)
+    if (padrao) saida.padrao = padrao
+    return saida
+  }
+  return linha
+}
+
+// --- editor de uma função -------------------------------------------------
+function editorDeFuncao (funcao, { endereco, aoRemover }) {
+  const nome = el('input', { type: 'text', value: funcao?.nome || '', placeholder: 'baixar' })
+  const descricao = el('input', { type: 'text', value: funcao?.descricao || '', placeholder: 'O que esta função faz' })
+  const metodo = el('select', {}, METODOS.map((m) => el('option', { value: m, selected: (funcao?.metodo || 'POST') === m, text: m })))
+  const caminho = el('input', { type: 'text', value: funcao?.caminho || '', placeholder: '/download' })
+
+  const entradas = el('div', { className: 'stack' })
+  const removerEntrada = (linha) => linha.remove()
+  for (const e of funcao?.entradas || []) entradas.append(linhaDeEntrada(e, removerEntrada))
+
+  const forma = el('select', {}, FORMAS.map(([v, rotulo]) => el('option', { value: v, selected: (funcao?.resposta?.forma || 'texto') === v, text: rotulo })))
+  const campo = el('input', { type: 'text', value: funcao?.resposta?.campo || '', placeholder: 'choices' })
+  const campoDoTrabalho = el('input', { type: 'text', value: funcao?.resposta?.campoDoTrabalho || '', placeholder: 'job' })
+  const caminhoDeAcompanhamento = el('input', { type: 'text', value: funcao?.resposta?.caminhoDeAcompanhamento || '', placeholder: '/jobs/{job}' })
+  const campoDoEstado = el('input', { type: 'text', value: funcao?.resposta?.campoDoEstado || '', placeholder: 'estado' })
+  const estadosEmAndamento = el('input', { type: 'text', value: (funcao?.resposta?.estadosEmAndamento || []).join(', '), placeholder: 'na_fila, baixando' })
+  const campoDoResultado = el('input', { type: 'text', value: funcao?.resposta?.campoDoResultado || '', placeholder: 'midias' })
+  const campoDoErro = el('input', { type: 'text', value: funcao?.resposta?.campoDoErro || '', placeholder: 'erro' })
+
+  const blocoSimples = field('Campo da resposta', campo, 'Opcional: de qual campo tirar o resultado.')
+  // O protocolo de acompanhamento também nasce fechado. Nas conexões prontas
+  // ele já vem correto, e quem está ligando uma IA nunca precisa abri-lo — mas
+  // ele fica ali, à mão, que era o ponto: não pode estar escondido no código.
+  const blocoTrabalho = el('details', { className: 'panel stack' }, [
+    el('summary', { text: 'Como acompanhar o trabalho até terminar' }),
+    el('p', { className: 'muted compact', text: 'O serviço não devolve o resultado na hora: ele devolve um identificador e a gente pergunta até terminar. É assim que o serviço de download funciona.' }),
+    el('div', { className: 'form-grid' }, [
+      field('Campo do identificador', campoDoTrabalho, 'Onde vem o id do trabalho na primeira resposta.'),
+      field('Caminho para acompanhar', caminhoDeAcompanhamento, 'Use {job} onde o id entra.')
     ]),
     el('div', { className: 'form-grid' }, [
-      field('Identificador', idInput, 'Nome estável usado pelas automações para referenciar esta conexão.'),
-      field('Tipo', kindInput, 'Identifica o adaptador da integração, por exemplo http. O suporte de execução depende do motor.')
+      field('Campo do estado', campoDoEstado),
+      field('Estados de "ainda não acabou"', estadosEmAndamento, 'Separados por vírgula. Sem isto não se sabe quando parar de perguntar.')
     ]),
-    field('Configuração em JSON', configInput, 'Parâmetros não secretos, como URL base, timeouts e opções do adaptador.'),
-    field('Segredos em JSON', secretInput, editing
-      ? 'O valor atual nunca volta para o navegador. Deixe vazio para preservar o segredo existente; preencha somente para substituí-lo.'
-      : 'Opcional. Tokens e senhas são enviados uma vez e nunca aparecem novamente na API.'),
-    editing ? el('div', { className: 'notice notice-info compact' }, [el('strong', { text: 'Segredo protegido' }), el('p', { text: 'A API atual não informa se já existe um segredo; por segurança, o campo sempre abre vazio.' })]) : null,
-    message,
-    el('div', { className: 'button-row' }, [submit, close ? button('Cancelar', { onClick: close }) : null])
+    el('div', { className: 'form-grid' }, [
+      field('Campo do resultado', campoDoResultado),
+      field('Campo do erro', campoDoErro, 'Opcional.')
+    ])
   ])
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault()
-    message.replaceChildren()
-    setBusy(submit, true, 'Salvando…')
+  const sincronizarForma = () => {
+    blocoTrabalho.hidden = forma.value !== 'trabalho'
+    blocoSimples.hidden = forma.value === 'trabalho'
+  }
+  forma.addEventListener('change', sincronizarForma)
+  sincronizarForma()
+
+  // O aviso de destino, ao vivo: mostra para onde vai e se a credencial segue.
+  const aviso = el('div', { className: 'notice notice-info compact' })
+  const atualizarAviso = () => {
+    const d = destinoDe(endereco(), { caminho: caminho.value })
+    aviso.replaceChildren(
+      el('strong', { text: `${metodo.value} ${d.url || '(sem caminho)'}` }),
+      el('p', {
+        text: d.levaSegredo
+          ? 'A credencial desta conexão vai junto.'
+          : 'Outro serviço: a credencial desta conexão NÃO vai junto — a chamada sai sem autenticação.'
+      })
+    )
+    aviso.className = d.levaSegredo ? 'notice notice-info compact' : 'notice notice-warning compact'
+  }
+  caminho.addEventListener('input', atualizarAviso)
+  metodo.addEventListener('change', atualizarAviso)
+  atualizarAviso()
+
+  const cartao = el('article', { className: 'panel stack-lg' }, [
+    el('div', { className: 'form-grid' }, [
+      field('Nome da função', nome, 'A automação chama por este nome.'),
+      field('Método', metodo)
+    ]),
+    field('Descrição', descricao),
+    field('Caminho', caminho, 'Relativo ao endereço da conexão (/download) ou uma URL inteira de outro serviço.'),
+    aviso,
+    el('div', { className: 'section-heading' }, [
+      el('div', {}, [el('h3', { text: 'Entradas' }), el('p', { className: 'muted compact', text: 'O que a automação informa ao chamar.' })]),
+      button('Adicionar entrada', { onClick: () => entradas.append(linhaDeEntrada(null, removerEntrada)) })
+    ]),
+    entradas,
+    el('h3', { text: 'Resposta' }),
+    field('Como a resposta chega', forma),
+    blocoSimples,
+    blocoTrabalho,
+    el('div', { className: 'button-row' }, [button('Remover função', { variant: 'danger-quiet', onClick: () => aoRemover(cartao) })])
+  ])
+
+  cartao.atualizarDestino = atualizarAviso
+  cartao.ler = () => {
+    const saida = {
+      nome: nome.value.trim(),
+      descricao: descricao.value.trim(),
+      metodo: metodo.value,
+      caminho: caminho.value.trim(),
+      entradas: [...entradas.children].map((l) => l.ler())
+    }
+    if (forma.value === 'trabalho') {
+      saida.resposta = {
+        forma: 'trabalho',
+        campoDoTrabalho: campoDoTrabalho.value.trim(),
+        caminhoDeAcompanhamento: caminhoDeAcompanhamento.value.trim(),
+        campoDoEstado: campoDoEstado.value.trim(),
+        estadosEmAndamento: estadosEmAndamento.value.split(',').map((e) => e.trim()).filter(Boolean),
+        campoDoResultado: campoDoResultado.value.trim(),
+        campoDoErro: campoDoErro.value.trim() || null
+      }
+    } else {
+      saida.resposta = { forma: forma.value, campo: campo.value.trim() || null }
+    }
+    return saida
+  }
+  return cartao
+}
+
+// --- o formulário da conexão inteira --------------------------------------
+function formularioDeConexao ({ conexao = null, modelo = null, fechar, refresh }) {
+  const editando = Boolean(conexao)
+  const partida = conexao || modelo
+  const idInput = el('input', { type: 'text', value: partida?.id || '', placeholder: 'minha-ia', disabled: editando })
+  const enderecoInput = el('input', { type: 'text', value: partida?.config?.endereco || '', placeholder: 'https://api.exemplo.com' })
+
+  const funcoes = el('div', { className: 'stack-lg' })
+  const removerFuncao = (cartao) => cartao.remove()
+  const lerEndereco = () => enderecoInput.value.trim()
+  const adicionar = (f) => funcoes.append(editorDeFuncao(f, { endereco: lerEndereco, aoRemover: removerFuncao }))
+  for (const f of partida?.config?.funcoes || []) adicionar(f)
+  // Trocar o endereço muda para onde TODAS as funções relativas apontam.
+  enderecoInput.addEventListener('input', () => {
+    for (const c of funcoes.children) c.atualizarDestino?.()
+  })
+
+  // A CREDENCIAL, PERGUNTADA DO LADO DE QUEM RESPONDE.
+  //
+  // Aqui estava escrito "Nome do campo — como o serviço chama a credencial
+  // dele?", com "token" preenchido. O dono olhou e disse: "nem eu que sou
+  // programador estou entendendo que bagaça é pra fazer aqui".
+  //
+  // Ele tinha razão, e o defeito era o mesmo do `baixa` escondido no código: o
+  // formato INTERNO de armazenamento (as chaves do secret_json) vazando como se
+  // fosse pergunta ao usuário. Ninguém tem essa resposta na cabeça.
+  //
+  // O que a pessoa tem é uma chave na mão e uma documentação dizendo como
+  // mandá-la. Então é isso que se pergunta — com as formas descritas pelo que
+  // ela RECONHECE na documentação, não pelo nome técnico.
+  const AUTENTICACOES = [
+    ['nenhuma', 'Não precisa de chave — o serviço é aberto'],
+    ['bearer', 'Chave de API — a documentação diz "Bearer" ou "Authorization"'],
+    ['cabeçalho', 'Cabeçalho próprio — a documentação mostra algo como  X-API-Key: sua-chave'],
+    ['parâmetro', 'Na própria URL — a documentação mostra algo como  ?api_key=sua-chave']
+  ]
+  const autenticacaoAtual = partida?.config?.autenticacao?.tipo || (editando ? 'nenhuma' : 'bearer')
+  const autenticacao = el('select', {}, AUTENTICACOES.map(([v, rotulo]) =>
+    el('option', { value: v, selected: autenticacaoAtual === v, text: rotulo })))
+  const nomeDoCabecalho = el('input', {
+    type: 'text',
+    value: partida?.config?.autenticacao?.nome || '',
+    placeholder: 'X-API-Key'
+  })
+  // DE ONDE a chave vem. Colar é o pedido do dono (quem aluga não tem
+  // terminal); arquivo é a forma que já existia, e para quem tem terminal ela
+  // continua melhor: a chave não entra no banco nem em backup do banco.
+  const ORIGENS = [
+    ['colada', 'Colar a chave aqui'],
+    ['arquivo', 'Ler de um arquivo no servidor']
+  ]
+  const origemAtual = partida?.config?.autenticacao?.origem || 'colada'
+  const origem = el('select', {}, ORIGENS.map(([v, rotulo]) =>
+    el('option', { value: v, selected: origemAtual === v, text: rotulo })))
+  const arquivoInput = el('input', {
+    type: 'text',
+    value: partida?.config?.autenticacao?.arquivo || '',
+    placeholder: '~/meu-servico/.token'
+  })
+  const segredoInput = el('input', {
+    type: 'password',
+    autocomplete: 'new-password',
+    placeholder: editando && conexao.segredoDefinido ? '•••••••• (já guardada)' : 'cole a chave aqui'
+  })
+  const apagarSegredo = el('input', { type: 'checkbox' })
+  const campoOrigem = field('De onde vem a chave', origem)
+  const campoArquivo = field('Caminho do arquivo', arquivoInput, 'O conteúdo do arquivo é a chave. Ele nunca é copiado para o banco.')
+
+  const campoNome = field('Nome que a documentação usa', nomeDoCabecalho, 'O texto antes dos dois-pontos, ou o nome do parâmetro.')
+  const campoValor = field('Sua chave', segredoInput, editando
+    ? 'Deixe vazio para manter a que já está guardada. Ela nunca volta para a tela.'
+    : 'Enviada uma vez. Depois de salva, nunca mais é devolvida pela API.')
+  const exemplo = el('p', { className: 'muted compact' })
+  const sincronizarAutenticacao = () => {
+    const tipo = autenticacao.value
+    const precisaNome = tipo === 'cabeçalho' || tipo === 'parâmetro'
+    campoNome.hidden = !precisaNome
+    campoOrigem.hidden = tipo === 'nenhuma'
+    campoArquivo.hidden = tipo === 'nenhuma' || origem.value !== 'arquivo'
+    campoValor.hidden = tipo === 'nenhuma' || origem.value !== 'colada'
+    const nome = nomeDoCabecalho.value.trim() || (tipo === 'cabeçalho' ? 'X-API-Key' : 'api_key')
+    exemplo.textContent = tipo === 'nenhuma'
+      ? 'As chamadas saem sem autenticação nenhuma.'
+      : tipo === 'bearer'
+        ? 'Vai assim na chamada:  Authorization: Bearer sua-chave'
+        : tipo === 'cabeçalho'
+          ? `Vai assim na chamada:  ${nome}: sua-chave`
+          : `Vai assim na chamada:  ...?${nome}=sua-chave`
+  }
+  autenticacao.addEventListener('change', sincronizarAutenticacao)
+  origem.addEventListener('change', sincronizarAutenticacao)
+  nomeDoCabecalho.addEventListener('input', sincronizarAutenticacao)
+  sincronizarAutenticacao()
+
+  const mensagem = el('div')
+  const salvar = button(editando ? 'Salvar conexão' : 'Criar conexão', { variant: 'primary', type: 'submit' })
+
+  const form = el('form', { className: 'panel stack-lg' }, [
+    el('div', { className: 'panel-heading' }, [
+      el('div', {}, [
+        el('h2', { text: editando ? `Editar ${conexao.id}` : (modelo ? `Nova conexão a partir de "${modelo.id}"` : 'Nova conexão') }),
+        el('p', { text: 'Um serviço externo que as automações podem consultar. O LCN não acessa a web sozinho — toda consulta passa por uma conexão declarada aqui.' })
+      ]),
+      fechar ? button('Fechar', { variant: 'quiet', onClick: fechar }) : null
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Identificador', idInput, 'A automação escreve este nome para chamar o serviço.'),
+      field('Endereço do serviço', enderecoInput, 'Para onde as chamadas vão. http ou https.')
+    ]),
+    el('h3', { text: 'Como este serviço pede autenticação' }),
+    field('Forma', autenticacao),
+    exemplo,
+    campoNome,
+    campoOrigem,
+    campoArquivo,
+    campoValor,
+    editando && conexao.segredoDefinido
+      ? field('Apagar a chave guardada', apagarSegredo, 'Marque para remover. As chamadas passam a sair sem autenticação.')
+      : null,
+    el('div', { className: 'section-heading' }, [
+      el('div', {}, [
+        el('h3', { text: 'Funções' }),
+        el('p', { className: 'muted compact', text: 'O que dá para pedir a este serviço. Cada função vira algo que uma automação pode chamar.' })
+      ]),
+      button('Adicionar função', { onClick: () => adicionar(null) })
+    ]),
+    funcoes,
+    mensagem,
+    el('div', { className: 'button-row' }, [salvar, fechar ? button('Cancelar', { onClick: fechar }) : null])
+  ].filter(Boolean))
+
+  form.addEventListener('submit', async (evento) => {
+    evento.preventDefault()
+    mensagem.replaceChildren()
+    setBusy(salvar, true, 'Salvando…')
     try {
       const id = idInput.value.trim()
-      const kind = kindInput.value.trim()
       if (!id) throw new Error('Informe o identificador da conexão.')
-      if (!kind) throw new Error('Informe o tipo da conexão.')
-      const body = { kind, config: parseJson(configInput.value, 'A configuração') }
-      const secret = parseJson(secretInput.value, 'O segredo', { optional: true })
-      if (secret !== undefined) body.secret = secret
-      if (editing) await api.connections.update(connection.id, body)
-      else await api.connections.create({ id, ...body })
-      notify(editing ? 'Conexão atualizada.' : 'Conexão criada.')
+      const auth = { tipo: autenticacao.value }
+      if (auth.tipo === 'cabeçalho' || auth.tipo === 'parâmetro') auth.nome = nomeDoCabecalho.value.trim()
+      if (auth.tipo !== 'nenhuma') {
+        auth.origem = origem.value
+        if (origem.value === 'arquivo') auth.arquivo = arquivoInput.value.trim()
+      }
+      const corpo = {
+        kind: 'http',
+        config: { endereco: lerEndereco(), autenticacao: auth, funcoes: [...funcoes.children].map((c) => c.ler()) }
+      }
+      // As três intenções separadas, como o motor espera: ausente mantém,
+      // null apaga, objeto substitui. O nome da chave guardada é sempre
+      // `valor` — COMO ela viaja é a declaração, não o nome do campo.
+      // Chave de arquivo não tem nada para guardar no banco — o banco só sabe
+      // ONDE ela está.
+      if (apagarSegredo.checked || auth.tipo === 'nenhuma' || auth.origem === 'arquivo') corpo.secret = null
+      else if (segredoInput.value) corpo.secret = { valor: segredoInput.value }
+
+      if (editando) await api.connections.update(conexao.id, corpo)
+      else await api.connections.create({ id, ...corpo })
+      notify(editando ? 'Conexão atualizada.' : 'Conexão criada.')
       await refresh()
-    } catch (error) {
-      message.replaceChildren(errorState(error))
+    } catch (erro) {
+      mensagem.replaceChildren(errorState(erro))
     } finally {
-      setBusy(submit, false)
+      setBusy(salvar, false)
     }
   })
   return form
 }
 
-export async function renderConnections ({ refresh }) {
-  setPageHeader({
-    eyebrow: 'Configurações da API',
-    title: 'Conexões',
-    description: 'Cadastre parâmetros e segredos usados por integrações externas, sem expor credenciais salvas.',
-    actions: [button('Atualizar', { onClick: refresh })]
-  })
-  const connections = await api.connections.list()
-  const root = el('div', { className: 'connections-layout' })
-  const listColumn = el('div', { className: 'stack' })
-  const editor = el('div')
-  const showEditor = (connection = null) => editor.replaceChildren(connectionForm({ connection, close: () => editor.replaceChildren(), refresh }))
-  listColumn.append(el('div', { className: 'section-heading' }, [
-    el('div', {}, [
-      el('h2', { text: 'Conexões cadastradas' }),
-      el('p', { text: connections.length === 1 ? '1 configuração disponível.' : `${connections.length} configurações disponíveis.` })
-    ]),
-    button('Nova conexão', { variant: 'primary', onClick: () => showEditor() })
-  ]))
-  if (!connections.length) {
-    listColumn.append(emptyState('Nenhuma conexão cadastrada', 'Crie uma conexão somente quando uma integração realmente precisar dela.', button('Criar conexão', { variant: 'primary', onClick: () => showEditor() })))
-  } else {
-    listColumn.append(...connections.map((connection) => el('article', { className: 'list-card connection-card' }, [
-      el('div', { className: 'list-card-main' }, [
-        el('div', {}, [el('p', { className: 'mono overline', text: connection.id }), el('h2', { text: connection.kind })]),
-        badge('Configuração ativa', 'info')
+// --- o cartão de leitura --------------------------------------------------
+function cartaoDeConexao (conexao, { editar, refresh }) {
+  const funcoes = conexao.config?.funcoes || []
+  const endereco = conexao.config?.endereco || '(sem endereço)'
+
+  const listaDeFuncoes = funcoes.length
+    ? funcoes.map((f) => {
+        const d = destinoDe(conexao.config?.endereco, f)
+        return el('div', { className: 'panel compact stack' }, [
+          el('div', { className: 'list-card-main' }, [
+            el('div', {}, [
+              el('h4', { text: f.nome }),
+              f.descricao ? el('p', { className: 'muted compact', text: f.descricao }) : null
+            ].filter(Boolean)),
+            badge(`${f.metodo} ${d.url}`, d.levaSegredo ? 'info' : 'warning')
+          ]),
+          f.entradas?.length
+            ? el('p', { className: 'muted compact', text: `Recebe: ${f.entradas.map((e) => e.opcoes?.length ? `${e.nome} (${e.opcoes.join(' · ')})` : e.nome).join(', ')}` })
+            : el('p', { className: 'muted compact', text: 'Não recebe nada.' }),
+          el('p', { className: 'muted compact', text: `Responde: ${f.resposta?.forma || '—'}` })
+        ])
+      })
+    : [el('p', { className: 'muted', text: 'Nenhuma função declarada ainda. Sem função, nada pode ser pedido a este serviço.' })]
+
+  return el('article', { className: 'list-card stack' }, [
+    el('div', { className: 'list-card-main' }, [
+      el('div', {}, [
+        el('p', { className: 'mono overline', text: conexao.id }),
+        el('h2', { text: endereco })
       ]),
-      el('pre', { className: 'json-view compact-json', text: JSON.stringify(connection.config, null, 2) }),
-      el('small', { className: 'muted', text: `Atualizada em ${formatDate(connection.updatedAt)}` }),
-      el('div', { className: 'button-row' }, [
-        button('Editar', { variant: 'quiet', onClick: () => showEditor(connection) }),
-        button('Remover', { variant: 'danger-quiet', onClick: async (event) => {
-          if (!window.confirm(`Remover a conexão "${connection.id}"? Esta ação não pode ser desfeita.`)) return
-          const control = event.currentTarget
-          setBusy(control, true, 'Removendo…')
+      // O que importa aqui é COMO ela autentica, não como o campo se chama por
+      // dentro. `valor` é detalhe de armazenamento e não diz nada a ninguém.
+      // O estado vem do MOTOR, que é quem consegue conferir se a chave de
+      // arquivo realmente resolve. A tela dizia "Falta a chave" olhando só o
+      // banco — e apontava falta numa chave que existia e funcionava.
+      (() => {
+        const auth = conexao.config?.autenticacao || { tipo: 'nenhuma' }
+        const cred = conexao.credencial || {}
+        if (!cred.necessaria) return badge('Sem autenticação', 'neutral')
+        if (!cred.resolvida) return badge(cred.motivo || 'Falta a chave', 'warning')
+        const comoViaja = auth.tipo === 'bearer'
+          ? 'Authorization: Bearer'
+          : auth.tipo === 'cabeçalho' ? auth.nome : `?${auth.nome}=`
+        const daOnde = cred.origem === 'arquivo' ? ` · do arquivo ${cred.arquivo}` : ''
+        return badge(`Chave via ${comoViaja}${daOnde}`, 'success')
+      })()
+    ]),
+    ...listaDeFuncoes,
+    el('small', { className: 'muted', text: `Atualizada em ${formatDate(conexao.updatedAt)}` }),
+    el('div', { className: 'button-row' }, [
+      button('Editar', { variant: 'quiet', onClick: () => editar(conexao) }),
+      button('Remover', {
+        variant: 'danger-quiet',
+        onClick: async (evento) => {
+          if (!window.confirm(`Remover a conexão "${conexao.id}"? As automações que a chamam param de funcionar.`)) return
+          const controle = evento.currentTarget
+          setBusy(controle, true, 'Removendo…')
           try {
-            await api.connections.remove(connection.id)
+            await api.connections.remove(conexao.id)
             notify('Conexão removida.')
             await refresh()
-          } catch (error) {
-            notify(error.message, 'danger')
-            setBusy(control, false)
+          } catch (erro) {
+            notify(erro.message, 'danger')
+            setBusy(controle, false)
           }
-        } })
-      ])
-    ])))
+        }
+      })
+    ])
+  ])
+}
+
+export async function renderConnections ({ refresh }) {
+  setPageHeader({
+    eyebrow: 'Serviços externos',
+    title: 'Conexões',
+    description: 'As APIs que as automações podem consultar. O LCN não acessa a web sozinho — toda consulta externa passa por uma conexão declarada aqui.',
+    actions: [button('Atualizar', { onClick: refresh })]
+  })
+
+  const [conexoes, prontas] = await Promise.all([
+    api.connections.list(),
+    api.connections.prontas().catch(() => [])
+  ])
+
+  const raiz = el('div', { className: 'connections-layout' })
+  const coluna = el('div', { className: 'stack' })
+  const editor = el('div')
+  const abrir = (conexao = null, modelo = null) =>
+    editor.replaceChildren(formularioDeConexao({ conexao, modelo, fechar: () => editor.replaceChildren(), refresh }))
+
+  coluna.append(el('div', { className: 'section-heading' }, [
+    el('div', {}, [
+      el('h2', { text: 'Serviços cadastrados' }),
+      el('p', { text: conexoes.length === 1 ? '1 serviço.' : `${conexoes.length} serviços.` })
+    ]),
+    button('Nova conexão', { variant: 'primary', onClick: () => abrir() })
+  ]))
+
+  if (!conexoes.length) {
+    coluna.append(emptyState(
+      'Nenhum serviço cadastrado',
+      'Sem conexão, uma automação não tem como consultar nada fora do WhatsApp.',
+      button('Criar conexão', { variant: 'primary', onClick: () => abrir() })
+    ))
+  } else {
+    coluna.append(...conexoes.map((c) => cartaoDeConexao(c, { editar: (x) => abrir(x), refresh })))
   }
-  root.append(listColumn, editor)
-  return root
+
+  // As prontas que ainda não estão cadastradas viram atalho — e servem de
+  // exemplo de como se declara uma conexão do zero.
+  const disponiveis = prontas.filter((p) => !p.jaCadastrada)
+  if (disponiveis.length) {
+    coluna.append(el('section', { className: 'panel stack' }, [
+      el('h3', { text: 'Prontas para cadastrar' }),
+      el('p', { className: 'muted compact', text: 'Declarações que já vêm com o sistema. Você pode ajustá-las depois como qualquer outra.' }),
+      ...disponiveis.map((p) => el('div', { className: 'list-card-main' }, [
+        el('div', {}, [el('h4', { text: p.titulo || p.id }), el('p', { className: 'muted compact', text: p.descricao || '' })]),
+        button('Cadastrar', { onClick: () => abrir(null, p) })
+      ]))
+    ]))
+  }
+
+  raiz.append(coluna, editor)
+  return raiz
 }

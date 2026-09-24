@@ -1,6 +1,7 @@
 import { api, ApiError } from '../api.js'
 import { avisoInline } from './variables.js'
 import { badge, button, el, emptyState, errorState, field, loading, notify, setBusy, setPageHeader } from '../ui.js'
+import { TYPE_LABELS, criarControleParametro, valorParametro } from '../logic/parametros.js'
 
 const CATEGORY_LABELS = {
   utilitarios: 'Utilitários',
@@ -9,20 +10,8 @@ const CATEGORY_LABELS = {
   'modulos-especializados': 'Módulos especializados'
 }
 
-const TYPE_LABELS = {
-  string: 'Texto',
-  number: 'Número',
-  boolean: 'Sim ou não'
-}
-
 function rotuloCategoria (category) {
   return CATEGORY_LABELS[category] || category
-}
-
-function valorParametro (definition, control) {
-  if (definition.type === 'boolean') return control.checked
-  if (definition.type === 'number') return Number(control.value)
-  return control.value
 }
 
 function mensagemErroInstalacao (error) {
@@ -99,32 +88,6 @@ function painelCodigo (template) {
     el('p', { className: 'field-help', text: 'Visualização somente leitura do documento que será preenchido durante a instalação.' }),
     el('pre', { className: 'json-view', text: JSON.stringify(template.documentTemplate, null, 2) })
   ])
-}
-
-function criarControleParametro (definition, pools) {
-  const hasDefault = Object.prototype.hasOwnProperty.call(definition, 'default')
-  if (definition.key === 'poolId') {
-    const control = el('select', { required: true }, [
-      el('option', { value: '', text: pools.length ? 'Selecione um pool' : 'Nenhum pool cadastrado' })
-    ])
-    for (const pool of pools) {
-      control.append(el('option', {
-        value: pool.id,
-        selected: hasDefault && String(definition.default) === pool.id,
-        text: `${pool.label || pool.id} · ${pool.id}`
-      }))
-    }
-    return control
-  }
-  if (definition.type === 'boolean') {
-    return el('input', { type: 'checkbox', checked: hasDefault ? Boolean(definition.default) : false })
-  }
-  return el('input', {
-    type: definition.type === 'number' ? 'number' : 'text',
-    step: definition.type === 'number' ? 'any' : undefined,
-    value: hasDefault ? String(definition.default) : '',
-    required: true
-  })
 }
 
 function painelInstalacao ({ templates, rootTemplateId, pools, instances, navigate }) {
@@ -259,6 +222,18 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     return null
   }
 
+  // Em que modo a automação nasce.
+  //
+  // Antes isto não existia: a coluna tem DEFAULT 'shadow', a rota não definia o
+  // campo, e todo comando instalado nascia mudo — avaliava, registrava "teria
+  // executado" e não enviava nada. O controle para trocar existia, mas só na
+  // tela de Automações, que quem acabou de instalar não abre. Escolher aqui, com
+  // "ao vivo" marcado, é o que faz o botão "Instalar" significar o que diz.
+  const modoSelect = el('select', {}, [
+    el('option', { value: 'live', selected: true, text: 'Ao vivo — responde de verdade' }),
+    el('option', { value: 'shadow', text: 'Sombra — só registra o que faria, sem enviar' })
+  ])
+
   function montarCorpo () {
     const automationIds = {}
     const parameters = {}
@@ -273,6 +248,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     return {
       automationIds,
       parameters,
+      deploymentMode: modoSelect.value,
       scope: {
         include: [{ kind: selectedTarget.value.kind, id: selectedTarget.value.id }],
         exclude: []
@@ -296,13 +272,22 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
         const result = await api.templates.install(rootTemplateId, montarCorpo())
         const installed = Array.isArray(result?.installed) ? result.installed : []
         const ids = installed.map((automation) => automation.id).filter(Boolean)
+        const emSombra = result?.deploymentMode === 'shadow'
         const message = ids.length
           ? `${ids.length === 1 ? 'Automação instalada' : 'Automações instaladas'}: ${ids.join(', ')}.`
           : 'Instalação concluída pelo motor.'
         notify(message)
-        resultArea.replaceChildren(el('div', { className: 'notice notice-success' }, [
-          el('strong', { text: 'Instalação concluída.' }),
+        resultArea.replaceChildren(el('div', { className: `notice ${emSombra ? 'notice-warning' : 'notice-success'}` }, [
+          el('strong', { text: emSombra ? 'Instalado em SOMBRA.' : 'Instalado e no ar.' }),
           el('p', { text: message }),
+          // Dizer o modo aqui, e não só na outra tela, é o conserto de um erro
+          // que já aconteceu duas vezes: anunciar "está no ar" um comando mudo.
+          el('p', {
+            className: 'muted compact',
+            text: emSombra
+              ? 'Ele NÃO vai responder no WhatsApp ainda — só registra o que faria, na aba Execuções. Troque para "ao vivo" em Automações quando quiser ligar.'
+              : 'Já responde no WhatsApp.'
+          }),
           button('Ver em Automações', { onClick: () => navigate('/automations') })
         ]))
       } catch (error) {
@@ -339,7 +324,11 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
       targetArea
     ]),
     summaryArea,
-    el('div', { className: 'catalog-install-actions' }, [botaoInstalar, el('span', { className: 'muted compact', text: 'A automação será publicada imediatamente.' })]),
+    el('section', { className: 'catalog-template-form' }, [
+      el('p', { className: 'overline', text: 'Como nasce' }),
+      field('Modo', modoSelect, 'Sombra serve para conferir o que o comando faria antes de deixar que ele faça.')
+    ]),
+    el('div', { className: 'catalog-install-actions' }, [botaoInstalar]),
     resultArea
   ])
 }

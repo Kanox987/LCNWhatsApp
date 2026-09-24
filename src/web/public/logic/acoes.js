@@ -60,6 +60,7 @@ export const GATILHOS = Object.freeze([
       { chave: 'messageKinds', rotulo: 'Só nestes tipos', ajuda: 'Deixe vazio para qualquer tipo. Marque para reagir só a foto, só a áudio, só a visualização única…' },
       { chave: 'containsLink', rotulo: 'Tem link?', ajuda: 'sim = só mensagens com link · não = só mensagens SEM link. O detector é fechado: não aceita expressão sua, e não marca "etc..." nem "3.5" como link.' },
       { chave: 'mediaLinkOnly', rotulo: 'Só link de mídia', ajuda: 'Reage só a POST de rede conhecida: reel e foto do Instagram, Shorts e vídeo do YouTube, TikTok, Pinterest, Facebook, X, Reddit. Link de loja, notícia, arquivo em nuvem ou post de comunidade é ignorado em silêncio — sem isso o bot promete "baixando…" antes de descobrir que não há mídia ali.' },
+      { chave: 'alsoOnCommands', rotulo: 'Reagir também a comandos', ajuda: 'Normalmente esta regra CEDE quando a mensagem já virou um comando: "/dow <link>" é comando e é mensagem com link ao mesmo tempo, e sem isso o mesmo link era baixado duas vezes. Quem digita um comando endereçou o bot; a regra automática existe para a mensagem que ninguém endereçou a ele. Ligue só se a regra precisa ver tudo que passa — uma automação de auditoria, por exemplo.' },
       { chave: 'keywords', rotulo: 'Contém alguma destas palavras', ajuda: 'Dispara se o texto tiver qualquer uma delas, sem diferenciar maiúscula.' },
       { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'A barreira acima vale de qualquer jeito.' },
       { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot.' }
@@ -103,6 +104,7 @@ export const ACOES = Object.freeze([
     campos: [
       { chave: 'url', rotulo: 'O link', ajuda: 'Aceita variável: {{quoted.link}} pega o link da mensagem marcada, {{message.link}} pega o da própria mensagem. Se não houver link, o comando avisa em vez de tentar.' },
       { chave: 'modo', rotulo: 'O que baixar', ajuda: 'auto deixa o serviço escolher · video traz imagem e som · audio traz só a trilha · thumbnail traz só a capa.' },
+      { chave: 'delivery', rotulo: 'Como entregar quando vem mais de um arquivo', ajuda: 'Carrossel agrupa tudo num álbum só — é o padrão, e o WhatsApp tem álbum de verdade, com contagem separada de foto e vídeo. Separado manda uma mensagem por arquivo. Nos dois casos TODAS as mídias são entregues: antes o bot baixava as 10 fotos de um post e mandava 1, e num post misto o vídeo ganhava e as fotos sumiam sem aviso. Se o servidor recusar o álbum, a entrega cai sozinha para uma por uma.' },
       { chave: 'ackText', rotulo: 'Aviso ao começar', ajuda: 'Enviado na hora, marcando a mensagem do link. Download demora, e silêncio parece que o comando não funcionou.' },
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Acompanha a mídia. Sem legenda, entra a descrição que o serviço trouxer (título do vídeo, por exemplo).' },
       { chave: 'notFoundText', rotulo: 'Se não houver link', ajuda: 'Enviado quando o comando é usado sem link nenhum por perto.' },

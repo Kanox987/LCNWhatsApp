@@ -104,7 +104,9 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       despublicar: (id) => requisitar('POST', `${caminho('/automations', id)}/unpublish`),
       definirHabilitada: (id, enabled) => requisitar('PUT', `${caminho('/automations', id)}/enabled`, { enabled }),
       definirModo: (id, mode) => requisitar('PUT', `${caminho('/automations', id)}/deployment-mode`, { mode }),
-      obterProvenance: (id) => requisitar('GET', `${caminho('/automations', id)}/provenance`)
+      obterProvenance: (id) => requisitar('GET', `${caminho('/automations', id)}/provenance`),
+      obterReconfiguracao: (id) => requisitar('GET', `${caminho('/automations', id)}/reconfigure`),
+      reconfigurar: (id, parameters) => requisitar('PUT', `${caminho('/automations', id)}/reconfigure`, { parameters })
     },
     templates: {
       listar: () => requisitar('GET', '/templates'),
@@ -129,6 +131,7 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
     },
     conexoes: {
       listar: () => requisitar('GET', '/connections'),
+      prontas: () => requisitar('GET', '/connections-prontas'),
       criar: (dados) => requisitar('POST', '/connections', dados),
       obter: (id) => requisitar('GET', caminho('/connections', id)),
       atualizar: (id, dados) => requisitar('PUT', caminho('/connections', id), dados),

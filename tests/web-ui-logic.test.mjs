@@ -5,7 +5,6 @@
 // e montagem do documento de automação a partir do estado do wizard.
 import { parseBandwidth, formatBandwidth, formatBytes } from '../src/web/public/logic/optimization.js'
 import { converterParaTipo, descreverValor, tipoDoValor, valorParaCampo } from '../src/web/public/logic/valores.js'
-import { suggestAutomationId, emptyScopeBlocksSave, buildAutomationDocument, automationSummary, stateFromDocument } from '../src/web/public/logic/automation.js'
 
 let falhas = 0
 const check = (nome, ok) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}`) }
@@ -46,137 +45,21 @@ check('formatBytes: GB com 1 casa decimal', formatBytes(2_000_000_000) === '2.0 
 check('formatBytes: zero é um total válido, não "sem limite"', formatBytes(0) === '0 B')
 check('formatBytes: negativo/NaN nunca lança, cai num traço', formatBytes(-5) === '—' && formatBytes(NaN) === '—')
 
-// --- suggestAutomationId ---
-check('suggestAutomationId: espaços e acentos viram id kebab-case', suggestAutomationId('Consultar Climática Região') === 'consultar-climatica-regiao')
-check('suggestAutomationId: símbolos somem', suggestAutomationId('Ping! /teste #1') === 'ping-teste-1')
-check('suggestAutomationId: nome vazio vira string vazia (nunca lança)', suggestAutomationId('') === '')
-check('suggestAutomationId: nome undefined nunca lança', suggestAutomationId(undefined) === '')
-
-// --- emptyScopeBlocksSave (achado real do plano: include vazio nunca é "todos") ---
-check('emptyScopeBlocksSave: array vazio bloqueia', emptyScopeBlocksSave([]) === true)
-check('emptyScopeBlocksSave: undefined bloqueia', emptyScopeBlocksSave(undefined) === true)
-check('emptyScopeBlocksSave: com 1 item não bloqueia', emptyScopeBlocksSave([{ kind: 'contact', id: 'x' }]) === false)
-
-// --- buildAutomationDocument: estado do wizard -> documento v1 válido ---
-const estadoWizard = {
-  id: 'ping', name: 'Ping', enabled: true, command: '/ping', match: 'exact',
-  scopeInclude: [{ kind: 'contact', id: '5511999@s.whatsapp.net', label: 'Fulano' }],
-  poolId: 'pool-local', replyText: 'pong ({{latencyMs}}ms)'
-}
-const doc = buildAutomationDocument(estadoWizard)
-check('buildAutomationDocument: schemaVersion 1', doc.schemaVersion === 1)
-check('buildAutomationDocument: só trigger.command -> action.whatsapp.reply (linear)', doc.flow.nodes.map((n) => n.type).join(',') === 'trigger.command,action.whatsapp.reply')
-check('buildAutomationDocument: edge liga os dois nós em "matched"', doc.flow.edges[0].from === 'gatilho-comando' && doc.flow.edges[0].to === 'resposta-whatsapp' && doc.flow.edges[0].on === 'matched')
-check('buildAutomationDocument: scope.include só leva kind/id (não vaza "label" da UI pro documento)', JSON.stringify(doc.scope.include[0]) === JSON.stringify({ kind: 'contact', id: '5511999@s.whatsapp.net' }))
-check('buildAutomationDocument: texto de resposta preserva o placeholder de latência', doc.flow.nodes[1].config.text === 'pong ({{latencyMs}}ms)')
-check('buildAutomationDocument: scope vazio gera include: [] (nunca omite o campo)', Array.isArray(buildAutomationDocument({ ...estadoWizard, scopeInclude: [] }).scope.include))
-check('buildAutomationDocument: sem menuLabel/menuDescription, nunca inclui "display" no documento', doc.display === undefined)
-const docComMenu = buildAutomationDocument({ ...estadoWizard, menuLabel: '/ping', menuDescription: 'Testa a latência' })
-check('buildAutomationDocument: com menuLabel/menuDescription preenchidos, gera "display" completo', docComMenu.display.menuLabel === '/ping' && docComMenu.display.menuDescription === 'Testa a latência')
-const docSoLabel = buildAutomationDocument({ ...estadoWizard, menuLabel: '/ping' })
-check('buildAutomationDocument: só menuLabel preenchido, "display" não leva menuDescription vazia', docSoLabel.display.menuLabel === '/ping' && !('menuDescription' in docSoLabel.display))
-
-// --- automationSummary: resumo em linguagem humana pra etapa de revisão ---
-const resumo = automationSummary(estadoWizard)
-check('automationSummary: menciona o nome', resumo.some((linha) => linha.includes('Ping')))
-check('automationSummary: menciona o comando', resumo.some((linha) => linha.includes('/ping')))
-check('automationSummary: menciona os destinos autorizados', resumo.some((linha) => linha.includes('Fulano')))
-const resumoSemEscopo = automationSummary({ ...estadoWizard, scopeInclude: [] })
-check('automationSummary: escopo vazio avisa que o salvamento deve ficar bloqueado', resumoSemEscopo.some((linha) => linha.toLowerCase().includes('bloqueado')))
-check('automationSummary: sem menuLabel, avisa que não vai aparecer no /menu', resumo.some((linha) => linha.includes('Não vai aparecer no comando /menu')))
-const resumoComMenu = automationSummary({ ...estadoWizard, menuLabel: '/ping', menuDescription: 'Testa a latência' })
-check('automationSummary: com menuLabel, menciona como vai aparecer no /menu', resumoComMenu.some((linha) => linha.includes('/menu') && linha.includes('Testa a latência')))
-
-// --- stateFromDocument: caminho inverso, editar uma automação existente ---
-const estadoRecuperado = stateFromDocument(doc, new Map([['5511999@s.whatsapp.net', 'Fulano']]))
-check('stateFromDocument: recupera o comando do trigger', estadoRecuperado.command === '/ping')
-check('stateFromDocument: recupera o texto de resposta', estadoRecuperado.replyText === 'pong ({{latencyMs}}ms)')
-check('stateFromDocument: recupera o label do contato via mapa de nomes', estadoRecuperado.scopeInclude[0].label === 'Fulano')
-check('stateFromDocument: documento vazio/malformado nunca lança, cai em defaults', JSON.stringify(stateFromDocument({}).scopeInclude) === '[]')
-const estadoComMenu = stateFromDocument(docComMenu)
-check('stateFromDocument: recupera menuLabel/menuDescription de "display"', estadoComMenu.menuLabel === '/ping' && estadoComMenu.menuDescription === 'Testa a latência')
-check('stateFromDocument: sem "display" no documento, menuLabel/menuDescription vêm vazios (nunca undefined)', estadoRecuperado.menuLabel === '' && estadoRecuperado.menuDescription === '')
-
-// --- ida e volta: documento -> estado -> documento é estável (idempotente) ---
-const doc2 = buildAutomationDocument(stateFromDocument(doc))
-check('ida e volta documento->estado->documento não perde informação', JSON.stringify(doc2) === JSON.stringify(doc))
-const docComMenu2 = buildAutomationDocument(stateFromDocument(docComMenu))
-check('ida e volta documento->estado->documento não perde "display" (menu)', JSON.stringify(docComMenu2) === JSON.stringify(docComMenu))
-
-// --- valores tipados na aba Dados (Bloco 1b) -----------------------------
-// A tabela sempre guardou qualquer tipo; era a tela que mandava tudo como
-// texto — e um contador criado à mão como "0" não podia ser somado depois.
-check('tipoDoValor reconhece número', tipoDoValor(3) === 'number')
-check('tipoDoValor reconhece sim/não', tipoDoValor(true) === 'boolean')
-check('tipoDoValor cai em texto por padrão', tipoDoValor('premium') === 'text' && tipoDoValor(null) === 'text')
-
-check('converte número digitado', converterParaTipo('7', 'number').valor === 7)
-check('aceita vírgula como separador decimal', converterParaTipo('1,5', 'number').valor === 1.5)
-check('número inválido é ERRO, não vira zero em silêncio', converterParaTipo('abc', 'number').ok === false)
-check('número vazio é erro explicado', converterParaTipo('', 'number').ok === false)
-
-check('converte sim', converterParaTipo('sim', 'boolean').valor === true)
-check('converte true', converterParaTipo('true', 'boolean').valor === true)
-check('converte não (com acento)', converterParaTipo('não', 'boolean').valor === false)
-check('vazio em sim/não vira não, não vira erro', converterParaTipo('', 'boolean').valor === false)
-check('texto qualquer em sim/não é erro', converterParaTipo('talvez', 'boolean').ok === false)
-
-check('texto passa direto', converterParaTipo('premium', 'text').valor === 'premium')
-check('tipo desconhecido é recusado', converterParaTipo('x', 'inventado').ok === false)
-check('converter nunca lança', converterParaTipo(undefined, 'text').ok === true && converterParaTipo(null, 'number').ok === false)
-
-check('valorParaCampo não coloca aspas em texto', valorParaCampo('premium') === 'premium')
-check('valorParaCampo mostra número sem aspas', valorParaCampo(3) === '3')
-check('descreverValor explica vazio em vez de mostrar nada', descreverValor('') === '(vazio)')
-check('descreverValor traduz booleano', descreverValor(true) === 'sim' && descreverValor(false) === 'não')
-
-
-// --- o editor não pode destruir o que não sabe montar ---------------------
-// `buildAutomationDocument` emite DOIS nós fixos. Abrir nele qualquer automação
-// de outra forma e salvar reescreveria a regra inteira, em silêncio: o anti-link
-// vira um comando vazio respondendo texto vazio. Nenhum erro, nenhum aviso, a
-// automação some.
+// O que existia aqui exercitava o assistente de seis passos, removido junto
+// com ele: `suggestAutomationId`, `emptyScopeBlocksSave`,
+// `buildAutomationDocument`, `automationSummary`, `stateFromDocument` e
+// `analisarForma`.
 //
-// Estes casos são o portão: forma que o assistente não reproduz fielmente tem
-// que ser marcada ANTES de a tela abrir.
-{
-  const { analisarForma } = await import('../src/web/public/logic/automation.js')
-  const simples = {
-    inputPolicy: { acceptedMessageKinds: ['text'] },
-    flow: {
-      nodes: [
-        { id: 'g', type: 'trigger.command', config: { command: '/oi', match: 'exact_or_args', allowFrom: 'external' } },
-        { id: 'r', type: 'action.whatsapp.reply', config: { text: 'olá' } }
-      ]
-    }
-  }
-  check('o comando simples que o assistente monta continua editável', analisarForma(simples).suportada === true,
-    analisarForma(simples).motivo)
-
-  const foraDaForma = [
-    ['gatilho automático', { ...simples, flow: { nodes: [{ ...simples.flow.nodes[0], type: 'trigger.message' }, simples.flow.nodes[1]] } }],
-    ['ação que não é responder texto', { ...simples, flow: { nodes: [simples.flow.nodes[0], { id: 'x', type: 'action.media.download', config: {} }] } }],
-    ['mais de dois passos', { ...simples, flow: { nodes: [...simples.flow.nodes, { id: 'c', type: 'action.variable.increment', config: {} }] } }],
-    ['olha foto além de texto', { ...simples, inputPolicy: { acceptedMessageKinds: ['text', 'image'] } }],
-    ['responde o próprio número', { ...simples, flow: { nodes: [{ ...simples.flow.nodes[0], config: { ...simples.flow.nodes[0].config, allowFrom: 'any' } }, simples.flow.nodes[1]] } }],
-    ['restrita ao dono', { ...simples, flow: { nodes: [{ ...simples.flow.nodes[0], config: { ...simples.flow.nodes[0].config, requireOwner: true } }, simples.flow.nodes[1]] } }],
-    ['tem destino excluído', { ...simples, scope: { exclude: [{ kind: 'contact', id: '1@s.whatsapp.net' }] } }],
-    ['documento vazio', { flow: { nodes: [] } }]
-  ]
-  for (const [nome, doc] of foraDaForma) {
-    const f = analisarForma(doc)
-    check(`"${nome}" abre em somente leitura`, f.suportada === false, f.motivo)
-    check(`e diz o porquê em português: ${nome}`, typeof f.motivo === 'string' && f.motivo.length > 20)
-  }
-
-  // A marca precisa chegar no estado que a tela lê — analisar certo e não
-  // repassar seria o mesmo defeito com um passo a mais.
-  const { stateFromDocument } = await import('../src/web/public/logic/automation.js')
-  check('o estado da tela carrega a marca de forma não suportada',
-    stateFromDocument(foraDaForma[0][1]).suportada === false)
-  check('e o comando simples chega marcado como editável',
-    stateFromDocument(simples).suportada === true)
-}
+// Aqueles casos guardavam uma decisão que deixou de existir: "esta automação
+// cabe na forma que o assistente monta?". Como ele montava DOIS nós, a resposta
+// era não para todas as automações reais, e a tela abria um resumo no lugar da
+// regra. Agora criar e editar são a mesma coisa — o texto .lcn — e o contrato
+// que importa é outro: `tests/lcn-ida-e-volta.test.mjs` prova que toda ação que
+// o motor executa tem palavra na linguagem, nos dois sentidos, e que cada
+// template do catálogo vira texto e volta IGUAL.
+//
+// Manter aqueles testes verdes sobre código que ninguém chama seria pior que
+// não tê-los: passa a impressão de cobertura onde não há mais nada coberto.
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LÓGICA DO PAINEL PASSARAM')
 process.exit(falhas ? 1 : 0)

@@ -72,6 +72,11 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.put('/api/v1/automations/:id/deployment-mode', ({ params, body }) => automacoes().definirModo(params.id, body?.mode))
   roteador.get('/api/v1/automations/:id/provenance', ({ params }) => automacoes().obterProvenance(params.id))
 
+  // O formulário de configuração DEPOIS da instalação. Como no /lcn, o id vem
+  // da rota e nunca do corpo — o corpo traz só os valores.
+  roteador.get('/api/v1/automations/:id/reconfigure', ({ params }) => automacoes().obterReconfiguracao(params.id))
+  roteador.put('/api/v1/automations/:id/reconfigure', ({ params, body }) => automacoes().reconfigurar(params.id, body?.parameters))
+
   // --- a automação como TEXTO ---------------------------------------------
   //
   // O motor nunca ouve falar da linguagem: ele continua recebendo e guardando
@@ -96,6 +101,32 @@ export function criarRoteadorWeb (aplicacao) {
       // a tela precisa conseguir dizer POR QUE não dá para editar.
       throw new ErroHttp(422, `Esta automação ainda não vira texto: ${erro.message}`)
     }
+  })
+
+  // CRIAR uma automação escrevendo a linguagem.
+  //
+  // Antes, criar era o assistente de seis passos — que monta exatamente uma
+  // forma (um comando que responde um texto) e chama de "resumo" tudo o que não
+  // cabe nela. Quem criava assim não conseguia expressar nada do que o catálogo
+  // já faz, e depois abria a própria automação e via duas linhas no lugar dela.
+  //
+  // Aqui o id vem do TEXTO, e é a única rota em que isso vale: não há automação
+  // ainda, então não há nada que o texto possa renomear por engano.
+  roteador.post('/api/v1/automations/lcn', ({ body }) => {
+    let compilado
+    try {
+      compilado = compilar(String(body?.texto ?? ''))
+    } catch (erro) {
+      if (!(erro instanceof ErroDeSintaxe)) throw erro
+      throw new ErroHttp(422, erro.message, { linha: erro.linha })
+    }
+    if (compilado.template) {
+      throw new ErroHttp(422, 'Isto é um template, não uma automação. Instale pelo Catálogo.')
+    }
+    if (!compilado.id) {
+      throw new ErroHttp(422, 'Falta a linha "id:" — é por ela que a automação passa a existir.')
+    }
+    return automacoes().criar(compilado)
   })
 
   roteador.put('/api/v1/automations/:id/lcn', ({ params, body, req }) => {
@@ -127,6 +158,9 @@ export function criarRoteadorWeb (aplicacao) {
 
   // --- conexões (segredos de integração — nunca devolvidos em claro pelo motor) ---
   roteador.get('/api/v1/connections', () => conexoes().listar())
+  // As declarações prontas: servem de exemplo de como se declara uma conexão,
+  // e de atalho para recadastrar uma que foi apagada.
+  roteador.get('/api/v1/connections-prontas', () => conexoes().prontas())
   roteador.post('/api/v1/connections', ({ body }) => conexoes().criar(body))
   roteador.get('/api/v1/connections/:id', ({ params }) => conexoes().obter(params.id))
   roteador.put('/api/v1/connections/:id', ({ params, body }) => conexoes().atualizar(params.id, body))
