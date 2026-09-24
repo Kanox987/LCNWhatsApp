@@ -1,0 +1,38 @@
+template enviar-do-acervo v1
+  nome: Enviar arquivo do acervo
+  descrição: Digite o comando seguido do caminho do arquivo — por exemplo "/arquivo produtos/fotos/capa.jpg" — e o bot manda o que estiver guardado ali. Sem pasta, o nome sozinho resolve, desde que não haja dois arquivos com o mesmo nome.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Enviar arquivo do acervo
+  menu: {{params.command}} — Manda um arquivo guardado no acervo
+  pool: {{params.poolId}}
+  tipos: texto
+  casa: exato ou com argumentos
+  de: {{params.allowFrom}}
+
+  envia arquivo "{{message.args}}"
+    legenda: "{{params.caption}}"
+    sem arquivo: "{{params.notFoundText}}"
+
+configurável
+  command: texto = "/arquivo"
+    rótulo: Comando
+    ajuda: Use com o caminho logo depois, como "/arquivo recebidos/cardapio.pdf".
+  allowFrom: opção (any, external) = "external"
+    rótulo: Quem pode acionar
+    ajuda: "external" faz o bot ignorar o próprio número. "any" também responde ao que VOCÊ manda do número onde o bot roda.
+  caption: texto = ""
+    rótulo: Legenda
+    ajuda: Deixe vazio para mandar o arquivo sem legenda.
+  notFoundText: texto = "Não achei esse arquivo no acervo. Confira o caminho — se houver dois com o mesmo nome, escreva a pasta junto."
+    rótulo: Se não achar
+    ajuda: Enviado quando o caminho não existe, ou quando o nome é ambíguo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa nota
+  Nome ambíguo NÃO manda "um dos dois": o bot avisa, para ninguém receber o arquivo errado sem entender por quê. Escreva a pasta junto para desempatar.
+
+# nós: gatilho-comando, enviar

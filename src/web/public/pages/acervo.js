@@ -111,7 +111,39 @@ function cartaoDeArquivo (arquivo, refresh) {
     }
   })
 
+  // O CAMINHO é o que se usa num comando hoje ("/arquivo produtos/capa.jpg"),
+  // então ele vira o botão de copiar mais à mão. O id continua ali: é a
+  // referência estável, que não muda se o arquivo for renomeado ou movido.
+  const copiarCaminho = button('Copiar caminho', {
+    variant: 'primary',
+    onClick: async (evento) => {
+      const controle = evento.currentTarget
+      await copyText(arquivo.path || arquivo.name)
+      controle.textContent = 'Copiado!'
+      window.setTimeout(() => { controle.textContent = 'Copiar caminho' }, 1400)
+    }
+  })
+
+  const campoPasta = el('input', { type: 'text', value: arquivo.folder || '', placeholder: 'sem pasta' })
+  const salvarPasta = button('Mover', {
+    onClick: async (evento) => {
+      const controle = evento.currentTarget
+      setBusy(controle, true, 'Movendo…')
+      try {
+        // Mover é trocar um rótulo: nenhum byte sai do lugar, porque o arquivo
+        // sempre esteve plano no disco, gravado por id.
+        await api.media.mover(arquivo.id, campoPasta.value.trim())
+        notify('Arquivo movido.')
+        await refresh()
+      } catch (erro) {
+        notify(erro.message, 'danger')
+        setBusy(controle, false)
+      }
+    }
+  })
+
   const copiarId = button('Copiar id', {
+    variant: 'quiet',
     variant: 'secondary',
     onClick: async (evento) => {
       const controle = evento.currentTarget
@@ -143,19 +175,21 @@ function cartaoDeArquivo (arquivo, refresh) {
     el('div', { className: 'list-card-main' }, [
       el('div', {}, [
         el('h2', { text: arquivo.name }),
-        el('p', { className: 'mono overline', text: arquivo.id })
+        el('p', { className: 'mono overline', text: arquivo.path || arquivo.name })
       ]),
       badge(ROTULO_TIPO[arquivo.kind] || arquivo.kind, 'info')
     ]),
     el('div', { className: 'acervo-campo-descricao' }, [descricao, salvarDescricao]),
+    el('div', { className: 'acervo-campo-descricao' }, [campoPasta, salvarPasta]),
     el('small', { className: 'muted', text: `${formatarBytes(arquivo.sizeBytes)} · ${arquivo.mimetype} · enviado em ${formatDate(arquivo.createdAt)}` }),
-    el('div', { className: 'button-row' }, [copiarId, remover])
+    el('div', { className: 'button-row' }, [copiarCaminho, copiarId, remover])
   ])
 }
 
 function painelDeEnvio (limites, refresh) {
   const seletor = el('input', { type: 'file', accept: (limites?.acceptedTypes || []).join(',') })
   const descricao = el('input', { type: 'text', placeholder: 'Ex: foto do combo família' })
+  const pasta = el('input', { type: 'text', placeholder: 'produtos/fotos' })
   const mensagem = el('div')
   const enviar = button('Enviar para o acervo', { variant: 'primary', type: 'submit' })
   const limiteBytes = Number(limites?.maxFileBytes) || 0
@@ -169,7 +203,8 @@ function painelDeEnvio (limites, refresh) {
     ]),
     el('div', { className: 'form-grid' }, [
       field('Arquivo', seletor, 'O nome do arquivo vira só um rótulo na tela — o sistema gera um identificador próprio.'),
-      field('Descrição', descricao, 'Opcional, mas ajuda a reconhecer o arquivo daqui a um mês.')
+      field('Descrição', descricao, 'Opcional, mas ajuda a reconhecer o arquivo daqui a um mês.'),
+      field('Pasta', pasta, 'Opcional, até três níveis ("produtos/fotos"). É um rótulo do acervo, não uma pasta no disco — o arquivo continua guardado por identificador gerado, e é isso que impede um nome virar caminho no sistema de arquivos.')
     ]),
     mensagem,
     el('div', { className: 'button-row' }, [enviar])
@@ -199,7 +234,8 @@ function painelDeEnvio (limites, refresh) {
         contentBase64,
         mimetype: arquivo.type,
         name: arquivo.name,
-        description: descricao.value.trim() || undefined
+        description: descricao.value.trim() || undefined,
+        folder: pasta.value.trim() || undefined
       })
       notify('Arquivo enviado para o acervo.')
       await refresh()
@@ -255,8 +291,36 @@ export async function renderAcervo ({ refresh }) {
 
   const { files = [], usage, limits } = await api.media.list()
 
+  // Agrupado por pasta, com a raiz primeiro.
+  //
+  // Sem isto, criar pastas não organizaria nada: a lista continuaria uma grade
+  // única, e a pasta seria uma palavra que só aparece no cartão. Agrupar é o
+  // que faz a pasta existir para quem olha.
+  function porPasta (arquivos) {
+    const grupos = new Map()
+    for (const arquivo of arquivos) {
+      const pasta = arquivo.folder || ''
+      if (!grupos.has(pasta)) grupos.set(pasta, [])
+      grupos.get(pasta).push(arquivo)
+    }
+    return [...grupos.entries()].sort(([a], [b]) => {
+      if (a === '') return -1
+      if (b === '') return 1
+      return a.localeCompare(b)
+    })
+  }
+
+  const grupos = porPasta(files)
   const lista = files.length
-    ? el('div', { className: 'card-grid acervo-grade' }, files.map((arquivo) => cartaoDeArquivo(arquivo, refresh)))
+    ? el('div', { className: 'stack-lg' }, grupos.map(([pasta, arquivos]) => el('section', { className: 'stack' }, [
+      el('div', { className: 'section-heading' }, [
+        el('div', {}, [
+          el('h3', { text: pasta || 'Sem pasta' }),
+          el('p', { className: 'muted compact', text: `${arquivos.length} ${arquivos.length === 1 ? 'arquivo' : 'arquivos'}` })
+        ])
+      ]),
+      el('div', { className: 'card-grid acervo-grade' }, arquivos.map((arquivo) => cartaoDeArquivo(arquivo, refresh)))
+    ])))
     : emptyState(
       'O acervo está vazio',
       'Envie uma foto, um áudio ou um PDF para poder usá-lo dentro de um comando sem reenviar o arquivo toda vez.'
@@ -268,7 +332,7 @@ export async function renderAcervo ({ refresh }) {
     el('div', { className: 'section-heading' }, [
       el('div', {}, [
         el('h2', { text: 'Arquivos guardados' }),
-        el('p', { text: 'O identificador de cada arquivo é o que você usa na ação de enviar arquivo.' })
+        el('p', { text: 'O CAMINHO de cada arquivo é o que você escreve num comando — "/arquivo produtos/fotos/capa.jpg". O identificador continua ali para quem prefere a referência estável, que não muda se o arquivo for renomeado ou movido.' })
       ])
     ]),
     lista

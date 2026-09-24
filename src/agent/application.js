@@ -43,7 +43,8 @@ export function criarAplicacao ({
       enviar: (body) => mediaService.enviar(body),
       conteudo: (id) => mediaService.conteudo(id),
       remover: (id) => mediaService.remover(id),
-      descrever: (id, descricao) => mediaService.descrever(id, descricao)
+      descrever: (id, descricao) => mediaService.descrever(id, descricao),
+      mover: (id, pasta) => mediaService.mover(id, pasta)
     },
     // Repassa pro motor sem esconder a forma da API dele — os Módulos 1/2
     // definem o contrato real de automations/executions; aqui é só o ponto

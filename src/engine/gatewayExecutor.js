@@ -429,6 +429,57 @@ async function executarChamadaDeConexao (client, comando, deps) {
   }
 }
 
+// Guardar no acervo a mídia que chegou pelo WhatsApp.
+//
+// O par que faltava: o acervo sabia ENVIAR (`whatsapp.sendFile`) e só entrava
+// coisa por upload no painel. Agora o arquivo que alguém mandou na conversa
+// pode virar acervo sem sair do WhatsApp.
+//
+// Mesma fronteira da figurinha: o motor mandou o token opaco, e quem o resolve
+// e carrega bytes é este lado.
+async function executarGuardarNoAcervo (client, comando, deps) {
+  const { mediaRefCache, baixarBuffer, acervo, limiteBytes } = deps
+  const { chatId, mediaRef, sourceKind, replyTo, pasta, nome, descricao, okText, errorText } = comando.payload
+
+  const avisar = criarAvisador(client, comando, { chatId, replyTo, errorText })
+
+  const entrada = mediaRefCache.resolver(mediaRef)
+  if (!entrada) {
+    // TTL do cache é curto de propósito. Comando que volta tarde do motor não
+    // resolve mais a mídia — e é erro conhecido, não resultado ambíguo.
+    await avisar('a mídia expirou antes do comando voltar do motor')
+    throw new Error('a mídia deste arquivo expirou antes do comando voltar do motor')
+  }
+
+  let guardado
+  try {
+    const buffer = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
+    guardado = acervo.guardar(buffer, {
+      mimetype: entrada.node?.mimetype || entrada.mimetype || null,
+      name: nome || entrada.node?.fileName || null,
+      description: descricao || null,
+      folder: pasta || null
+    })
+  } catch (erro) {
+    // O erro do acervo é acionável por quem mandou: "tipo não aceito",
+    // "grande demais", "não cabe". Vai inteiro, ao contrário dos nossos.
+    await avisar(erro?.message || 'não consegui guardar')
+    throw erro
+  }
+
+  if (okText) {
+    const texto = okText
+      .replaceAll('{{caminho}}', guardado.path)
+      .replaceAll('{{id}}', guardado.id)
+      .replaceAll('{{nome}}', guardado.name)
+    await comTimeout(
+      () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao confirmar o arquivo guardado do comando ${comando.id}`
+    )
+  }
+}
+
 // A entrega de mídias, compartilhada pelo download e pela chamada de conexão.
 //
 // Estava embutida no download; virou função porque agora são dois caminhos que
@@ -639,7 +690,12 @@ async function executarMensagemRica (client, comando) {
 async function executarEnvioDeArquivo (client, comando, deps) {
   const { acervo } = deps
   const payload = comando.payload
-  const registro = acervo.obter(payload.fileId)
+  // Por id OU por caminho. O id é estável e nunca muda; o caminho é o que uma
+  // pessoa consegue escrever no WhatsApp ("produtos/fotos/capa.jpg"). Os dois
+  // resolvem para o mesmo registro.
+  const registro = payload.fileId
+    ? acervo.obter(payload.fileId)
+    : acervo.porCaminho(payload.caminho)
 
   if (!registro) {
     if (payload.notFoundText) {
@@ -649,7 +705,7 @@ async function executarEnvioDeArquivo (client, comando, deps) {
         `timeout ao avisar do arquivo ausente no comando ${comando.id}`
       )
     }
-    throw new Error(`o arquivo ${payload.fileId} não está mais no acervo`)
+    throw new Error(`arquivo não encontrado no acervo: ${payload.fileId || payload.caminho}`)
   }
 
   const buffer = acervo.lerConteudo(registro.id)
@@ -684,7 +740,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       'whatsapp.rich': executarMensagemRica,
       'whatsapp.sendFile': executarEnvioDeArquivo,
       'media.download': executarDownload,
-      'connection.call': executarChamadaDeConexao
+      'connection.call': executarChamadaDeConexao,
+      'acervo.save': executarGuardarNoAcervo
     }[comando?.commandType]
 
     if (!executor) {

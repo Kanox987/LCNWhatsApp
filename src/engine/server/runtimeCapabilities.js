@@ -24,7 +24,10 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // runtime são os dois lados. Ela ficou de fora de propósito enquanto só o
   // motor existia: declarar antes deixaria publicar uma automação que casa,
   // gera comando e morre na entrega.
-  'action.connection.call'
+  'action.connection.call',
+  // Guardar no acervo a mídia que chegou pelo WhatsApp. O par de
+  // `action.whatsapp.sendFile`, que só sabia tirar de lá.
+  'action.acervo.save'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([

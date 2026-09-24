@@ -178,6 +178,9 @@
               },
               {
                 "$ref": "#/definitions/actionConnectionCall"
+              },
+              {
+                "$ref": "#/definitions/actionAcervoSave"
               }
             ]
           }
@@ -421,13 +424,20 @@
         "config": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "fileId"
+          "anyOf": [
+            { "required": ["fileId"] },
+            { "required": ["path"] }
           ],
           "properties": {
             "fileId": {
               "type": "string",
-              "pattern": "^[0-9a-f]{24}$"
+              "pattern": "^[0-9a-f]{24}$",
+              "description": "O identificador do arquivo. Estável: não muda se o arquivo for renomeado ou movido de pasta."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "O caminho no acervo, como \"produtos/fotos/capa.jpg\". Aceita variáveis, e é o que uma pessoa consegue escrever no WhatsApp. Sem pasta, o nome sozinho resolve — desde que não haja dois com o mesmo nome, porque devolver um dos dois calado faria a pessoa mandar o errado sem entender por quê."
             },
             "caption": {
               "type": "string"
@@ -1016,6 +1026,45 @@
             },
             "buttonTitle": {
               "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "actionAcervoSave": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.acervo.save" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "folder": {
+              "type": "string",
+              "description": "Pasta onde guardar, por exemplo \"produtos/fotos\". Aceita variáveis. PASTA É RÓTULO, não diretório: o arquivo continua gravado por id gerado, e é isso que impede um nome vindo do WhatsApp de virar caminho no disco."
+            },
+            "name": {
+              "type": "string",
+              "description": "Nome do arquivo no acervo. Vazio usa o nome que veio no WhatsApp. Aceita variáveis."
+            },
+            "description": {
+              "type": "string",
+              "description": "Descrição, para reconhecer o arquivo daqui a um mês."
+            },
+            "okText": {
+              "type": "string",
+              "description": "Resposta quando guardar. Use {{caminho}} para mostrar onde ficou e {{id}} para o identificador."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando não há mídia por perto — a pessoa mandou o comando sem anexar nem responder um arquivo."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "Resposta quando não deu para guardar (tipo não aceito, arquivo grande demais, acervo cheio). {{erro}} vira o motivo."
             }
           }
         }

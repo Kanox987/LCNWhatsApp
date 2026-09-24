@@ -90,9 +90,25 @@ export const ACOES = Object.freeze([
     palavra: 'envia arquivo',
     tipo: 'action.whatsapp.sendFile',
     campos: [
-      { chave: 'fileId', inline: true, tipo: 'texto' },
+      // O valor na mesma linha é o CAMINHO, que é o que uma pessoa escreve
+      // ("produtos/fotos/capa.jpg"). O id continua aceito como campo, para
+      // quem quer a referência estável que não muda se o arquivo for renomeado.
+      { chave: 'path', inline: true, tipo: 'texto' },
+      { chave: 'fileId', rotulo: 'id', tipo: 'texto' },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
       { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'guarda no acervo',
+    tipo: 'action.acervo.save',
+    campos: [
+      { chave: 'folder', rotulo: 'pasta', tipo: 'texto' },
+      { chave: 'name', rotulo: 'nome', tipo: 'texto' },
+      { chave: 'description', rotulo: 'descrição', tipo: 'texto' },
+      { chave: 'okText', rotulo: 'confirma', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' },
+      { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
     ]
   },
   {

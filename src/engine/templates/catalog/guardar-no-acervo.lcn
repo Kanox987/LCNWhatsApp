@@ -1,0 +1,51 @@
+template guardar-no-acervo v1
+  nome: Guardar arquivo no acervo
+  descrição: Mande uma foto, vídeo, áudio ou PDF com o comando na legenda — ou responda um arquivo já enviado — e ele fica guardado no acervo do bot, pronto para ser usado em qualquer comando. Aceita pasta, para organizar, e responde com o caminho onde ficou.
+  categoria: utilitarios
+
+comando {{params.command}}
+  nome: Guardar arquivo no acervo
+  menu: {{params.command}} — Guarda no acervo o arquivo que você mandar
+  pool: {{params.poolId}}
+  tipos: foto, vídeo, áudio, documento
+  casa: exato ou com argumentos
+  de: {{params.allowFrom}}
+  só dono
+
+  guarda no acervo
+    pasta: "{{params.pasta}}"
+    descrição: "Enviado por {{sender.name}} em {{now.date}}"
+    confirma: "{{params.okText}}"
+    sem arquivo: "{{params.notFoundText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/guardar"
+    rótulo: Comando
+    ajuda: Mande o arquivo com o comando na legenda, ou responda um arquivo com o comando.
+  pasta: texto = "recebidos"
+    rótulo: Pasta
+    ajuda: Onde organizar. Pode ter até três níveis, como "produtos/fotos". A pasta é um rótulo do acervo, não uma pasta no disco — o arquivo continua guardado por identificador gerado.
+  allowFrom: opção (any, external) = "any"
+    rótulo: Também aceitar do próprio número
+    ajuda: "any" também guarda o que VOCÊ manda do número onde o bot roda, que é o normal para uso pessoal.
+  okText: texto = "✅ Guardei no acervo: {{caminho}}\nUse esse caminho para enviá-lo depois."
+    rótulo: Confirmação
+    ajuda: "{{caminho}}" vira o caminho onde o arquivo ficou · "{{id}}" vira o identificador · "{{nome}}" vira o nome.
+  notFoundText: texto = "Mande o arquivo junto com o comando, ou responda um arquivo já enviado."
+    rótulo: Se não houver arquivo
+    ajuda: Enviado quando o comando chega sozinho, sem mídia por perto.
+  errorText: texto = "Não consegui guardar: {{erro}}"
+    rótulo: Se falhar
+    ajuda: "{{erro}}" vira o motivo — tipo não aceito, arquivo grande demais, acervo cheio.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa nota
+  Restrito ao dono: o acervo é compartilhado entre todos os seus números e tem cota de espaço, então quem guarda precisa ser quem administra.
+
+avisa nota
+  Tipos aceitos: foto (jpg, png, webp, gif), vídeo mp4, áudio (mp3, ogg, m4a), PDF e texto. Até 32 MB por arquivo.
+
+# nós: gatilho-comando, guardar

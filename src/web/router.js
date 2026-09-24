@@ -43,7 +43,14 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.get('/api/v1/media', () => aplicacao.acervo.listar())
   roteador.post('/api/v1/media', ({ body }) => aplicacao.acervo.enviar(body))
   roteador.get('/api/v1/media/:id/content', ({ params }) => respostaBinaria(aplicacao.acervo.conteudo(params.id)))
-  roteador.put('/api/v1/media/:id', ({ params, body }) => aplicacao.acervo.descrever(params.id, body?.description))
+  // Uma rota, duas intenções distintas: descrever e mover. Separadas pelo campo
+  // que veio, para "mover para a raiz" (pasta vazia) não ser confundido com
+  // "não mexi na pasta".
+  roteador.put('/api/v1/media/:id', ({ params, body }) => (
+    Object.hasOwn(body || {}, 'folder')
+      ? aplicacao.acervo.mover(params.id, body.folder)
+      : aplicacao.acervo.descrever(params.id, body?.description)
+  ))
   roteador.delete('/api/v1/media/:id', ({ params }) => aplicacao.acervo.remover(params.id))
   roteador.get('/api/v1/instances/:id', ({ params }) => aplicacao.instancias.obter(params.id))
   roteador.post('/api/v1/instances/:id/start', ({ params }) => aplicacao.instancias.iniciar(params.id))

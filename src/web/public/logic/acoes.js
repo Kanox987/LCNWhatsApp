@@ -86,9 +86,29 @@ export const ACOES = Object.freeze([
     resumo: 'Manda uma imagem, áudio, vídeo, PDF ou texto que você guardou no Acervo. É como responder com foto de produto ou cardápio sem reenviar o arquivo toda vez.',
     exemplo: 'Alguém digita "/cardapio" e recebe o PDF que você subiu.',
     campos: [
-      { chave: 'fileId', rotulo: 'Arquivo', ajuda: 'O identificador que aparece no cartão do arquivo na aba Acervo — tem um botão "Copiar id" lá.' },
+      { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Como "produtos/fotos/capa.jpg" — é o que uma pessoa consegue escrever no WhatsApp. Aceita variáveis: {{message.args}} pega o que foi digitado depois do comando. Sem pasta, o nome sozinho resolve, desde que não haja dois arquivos com o mesmo nome.' },
+      { chave: 'fileId', rotulo: 'Arquivo (por identificador)', ajuda: 'O identificador que aparece no cartão do arquivo na aba Acervo — tem um botão "Copiar id" lá. É a referência estável: não muda se o arquivo for renomeado ou movido de pasta.' },
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Texto que acompanha o arquivo. Aceita variáveis. Arquivo de texto é enviado como mensagem, então não leva legenda.' },
       { chave: 'notFoundText', rotulo: 'Se o arquivo sumiu', ajuda: 'Enviado quando o arquivo foi apagado do acervo depois de o comando ser publicado — melhor avisar que ficar mudo.' }
+    ]
+  },
+  {
+    tipo: 'action.acervo.save',
+    rotulo: 'Guardar no acervo',
+    familia: 'midia',
+    resumo: 'Pega a foto, o vídeo, o áudio ou o PDF que chegou na conversa e guarda no acervo do bot, para usar depois em qualquer comando.',
+    exemplo: 'Mandar uma foto com "/guardar" na legenda, ou responder um arquivo com o comando.',
+    ressalva: {
+      level: 'note',
+      text: 'A pasta é um RÓTULO do acervo, não uma pasta no disco: o arquivo continua gravado por identificador gerado. É isso que impede um nome vindo do WhatsApp de virar caminho no sistema de arquivos.'
+    },
+    campos: [
+      { chave: 'folder', rotulo: 'Pasta', ajuda: 'Onde organizar, até três níveis ("produtos/fotos"). Aceita variáveis.' },
+      { chave: 'name', rotulo: 'Nome', ajuda: 'Vazio usa o nome que veio no WhatsApp.' },
+      { chave: 'description', rotulo: 'Descrição', ajuda: 'Ajuda a reconhecer o arquivo daqui a um mês.' },
+      { chave: 'okText', rotulo: 'Confirmação', ajuda: '{{caminho}} vira o caminho onde ficou · {{id}} o identificador · {{nome}} o nome.' },
+      { chave: 'notFoundText', rotulo: 'Se não houver arquivo', ajuda: 'Quando o comando chega sozinho, sem mídia por perto.' },
+      { chave: 'errorText', rotulo: 'Se falhar', ajuda: '{{erro}} vira o motivo: tipo não aceito, arquivo grande demais, acervo cheio.' }
     ]
   },
   {

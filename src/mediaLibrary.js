@@ -157,6 +157,11 @@ function exporArquivo (registro) {
   return {
     id: registro.id,
     name: registro.name,
+    folder: registro.folder || null,
+    // O caminho pronto: é por ele que um comando acha o arquivo, e é o que a
+    // pessoa escreve. Montar na tela e no motor separadamente daria duas
+    // versões da mesma verdade.
+    path: caminhoLogico(registro),
     kind: registro.kind,
     mimetype: registro.mimetype,
     sizeBytes: registro.sizeBytes,
@@ -201,7 +206,7 @@ export function lerConteudo (id) {
 }
 
 // Grava um arquivo novo. `nomeOriginal` é só rótulo — nunca vira caminho.
-export function guardar (buffer, { mimetype, name, description } = {}) {
+export function guardar (buffer, { mimetype, name, description, folder } = {}) {
   if (!Buffer.isBuffer(buffer) || !buffer.length) {
     throw new ErroDeAcervo('Arquivo vazio.')
   }
@@ -231,6 +236,7 @@ export function guardar (buffer, { mimetype, name, description } = {}) {
   const registro = {
     id,
     name: rotuloSeguro(name) || `arquivo${tipo.ext}`,
+    folder: normalizarPasta(folder),
     kind: tipo.kind,
     mimetype: String(mimetype).toLowerCase(),
     ext: tipo.ext,
@@ -244,13 +250,73 @@ export function guardar (buffer, { mimetype, name, description } = {}) {
   return exporArquivo(registro)
 }
 
+// PASTA É RÓTULO, NÃO DIRETÓRIO — e isso é decisão de segurança, não preguiça.
+//
+// O acervo gera o id aleatório e NUNCA deriva caminho do nome que veio de fora:
+// é o que fecha travessia ("../../config.json" vira "9f2a..."). Criar diretório
+// de verdade a partir de texto que chega pelo WhatsApp reabriria exatamente
+// esse buraco, e com a pior origem possível.
+//
+// Então a pasta vive no índice. O arquivo continua gravado por id, plano, 0600.
+// Quem organiza vê pastas; o disco continua sem nenhuma.
+export function normalizarPasta (bruto) {
+  if (typeof bruto !== 'string') return null
+  const partes = bruto
+    .split('/')
+    .map((parte) => parte.replace(/[\u0000-\u001f\u007f]/g, '').trim())
+    // "." e ".." não significam nada num rótulo, e deixá-los passar convidaria
+    // alguém a tratar isto como caminho depois.
+    .filter((parte) => parte && parte !== '.' && parte !== '..')
+    .map((parte) => parte.slice(0, 60))
+  if (!partes.length) return null
+  // Três níveis bastam para organizar e param a criação de árvore infinita por
+  // mensagem de WhatsApp.
+  return partes.slice(0, 3).join('/')
+}
+
+// O caminho que a pessoa escreve para achar o arquivo: "produtos/fotos/capa.jpg".
+export function caminhoLogico (registro) {
+  return registro.folder ? `${registro.folder}/${registro.name}` : registro.name
+}
+
+// Busca por caminho ou por nome. Comparação sem diferenciar maiúscula: quem
+// digita no WhatsApp não vai acertar a caixa, e recusar por isso seria implicar
+// com a pessoa em vez de ajudá-la.
+export function porCaminho (caminho) {
+  const alvo = String(caminho ?? '').trim().replace(/^\/+|\/+$/g, '').toLowerCase()
+  if (!alvo) return null
+  const arquivos = lerIndice()
+  const achado = arquivos.find((r) => caminhoLogico(r).toLowerCase() === alvo) ||
+    // Sem pasta no pedido, o nome sozinho resolve — desde que não seja
+    // ambíguo. Devolver "um dos dois" calado faria a pessoa mandar o arquivo
+    // errado sem nunca entender por quê.
+    (() => {
+      const porNome = arquivos.filter((r) => r.name.toLowerCase() === alvo)
+      return porNome.length === 1 ? porNome[0] : null
+    })()
+  return achado ? exporArquivo(achado) : null
+}
+
+// Os nomes de pasta que existem hoje, para a tela e para o menu de ajuda.
+export function listarPastas () {
+  const pastas = new Set()
+  for (const r of lerIndice()) if (r.folder) pastas.add(r.folder)
+  return [...pastas].sort()
+}
+
+// Quantos arquivos têm o mesmo caminho — usado para avisar antes de gravar.
+export function quantosEm (pasta, nome) {
+  const alvo = `${pasta ? pasta + '/' : ''}${nome}`.toLowerCase()
+  return lerIndice().filter((r) => caminhoLogico(r).toLowerCase() === alvo).length
+}
+
 // O nome original só existe para a pessoa reconhecer o arquivo na tela. Tira
 // caminho, caractere de controle e corta o tamanho — nunca é usado para
 // montar caminho, mas também não vai poluir a interface nem virar payload
 // estranho em log.
 function rotuloSeguro (nome) {
   if (typeof nome !== 'string') return null
-  const limpo = path.basename(nome).replace(/[ -]/g, '').trim()
+  const limpo = path.basename(nome).replace(/[\u0000-\u001f\u007f]/g, '').trim()
   return limpo ? limpo.slice(0, 120) : null
 }
 
@@ -269,6 +335,17 @@ export function atualizarDescricao (id, description) {
   const registro = arquivos.find((a) => a.id === id)
   if (!registro) return null
   registro.description = typeof description === 'string' && description.trim() ? description.trim() : null
+  gravarIndice(arquivos)
+  return exporArquivo(registro)
+}
+
+// Mover é só trocar o rótulo: nenhum byte sai do lugar, porque não há lugar
+// para sair — o arquivo sempre esteve plano, gravado por id.
+export function moverPara (id, folder) {
+  const arquivos = lerIndice()
+  const registro = arquivos.find((a) => a.id === id)
+  if (!registro) return null
+  registro.folder = normalizarPasta(folder)
   gravarIndice(arquivos)
   return exporArquivo(registro)
 }

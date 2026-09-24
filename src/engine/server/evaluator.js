@@ -490,6 +490,43 @@ function executarNo (db, no, evento, contexto, comandos) {
       return 'success'
     }
 
+    // Guardar no acervo a mídia que chegou pelo WhatsApp.
+    //
+    // Mesma fronteira da figurinha: o motor NUNCA vê a mídia. Ele repassa o
+    // token opaco que só o gateway que o criou resolve, e diz onde guardar.
+    //
+    // As duas formas de mandar precisam funcionar, e a segunda é a mais usada:
+    // o arquivo COM o comando na legenda, e o comando RESPONDENDO um arquivo já
+    // enviado.
+    case 'action.acervo.save': {
+      const citada = evento.message?.quotedMediaRef
+      const mediaRef = evento.message?.mediaRef || citada?.token
+      if (!mediaRef) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto), replyTo: referenciaDoLink(evento) }
+          })
+        }
+        return 'success'
+      }
+      comandos.push({
+        commandType: 'acervo.save',
+        payload: {
+          chatId: evento.chat.id,
+          mediaRef,
+          sourceKind: evento.message?.mediaRef ? evento.message.kind : (citada?.mediaKind || null),
+          replyTo: referenciaDoLink(evento),
+          ...(no.config?.folder ? { pasta: interpolar(no.config.folder, contexto) } : {}),
+          ...(no.config?.name ? { nome: interpolar(no.config.name, contexto) } : {}),
+          ...(no.config?.description ? { descricao: interpolar(no.config.description, contexto) } : {}),
+          ...(no.config?.okText ? { okText: no.config.okText } : {}),
+          ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+        }
+      })
+      return 'success'
+    }
+
     case 'action.whatsapp.sticker': {
       // O motor NUNCA vê a mídia: repassa o token opaco que só o processo do
       // gateway que o criou sabe resolver (mediaRefCache). Quem baixa e
@@ -695,7 +732,10 @@ function executarNo (db, no, evento, contexto, comandos) {
         commandType: 'whatsapp.sendFile',
         payload: {
           chatId: evento.chat.id,
-          fileId: no.config.fileId,
+          // Por id OU por caminho. O id é estável; o caminho é o que a pessoa
+          // escreve. O motor só repassa — quem enxerga o acervo é o gateway.
+          ...(no.config.fileId ? { fileId: no.config.fileId } : {}),
+          ...(no.config.path ? { caminho: interpolar(no.config.path, contexto) } : {}),
           ...(no.config.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
           ...(no.config.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {})
         }

@@ -59,7 +59,12 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     return biblioteca.guardar(buffer, {
       mimetype: body?.mimetype,
       name: body?.name,
-      description: body?.description
+      description: body?.description,
+      // A pasta é saneada dentro do acervo (`normalizarPasta`), não aqui: o
+      // saneamento tem que valer para TODA entrada — o upload do painel e o
+      // arquivo que chega pelo WhatsApp —, e deixar cada porta sanear a sua
+      // seria convidar as duas a divergirem.
+      folder: body?.folder
     })
   }
 
@@ -89,7 +94,13 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     return atualizado
   }
 
+  function mover (id, folder) {
+    const atualizado = biblioteca.moverPara(id, folder)
+    if (!atualizado) throw new biblioteca.ErroDeAcervo('Arquivo não encontrado no acervo.', 404)
+    return atualizado
+  }
+
   // Sem definirCota: o teto do acervo é configuração de quem instala, não
   // ação do painel. Ver o comentário em mediaLibrary.js.
-  return { listar, enviar, conteudo, remover, descrever }
+  return { listar, enviar, conteudo, remover, descrever, mover }
 }
