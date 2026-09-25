@@ -36,6 +36,13 @@ uma reconexão leve quando mudam.
       { "id": "5511999999999", "auto": true, "comandoTerceiros": null }
     ]
   },
+  "download": {                      // baixar link de mídia por um serviço externo
+    "api": "http://127.0.0.1:8765",  // endereço do serviço (só loopback)
+    "tokenArquivo": "/app/.ytdlp-token",  // arquivo com o token; NUNCA o token aqui
+    "modoPadrao": "auto",            // auto | video | audio | thumbnail
+    "limiteMB": 64,                  // acima disso, recusa antes de transferir
+    "esperaMaximaSegundos": 300      // passou disso, CANCELA o trabalho no serviço
+  },
   "atualizacao": { "autoUpdateBaileys": false, "falhasParaUpdate": 5 },
   "outputApi": { "enabled": false, "host": "127.0.0.1", "porta": 8787, "token": "" }
 }
@@ -55,6 +62,23 @@ uma reconexão leve quando mudam.
   conversa (qualquer citação) já revela sozinha. Ver
   [DOWNLOAD-AUTOMATICO.md](DOWNLOAD-AUTOMATICO.md). Editável em `lcn` > Configurações
   > Download automático.
+- **download**: o serviço que baixa link de mídia. `esperaMaximaSegundos` é
+  quanto o bot espera antes de desistir — e desistir **cancela o trabalho no
+  serviço** (`POST /jobs/{job}/cancelar`), em vez de largar a vaga ocupada: como
+  o serviço roda poucos downloads ao mesmo tempo, largar dois trabalhos travados
+  parava a fila para todo mundo. O serviço também derruba sozinho o download que
+  fica 90s sem avançar.
+- **download.tokenArquivo**: o token fica em ARQUIVO, e não aqui, para não
+  entrar em backup de configuração por acidente.
+
+  > Esta seção continua valendo, e é o caminho para quem tem terminal. Mas ela
+  > deixou de ser o único: o mesmo serviço aparece agora na aba **Conexões** do
+  > painel, com endereço, credencial e as funções que dá para pedir a ele. Quem
+  > administra pelo painel — o caso de quem não tem acesso ao terminal —
+  > configura por lá, e pode colar a chave em vez de apontar um arquivo. A
+  > conexão que já vem pronta aponta para o mesmo `tokenArquivo` daqui, sem
+  > copiar o segredo para o banco.
+
 - **hardware.debug**: liga logs detalhados de cada mensagem recebida — útil pra
   diagnosticar "mandei e não capturou". Ver [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).
 - **hardware.logLevel**: nível de log da Baileys (`silent` em produção; `warn`/`error`
