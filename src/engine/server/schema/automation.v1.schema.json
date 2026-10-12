@@ -95,6 +95,29 @@
         },
         "historyPolicy": {
           "const": "live_only"
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "from"],
+          "description": "O QUE a automação precisa receber para fazer sentido. Declarar isto substitui escrever {{message.link}} na mão numa entrada de ação: aquela string esconde um algoritmo (interpola, apaga o que não resolveu, pega o primeiro link) que ninguém adivinha lendo. Com a exigência declarada, o motor resolve antes de rodar o fluxo, responde `missingText` quando falta, e o publish recusa o marcador cru.",
+          "properties": {
+            "kind": {
+              "enum": ["link", "media"],
+              "description": "\"link\" procura um endereço no texto; \"media\" procura foto, vídeo, áudio ou documento."
+            },
+            "from": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "enum": ["message", "quoted"] },
+              "description": "Onde procurar, NA ORDEM. [\"quoted\",\"message\"] procura primeiro na mensagem marcada. É o que faz um comando aceitar as duas formas — responder um arquivo OU mandar junto — sem a pessoa escolher uma na instalação."
+            },
+            "missingText": {
+              "type": "string",
+              "description": "O que responder quando não há o que ele precisa. Sem isto o comando fica em silêncio, que é o pior desfecho: não dá nem para saber se funcionou."
+            }
+          }
         }
       }
     },

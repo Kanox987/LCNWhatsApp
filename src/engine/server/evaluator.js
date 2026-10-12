@@ -304,6 +304,37 @@ export function primeiroLink (texto) {
   return undefined
 }
 
+// A EXIGÊNCIA DECLARADA, resolvida antes de o fluxo rodar.
+//
+// Substitui o `"{{quoted.link}} {{message.link}}"` escrito na entrada de uma
+// ação — string que esconde um algoritmo (interpola, apaga o que não resolveu,
+// pega o primeiro link) e que ninguém adivinha lendo.
+//
+// A ordem de `from` é a ordem de procura, e é o que permite um comando aceitar
+// as duas formas: responder uma mensagem com link OU colar o link junto.
+//
+// LINK e MÍDIA são diferentes de propósito. Link é informação e entra no
+// contexto, então a ação escreve `url: o link`. Mídia é TOKEN — capacidade, não
+// informação — e o invariante 4 proíbe que ela chegue ao interpolador; aqui a
+// exigência serve de portão e de mensagem de falta, e quem precisa do ref
+// continua resolvendo estruturalmente.
+function resolverExigencia (evento, exige) {
+  if (!exige?.kind) return { precisa: false, ok: true }
+  for (const onde of exige.from || []) {
+    if (exige.kind === 'link') {
+      // `quotedRef.text` é de onde `{{quoted.link}}` já tirava o link — a mesma
+      // fonte, agora declarada em vez de escondida numa string.
+      const texto = onde === 'quoted' ? evento.message?.quotedRef?.text : evento.message?.text
+      const link = primeiroLink(texto)
+      if (link) return { precisa: true, ok: true, link }
+    } else {
+      const ref = onde === 'quoted' ? evento.message?.quotedMediaRef?.token : evento.message?.mediaRef
+      if (ref) return { precisa: true, ok: true, mediaRef: ref }
+    }
+  }
+  return { precisa: true, ok: false }
+}
+
 // Gatilho que dispara sem comando: por tipo de mídia, por link, por palavra.
 // É o que os "anti-*" e "auto-*" dos bots de referência precisam.
 function eventoCasaGatilhoDeMensagem (evento, config) {
@@ -918,6 +949,23 @@ function executarFluxo (db, documento, triggerId, evento) {
   const gatilho = nodesPorId.get(triggerId)
   const comandos = []
   const alvo = resolverAlvo(evento)
+
+  // O PORTÃO: sem o que a automação precisa, o fluxo não roda.
+  //
+  // Antes cada ação se defendia sozinha com o próprio `notFoundText`, e quem
+  // esquecesse ficava com um comando que casava, não fazia nada e não dizia
+  // nada — o pior desfecho, porque nem dá para saber se funcionou.
+  const exigido = resolverExigencia(evento, documento.inputPolicy?.requires)
+  if (exigido.precisa && !exigido.ok) {
+    const aviso = documento.inputPolicy.requires.missingText
+    if (aviso) {
+      comandos.push({
+        commandType: 'whatsapp.reply',
+        payload: { chatId: evento.chat.id, text: aviso, replyTo: referenciaDoLink(evento) }
+      })
+    }
+    return comandos
+  }
   const contexto = {
     // A FRONTEIRA DO QUE É LEGÍVEL É ESTE OBJETO.
     //
@@ -954,6 +1002,13 @@ function executarFluxo (db, documento, triggerId, evento) {
     // quando o gateway não soube dizer — placeholder fica literal.
     bot: evento.bot || {},
     now: valoresDeAgora(),
+    // O que a automação DECLAROU precisar, já resolvido. É isto que a ação lê
+    // como `url: o link` — o algoritmo de procura saiu da string e virou
+    // declaração no cabeçalho.
+    //
+    // Só o link entra aqui. Token de mídia é capacidade, não informação, e o
+    // invariante 4 proíbe que ele chegue ao interpolador.
+    ...(exigido.link ? { precisa: { link: exigido.link } } : {}),
     var: carregarVariaveis(db, evento)
   }
 

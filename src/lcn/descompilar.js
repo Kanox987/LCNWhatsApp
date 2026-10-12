@@ -7,7 +7,7 @@
 //
 // Com o texto, qualquer documento vira algo que uma pessoa lê e edita.
 import {
-  ACOES, CASAMENTOS, CLASSES, DESTINOS, NIVEIS_DE_AVISO, ORIGENS, OPERADORES,
+  ACOES, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, ORIGENS, OPERADORES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo
 } from './vocabulario.js'
 
@@ -62,6 +62,12 @@ function linhaDeAcao (no) {
   if (def.mapa && cfg[def.mapa.chave] && Object.keys(cfg[def.mapa.chave]).length) {
     linhas.push(`${IDENT}${def.mapa.bloco}`)
     for (const [nome, valor] of Object.entries(cfg[def.mapa.chave])) {
+      // O caminho de volta do `o link`: o marcador interno nunca aparece na
+      // linguagem.
+      if (String(valor) === '{{precisa.link}}') {
+        linhas.push(`${IDENT}${IDENT}${nome}: o link`)
+        continue
+      }
       // Aspas só quando precisam: valor com espaço, marcador ou vazio. Palavra
       // simples fica limpa, como foi escrita.
       const texto = String(valor)
@@ -170,6 +176,18 @@ export function descompilar (documento, template = null) {
   h(`acessa: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
   if (documento.inputPolicy?.historyPolicy && documento.inputPolicy.historyPolicy !== 'live_only') {
     h(`histórico: ${documento.inputPolicy.historyPolicy}`)
+  }
+
+  // A exigência e a mensagem de falta, lado a lado.
+  const exige = documento.inputPolicy?.requires
+  if (exige) {
+    const onde = (exige.from || []).map((f) => ONDE_PROCURAR[f] || f).join(' ou ')
+    h(`precisa de ${EXIGENCIAS[exige.kind] || exige.kind}: ${onde}`)
+    if (exige.missingText) {
+      // "ele" para link, "ela" para mídia — a linguagem é em português, e
+      // concordar custa uma linha.
+      h(`${exige.kind === 'media' ? 'sem ela' : 'sem ele'}: ${citar(exige.missingText)}`)
+    }
   }
 
   if (gatilho.type === 'trigger.command') {

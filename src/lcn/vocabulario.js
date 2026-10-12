@@ -205,6 +205,29 @@ export const CASAMENTOS = Object.freeze({
 // faz é "quem pode usar isso?", não "de onde vem".
 export const ORIGENS = Object.freeze({ external: 'só externos', any: 'qualquer um' })
 
+// O QUE a automação precisa receber, e ONDE procurar.
+//
+// Isto substitui escrever `"{{quoted.link}} {{message.link}}"` numa entrada de
+// ação. Aquela string esconde um algoritmo — interpola os dois marcadores,
+// APAGA o que não resolveu, e pega o primeiro link que sobrou — e o dono leu
+// exatamente como ela é: "isso é muito abstrato... ele vai procurar um link na
+// mensagem, como?".
+//
+// Declarado, o motor resolve antes de rodar o fluxo, responde quando falta, e a
+// ação só escreve `url: o link`.
+export const EXIGENCIAS = Object.freeze({
+  link: 'um link',
+  media: 'uma mídia'
+})
+
+// Onde procurar, e a ordem importa: "na citada ou na mensagem" procura primeiro
+// na mensagem marcada. É o que faz um comando aceitar as duas formas — responder
+// um arquivo OU mandar junto com o comando.
+export const ONDE_PROCURAR = Object.freeze({
+  message: 'na mensagem',
+  quoted: 'na citada'
+})
+
 // As duas CLASSES de automação, e a diferença não é detalhe de gatilho.
 //
 // Um comando é acordado por alguém digitar. Um vigia fica ligado o tempo todo,

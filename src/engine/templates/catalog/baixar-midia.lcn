@@ -12,14 +12,15 @@ automação
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
+  precisa de um link: na citada ou na mensagem
+  sem ele: "{{params.notFoundText}}"
 
   chama {{params.conexao}}.baixar
     com
-      url: "{{quoted.link}} {{message.link}}"
+      url: o link
       modo: "{{params.modo}}"
     avisa: "{{params.ackText}}"
     legenda: "{{params.caption}}"
-    sem dados: "{{params.notFoundText}}"
     erro: "{{params.errorText}}"
 
 configurável

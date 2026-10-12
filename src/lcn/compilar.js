@@ -6,7 +6,7 @@
 // o mesmo portão do JSON escrito à mão. É isto que deixa a linguagem existir
 // sem reabrir a decisão de não executar código de usuário.
 import {
-  ACOES, CASAMENTOS, CLASSES, DESTINOS, NIVEIS_DE_AVISO, OPERADORES, ORIGENS,
+  ACOES, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, ORIGENS,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
@@ -180,6 +180,11 @@ function lerAcao (linha, filhas) {
       // valor simples (`modo: auto`). Exigir aspas sempre encheria de cerimônia
       // o caso mais comum.
       const cru = filha.texto.slice(sep + 1).trim()
+      // `o link` aponta para o que o cabeçalho declarou precisar. É o que
+      // substitui `"{{quoted.link}} {{message.link}}"` — a string que esconde
+      // um algoritmo. O marcador interno existe porque o motor interpola; a
+      // linguagem nunca o mostra.
+      if (cru === 'o link') { mapa[filha.texto.slice(0, sep).trim()] = '{{precisa.link}}'; continue }
       mapa[filha.texto.slice(0, sep).trim()] = cru.startsWith('"') ? descitar(cru, filha.n) : cru
     }
     if (Object.keys(mapa).length) config[def.mapa.chave] = mapa
@@ -452,6 +457,40 @@ export function compilar (texto) {
             l.n
           )
         }
+        break
+      }
+      // "precisa de um link: na mensagem ou na citada"
+      //
+      // A chave chega aqui já partida em "precisa de X" + o valor, porque o
+      // formato do cabeçalho é "campo: valor". Ver EXIGENCIAS no vocabulário
+      // para por que isto existe.
+      case 'precisa de um link':
+      case 'precisa de uma mídia': {
+        const oQue = chave.slice('precisa de '.length)
+        const kind = Object.keys(EXIGENCIAS).find((k) => EXIGENCIAS[k] === oQue)
+        const onde = valor.split(/\s+ou\s+|,/).map((parte) => {
+          const limpo = parte.trim()
+          const achado = Object.keys(ONDE_PROCURAR).find((k) => ONDE_PROCURAR[k] === limpo)
+          if (!achado) {
+            throw new ErroDeSintaxe(
+              `não sei procurar "${limpo}". Use: ${Object.values(ONDE_PROCURAR).join(' ou ')}.`, l.n
+            )
+          }
+          return achado
+        })
+        // A ordem escrita é a ordem de procura: "na citada ou na mensagem"
+        // olha primeiro a mensagem marcada.
+        doc.inputPolicy.requires = { kind, from: onde }
+        break
+      }
+      // Fica junto do que ele guarda — e não perdido entre os textos da ação,
+      // que é onde o `sem mídia`/`sem dados` morava.
+      case 'sem ele':
+      case 'sem ela': {
+        if (!doc.inputPolicy.requires) {
+          throw new ErroDeSintaxe(`"${chave}" precisa vir depois de "precisa de ..."`, l.n)
+        }
+        doc.inputPolicy.requires.missingText = descitar(valor, l.n)
         break
       }
       case 'id': doc.id = valor; break
