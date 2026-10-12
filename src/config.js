@@ -78,6 +78,37 @@ function mesclar (base, extra) {
 // Migração: o provedor "codex" (e o campo codexModelo) foram removidos do
 // LCNWhatsApp. Config antigo com transcricao.provedor === 'codex' vira "off"
 // automaticamente, com um aviso curto — sem apagar o resto da configuração.
+// O nome da chave ficou para trás na migração de biblioteca.
+//
+// A funcionalidade NÃO é resto de Baileys: ela sinaliza "muitas quedas seguidas,
+// pode ser mudança de protocolo do WhatsApp, atualize a biblioteca" — e vale
+// igual para a zapo-js. O código já lê `autoUpdateLib`; só a chave no arquivo de
+// quem instalou antes continuava com o nome antigo.
+//
+// E isso não era cosmético: quem tinha `autoUpdateBaileys` no config.json estava
+// ligando uma chave que o código não lê. A pessoa marcava "ligado" e a
+// funcionalidade seguia desligada, sem nada avisando — a mesma família do painel
+// dizendo "Conectado" para um bot que não está rodando.
+//
+// Migra PRESERVANDO o valor: quem tinha ligado continua ligado, e agora de
+// verdade.
+// RODA NO ARQUIVO CRU, antes da mesclagem com o padrão — e isso não é detalhe.
+//
+// Depois de `mesclar(PADRAO, bruto)` a chave `autoUpdateLib` SEMPRE existe, com
+// o `false` do padrão. Rodando depois, "o novo já existe, não sobrescrevo"
+// descartava o valor do usuário e a migração não fazia nada, em silêncio —
+// exatamente o defeito que ela existe para consertar. Um teste pegou.
+function migrarNomeDoAutoUpdate (bruto) {
+  const a = bruto?.atualizacao
+  if (!a || typeof a !== 'object' || !('autoUpdateBaileys' in a)) return false
+  // Com os dois no arquivo do usuário, o nome NOVO ganha: é o que o código lê,
+  // então é o que reflete o que está valendo hoje.
+  if (!('autoUpdateLib' in a)) a.autoUpdateLib = a.autoUpdateBaileys === true
+  delete a.autoUpdateBaileys
+  console.warn('config.json: "atualizacao.autoUpdateBaileys" virou "autoUpdateLib" (a biblioteca é a zapo-js desde a migração). Valor preservado.')
+  return true
+}
+
 function migrarCodex (cfg) {
   const t = cfg.transcricao
   if (!t) return false
@@ -103,8 +134,10 @@ export function carregar () {
   } catch (e) {
     console.error('config.json inválido, usando padrão:', e.message)
   }
+  // Antes de mesclar: ver o comentário de migrarNomeDoAutoUpdate.
+  const renomeou = migrarNomeDoAutoUpdate(bruto)
   const cfg = mesclar(PADRAO, bruto)
-  if (migrarCodex(cfg)) {
+  if (migrarCodex(cfg) || renomeou) {
     try { fs.writeFileSync(ARQ_CONFIG, JSON.stringify(cfg, null, 2) + '\n') } catch {}
   }
   return cfg
@@ -143,8 +176,11 @@ export function observar (onChange) {
         } catch {
           return // escrita ainda em andamento / JSON inválido — ignora este evento
         }
+        // Mesma ordem da carga: renomear ANTES de mesclar, senão o padrão
+        // já preencheu a chave nova e o valor do usuário se perde.
+        const renomeou = migrarNomeDoAutoUpdate(bruto)
         const cfg = mesclar(PADRAO, bruto)
-        if (migrarCodex(cfg)) {
+        if (migrarCodex(cfg) || renomeou) {
           try { fs.writeFileSync(ARQ_CONFIG, JSON.stringify(cfg, null, 2) + '\n') } catch {}
         }
         try { onChange(cfg) } catch (e) { console.error('reload config:', e.message) }

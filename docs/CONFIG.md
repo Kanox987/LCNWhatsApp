@@ -43,7 +43,7 @@ uma reconexão leve quando mudam.
     "limiteMB": 64,                  // acima disso, recusa antes de transferir
     "esperaMaximaSegundos": 300      // passou disso, CANCELA o trabalho no serviço
   },
-  "atualizacao": { "autoUpdateBaileys": false, "falhasParaUpdate": 5 },
+  "atualizacao": { "autoUpdateLib": false, "falhasParaUpdate": 5 },
   "outputApi": { "enabled": false, "host": "127.0.0.1", "porta": 8787, "token": "" }
 }
 ```
@@ -81,7 +81,7 @@ uma reconexão leve quando mudam.
 
 - **hardware.debug**: liga logs detalhados de cada mensagem recebida — útil pra
   diagnosticar "mandei e não capturou". Ver [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).
-- **hardware.logLevel**: nível de log da Baileys (`silent` em produção; `warn`/`error`
+- **hardware.logLevel**: nível de log da `zapo-js` (`silent` em produção; `warn`/`error`
   ajuda a ver falhas de descriptografia). Mudança exige reconexão.
 - **transcricao.conversas**: lista de overrides por conversa. `auto: true` liga
   transcrição automática de todo áudio normal ali (responde na própria conversa).
