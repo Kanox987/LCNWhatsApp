@@ -305,15 +305,16 @@ function marcarLinha (area, linha) {
 // O esqueleto abaixo não é decoração: começar de uma página em branco numa
 // linguagem que a pessoa está conhecendo é o jeito mais rápido de ela desistir.
 // Ele nasce sendo um comando que funciona, e é editado a partir daí.
-const ESQUELETO = (poolId) => `comando /meucomando
-  id: meu-comando
+const ESQUELETO = (poolId) => `automação meu-comando
   nome: Meu comando
-  menu: /meucomando — o que ele faz
+  tipo: comando
+  dispara com: /meucomando
+  acessa: texto
+  quem: qualquer um
   onde: em qualquer lugar
   pool: ${poolId}
-  tipos: texto
+  menu: /meucomando — o que ele faz
   casa: exato
-  de: externo
 
   responde "oi, {{sender.name}}!"
 `
@@ -328,13 +329,17 @@ async function renderCriador ({ navigate, refresh }) {
     actions: [button('← Voltar para a lista', { onClick: () => navigate('/automations') })]
   })
 
+  // O prefixo `__` é do sistema. Oferecer `__native__` como padrão do esqueleto
+  // era entregar o reservado de bandeja — a mesma família do __owner__ que o
+  // motor passou a recusar, só na direção oposta.
+  const oferecidos = pools.filter((p) => !String(p.id).startsWith('__'))
   const area = el('textarea', {
     className: 'lcn-editor',
     rows: '18',
     spellcheck: 'false',
     autocapitalize: 'off',
     autocomplete: 'off'
-  }, ESQUELETO(pools[0]?.id || 'pool-local'))
+  }, ESQUELETO(oferecidos[0]?.id || 'pool-local'))
 
   const aviso = el('div', {})
   area.addEventListener('input', () => { aviso.textContent = '' })
@@ -368,9 +373,11 @@ async function renderCriador ({ navigate, refresh }) {
   const ajuda = el('section', { className: 'card' }, [
     el('h2', { text: 'O essencial' }),
     el('ul', { className: 'human-summary' }, [
-      el('li', { text: 'id: é por essa linha que a automação passa a existir. Não dá para repetir um id que já existe.' }),
+      el('li', { text: 'automação <id>: é por essa linha que a automação passa a existir. Não dá para repetir um id que já existe.' }),
+      el('li', { text: 'tipo: "comando" é acordado por alguém digitar; "vigia" fica ligado o tempo todo olhando a conversa (é o que serve para responder "bom dia" ou baixar link sozinho).' }),
+      el('li', { text: 'acessa: a que tipos de mensagem ele precisa de acesso. Não é preferência: tipo que não estiver aqui NUNCA chega nele.' }),
       el('li', { text: 'onde: diz onde o comando pode valer. Deixar de fora não significa "em todo lugar" — significa que não casa com ninguém.' }),
-      el('li', { text: `pool: qual conjunto de números responde.${pools.length ? ' Disponíveis: ' + pools.map((p) => p.id).join(', ') : ' Nenhum pool cadastrado ainda.'}` }),
+      el('li', { text: `pool: qual conjunto de números responde.${oferecidos.length ? ' Disponíveis: ' + oferecidos.map((p) => p.id).join(', ') : ' Nenhum pool cadastrado ainda.'}` }),
       el('li', { text: 'A automação nasce como rascunho. Ela só responde no WhatsApp depois de publicada.' })
     ])
   ])

@@ -3,13 +3,15 @@ template config-menu v1
   descrição: Permite mudar o texto do menu direto pela conversa, sem abrir o painel. Cada grupo guarda a própria configuração: o mesmo comando usado em dois grupos configura cada um separadamente. Restrito ao dono do bot.
   categoria: configuracoes
 
-comando {{params.command}}
+automação
   nome: Configurar menu (pelo WhatsApp)
+  tipo: comando
+  dispara com: {{params.command}}
   menu: {{params.command}} — Muda o texto do menu desta conversa (só o dono)
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato ou com argumentos
-  de: externo
+  quem: só externos
   só dono
 
   configura menu

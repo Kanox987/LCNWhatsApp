@@ -96,13 +96,15 @@ function primeiraDiferenca (a, b) {
   descrição: Mostra os quatro tipos de configuração
   categoria: utilitarios
 
-comando /exemplo
+automação
   nome: Exemplo
+  tipo: comando
+  dispara com: /exemplo
   onde: em qualquer lugar
   pool: p1
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: externo
+  quem: só externos
 
   responde "oi"
 
@@ -136,13 +138,15 @@ configurável
 {
   let e
   try {
-    compilar(`comando /x
+    compilar(`automação
+  tipo: comando
+  dispara com: /x
   nome: X
   onde: em qualquer lugar
   pool: p
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: externo
+  quem: só externos
 
   responde "oi"
 
@@ -169,14 +173,16 @@ configurável
 
 // --- o texto é legível por gente -----------------------------------------
 {
-  const doc = compilar(`comando /oi
+  const doc = compilar(`automação
+  tipo: comando
+  dispara com: /oi
   id: oi
   nome: Saudação
   onde: em qualquer lugar
   pool: p1
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: externo
+  quem: só externos
 
   responde "olá!"
 `)
@@ -192,14 +198,16 @@ configurável
 
 // --- condição com dois ramos ---------------------------------------------
 {
-  const doc = compilar(`comando /alterna
+  const doc = compilar(`automação
+  tipo: comando
+  dispara com: /alterna
   id: alterna
   nome: Alterna
   onde: em qualquer lugar
   pool: p1
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: externo
+  quem: só externos
   só dono
 
   se var chat ligado == "sim"
@@ -226,14 +234,14 @@ configurável
   const casos = [
     ['', 'arquivo vazio'],
     ['responde "oi"', 'começa com'],
-    ['comando /x\n  nomee: errado\n', 'não conheço o campo'],
-    ['comando /x\n  casa: torto\n', 'modo de casamento desconhecido'],
-    ['comando /x\n  onde: no além\n', 'destino desconhecido'],
-    ['comando /x\n  tipos: hologramas\n', 'tipo de mensagem desconhecido'],
-    ['comando /x\n\n  dança "oi"\n', 'não conheço a ação'],
-    ['comando /x\n\n  responde sem aspas\n', 'esperava texto entre aspas'],
-    ['comando /x\n\n  responde "oi"\n    cor: "azul"\n', 'não tem campo'],
-    ['comando /x\n\n  se var chat a b\n', 'precisa de um operador']
+    ['automação\n  tipo: comando\n  dispara com: /x\n  nomee: errado\n', 'não conheço o campo'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n  casa: torto\n', 'modo de casamento desconhecido'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n  onde: no além\n', 'destino desconhecido'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n  acessa: hologramas\n', 'tipo de mensagem desconhecido'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n\n  dança "oi"\n', 'não conheço a ação'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n\n  responde sem aspas\n', 'esperava texto entre aspas'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n\n  responde "oi"\n    cor: "azul"\n', 'não tem campo'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n\n  se var chat a b\n', 'precisa de um operador']
   ]
   for (const [fonte, esperado] of casos) {
     let e
@@ -243,8 +251,10 @@ configurável
   }
 
   let comLinha
-  try { compilar('comando /x\n  nomee: errado\n') } catch (e) { comLinha = e }
-  check('o erro diz em que linha está', /linha 2/.test(comLinha?.message || ''), comLinha?.message)
+  try { compilar('automação\n  tipo: comando\n  dispara com: /x\n  nomee: errado\n') } catch (e) { comLinha = e }
+  // A linha é a do campo errado (a 4ª: abertura, tipo, dispara com, nomee).
+  // Sem o número, a pessoa procura o erro num texto de quarenta linhas.
+  check('o erro diz em que linha está', /linha 4/.test(comLinha?.message || ''), comLinha?.message)
 }
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LINGUAGEM PASSARAM')

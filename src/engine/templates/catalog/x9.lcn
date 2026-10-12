@@ -3,13 +3,15 @@ template x9 v1
   descrição: Irmão do /recover: responda uma mídia de visualização única e ela volta NA MESMA CONVERSA, à vista de todo mundo que está ali. O /recover manda para a conversa que você configurou; o /x9 entrega no lugar.
   categoria: utilitarios
 
-comando {{params.command}}
+automação
   nome: X9 — recuperar na mesma conversa
+  tipo: comando
+  dispara com: {{params.command}}
   menu: {{params.command}} — Recupera visualização única na própria conversa
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato ou com argumentos
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
 
   recupera
     para: esta conversa

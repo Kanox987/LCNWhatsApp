@@ -3,12 +3,14 @@ template auto-recover v1
   descrição: Recupera TODA visualização única que chegar, sem ninguém digitar comando. Instale escolhendo o destino "conversas marcadas com auto_recover" e ligue conversa por conversa — pelo comando /autorecover ou marcando na aba Dados — assim ele vale só onde você quiser.
   categoria: modulos-especializados
 
-ao receber mensagem
+automação
   nome: Recuperar automaticamente
+  tipo: vigia
+  dispara com: qualquer mensagem
   pool: {{params.poolId}}
-  tipos: visualização única
+  acessa: visualização única
   quando for: visualização única
-  de: externo
+  quem: só externos
 
   recupera
     para: número fixo

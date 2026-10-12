@@ -3,12 +3,14 @@ template anti-imagem v1
   descrição: Apaga automaticamente toda mensagem de imagem enviada no grupo, sem precisar de comando. Você escolhe quantos avisos a pessoa recebe antes de ser removida. O contador é por pessoa e por grupo, e o dono do bot nunca é removido.
   categoria: modulos-especializados
 
-ao receber mensagem
+automação
   nome: Anti-imagem
+  tipo: vigia
+  dispara com: qualquer mensagem
   pool: {{params.poolId}}
-  tipos: foto
+  acessa: foto
   quando for: foto
-  de: externo
+  quem: só externos
 
   apaga mensagem
   soma group_member anti-imagem_apagados = 1

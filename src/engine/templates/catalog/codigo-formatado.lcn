@@ -3,12 +3,14 @@ template codigo-formatado v1
   descrição: Responde com o texto formatado como bloco de código com cores, em vez de texto simples. Útil para mandar trechos de código, tabelas ou fórmulas de forma legível.
   categoria: utilitarios
 
-comando {{params.command}}
+automação
   nome: Responder com código colorido
+  tipo: comando
+  dispara com: {{params.command}}
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato ou com argumentos
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
 
   responde rico "{{message.args}}"
     formato: código

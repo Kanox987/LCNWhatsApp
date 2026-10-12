@@ -3,12 +3,14 @@ template marcar-variavel v1
   descrição: Quando alguém manda o comando, grava uma variável customizada nesse contato (ex: marcar como "vip") e confirma por mensagem — sem precisar editar cada contato manualmente na aba Dados.
   categoria: utilitarios
 
-comando {{params.command}}
+automação
   nome: Marcar remetente com uma variável
+  tipo: comando
+  dispara com: {{params.command}}
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
 
   define sender {{params.variavel}} = "{{params.valor}}"
   responde "{{params.confirmacao}}"

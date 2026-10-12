@@ -229,7 +229,11 @@ try {
     const corpo = await rTexto.json()
     check('GET /lcn responde 200', rTexto.status === 200)
     check('e devolve a automação escrita em português',
-      typeof corpo.texto === 'string' && corpo.texto.startsWith('comando /ping'))
+      typeof corpo.texto === 'string' && corpo.texto.startsWith('automação ping'), (corpo.texto || '').split('\n')[0])
+    // A classe virou campo do cabeçalho: a primeira coisa que se lê é o que a
+    // automação É, não uma palavra de abertura que escondia isso.
+    check('o cabeçalho diz o que ela é e o que a dispara',
+      (corpo.texto || '').includes('tipo: comando') && (corpo.texto || '').includes('dispara com: /ping'))
     check('o texto traz a resposta', (corpo.texto || '').includes('responde "pong"'))
     check('e o etag, para salvar sem sobrescrever edição alheia', corpo.etag === 'etag-1')
 
@@ -249,7 +253,7 @@ try {
     const rErro = await fetch(`${base}/api/v1/automations/ping/lcn`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ texto: 'comando /x\n  nomee: errado\n' })
+      body: JSON.stringify({ texto: 'automação x\n  nomee: errado\n' })
     })
     const erroCorpo = await rErro.json()
     check('erro de escrita responde 422, não 500', rErro.status === 422)

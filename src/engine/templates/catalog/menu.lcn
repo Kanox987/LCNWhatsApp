@@ -4,13 +4,15 @@ template menu v1
   categoria: utilitarios
   depende de: config-menu
 
-comando {{params.command}}
+automação
   nome: Menu de comandos
+  tipo: comando
+  dispara com: {{params.command}}
   menu: {{params.command}} — Mostra esta lista de comandos
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
 
   mostra menu
     cabeçalho: "{{params.header}}"

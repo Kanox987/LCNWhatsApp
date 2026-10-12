@@ -7,7 +7,7 @@
 //
 // Com o texto, qualquer documento vira algo que uma pessoa lê e edita.
 import {
-  ACOES, CASAMENTOS, DESTINOS, NIVEIS_DE_AVISO, ORIGENS, OPERADORES,
+  ACOES, CASAMENTOS, CLASSES, DESTINOS, NIVEIS_DE_AVISO, ORIGENS, OPERADORES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo
 } from './vocabulario.js'
 
@@ -111,12 +111,14 @@ function escreverDestino (ref) {
   return palavra
 }
 
-function cabecalhoDoGatilho (gatilho) {
+// A abertura só IDENTIFICA; a classe virou campo do cabeçalho. Ver o comentário
+// correspondente em compilar.js.
+function cabecalhoDoGatilho (gatilho, documento, template) {
   const cfg = gatilho.config || {}
-  if (gatilho.type === 'trigger.command') {
-    return { titulo: `comando ${cfg.command}`, cfg }
-  }
-  return { titulo: 'ao receber mensagem', cfg }
+  // Num template o id vem do cabeçalho `template`; numa automação publicada ele
+  // vem aqui, na abertura.
+  const id = template ? null : documento?.id
+  return { titulo: id ? `automação ${id}` : 'automação', cfg }
 }
 
 export function descompilar (documento, template = null) {
@@ -126,7 +128,7 @@ export function descompilar (documento, template = null) {
   const gatilho = nos.find((n) => typeof n.type === 'string' && n.type.startsWith('trigger.'))
   if (!gatilho) throw new Error('O documento não tem gatilho.')
 
-  const { titulo, cfg } = cabecalhoDoGatilho(gatilho)
+  const { titulo, cfg } = cabecalhoDoGatilho(gatilho, documento, template)
   const linhas = []
 
   // Cabeçalho de template vem ANTES do comando: é o que identifica o arquivo.
@@ -148,11 +150,12 @@ export function descompilar (documento, template = null) {
   linhas.push(titulo)
   const h = (texto) => linhas.push(`${IDENT}${texto}`)
 
-  if (!template) {
-    h(`id: ${documento.id}`)
-    if (documento.revision !== undefined) h(`revisão: ${documento.revision}`)
-  }
+  if (!template && documento.revision !== undefined) h(`revisão: ${documento.revision}`)
   h(`nome: ${documento.name}`)
+
+  // O QUE ELA É, e o que a acorda — as duas primeiras coisas que se lê.
+  h(`tipo: ${CLASSES[gatilho.type] || gatilho.type}`)
+  h(`dispara com: ${gatilho.type === 'trigger.command' ? cfg.command : 'qualquer mensagem'}`)
   if (documento.display?.menuLabel) {
     const desc = documento.display.menuDescription
     h(`menu: ${documento.display.menuLabel}${desc ? ` — ${desc}` : ''}`)
@@ -164,7 +167,7 @@ export function descompilar (documento, template = null) {
   h(`pool: ${documento.responder?.poolId ?? ''}`)
 
   const tipos = documento.inputPolicy?.acceptedMessageKinds || []
-  h(`tipos: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
+  h(`acessa: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
   if (documento.inputPolicy?.historyPolicy && documento.inputPolicy.historyPolicy !== 'live_only') {
     h(`histórico: ${documento.inputPolicy.historyPolicy}`)
   }
@@ -182,7 +185,7 @@ export function descompilar (documento, template = null) {
       h(`palavras: ${cfg.keywords.map(citar).join(', ')}`)
     }
   }
-  h(`de: ${ORIGENS[cfg.allowFrom] || cfg.allowFrom}`)
+  h(`quem: ${ORIGENS[cfg.allowFrom] || cfg.allowFrom}`)
   if (cfg.requireOwner === true) h('só dono')
 
   linhas.push('')

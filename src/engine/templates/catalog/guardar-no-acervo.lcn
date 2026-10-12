@@ -3,13 +3,15 @@ template guardar-no-acervo v1
   descrição: Mande uma foto, vídeo, áudio ou PDF com o comando na legenda — ou responda um arquivo já enviado — e ele fica guardado no acervo do bot, pronto para ser usado em qualquer comando. Aceita pasta, para organizar, e responde com o caminho onde ficou.
   categoria: utilitarios
 
-comando {{params.command}}
+automação
   nome: Guardar arquivo no acervo
+  tipo: comando
+  dispara com: {{params.command}}
   menu: {{params.command}} — Guarda no acervo o arquivo que você mandar
   pool: {{params.poolId}}
-  tipos: foto, vídeo, áudio, documento
+  acessa: foto, vídeo, áudio, documento
   casa: exato ou com argumentos
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
   só dono
 
   guarda no acervo

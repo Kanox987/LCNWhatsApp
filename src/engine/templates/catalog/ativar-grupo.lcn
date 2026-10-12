@@ -3,13 +3,15 @@ template ativar-grupo v1
   descrição: Autoriza o bot a agir NESTE grupo, alternando a cada uso. Sem isso, em grupo o bot fica inerte: nenhuma automação é avaliada e nada é registrado — só comandos restritos ao dono passam, que é como este aqui consegue funcionar. Em conversa direta não é preciso: lá quem escreveu escolheu falar com o bot.
   categoria: configuracoes
 
-comando {{params.command}}
+automação
   nome: Ativar o bot neste grupo
+  tipo: comando
+  dispara com: {{params.command}}
   menu: {{params.command}} — Liga/desliga o bot neste grupo (só dono)
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: externo
+  quem: só externos
   só dono
 
   se var chat grupo_ativo == "sim"

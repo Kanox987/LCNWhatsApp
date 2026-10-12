@@ -39,13 +39,15 @@ try {
     '  categoria: utilitarios',
     ...dependeDe.map((d) => `  depende de: ${d}`),
     '',
-    `comando /${templateId}`,
+    `automação
+  tipo: comando
+  dispara com: /${templateId}`,
     `  nome: ${templateId}`,
     '  onde: em qualquer lugar',
     '  pool: p1',
-    '  tipos: texto',
+    '  acessa: texto',
     '  casa: exato',
-    '  de: externo',
+    '  quem: só externos',
     '',
     '  responde "oi"',
     ''

@@ -3,12 +3,14 @@ template ping v1
   descrição: Responde a um comando com "pong" e o tempo real de processamento em milissegundos. Bom primeiro teste pra confirmar que uma automação nova está publicada e respondendo de verdade.
   categoria: utilitarios
 
-comando {{params.command}}
+automação
   nome: Ping (teste de latência)
+  tipo: comando
+  dispara com: {{params.command}}
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
 
   responde "pong ({{latencyMs}}ms)"
 

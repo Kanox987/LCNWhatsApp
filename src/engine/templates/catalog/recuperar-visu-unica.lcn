@@ -4,13 +4,15 @@ template recuperar-visu-unica v1
   categoria: utilitarios
   depende de: config-recover
 
-comando {{params.command}}
+automação
   nome: Recuperar visualização única
+  tipo: comando
+  dispara com: {{params.command}}
   menu: {{params.command}} — Recupera mídia de visualização única
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   casa: exato ou com argumentos
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
 
   recupera
     para: {{params.destination}}

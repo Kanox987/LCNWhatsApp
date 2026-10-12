@@ -3,13 +3,15 @@ template auto-download v1
   descrição: Baixa sozinho reel e foto do Instagram, Shorts e vídeo do YouTube, TikTok, Pinterest e outras redes conhecidas, sem ninguém digitar comando. Link que não é post de mídia — loja, notícia, arquivo em nuvem — é ignorado em silêncio, sem prometer nada. Instale escolhendo o destino "conversas marcadas" com o marcador auto_download, e ligue conversa por conversa pelo /autodow.
   categoria: modulos-especializados
 
-ao receber mensagem
+automação
   nome: Baixar links automaticamente
+  tipo: vigia
+  dispara com: qualquer mensagem
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   com link
   só link de mídia
-  de: {{params.allowFrom}}
+  quem: {{params.allowFrom}}
 
   baixa "{{message.link}}"
     modo: {{params.modo}}

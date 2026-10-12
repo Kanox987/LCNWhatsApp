@@ -6,7 +6,7 @@
 // o mesmo portão do JSON escrito à mão. É isto que deixa a linguagem existir
 // sem reabrir a decisão de não executar código de usuário.
 import {
-  ACOES, CASAMENTOS, DESTINOS, NIVEIS_DE_AVISO, OPERADORES, ORIGENS,
+  ACOES, CASAMENTOS, CLASSES, DESTINOS, NIVEIS_DE_AVISO, OPERADORES, ORIGENS,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
@@ -357,17 +357,30 @@ export function compilar (texto) {
   const cabeca = linhas[0]
   if (cabeca.indent !== 0) throw new ErroDeSintaxe('a primeira linha precisa começar na margem', cabeca.n)
 
+  // A ABERTURA SÓ IDENTIFICA. O que a automação É virou campo do cabeçalho.
+  //
+  // Antes a classe estava escondida na palavra de abertura — `comando /x` contra
+  // `ao receber mensagem` — como se as duas fossem variação do mesmo gatilho. O
+  // dono pediu o contrário: "um campo nas primeiras linhas dizendo o tipo e o
+  // que ele necessita pra ser disparado, ou se é de uso contínuo".
+  //
+  // `automação <id>` numa automação publicada; `automação` sozinha num template,
+  // onde o id vem do cabeçalho `template`.
   const gatilhoConfig = {}
-  let tipoDoGatilho
-  const comando = cabeca.texto.match(/^comando\s+(\S+)$/)
-  if (comando) {
-    tipoDoGatilho = 'trigger.command'
-    gatilhoConfig.command = comando[1]
-  } else if (cabeca.texto === 'ao receber mensagem') {
-    tipoDoGatilho = 'trigger.message'
-  } else {
-    throw new ErroDeSintaxe('a automação começa com "comando /x" ou "ao receber mensagem"', cabeca.n)
+  let tipoDoGatilho = null
+  const abertura = cabeca.texto.match(/^automação(?:\s+(\S+))?$/)
+  if (!abertura) {
+    // A forma antiga some, e a mensagem precisa dizer o que fazer — "não
+    // entendi" aqui manda procurar erro no lugar errado.
+    if (/^comando\s|^ao receber mensagem$/.test(cabeca.texto)) {
+      throw new ErroDeSintaxe(
+        'a automação agora começa com "automação <id>", e o que ela é vira campo: "tipo: comando" + "dispara com: /x", ou "tipo: vigia"',
+        cabeca.n
+      )
+    }
+    throw new ErroDeSintaxe('a automação começa com "automação <id>"', cabeca.n)
   }
+  const idDaAbertura = abertura[1] || null
 
   const doc = {
     schemaVersion: 1,
@@ -379,6 +392,12 @@ export function compilar (texto) {
     flow: { nodes: [], edges: [] }
   }
   let display = null
+
+  // O id entra AQUI, antes do laço do cabeçalho, porque é de onde ele vem: a
+  // abertura. Entrar depois punha as chaves `id` e `revision` em ordem trocada
+  // em relação ao texto escrito à mão, e a ida e volta deixava de bater por uma
+  // diferença que não é diferença nenhuma.
+  if (idDaAbertura) doc.id = idDaAbertura
 
   // --- cabeçalho ----------------------------------------------------------
   let i = 1
@@ -408,6 +427,33 @@ export function compilar (texto) {
     const valor = l.texto.slice(sep + 1).trim()
 
     switch (chave) {
+      // A CLASSE, e ela é obrigatória — ver a conferência depois do laço.
+      case 'tipo': {
+        const achado = Object.keys(CLASSES).find((k) => CLASSES[k] === valor)
+        if (!achado) {
+          throw new ErroDeSintaxe(`tipo desconhecido: "${valor}". Use: ${Object.values(CLASSES).join(' ou ')}.`, l.n)
+        }
+        tipoDoGatilho = achado
+        break
+      }
+      // O que acorda a automação. Para comando é a palavra digitada; para vigia
+      // é "qualquer mensagem", e os filtros (com link, palavras, quando for)
+      // refinam em linhas próprias.
+      case 'dispara com': {
+        if (!tipoDoGatilho) throw new ErroDeSintaxe('"dispara com" precisa vir depois de "tipo:"', l.n)
+        if (tipoDoGatilho === 'trigger.command') {
+          if (!valor || /\s/.test(valor)) {
+            throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, l.n)
+          }
+          gatilhoConfig.command = valor
+        } else if (valor !== 'qualquer mensagem') {
+          throw new ErroDeSintaxe(
+            `um vigia dispara com "qualquer mensagem" — o que ele observa se diz nas linhas seguintes (com link, palavras, quando for). Veio "${valor}"`,
+            l.n
+          )
+        }
+        break
+      }
       case 'id': doc.id = valor; break
       case 'revisão': doc.revision = Number(valor); break
       case 'nome': doc.name = valor; break
@@ -421,11 +467,15 @@ export function compilar (texto) {
       case 'menos': doc.scope.exclude.push(lerDestino(valor, l.n)); break
       case 'pool': doc.responder.poolId = valor; break
       case 'histórico': doc.inputPolicy.historyPolicy = valor; break
-      case 'tipos':
+      // "acessa" e não "tipos": é EXIGÊNCIA, não filtro. O motor não avalia a
+      // automação para tipo que não esteja aqui, então um contador que declara
+      // só texto NUNCA vê a mensagem de voz — e falha calado. A palavra antiga
+      // lia como se fosse preferência.
+      case 'acessa':
         doc.inputPolicy.acceptedMessageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
         break
       case 'casa': gatilhoConfig.match = traduzir(CASAMENTO_POR_PALAVRA, valor, 'modo de casamento', l.n); break
-      case 'de': gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'origem', l.n); break
+      case 'quem': gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'quem pode acionar', l.n); break
       case 'quando for':
         gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
         break
@@ -434,6 +484,16 @@ export function compilar (texto) {
         break
       default: throw new ErroDeSintaxe(`não conheço o campo "${chave}"`, l.n)
     }
+  }
+
+  // Sem tipo não há automação: é a diferença entre algo que alguém digita e algo
+  // que fica ligado o tempo todo olhando a conversa. Deixar isso implícito foi o
+  // que fez a classe virar detalhe de gatilho.
+  if (!tipoDoGatilho) {
+    throw new ErroDeSintaxe(`falta "tipo:" — ${Object.values(CLASSES).join(' ou ')}`, cabeca.n)
+  }
+  if (tipoDoGatilho === 'trigger.command' && !gatilhoConfig.command) {
+    throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
   }
 
   if (display) doc.display = display

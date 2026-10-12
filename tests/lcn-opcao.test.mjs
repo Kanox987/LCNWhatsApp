@@ -21,12 +21,14 @@ const fonte = `template escolhe v1
   descrição: Teste do tipo opção.
   categoria: modulos-especializados
 
-comando /teste
+automação
+  tipo: comando
+  dispara com: /teste
   nome: Escolhe
   pool: p
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: externo
+  quem: só externos
 
   responde "modo {{params.modo}}"
 
@@ -95,15 +97,17 @@ if (catalogo) {
 // quê? para quem?". Aqui a primeira linha já diz de QUEM o comando depende, e
 // o bloco `com` diz o que vai — com o nome de cada entrada à vista.
 {
-  const fonteChama = `comando /dow
+  const fonteChama = `automação
+  tipo: comando
+  dispara com: /dow
   id: t
   revisão: 1
   nome: T
   onde: em qualquer lugar
   pool: p
-  tipos: texto
+  acessa: texto
   casa: exato
-  de: externo
+  quem: só externos
 
   chama midia.baixar
     com

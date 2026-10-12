@@ -3,13 +3,15 @@ template anti-link v1
   descrição: Apaga mensagens com link automaticamente, sem precisar de comando. Você escolhe quantos avisos a pessoa recebe antes de ser removida do grupo. O contador é por pessoa e por grupo: avisos num grupo não somam com os de outro. O dono do bot nunca é removido.
   categoria: modulos-especializados
 
-ao receber mensagem
+automação
   nome: Anti-link
+  tipo: vigia
+  dispara com: qualquer mensagem
   pool: {{params.poolId}}
-  tipos: texto
+  acessa: texto
   com link
   quando for: texto
-  de: externo
+  quem: só externos
 
   apaga mensagem
   soma group_member links_apagados = 1

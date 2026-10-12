@@ -201,7 +201,23 @@ export const CASAMENTOS = Object.freeze({
   keyword: 'palavra solta'
 })
 
-export const ORIGENS = Object.freeze({ external: 'externo', any: 'qualquer' })
+// Quem pode acionar. Renomeado de `de:` para `quem:` — a pergunta que a pessoa
+// faz é "quem pode usar isso?", não "de onde vem".
+export const ORIGENS = Object.freeze({ external: 'só externos', any: 'qualquer um' })
+
+// As duas CLASSES de automação, e a diferença não é detalhe de gatilho.
+//
+// Um comando é acordado por alguém digitar. Um vigia fica ligado o tempo todo,
+// olhando a conversa — é o download automático, e é o "responder bom dia" que o
+// dono descreveu. Ele não tem gatilho de comando nenhum.
+//
+// Estava escondido na palavra de abertura (`comando /x` contra `ao receber
+// mensagem`), como se fosse variação do mesmo. A primeira coisa que se lê agora
+// é o que a automação É.
+export const CLASSES = Object.freeze({
+  'trigger.command': 'comando',
+  'trigger.message': 'vigia'
+})
 
 export const TIPOS_DE_MENSAGEM = Object.freeze({
   text: 'texto',
