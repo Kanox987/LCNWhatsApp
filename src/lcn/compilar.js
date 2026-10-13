@@ -201,7 +201,13 @@ function lerAcao (linha, filhas) {
     if (!campo) throw new ErroDeSintaxe(`"${def.palavra}" não tem campo "${rotulo}"`, filha.n)
     if (campo.tipo === 'texto') config[campo.chave] = descitar(valor, filha.n)
     else if (campo.tipo === 'booleano') config[campo.chave] = valor === 'sim' || valor === 'true'
-    else if (campo.tipo === 'numero') config[campo.chave] = Number(valor)
+    else if (campo.tipo === 'numero') {
+      // Mesma razão do `ehMarcador` logo abaixo, e o mesmo defeito que lá já
+      // estava resolvido: num TEMPLATE o valor pode ser o buraco que quem
+      // instala preenche. `Number('{{params.tamanho}}')` é NaN, e NaN vira
+      // `null` no JSON — o campo sumiria do documento sem erro nenhum.
+      config[campo.chave] = ehMarcador(valor) ? valor : Number(valor)
+    }
     else if (campo.palavras) {
       // `{{params.x}}` num template NÃO é palavra da lista: é o buraco que quem
       // instala preenche. Traduzir aqui recusaria o catálogo inteiro na carga —

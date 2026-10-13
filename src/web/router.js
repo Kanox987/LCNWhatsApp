@@ -35,6 +35,10 @@ export function criarRoteadorWeb (aplicacao) {
     }
   })
 
+  // Programas externos que o bot usa (ffmpeg). Só leitura, e o que volta é
+  // presença e versão — nunca caminho de binário nem variável de ambiente.
+  roteador.get('/api/v1/dependencies', () => aplicacao.dependencias.listar())
+
   // --- instâncias: ciclo de vida real e otimização (agente/data plane) ---
   roteador.get('/api/v1/instances', () => aplicacao.instancias.listar())
 

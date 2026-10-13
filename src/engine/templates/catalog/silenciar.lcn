@@ -1,0 +1,46 @@
+template silenciar v1
+  nome: Silenciar no grupo
+  descrição: Marca como silenciada a pessoa que você marcar com @ ou cuja mensagem você responder. Quem silencia é este comando; quem APAGA as mensagens é a regra "Apagar mensagem de quem está silenciado" — instale as duas, senão a marca fica guardada e nada acontece. A marca vale só neste grupo.
+  categoria: modulos-especializados
+
+automação
+  nome: Silenciar no grupo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Silencia no grupo quem você marcar ou responder
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: só externos
+
+  se evento sender.isAdmin == true
+    define target_group_member silenciado = "sim"
+    responde "{{params.okText}}"
+  senão
+    responde "{{params.negadoText}}"
+
+configurável
+  command: texto = "/mute"
+    rótulo: Comando
+    ajuda: A palavra que o administrador digita marcando a pessoa, ou respondendo uma mensagem dela.
+  okText: texto = "🔇 wa.me/{{target.number}} silenciado neste grupo. As próximas mensagens dessa pessoa serão apagadas até alguém usar o /unmute."
+    rótulo: Confirmação
+    ajuda: Enviado depois de marcar a pessoa como silenciada. Deixe o {{target.number}} no texto: sem ninguém marcado ele aparece cru na resposta, e é assim que se vê que o comando foi usado sozinho — a marca não teria onde ser gravada.
+  negadoText: texto = "Só administradores do grupo podem usar este comando."
+    rótulo: Resposta para quem não é administrador
+    ajuda: Enviado quando quem digitou não é administrador do grupo — e também quando o bot ainda não conseguiu carregar a lista de administradores daquele grupo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  targetMember silenciado: texto
+    Marca que esta pessoa está silenciada NESTE grupo. Preenchido = silenciada. A mesma chave é lida pela regra que apaga as mensagens — se os nomes não baterem, o comando confirma e nada é apagado.
+
+avisa nota
+  Sozinho este comando só anota a marca. Instale junto a regra "Apagar mensagem de quem está silenciado" — é ela que apaga.
+
+avisa nota
+  Marque a pessoa com @ ou responda uma mensagem dela. Sem alvo não há onde gravar a marca, e a confirmação sai com o {{target.number}} cru — é o sinal de que o comando foi usado sozinho.
+
+# nós: gatilho-comando, e-admin, marcar, confirmar, negar

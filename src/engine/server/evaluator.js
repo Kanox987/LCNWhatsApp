@@ -571,12 +571,20 @@ function executarNo (db, no, evento, contexto, comandos) {
       const citada = evento.message?.quotedMediaRef
       const mediaRef = evento.message?.mediaRef || citada?.token
       if (mediaRef) {
+        // Tamanho, duração, qualidade e peso são do COMANDO, não do meu código.
+        // Só viajam os que o documento declarou: campo ausente deixa o gateway
+        // usar o padrão, em vez de o motor inventar um número e fixá-lo.
+        const conversao = {}
+        for (const campo of ['size', 'maxSeconds', 'quality', 'maxKilobytes']) {
+          if (Number.isFinite(no.config?.[campo])) conversao[campo] = no.config[campo]
+        }
         comandos.push({
           commandType: 'whatsapp.sticker',
           payload: {
             chatId: evento.chat.id,
             mediaRef,
-            sourceKind: evento.message?.mediaRef ? evento.message.kind : (citada?.mediaKind || null)
+            sourceKind: evento.message?.mediaRef ? evento.message.kind : (citada?.mediaKind || null),
+            ...conversao
           }
         })
       } else if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
@@ -817,6 +825,19 @@ function executarNo (db, no, evento, contexto, comandos) {
       }
       const quem = no.config?.who === 'target' ? resolverAlvo(evento) : evento.sender?.id
       if (!quem) {
+        // "/ban" sem marcar ninguém é o erro de uso mais comum deste comando, e
+        // sem texto de falta ele terminava em SILÊNCIO no WhatsApp: a execução
+        // virava `error` numa aba que quem digitou não abre. Mesma forma das
+        // outras ações do catálogo ("sem mídia", "sem arquivo") — quem declarar
+        // o aviso recebe resposta; quem não declarar continua caindo no erro
+        // registrado, que é o comportamento de antes.
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
         throw new ErroDeFluxo('Não há quem remover: o comando não indicou ninguém.')
       }
       if (no.config?.neverRemoveOwner !== false && ehDono(db, quem)) {

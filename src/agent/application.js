@@ -8,6 +8,7 @@ import { criarInstanceService } from './instanceService.js'
 import { criarDirectoryService } from './directoryService.js'
 import { criarServicoAcervo } from './mediaService.js'
 import { criarClienteEngine } from '../engine/client.js'
+import { verificarDependencias } from '../dependencias.js'
 
 export function criarAplicacao ({
   instanceService = criarInstanceService(),
@@ -45,6 +46,12 @@ export function criarAplicacao ({
       remover: (id) => mediaService.remover(id),
       descrever: (id, descricao) => mediaService.descrever(id, descricao),
       mover: (id, pasta) => mediaService.mover(id, pasta)
+    },
+    // Programas de fora (hoje só o ffmpeg). Fica deste lado e não no motor pelo
+    // mesmo motivo do acervo: quem roda processo na máquina é este processo. O
+    // que a tela mostra é o que ESTA máquina tem — ver a ressalva na tela.
+    dependencias: {
+      listar: () => verificarDependencias()
     },
     // Repassa pro motor sem esconder a forma da API dele — os Módulos 1/2
     // definem o contrato real de automations/executions; aqui é só o ponto

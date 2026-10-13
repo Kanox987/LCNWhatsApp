@@ -158,8 +158,14 @@ export const ACOES = Object.freeze([
     familia: 'midia',
     resumo: 'Pega a imagem ou vídeo da mensagem e devolve como figurinha. Funciona com a mídia enviada junto com o comando OU respondendo uma mídia já enviada.',
     exemplo: 'Mandar a foto com "/fig" escrito na legenda, ou responder uma foto com "/fig".',
-    ressalva: { level: 'requirement', text: 'Precisa de ffmpeg instalado no computador onde o bot roda.' },
-    campos: [{ chave: 'notFoundText', rotulo: 'Se não achar mídia', ajuda: 'Enviado quando o comando é usado sem imagem nem vídeo por perto.' }]
+    ressalva: { level: 'requirement', text: 'Precisa de ffmpeg instalado no computador onde o bot roda — é programa de fora, não faz parte do LCN. A Visão geral mostra se ele está lá.' },
+    campos: [
+      { chave: 'size', rotulo: 'Tamanho em pixels', ajuda: 'De 96 a 1024. Em branco usa 512, que é o tamanho padrão das figurinhas do WhatsApp. A proporção é mantida e a sobra fica transparente.' },
+      { chave: 'maxSeconds', rotulo: 'Segundos de vídeo', ajuda: 'De 1 a 30. Só vale para vídeo, que vira figurinha animada. Mais segundos, arquivo mais pesado.' },
+      { chave: 'quality', rotulo: 'Qualidade', ajuda: 'De 1 a 100. Em branco usa 80 para foto e 50 para vídeo — animada precisa de mais compressão para caber no peso.' },
+      { chave: 'maxKilobytes', rotulo: 'Peso máximo em KB', ajuda: 'De 64 a 10240. Em branco usa 1024 KB, que é o que o WhatsApp costuma aceitar. Acima do limite o comando explica quanto deu, em vez de mandar algo que seria recusado.' },
+      { chave: 'notFoundText', rotulo: 'Se não achar mídia', ajuda: 'Enviado quando o comando é usado sem imagem nem vídeo por perto.' }
+    ]
   },
   {
     tipo: 'action.whatsapp.recover',
@@ -237,7 +243,8 @@ export const ACOES = Object.freeze([
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise, em vez de tentar e falhar na frente de todo mundo.' },
     campos: [
       { chave: 'who', rotulo: 'Quem remover', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida).' },
-      { chave: 'neverRemoveOwner', rotulo: 'Nunca remover um dono', ajuda: 'Ligado por padrão. Desligue só se você quiser de propósito uma regra que vale para todos, dono incluído.' }
+      { chave: 'neverRemoveOwner', rotulo: 'Nunca remover um dono', ajuda: 'Ligado por padrão. Desligue só se você quiser de propósito uma regra que vale para todos, dono incluído.' },
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
     ]
   },
   {

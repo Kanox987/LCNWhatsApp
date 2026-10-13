@@ -12,7 +12,21 @@ import * as enviadas from '../enviadas.js'
 // participantAlt/remoteJidAlt têm prioridade sobre o LID cru — mesma
 // normalização já usada inline em connection.js, reaproveitada
 // aqui (não reinventada) por consistência.
+//
+// EM GRUPO O REMETENTE NUNCA CAI NO remoteJid, e isto é o conserto de um
+// defeito relatado ao vivo: a legenda do /x9 saía com "wa.me/120363..." — o
+// id do GRUPO apresentado como se fosse o telefone de uma pessoa. O grupo é
+// o endereço da conversa, nunca o autor dela, e a cadeia de `||` fazia essa
+// troca calada toda vez que `participant` não vinha na chave.
+//
+// Sem participant em grupo, a mensagem fica SEM autor conhecido: `sender.id`
+// indefinido faz o escopo de pessoa não resolver e a ação ser ignorada, que é
+// o desfecho honesto. Atribuí-la ao grupo seria pior que não saber — contaria
+// aviso, gravaria variável e mostraria número no lugar de alguém que não
+// existe. `connection.js:162` já decidia assim ao registrar contato; o
+// adaptador era o único lugar fora dessa regra.
 function resolverSenderId (key) {
+  if (key.isGroup) return key.participantAlt || key.participant || undefined
   return key.participantAlt || key.remoteJidAlt || key.participant || key.remoteJid
 }
 

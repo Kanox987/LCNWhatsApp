@@ -1,0 +1,33 @@
+template anti-silenciado v1
+  nome: Apagar mensagem de quem está silenciado
+  descrição: A outra metade do /mute: apaga toda mensagem de quem estiver marcado como silenciado NESTE grupo. Sem esta regra instalada, o /mute só anota a marca e nada acontece.
+  categoria: modulos-especializados
+
+automação
+  nome: Apagar mensagem de quem está silenciado
+  tipo: vigia
+  dispara com: qualquer mensagem
+  pool: {{params.poolId}}
+  acessa: texto, foto, vídeo, áudio, documento
+  também em comandos
+  quem: só externos
+
+  se var group_member silenciado == "sim"
+    apaga mensagem
+
+configurável
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa esta regra.
+
+declara
+  member silenciado: texto
+    A marca que o /mute grava nesta pessoa dentro deste grupo. "sim" = silenciada. Os dois comandos e esta regra precisam usar exatamente esta chave; nomes diferentes fazem o par falhar sem erro nenhum.
+
+avisa exige
+  Para apagar mensagens o número precisa ser ADMINISTRADOR do grupo. Sem isso o WhatsApp recusa e a tentativa aparece como falha no histórico.
+
+avisa nota
+  Vale também para mensagens que são comandos — quem está silenciado não aciona o bot.
+
+# nós: gatilho-mensagem, esta-silenciado, apagar

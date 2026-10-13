@@ -35,7 +35,13 @@ export const ACOES = Object.freeze([
   {
     palavra: 'figurinha',
     tipo: 'action.whatsapp.sticker',
-    campos: [{ chave: 'notFoundText', rotulo: 'sem mídia', tipo: 'texto' }]
+    campos: [
+      { chave: 'size', rotulo: 'tamanho', tipo: 'numero' },
+      { chave: 'maxSeconds', rotulo: 'segundos', tipo: 'numero' },
+      { chave: 'quality', rotulo: 'qualidade', tipo: 'numero' },
+      { chave: 'maxKilobytes', rotulo: 'peso máximo em KB', tipo: 'numero' },
+      { chave: 'notFoundText', rotulo: 'sem mídia', tipo: 'texto' }
+    ]
   },
   {
     palavra: 'recupera',
@@ -121,7 +127,8 @@ export const ACOES = Object.freeze([
     tipo: 'action.group.remove',
     campos: [
       { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
-      { chave: 'neverRemoveOwner', rotulo: 'nunca o dono', tipo: 'booleano' }
+      { chave: 'neverRemoveOwner', rotulo: 'nunca o dono', tipo: 'booleano' },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
     ]
   },
   {

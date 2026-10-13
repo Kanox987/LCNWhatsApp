@@ -129,7 +129,17 @@ async function executarFigurinha (client, comando, deps) {
   }
 
   const bruto = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
-  const figurinha = await converterParaFigurinha(bruto, { animada: ehAnimada(entrada.tipo) })
+  // `limiteBytes` acima é o teto de ENTRADA (o que se aceita baixar do
+  // WhatsApp, limite de operação da máquina); `maxBytes` abaixo é o teto da
+  // figurinha PRONTA, que é escolha de quem montou o comando. Confundir os
+  // dois faria a configuração do comando mexer no consumo do processo.
+  const figurinha = await converterParaFigurinha(bruto, {
+    animada: ehAnimada(entrada.tipo),
+    tamanho: comando.payload.size,
+    duracaoMaxSegundos: comando.payload.maxSeconds,
+    qualidade: comando.payload.quality,
+    limiteBytes: Number.isFinite(comando.payload.maxKilobytes) ? comando.payload.maxKilobytes * 1024 : undefined
+  })
 
   await comTimeout(
     () => enviarERegistrar(client, comando.payload.chatId, { type: 'sticker', media: figurinha }),

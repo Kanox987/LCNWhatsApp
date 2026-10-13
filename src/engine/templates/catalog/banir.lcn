@@ -1,0 +1,44 @@
+template banir v1
+  nome: Banir do grupo
+  descrição: Remove do grupo a pessoa que você marcar com @ ou cuja mensagem você responder. Só quem é administrador do grupo consegue usar, e o dono do bot nunca é removido.
+  categoria: modulos-especializados
+
+automação
+  nome: Banir do grupo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Remove do grupo quem você marcar ou responder
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: só externos
+
+  se evento sender.isAdmin == true
+    remove do grupo
+      quem: quem foi marcado
+      nunca o dono: true
+      sem alvo: "{{params.semAlvoText}}"
+  senão
+    responde "{{params.negadoText}}"
+
+configurável
+  command: texto = "/ban"
+    rótulo: Comando
+    ajuda: A palavra que o administrador digita marcando a pessoa, ou respondendo uma mensagem dela.
+  semAlvoText: texto = "Marque a pessoa com @ ou responda uma mensagem dela — sem isso eu não sei quem remover."
+    rótulo: Aviso quando ninguém foi marcado
+    ajuda: Sem este texto o comando não responde nada quando usado sozinho, e a falta só aparece na aba Execuções.
+  negadoText: texto = "Só administradores do grupo podem usar este comando."
+    rótulo: Resposta para quem não é administrador
+    ajuda: Enviado quando quem digitou não é administrador do grupo — e também quando o bot ainda não conseguiu carregar a lista de administradores daquele grupo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Para remover alguém, o NÚMERO DO BOT precisa ser administrador do grupo. Sem isso o WhatsApp recusa e a remoção aparece como falha no histórico.
+
+avisa nota
+  A conferência de administrador usa a lista de participantes que o bot carrega do grupo. Enquanto essa lista não chegar, o comando responde como se quem digitou não fosse administrador — é recusa visível, nunca remoção por engano.
+
+# nós: gatilho-comando, e-admin, remover, negar

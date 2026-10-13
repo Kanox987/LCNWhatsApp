@@ -12,13 +12,51 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
-// 512x512 é o tamanho canônico da figurinha. `force_original_aspect_ratio=
-// decrease` + `pad` mantém a proporção original e completa o resto com
-// transparência, em vez de esticar a imagem.
-const FILTRO = 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000'
+// Os números da conversão, e por que eles NÃO são constantes minhas.
+//
+// Eram: 512 px, 6 segundos, qualidade 80/50, 1 MB. Todos escolhidos por mim e
+// enterrados aqui, onde o dono do bot não alcança — a mesma crítica que ele fez
+// ao download ("aparece no código interno e não como configurável pelo dono").
+// Agora cada comando de figurinha declara os seus; isto aqui é só o PADRÃO de
+// quem não declarar nada.
+//
+// 512x512 é o tamanho canônico da figurinha do WhatsApp — por isso é o padrão,
+// não por isso é a única opção.
+export const PADRAO = Object.freeze({
+  tamanho: 512,
+  duracaoMaxSegundos: 6,
+  qualidadeEstatica: 80,
+  qualidadeAnimada: 50,
+  limiteBytes: 1024 * 1024,
+  timeoutMs: 30000
+})
 
-const LIMITE_FIGURINHA_BYTES = 1024 * 1024
-const TIMEOUT_MS = 30000
+// Os LIMITES existem para o que quebraria a própria máquina, e só para isso:
+// um webp animado de 2048 px por 5 minutos come o container inteiro. Dentro da
+// faixa, a escolha é de quem monta o comando.
+//
+// Quem impõe isto de verdade é o schema, na PUBLICAÇÃO — ali o número fora da
+// faixa é recusado com a faixa junto, e a pessoa vê. O aperto aqui é rede de
+// segurança para documento que tenha entrado por outro caminho, e nunca
+// inventa valor: fora da faixa, volta para a borda mais próxima.
+export const FAIXAS = Object.freeze({
+  tamanho: { min: 96, max: 1024 },
+  duracaoMaxSegundos: { min: 1, max: 30 },
+  qualidade: { min: 1, max: 100 },
+  limiteBytes: { min: 64 * 1024, max: 10 * 1024 * 1024 }
+})
+
+function dentroDaFaixa (valor, faixa, padrao) {
+  const n = Number(valor)
+  if (!Number.isFinite(n)) return padrao
+  return Math.min(faixa.max, Math.max(faixa.min, Math.round(n)))
+}
+
+// `force_original_aspect_ratio=decrease` + `pad` mantém a proporção original e
+// completa o resto com transparência, em vez de esticar a imagem.
+function filtroDeEscala (lado) {
+  return `scale=${lado}:${lado}:force_original_aspect_ratio=decrease,pad=${lado}:${lado}:(ow-iw)/2:(oh-ih)/2:color=#00000000`
+}
 
 export class ErroDeFigurinha extends Error {}
 
@@ -61,10 +99,19 @@ function rodarFfmpeg (args, { timeoutMs = TIMEOUT_MS } = {}) {
 // Converte um buffer de imagem ou vídeo curto em WebP de figurinha.
 // `animada` decide entre figurinha estática e animada — vídeo/gif viram
 // animadas, limitadas em duração porque o WhatsApp recusa figurinha grande.
-export async function converterParaFigurinha (buffer, { animada = false, duracaoMaxSegundos = 6 } = {}) {
+// O resto (`tamanho`, `duracaoMaxSegundos`, `qualidade`, `limiteBytes`) vem do
+// comando que o dono montou; ausente, cai no PADRÃO acima.
+export async function converterParaFigurinha (buffer, opcoes = {}) {
+  const { animada = false } = opcoes
   if (!Buffer.isBuffer(buffer) || !buffer.length) {
     throw new ErroDeFigurinha('Não veio mídia nenhuma para transformar em figurinha.')
   }
+
+  const tamanho = dentroDaFaixa(opcoes.tamanho, FAIXAS.tamanho, PADRAO.tamanho)
+  const duracaoMaxSegundos = dentroDaFaixa(opcoes.duracaoMaxSegundos, FAIXAS.duracaoMaxSegundos, PADRAO.duracaoMaxSegundos)
+  const qualidade = dentroDaFaixa(opcoes.qualidade, FAIXAS.qualidade,
+    animada ? PADRAO.qualidadeAnimada : PADRAO.qualidadeEstatica)
+  const limiteBytes = dentroDaFaixa(opcoes.limiteBytes, FAIXAS.limiteBytes, PADRAO.limiteBytes)
 
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-fig-'))
   const entrada = path.join(pasta, `entrada-${randomUUID()}`)
@@ -75,20 +122,26 @@ export async function converterParaFigurinha (buffer, { animada = false, duracao
 
     const args = ['-y', '-hide_banner', '-loglevel', 'error']
     if (animada) args.push('-t', String(duracaoMaxSegundos))
-    args.push('-i', entrada, '-vf', FILTRO, '-c:v', 'libwebp', '-an')
+    args.push('-i', entrada, '-vf', filtroDeEscala(tamanho), '-c:v', 'libwebp', '-an')
     if (animada) {
-      args.push('-loop', '0', '-preset', 'default', '-q:v', '50', '-fps_mode', 'passthrough')
+      args.push('-loop', '0', '-preset', 'default', '-q:v', String(qualidade), '-fps_mode', 'passthrough')
     } else {
-      args.push('-frames:v', '1', '-q:v', '80')
+      args.push('-frames:v', '1', '-q:v', String(qualidade))
     }
     args.push(saida)
 
-    await rodarFfmpeg(args)
+    await rodarFfmpeg(args, { timeoutMs: PADRAO.timeoutMs })
 
     const resultado = fs.readFileSync(saida)
     if (!resultado.length) throw new ErroDeFigurinha('A conversão terminou sem gerar figurinha nenhuma.')
-    if (resultado.length > LIMITE_FIGURINHA_BYTES) {
-      throw new ErroDeFigurinha('A figurinha ficou grande demais para o WhatsApp aceitar — tente uma mídia menor ou mais curta.')
+    if (resultado.length > limiteBytes) {
+      // O peso entra na mensagem: sem ele a pessoa não sabe se passou por pouco
+      // (baixar a qualidade resolve) ou se o vídeo é longo demais.
+      const kb = (n) => `${Math.round(n / 1024)} KB`
+      throw new ErroDeFigurinha(
+        `A figurinha ficou em ${kb(resultado.length)} e o limite deste comando é ${kb(limiteBytes)} — ` +
+        'tente uma mídia menor, mais curta, ou baixe a qualidade do comando.'
+      )
     }
     return resultado
   } finally {

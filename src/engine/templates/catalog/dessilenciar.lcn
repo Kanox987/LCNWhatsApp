@@ -1,0 +1,43 @@
+template dessilenciar v1
+  nome: Liberar quem está silenciado
+  descrição: Desfaz o /mute: tira a marca de silenciado da pessoa que você marcar com @ ou cuja mensagem você responder. Usa a mesma chave do comando que silencia — "silenciado" — e vale só neste grupo.
+  categoria: modulos-especializados
+
+automação
+  nome: Liberar quem está silenciado
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Libera quem você silenciou no grupo
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: só externos
+
+  se evento sender.isAdmin == true
+    define target_group_member silenciado = ""
+    responde "{{params.okText}}"
+  senão
+    responde "{{params.negadoText}}"
+
+configurável
+  command: texto = "/unmute"
+    rótulo: Comando
+    ajuda: A palavra que o administrador digita marcando a pessoa, ou respondendo uma mensagem dela.
+  okText: texto = "🔊 wa.me/{{target.number}} liberado. As mensagens dessa pessoa não serão mais apagadas."
+    rótulo: Confirmação
+    ajuda: Enviado depois de tirar a marca. Deixe o {{target.number}} no texto: sem ninguém marcado ele aparece cru na resposta, e é assim que se vê que o comando foi usado sozinho.
+  negadoText: texto = "Só administradores do grupo podem usar este comando."
+    rótulo: Resposta para quem não é administrador
+    ajuda: Enviado quando quem digitou não é administrador do grupo — e também quando o bot ainda não conseguiu carregar a lista de administradores daquele grupo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  targetMember silenciado: texto
+    A mesma marca que o /mute grava. Vazio = liberada.
+
+avisa nota
+  Marque a pessoa com @ ou responda uma mensagem dela.
+
+# nós: gatilho-comando, e-admin, liberar, confirmar, negar

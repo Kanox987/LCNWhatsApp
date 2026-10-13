@@ -65,6 +65,7 @@ function withQuery (path, values = {}) {
 
 export const api = {
   health: () => request('/health'),
+  dependencies: () => request('/dependencies'),
   instances: {
     list: () => request('/instances'),
     get: (id) => request(`/instances/${segment(id)}`),

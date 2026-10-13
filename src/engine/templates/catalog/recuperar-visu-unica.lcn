@@ -1,4 +1,4 @@
-template recuperar-visu-unica v1
+template recuperar-visu-unica v2
   nome: Recuperar visualização única
   descrição: O comando que deu origem a este projeto: responda uma mídia de visualização única e ela é reenviada como mídia normal para a conversa que você escolheu no /configrecover. Sem nada configurado, vai para as suas mensagens salvas. Para recuperar NA PRÓPRIA conversa, use o /x9.
   categoria: utilitarios
@@ -30,9 +30,9 @@ configurável
   destination: texto = "configured"
     rótulo: Para onde reenviar
     ajuda: "configured" usa a conversa gravada pelo /configrecover (e cai para mensagens salvas enquanto ninguém configurou). "saved_messages" força as mensagens salvas; "same_chat" reenvia na própria conversa.
-  caption: texto = "👁 *VISUALIZAÇÃO ÚNICA CAPTURADA*\n\n👤 Nome: {{sender.name}}\n📱 Número: wa.me/{{sender.number}}\n🗂 Tipo: {{media.kind}}\n🕒 {{now.date}} {{now.time}}"
+  caption: texto = "👁 *VISUALIZAÇÃO ÚNICA CAPTURADA*\n\n📱 De: wa.me/{{quoted.number}}\n🗂 Tipo: {{media.kind}}\n🕒 {{now.date}} {{now.time}}"
     rótulo: Legenda da mídia recuperada
-    ajuda: Texto que acompanha a mídia reenviada. Aceita as variáveis do sistema — {{media.kind}} diz se é foto, vídeo ou áudio.
+    ajuda: Texto que acompanha a mídia reenviada. {{quoted.number}} é o número de quem MANDOU a visualização única — não confunda com {{sender.number}}, que é quem digitou o comando (respondendo a si mesmo, dá na mesma; respondendo outra pessoa, mostra a errada). {{media.kind}} diz se é foto, vídeo ou áudio. Variável que não resolver aparece do jeito que está, de propósito: é assim que o erro não passa batido.
   notFoundText: texto = "Responda uma mídia de visualização única com este comando pra eu recuperar."
     rótulo: Aviso quando não achar
     ajuda: Texto enviado quando o comando é usado sem responder uma visualização única.

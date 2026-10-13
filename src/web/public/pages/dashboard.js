@@ -67,6 +67,29 @@ function instanceCard (instance, navigate) {
   ])
 }
 
+// Programas de fora de que o bot depende. Não é decoração: sem o ffmpeg o
+// comando de figurinha responde erro, e até agora a única forma de descobrir
+// isso era alguém reclamar.
+function dependenciaCard (dep) {
+  return el('article', { className: 'instance-card' }, [
+    el('div', { className: 'instance-card-head' }, [
+      el('div', {}, [
+        el('p', { className: 'mono overline', text: 'programa externo' }),
+        el('h2', { text: dep.nome })
+      ]),
+      dep.presente ? badge('Instalado', 'success') : badge('Não encontrado', 'warning')
+    ]),
+    el('dl', { className: 'metrics-grid' }, [
+      el('div', {}, [el('dt', { text: 'Versão' }), el('dd', { text: dep.versao || '—' })]),
+      el('div', {}, [el('dt', { text: 'Usado por' }), el('dd', { text: dep.usadoPor })])
+    ]),
+    // Faltar não é alarme: é UM comando que para. Dizer exatamente o que para
+    // evita tanto o susto quanto a surpresa depois.
+    el('p', { text: dep.presente ? dep.semEla : `${dep.motivo}. ${dep.semEla}` }),
+    dep.presente ? null : el('p', { className: 'mono', text: dep.comoInstalar })
+  ].filter(Boolean))
+}
+
 export async function renderDashboard ({ navigate, refresh }) {
   setPageHeader({
     eyebrow: 'Visão geral',
@@ -75,9 +98,12 @@ export async function renderDashboard ({ navigate, refresh }) {
     actions: [button('Atualizar', { onClick: refresh })]
   })
 
-  const [instances, healthResult] = await Promise.all([
+  const [instances, healthResult, dependencias] = await Promise.all([
     api.instances.list(),
-    api.health().catch((error) => ({ web: 'down', engine: 'down', reason: error.message }))
+    api.health().catch((error) => ({ web: 'down', engine: 'down', reason: error.message })),
+    // Falhar a conferência não pode derrubar a tela inteira: lista vazia some
+    // da página, e o resto continua.
+    api.dependencies().catch(() => [])
   ])
   const root = el('div', { className: 'stack-lg' })
   const healthTone = healthResult.engine === 'ok' ? 'success' : 'warning'
@@ -86,8 +112,28 @@ export async function renderDashboard ({ navigate, refresh }) {
     healthResult.reason ? el('p', { text: healthResult.reason }) : null
   ]))
 
+  const secaoDependencias = () => {
+    if (!dependencias.length) return null
+    const faltando = dependencias.filter((d) => !d.presente).length
+    return el('div', { className: 'stack-lg' }, [
+      el('div', { className: 'section-heading' }, [
+        el('div', {}, [
+          el('h2', { text: 'Programas externos' }),
+          el('p', {
+            text: faltando
+              ? `${faltando} não ${faltando === 1 ? 'foi encontrado' : 'foram encontrados'} nesta máquina. Não fazem parte do LCN: são instalados no sistema.`
+              : 'Programas que não fazem parte do LCN e que alguns comandos usam. Conferido na máquina onde o painel roda.'
+          })
+        ])
+      ]),
+      el('div', { className: 'card-grid' }, dependencias.map(dependenciaCard))
+    ])
+  }
+
   if (!instances.length) {
     root.append(emptyState('Nenhuma instância cadastrada', 'Crie uma instância pela ferramenta de terminal; ela aparecerá aqui automaticamente.'))
+    const deps = secaoDependencias()
+    if (deps) root.append(deps)
     return root
   }
   const conectadas = instances.filter((instance) => instance.connected === true).length
@@ -100,5 +146,7 @@ export async function renderDashboard ({ navigate, refresh }) {
     ]),
     el('div', { className: 'card-grid' }, instances.map((instance) => instanceCard(instance, navigate)))
   )
+  const deps = secaoDependencias()
+  if (deps) root.append(deps)
   return root
 }
