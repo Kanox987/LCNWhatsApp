@@ -65,7 +65,10 @@ function linhaDeAcao (no) {
     linhas.push(`${IDENT}${def.mapa.bloco}`)
     // O arquivo primeiro: numa chamada que converte mídia, ele é o assunto, e
     // o resto são ajustes em cima dele.
-    if (nomeDoArquivo) linhas.push(`${IDENT}${IDENT}${nomeDoArquivo}: ${def.arquivo.palavra}`)
+    if (nomeDoArquivo) {
+      const daChamadaAnterior = def.origemDoArquivo && cfg[def.origemDoArquivo.chave] === def.origemDoArquivo.valor
+      linhas.push(`${IDENT}${IDENT}${nomeDoArquivo}: ${daChamadaAnterior ? def.origemDoArquivo.palavra : def.arquivo.palavra}`)
+    }
     for (const [nome, valor] of Object.entries(entradasDoMapa)) {
       // O caminho de volta do `o link`: o marcador interno nunca aparece na
       // linguagem.

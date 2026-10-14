@@ -192,6 +192,12 @@ function lerAcao (linha, filhas) {
         config[def.arquivo.chave] = filha.texto.slice(0, sep).trim()
         continue
       }
+      // "o resultado": o arquivo vem da chamada ANTERIOR, não da mensagem.
+      if (def.origemDoArquivo && cru === def.origemDoArquivo.palavra) {
+        config[def.arquivo.chave] = filha.texto.slice(0, sep).trim()
+        config[def.origemDoArquivo.chave] = def.origemDoArquivo.valor
+        continue
+      }
       // Entre aspas é TEXTO, sempre. Sem aspas, o tipo é o que a entrada
       // declarada espera: um campo de peso recebe número, e a entrada da
       // conexão tem tipo. Antes tudo virava texto, e o número instalado pelo

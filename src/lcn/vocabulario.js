@@ -78,6 +78,10 @@ export const ACOES = Object.freeze([
     // fora de `inputs`, porque ali tudo passa pelo interpolador e token de
     // mídia no interpolador é o que o invariante 4 proíbe.
     arquivo: { palavra: 'a mídia', chave: 'mediaInput' },
+    // De ONDE vem o arquivo. "a mídia" é a da mensagem; "o resultado" é o que
+    // a chamada anterior devolveu — é o que faz duas chamadas em sequência
+    // virarem um cano, em vez de duas chamadas soltas sobre a mesma mídia.
+    origemDoArquivo: { palavra: 'o resultado', chave: 'mediaFrom', valor: 'resultado' },
     campos: [
       { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { album: 'carrossel', separate: 'separado' } },
       { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },

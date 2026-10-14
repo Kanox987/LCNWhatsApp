@@ -525,7 +525,7 @@ function compararValores (esquerda, operador, direita) {
 // Executa UM nó e devolve por qual aresta seguir ('success' para ação,
 // 'true'/'false' para condição). Só roda no caminho ao vivo — em sombra
 // nada aqui é chamado, então nenhum efeito é persistido.
-function executarNo (db, no, evento, contexto, comandos) {
+function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
   switch (no.type) {
     case 'action.whatsapp.reply': {
       const payload = { chatId: evento.chat.id, text: interpolar(no.config.text, contexto) }
@@ -654,8 +654,13 @@ function executarNo (db, no, evento, contexto, comandos) {
       // As duas origens, as mesmas da figurinha e as duas necessárias: a mídia
       // mandada COM o comando na legenda, e o comando RESPONDENDO uma mídia.
       const citadaDeMidia = evento.message?.quotedMediaRef
+      // De ONDE vem o arquivo. "resultado" é o da chamada anterior, e ele só
+      // existe numa retomada — o token chega no contexto, não no evento.
+      const daChamadaAnterior = no.config?.mediaFrom === 'resultado'
       const refDeMidia = no.config?.mediaInput
-        ? (evento.message?.mediaRef || citadaDeMidia?.token || null)
+        ? (daChamadaAnterior
+            ? (contexto.__resultado?.token || null)
+            : (evento.message?.mediaRef || citadaDeMidia?.token || null))
         : null
 
       // Falta o que a função precisa — e "falta" tem duas formas. Sem nenhuma
@@ -695,8 +700,15 @@ function executarNo (db, no, evento, contexto, comandos) {
           ...(refDeMidia ? {
             mediaInput: no.config.mediaInput,
             mediaRef: refDeMidia,
-            sourceKind: evento.message?.mediaRef ? evento.message.kind : (citadaDeMidia?.mediaKind || null)
+            sourceKind: daChamadaAnterior
+              ? (contexto.__resultado?.tipo || null)
+              : (evento.message?.mediaRef ? evento.message.kind : (citadaDeMidia?.mediaKind || null))
           } : {}),
+          // CANO: tem passo depois, então o gateway NÃO entrega — ele devolve
+          // o resultado e o motor retoma daqui. Sem esta marca os dois passos
+          // sairiam ao mesmo tempo, cada um pegando a mídia da mensagem: a
+          // sequência compila hoje e faz a coisa errada em silêncio.
+          ...(temSucessor ? { encadeado: true, retomarDe: no.id } : {}),
           entrega: no.config?.delivery || 'album',
           replyTo: referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
@@ -704,7 +716,14 @@ function executarNo (db, no, evento, contexto, comandos) {
           ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
         }
       })
-      return 'success'
+      // O FLUXO DORME AQUI quando há passo depois.
+      //
+      // Sem isto o caminhador seguia na hora para o nó seguinte, e os dois
+      // comandos saíam juntos — cada um pegando a mídia da mensagem. O
+      // segundo nem chegava a funcionar: ele espera o arquivo do primeiro, que
+      // ainda não existe. Nenhuma aresta casa com "dormindo", então a
+      // caminhada para; quem continua é a retomada, quando o resultado chega.
+      return temSucessor ? 'dormindo' : 'success'
     }
 
     case 'action.whatsapp.recover': {
@@ -980,7 +999,7 @@ function executarNo (db, no, evento, contexto, comandos) {
 // gatilho, seguindo a saída que cada nó devolve. Substituiu a antiga coleta
 // linear, que só conhecia "success" e encerrava em SILÊNCIO ao revisitar um
 // nó — com ramificação, silêncio viraria execução pela metade sem ninguém saber.
-function executarFluxo (db, documento, triggerId, evento) {
+function executarFluxo (db, documento, triggerId, evento, retomada = null) {
   const nodesPorId = new Map(documento.flow.nodes.map((n) => [n.id, n]))
   const gatilho = nodesPorId.get(triggerId)
   const comandos = []
@@ -1066,7 +1085,27 @@ function executarFluxo (db, documento, triggerId, evento) {
   // O publish já rejeita ciclo, então o limite é rede de segurança contra
   // documento adulterado direto no banco ou revisão antiga de antes da regra.
   const limitePassos = documento.flow.nodes.length
-  let edge = documento.flow.edges.find((e) => e.from === triggerId && e.on === 'matched')
+  // RETOMADA: o fluxo parou numa chamada que foi dormir, e o resultado dela
+  // chegou. Continua da aresta que sai daquele nó, com o resultado no
+  // contexto. O nó já executado entra em `visitados` para a trava de "duas
+  // vezes" continuar valendo através da retomada.
+  let edge
+  if (retomada) {
+    visitados.add(retomada.nodeId)
+    contexto.__resultado = retomada.resultado || null
+    // Só o que é INFORMAÇÃO entra no que dá para escrever num texto. O token
+    // do arquivo fica fora, como todo token — invariante 4 não muda porque a
+    // mídia agora vem de uma chamada em vez da conversa.
+    const r = retomada.resultado || {}
+    contexto.resultado = {
+      ...(r.tipo ? { tipo: r.tipo } : {}),
+      ...(r.mime ? { mime: r.mime } : {}),
+      ...(typeof r.texto === 'string' ? { texto: r.texto } : {})
+    }
+    edge = documento.flow.edges.find((e) => e.from === retomada.nodeId && e.on === 'success')
+  } else {
+    edge = documento.flow.edges.find((e) => e.from === triggerId && e.on === 'matched')
+  }
   let passos = 0
 
   while (edge) {
@@ -1076,7 +1115,8 @@ function executarFluxo (db, documento, triggerId, evento) {
     if (visitados.has(no.id)) throw new ErroDeFluxo(`O nó "${no.id}" seria executado duas vezes.`)
     visitados.add(no.id)
 
-    const saida = executarNo(db, no, evento, contexto, comandos)
+    const temSucessor = documento.flow.edges.some((e) => e.from === no.id && e.on === 'success')
+    const saida = executarNo(db, no, evento, contexto, comandos, temSucessor)
     edge = documento.flow.edges.find((e) => e.from === no.id && e.on === saida)
   }
 
@@ -1367,16 +1407,99 @@ export function fecharPendentesAntigos (db, { idadeMaximaMs = 24 * 60 * 60 * 100
   return resultado.changes
 }
 
-export function registrarResultadoExecucao (db, commandId, { status, detail } = {}) {
+// Quantas chamadas uma cadeia pode encadear.
+//
+// O limite de passos do fluxo não alcança a retomada: cada pedaço é uma
+// execução nova, e sem teto próprio um documento torto giraria para sempre, um
+// comando de cada vez. Oito é folgado para o que a linguagem escreve e curto o
+// bastante para o giro parar.
+const LIMITE_DE_ELOS = 8
+
+// O resultado de uma chamada que foi dormir.
+//
+// Só token e rótulos: o arquivo em si nunca volta ao motor, nem aqui. É o
+// mesmo contrato da mídia que chega pela conversa, usado na outra direção —
+// o gateway guarda os bytes e devolve a referência opaca.
+function resultadoValidado (resultado) {
+  if (!resultado || typeof resultado !== 'object' || Array.isArray(resultado)) return null
+  const limpo = {}
+  for (const campo of ['token', 'tipo', 'mime', 'texto']) {
+    if (typeof resultado[campo] === 'string' && resultado[campo]) limpo[campo] = resultado[campo]
+  }
+  return Object.keys(limpo).length ? limpo : null
+}
+
+// O fluxo continua de onde parou.
+//
+// A ideia é do dono: "comandos que ficam aguardando uma resposta ficam
+// dormindo até serem respondidos". A fila já existia — o que faltava era a
+// confirmação trazer o RESULTADO e o motor saber retomar. Nada de estado novo:
+// o evento original está em `inbound_events`, o documento na revisão, e onde
+// parar está no próprio comando.
+function retomarFluxo (db, comando, resultado) {
+  const payload = jsonOuNull(comando.payload_json) || {}
+  if (!payload.encadeado || !payload.retomarDe) return
+  const run = db.prepare('SELECT * FROM automation_runs WHERE id = ?').get(comando.run_id)
+  if (!run || run.deployment_mode !== 'live') return
+
+  const elos = db.prepare('SELECT COUNT(*) AS n FROM outbound_commands WHERE run_id = ?').get(run.id)
+  if (elos.n >= LIMITE_DE_ELOS) {
+    db.prepare('UPDATE automation_runs SET detail_json = ? WHERE id = ?')
+      .run(JSON.stringify({ message: `A cadeia passou de ${LIMITE_DE_ELOS} chamadas e foi interrompida.` }), run.id)
+    return
+  }
+
+  const revisao = db.prepare('SELECT doc_json FROM automation_revisions WHERE id = ?').get(run.automation_revision_id)
+  const documento = revisao ? jsonOuNull(revisao.doc_json) : null
+  const linhaEvento = db.prepare('SELECT raw_json, account_id FROM inbound_events WHERE id = ?').get(run.event_id)
+  const evento = linhaEvento ? jsonOuNull(linhaEvento.raw_json) : null
+  if (!documento || !evento) return
+
+  const gatilho = acharTrigger(documento)
+  if (!gatilho) return
+
+  let novos = []
+  try {
+    novos = executarFluxo(db, documento, gatilho.id, evento, { nodeId: payload.retomarDe, resultado })
+  } catch (erro) {
+    if (!(erro instanceof ErroDeFluxo) && !(erro instanceof ErroDeContador)) throw erro
+    db.prepare('UPDATE automation_runs SET status = ?, detail_json = ? WHERE id = ?')
+      .run('error', JSON.stringify({ message: erro.message }), run.id)
+    return
+  }
+
+  // Os comandos novos entram no MESMO run: a aba Execuções mostra a cadeia
+  // inteira como uma coisa só, que é o que ela é.
+  const agora = new Date().toISOString()
+  const inserir = db.prepare(`INSERT INTO outbound_commands
+    (id, run_id, target_account_id, command_type, payload_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+  for (const cmd of novos) {
+    inserir.run(crypto.randomUUID(), run.id, linhaEvento.account_id, cmd.commandType, JSON.stringify(cmd.payload), agora)
+  }
+}
+
+export function registrarResultadoExecucao (db, commandId, { status, detail, resultado } = {}) {
   if (!['sent', 'failed', 'outcome_unknown'].includes(status)) {
     throw new ErroHttp(400, "status deve ser 'sent', 'failed' ou 'outcome_unknown'.")
   }
   const row = db.prepare('SELECT * FROM outbound_commands WHERE id = ?').get(commandId)
   if (!row) throw new ErroHttp(404, `Comando não encontrado: ${commandId}.`)
-  db.prepare('UPDATE outbound_commands SET status = ?, resolved_at = ? WHERE id = ?')
-    .run(status, new Date().toISOString(), commandId)
-  if (detail !== undefined) {
-    db.prepare('UPDATE automation_runs SET detail_json = ? WHERE id = ?').run(JSON.stringify(detail), row.run_id)
-  }
+
+  const fechar = db.transaction(() => {
+    db.prepare('UPDATE outbound_commands SET status = ?, resolved_at = ? WHERE id = ?')
+      .run(status, new Date().toISOString(), commandId)
+    if (detail !== undefined) {
+      db.prepare('UPDATE automation_runs SET detail_json = ? WHERE id = ?').run(JSON.stringify(detail), row.run_id)
+    }
+    // ACORDA UMA VEZ SÓ. A confirmação pode chegar duas vezes (reenvio,
+    // gateway que subiu de novo), e retomar duas vezes faria o passo seguinte
+    // acontecer em dobro — mandar a figurinha duas vezes, gravar o arquivo
+    // duas vezes. Só a transição de `pending` para `sent` acorda.
+    if (row.status === 'pending' && status === 'sent') {
+      retomarFluxo(db, row, resultadoValidado(resultado))
+    }
+  })
+  fechar()
   return exporComando(db.prepare('SELECT * FROM outbound_commands WHERE id = ?').get(commandId))
 }

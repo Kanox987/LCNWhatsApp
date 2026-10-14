@@ -57,10 +57,10 @@ function resolverTextoComLatencia (texto, receivedAtMs) {
   return texto.replaceAll('{{latencyMs}}', String(Date.now() - receivedAtMs))
 }
 
-async function confirmarFailOpen (clienteEngine, comando, status) {
+async function confirmarFailOpen (clienteEngine, comando, status, resultado = null) {
   try {
     await comTimeout(
-      () => clienteEngine.execucoes.confirmar(comando.id, { status }),
+      () => clienteEngine.execucoes.confirmar(comando.id, { status, ...(resultado ? { resultado } : {}) }),
       TIMEOUT_CONFIRMACAO_MS,
       `timeout ao confirmar o comando ${comando.id}`
     )
@@ -380,7 +380,13 @@ async function executarChamadaDeConexao (client, comando, deps) {
       await avisar(recado)
       throw new Error('a mídia da chamada de conexão expirou antes do comando voltar do motor')
     }
-    const buffer = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
+    // O arquivo pode já estar AQUI: quando ele veio de uma chamada anterior da
+    // cadeia, os bytes nunca saíram deste processo — o cache guardou o próprio
+    // buffer em vez de um nó do WhatsApp. Tentar baixar de novo seria pedir ao
+    // WhatsApp uma mídia que nunca foi dele.
+    const buffer = entrada.node?.lcnBuffer
+      ? entrada.node.lcnBuffer
+      : await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
     // O mime vem do nó da mídia — é o que o WhatsApp disse que aquilo é, e vale
     // mais que a categoria. `entrada.tipo` é só "image/video/audio".
     const mime = entrada.node?.mimetype || mimeProvavel(entrada.tipo)
@@ -400,6 +406,34 @@ async function executarChamadaDeConexao (client, comando, deps) {
   } catch (erro) {
     await avisar(mensagemParaPessoa(erro))
     throw erro
+  }
+
+  // ELO DE CADEIA: não entrega nada. Guarda o arquivo aqui mesmo — no mesmo
+  // cache da mídia que chega pela conversa — e devolve a REFERÊNCIA. O motor
+  // retoma o fluxo com ela e o passo seguinte a recebe como arquivo.
+  //
+  // O invariante 4 não muda de lado: os bytes continuam só neste processo, e o
+  // que atravessa é token. É o contrato de sempre, usado na outra direção.
+  if (comando.payload.encadeado) {
+    if (resultado.forma === 'texto') {
+      const texto = typeof resultado.dados === 'string' ? resultado.dados : JSON.stringify(resultado.dados)
+      return { texto }
+    }
+    const primeira = (resultado.midias || [])[0]
+    if (!primeira) {
+      await avisar('a chamada terminou mas não veio arquivo nenhum')
+      throw new Error(`a chamada ${conexao}.${funcao} não devolveu arquivo para o passo seguinte`)
+    }
+    // Mais de um arquivo no meio de um cano é ambíguo: qual deles segue? Em
+    // vez de escolher calado, o primeiro segue e o resto é dito.
+    if ((resultado.midias || []).length > 1) {
+      await nota(`⚠️ A conversão devolveu ${resultado.midias.length} arquivos e o próximo passo usa só o primeiro.`)
+    }
+    return {
+      token: mediaRefCache.criar({ node: { lcnBuffer: primeira.buffer, mimetype: primeira.mime }, tipo: primeira.tipo, interno: {} }),
+      tipo: primeira.tipo,
+      mime: primeira.mime
+    }
   }
 
   // Resposta de texto vai como texto. É o caso de uma IA, de uma consulta de
@@ -759,6 +793,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       'acervo.save': executarGuardarNoAcervo
     }[comando?.commandType]
 
+    let resultado = null
     if (!executor) {
       console.warn(`[engine] Tipo de comando desconhecido; execução recusada: ${comando?.commandType || '(ausente)'}`)
       status = 'outcome_unknown'
@@ -767,7 +802,10 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         // `clienteEngine` entra nas dependências porque a chamada de conexão
         // precisa buscar a declaração no motor — é o único executor que
         // consulta o motor em vez de só agir sobre o WhatsApp.
-        await executor(client, comando, { ...(await resolverDependencias(deps)), clienteEngine })
+        // O executor devolve resultado só quando o comando é ELO DE CADEIA:
+        // aí ele não entrega nada, guarda o arquivo e passa a referência
+        // adiante. Em tudo mais o retorno é indiferente.
+        resultado = (await executor(client, comando, { ...(await resolverDependencias(deps)), clienteEngine })) || null
         status = 'sent'
       } catch (erro) {
         status = (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_RESULTADO_INCERTO')
@@ -782,7 +820,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       }
     }
 
-    await confirmarFailOpen(clienteEngine, comando, status)
+    await confirmarFailOpen(clienteEngine, comando, status, resultado)
   }
 }
 
