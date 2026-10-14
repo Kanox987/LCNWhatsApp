@@ -95,7 +95,7 @@ function construirMediaRef (msgBruta, msg, kind, marcadaComoViewOnce) {
     if (!achado) return undefined
     return mediaRefCache.criar({ node: achado.node, tipo: achado.tipo, interno: achado.interno })
   }
-  if (kind === 'image' || kind === 'video' || kind === 'audio') {
+  if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'sticker') {
     return construirMediaRefInline(msg, kind)
   }
   return undefined
@@ -171,6 +171,22 @@ function construirQuotedMediaRef (msg) {
     // verdade, e quem exige visu única é quem CONSOME (o /recover), não o nome
     // do campo.
     const visu = acharVisuUnica(citada, false)
+    // A figurinha citada entra por um caminho PRÓPRIO, e não pela busca de
+    // visualização única. `acharVisuUnica` fala de visu única: carregar
+    // figurinha para dentro dela misturaria dois assuntos, e um dia alguém
+    // teria uma figurinha tratada como mídia que some depois de aberta.
+    //
+    // Isto é o que faz "/converter png" e "/roubar" existirem: os dois
+    // trabalham em cima de uma figurinha RESPONDIDA, e até agora não havia
+    // token nenhum para ela.
+    const figurinha = !visu ? desembrulhar(citada)?.stickerMessage : null
+    if (figurinha) {
+      return {
+        token: mediaRefCache.criar({ node: figurinha, tipo: 'sticker', interno: desembrulhar(citada) }),
+        kind: 'media',
+        mediaKind: 'sticker'
+      }
+    }
     const achado = visu || acharVisuUnica(citada, true)
     if (achado) {
       return {

@@ -371,8 +371,8 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
 // Nome e tipo do arquivo que sai daqui. O serviço do outro lado decide o que
 // fazer pelo que recebe, então mandar tudo como "arquivo"/octet-stream faria
 // qualquer API ter que adivinhar.
-const MIME_POR_TIPO = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/ogg', document: 'application/octet-stream' }
-const EXTENSAO_POR_TIPO = { image: 'jpg', video: 'mp4', audio: 'ogg', document: 'bin' }
+const MIME_POR_TIPO = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/ogg', sticker: 'image/webp', document: 'application/octet-stream' }
+const EXTENSAO_POR_TIPO = { image: 'jpg', video: 'mp4', audio: 'ogg', sticker: 'webp', document: 'bin' }
 
 function mimeProvavel (tipo) {
   return MIME_POR_TIPO[tipo] || 'application/octet-stream'

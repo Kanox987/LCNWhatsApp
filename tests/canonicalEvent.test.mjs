@@ -32,7 +32,13 @@ check('imagem inline (não view-once)', classificarMensagem({ imageMessage: { ur
 check('áudio inline', classificarMensagem({ audioMessage: { url: 'x' } }), 'audio')
 check('visu única (viewOnceMessageV2)', classificarMensagem({ viewOnceMessageV2: { message: { imageMessage: { url: 'x', viewOnce: true } } } }), 'view_once')
 check('mensagem vazia/nula', classificarMensagem(null), 'unknown')
-check('sticker (tipo sem categoria própria ainda)', classificarMensagem({ stickerMessage: { url: 'x' } }), 'unknown')
+// Figurinha TEM categoria própria agora. Este caso afirmava o contrário, e o
+// que ele cimentava não era um limite escolhido: enquanto a figurinha caía em
+// 'unknown', o gateway descartava o evento antes do motor — ela era invisível
+// para o sistema, e os comandos que trabalham em cima dela (virar imagem,
+// virar gif, trocar pacote e autor) não tinham como existir.
+check('figurinha é mídia, com categoria própria', classificarMensagem({ stickerMessage: { url: 'x' } }), 'sticker')
+check('figurinha animada também', classificarMensagem({ stickerMessage: { url: 'x', isAnimated: true } }), 'sticker')
 
 // --- calcularEventId: determinístico, por gateway ---
 const args = { accountId: 'acc-1', chatId: '123@g.us', senderId: '456@s.whatsapp.net', providerMessageId: 'ABC' }
@@ -162,6 +168,46 @@ checkBool('view-once: mediaRef é STRING (token), não objeto', typeof eventoVie
 checkBool('view-once: mediaRef não expõe mediaKey em texto', !JSON.stringify(eventoViewOnce.message.mediaRef).includes('segredo-de-verdade'))
 const resolvido = resolver(eventoViewOnce.message.mediaRef)
 checkBool('view-once: token resolve de volta pro node real (mesmo processo)', resolvido?.node?.mediaKey === 'segredo-de-verdade')
+
+// --- FIGURINHA: a mídia que o sistema não enxergava --------------------
+//
+// Enquanto `stickerMessage` caía em 'unknown', o gateway descartava o evento
+// antes do motor — a figurinha era invisível. Três comandos dependiam disso
+// para existir: virar imagem, virar vídeo, e trocar pacote e autor.
+const nodeFigurinha = { url: 'https://x/fig.webp', mediaKey: 'segredo-da-figurinha', isAnimated: true, mimetype: 'image/webp' }
+const eventoFigurinha = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSGF1', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { stickerMessage: nodeFigurinha }
+}, { accountId: 'acc-1' })
+check('figurinha recebida: message.kind = sticker', eventoFigurinha.message.kind, 'sticker')
+checkBool('figurinha: tem token de mídia', typeof eventoFigurinha.message.mediaRef === 'string' && !!eventoFigurinha.message.mediaRef)
+// Invariante 4 de pé: o que viaja é token, o segredo fica neste processo.
+checkBool('figurinha: o token não carrega a mediaKey',
+  !JSON.stringify(eventoFigurinha.message.mediaRef).includes('segredo-da-figurinha'))
+const figResolvida = resolver(eventoFigurinha.message.mediaRef)
+checkBool('figurinha: o token resolve para o node real', figResolvida?.node?.mediaKey === 'segredo-da-figurinha')
+// O tipo importa: é ele que vira `stickerMessage` na hora de baixar os bytes.
+checkBool('figurinha: o token sabe que é figurinha', figResolvida?.tipo === 'sticker')
+
+// A figurinha CITADA — é esta que o /toimg e o /roubar usam, porque ninguém
+// responde um comando à própria figurinha que acabou de mandar.
+const eventoCitandoFigurinha = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSGF2', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: {
+    extendedTextMessage: {
+      text: '/toimg',
+      contextInfo: { stanzaId: 'QF1', participant: '5511999@s.whatsapp.net', quotedMessage: { stickerMessage: nodeFigurinha } }
+    }
+  }
+}, { accountId: 'acc-1' })
+check('comando citando figurinha: a mensagem é texto', eventoCitandoFigurinha.message.kind, 'text')
+checkBool('figurinha citada: existe token', !!eventoCitandoFigurinha.message.quotedMediaRef?.token)
+check('figurinha citada: o tipo real é preservado', eventoCitandoFigurinha.message.quotedMediaRef?.mediaKind, 'sticker')
+// NÃO é visualização única, e rotular como tal faria o /recover aceitar uma
+// figurinha comum — "recuperar" algo que todo mundo continua vendo.
+check('figurinha citada NÃO é rotulada visualização única', eventoCitandoFigurinha.message.quotedMediaRef?.kind, 'media')
+checkBool('figurinha citada: o token resolve com tipo sticker',
+  resolver(eventoCitandoFigurinha.message.quotedMediaRef.token)?.tipo === 'sticker')
 
 // --- áudio dentro de viewOnceMessageV2Extension ---
 const eventoAudioViewOnce = construirEventoDeMensagem({

@@ -108,6 +108,20 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
     resposta: arquivoDeVolta('figurinha')
   },
   {
+    nome: 'trocar_metadados',
+    descricao: 'Troca o nome do pacote e o autor de uma figurinha que já existe, SEM recodificar — a imagem fica idêntica, só o bloco de informação muda.',
+    metodo: 'POST',
+    caminho: '/figurinha/metadados',
+    entradas: [
+      { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
+      { nome: 'pacote', tipo: 'texto', obrigatoria: false },
+      { nome: 'autor', tipo: 'texto', obrigatoria: false },
+      { nome: 'emojis', tipo: 'texto', obrigatoria: false },
+      RESPOSTA_JSON
+    ],
+    resposta: arquivoDeVolta('figurinha')
+  },
+  {
     nome: 'converter',
     descricao: 'Troca o formato de foto, animação, vídeo ou áudio. O formato de saída é escolhido na chamada.',
     metodo: 'POST',

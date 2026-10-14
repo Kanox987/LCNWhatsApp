@@ -1,0 +1,53 @@
+template figurinha-para-imagem v1
+  nome: Figurinha para imagem
+  descrição: Responda uma figurinha com o comando e o bot devolve ela como foto normal, que dá para salvar na galeria. Figurinha animada vira só o primeiro quadro — para a animação inteira, use o comando que devolve vídeo.
+  categoria: utilitarios
+
+automação
+  nome: Figurinha para imagem
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Transforma figurinha em foto
+  pool: {{params.poolId}}
+  acessa: texto, figurinha
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na citada ou na mensagem
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.converter
+    com
+      arquivo: a mídia
+      formato: {{params.formato}}
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/toimg"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita respondendo a figurinha.
+  conexao: texto = "imagem"
+    rótulo: Serviço que converte
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  formato: opção (png, jpg, webp) = "png"
+    rótulo: Formato da foto
+    ajuda: png guarda a transparência da figurinha. jpg perde a transparência (o fundo vira branco) mas sai menor.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semMidiaText: texto = "Responde uma figurinha com este comando."
+    rótulo: Aviso quando não vier figurinha
+    ajuda: Resposta quando o comando é usado sem nada marcado.
+  errorText: texto = "Não consegui converter: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões.
+
+avisa nota
+  Vale para qualquer mídia marcada, não só figurinha — respondendo uma foto, ele converte a foto. É o mesmo comando de conversão, com o formato já escolhido.
+
+# nós: gatilho-comando, converter

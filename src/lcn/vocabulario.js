@@ -260,7 +260,8 @@ export const TIPOS_DE_MENSAGEM = Object.freeze({
   image: 'foto',
   video: 'vídeo',
   document: 'documento',
-  view_once: 'visualização única'
+  view_once: 'visualização única',
+  sticker: 'figurinha'
 })
 
 // Inverte um mapa palavra->código para ler o texto de volta.

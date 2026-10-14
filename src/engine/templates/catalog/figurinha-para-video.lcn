@@ -1,0 +1,64 @@
+template figurinha-para-video v1
+  nome: Figurinha animada para vídeo
+  descrição: Responda uma figurinha animada com o comando e o bot devolve ela como vídeo curto, que dá para salvar e reencaminhar. No WhatsApp o "gif" é um vídeo curto — por isso a saída é mp4 e não um arquivo .gif.
+  categoria: utilitarios
+
+automação
+  nome: Figurinha animada para vídeo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Transforma figurinha animada em vídeo
+  pool: {{params.poolId}}
+  acessa: texto, figurinha
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na citada ou na mensagem
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.converter
+    com
+      arquivo: a mídia
+      formato: {{params.formato}}
+      limite_bytes: {{params.pesoMaximoBytes}}
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/togif"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita respondendo a figurinha animada.
+  conexao: texto = "imagem"
+    rótulo: Serviço que converte
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  formato: opção (mp4, webm, gif) = "mp4"
+    rótulo: Formato da saída
+    ajuda: mp4 é o que o WhatsApp entende como animação e é o que deve ser usado. gif gera um arquivo .gif de verdade, que costuma ficar grande e chega como documento.
+  pesoMaximoBytes: número = 16000000
+    rótulo: Peso máximo (bytes)
+    ajuda: Uma figurinha animada de 5 segundos vira quase 2 MB em gif e bem menos em mp4. Acima do limite o serviço reduz a qualidade até caber.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semMidiaText: texto = "Responde uma figurinha animada com este comando."
+    rótulo: Aviso quando não vier figurinha
+    ajuda: Resposta quando o comando é usado sem nada marcado.
+  ackText: texto = "🎞 Convertendo…"
+    rótulo: Aviso ao começar
+    ajuda: Converter animação leva alguns segundos.
+  errorText: texto = "Não consegui converter: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões.
+
+avisa compatibilidade
+  O vídeo chega como vídeo comum, não com a marca de "GIF" que o WhatsApp põe em animações. O conteúdo é o mesmo; o que muda é a etiqueta.
+
+avisa nota
+  Figurinha parada vira um vídeo de um quadro só. Use este comando nas animadas.
+
+# nós: gatilho-comando, converter

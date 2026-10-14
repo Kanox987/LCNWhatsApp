@@ -118,7 +118,10 @@ for (const nome of ['figurinha', 'figurinha_de_frase', 'converter', 'remover_fun
       }
     }
   }
-  check('os cinco comandos novos foram conferidos', conferidos === 5, String(conferidos))
+  // O número cresce quando um comando novo entra, e é de propósito: se um dia
+  // ele CAIR, é porque um comando parou de apontar para a conexão de imagem —
+  // e isso não deve passar despercebido.
+  check('todos os comandos do serviço de imagem foram conferidos', conferidos === 9, String(conferidos))
 }
 
 // =========================================================================

@@ -1,0 +1,57 @@
+template roubar-figurinha v1
+  nome: Renomear figurinha (roubar)
+  descrição: Responda uma figurinha com o comando e o bot devolve a MESMA figurinha com o seu nome de pacote e autor. A imagem não é recodificada — só o bloco de informação muda, então nada de qualidade se perde.
+  categoria: utilitarios
+
+automação
+  nome: Renomear figurinha (roubar)
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Põe seu nome na figurinha
+  pool: {{params.poolId}}
+  acessa: texto, figurinha
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na citada ou na mensagem
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.trocar_metadados
+    com
+      arquivo: a mídia
+      pacote: {{params.pacote}}
+      autor: {{params.autor}}
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/roubar"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita respondendo a figurinha.
+  conexao: texto = "imagem"
+    rótulo: Serviço que renomeia
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  pacote: texto = "LCN Figurinhas"
+    rótulo: Nome do pacote
+    ajuda: O nome que passa a aparecer quando alguém abre a figurinha.
+  autor: texto = "LCN"
+    rótulo: Autor do pacote
+    ajuda: Aparece junto do nome do pacote.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semMidiaText: texto = "Responde uma figurinha com este comando."
+    rótulo: Aviso quando não vier figurinha
+    ajuda: Resposta quando o comando é usado sem nada marcado.
+  errorText: texto = "Não consegui renomear: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões.
+
+avisa nota
+  Só troca a etiqueta: a figurinha devolvida é byte por byte a mesma imagem, com outro nome de pacote e autor. Marcar uma foto em vez de uma figurinha não funciona — para isso use o comando de figurinha.
+
+# nós: gatilho-comando, renomear

@@ -1,4 +1,4 @@
-template figurinha-api v1
+template figurinha-api v2
   nome: Figurinha (pelo serviço de imagem)
   descrição: Transforma foto, vídeo ou GIF em figurinha, com o NOME DO PACOTE e o AUTOR que o WhatsApp mostra ao abrir a figurinha. Vídeo vira figurinha animada. Pode remover o fundo da foto no mesmo passo. Quem converte é o serviço de imagem declarado na aba Conexões — este comando não depende de programa instalado na máquina do número.
   categoria: utilitarios
@@ -15,16 +15,28 @@ automação
   precisa de uma mídia: na mensagem ou na citada
   sem ela: "{{params.semMidiaText}}"
 
-  chama {{params.conexao}}.figurinha
-    com
-      arquivo: a mídia
-      pacote: {{params.pacote}}
-      autor: {{params.autor}}
-      modo: {{params.modo}}
-      remover_fundo: {{params.removerFundo}}
-      limite_bytes: {{params.pesoMaximoBytes}}
-    avisa: "{{params.ackText}}"
-    erro: "{{params.errorText}}"
+  se evento message.args == "{{params.letraEsticar}}"
+    chama {{params.conexao}}.figurinha
+      com
+        arquivo: a mídia
+        pacote: {{params.pacote}}
+        autor: {{params.autor}}
+        modo: esticar
+        remover_fundo: {{params.removerFundo}}
+        limite_bytes: {{params.pesoMaximoBytes}}
+      avisa: "{{params.ackText}}"
+      erro: "{{params.errorText}}"
+  senão
+    chama {{params.conexao}}.figurinha
+      com
+        arquivo: a mídia
+        pacote: {{params.pacote}}
+        autor: {{params.autor}}
+        modo: {{params.modo}}
+        remover_fundo: {{params.removerFundo}}
+        limite_bytes: {{params.pesoMaximoBytes}}
+      avisa: "{{params.ackText}}"
+      erro: "{{params.errorText}}"
 
 configurável
   command: texto = "/fig"
@@ -40,8 +52,11 @@ configurável
     rótulo: Autor do pacote
     ajuda: Aparece junto do nome do pacote.
   modo: opção (transparente, quadrado, esticar) = "transparente"
-    rótulo: Como encaixar no quadrado
-    ajuda: transparente mantém a imagem inteira e deixa a sobra transparente. quadrado preenche o quadrado e corta o excesso pelo centro. esticar deforma para caber.
+    rótulo: Como encaixar no quadrado (padrão)
+    ajuda: O que vale quando a pessoa digita o comando sozinho. transparente mantém a imagem inteira e deixa a sobra transparente — é o "normal". quadrado preenche o quadrado e corta o excesso pelo centro. esticar deforma para caber.
+  letraEsticar: texto = "s"
+    rótulo: Letra que pede para esticar
+    ajuda: Digitando o comando seguido desta letra, a imagem é ESTICADA para preencher o quadrado inteiro, em vez de entrar com fundo transparente. Qualquer outra coisa depois do comando (ou nada) usa o modo padrão acima.
   removerFundo: opção (sim, nao) = "nao"
     rótulo: Remover o fundo
     ajuda: Só vale para foto, e leva alguns segundos a mais. Em vídeo o serviço ignora.
@@ -70,4 +85,7 @@ avisa exige
 avisa nota
   Não precisa de ffmpeg na máquina do número: quem converte é o serviço. É a diferença entre este comando e a "Figurinha" antiga.
 
-# nós: gatilho-comando, converter
+avisa nota
+  Duas formas de encaixar, escolhidas na hora: o comando sozinho usa o modo padrão (imagem inteira, sobra transparente) e o comando seguido de "s" estica para preencher o quadrado.
+
+# nós: gatilho-comando, pediu-esticar, converter-esticado, converter-normal
