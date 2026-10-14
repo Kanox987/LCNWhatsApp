@@ -205,6 +205,12 @@ export function descompilar (documento, template = null) {
   }
 
   if (gatilho.type === 'trigger.command') {
+    // A linha mostra o que a pessoa vai digitar: os nomes com o separador no
+    // meio. Guardar separador e nomes em campos distintos e escrever os dois
+    // seria mostrar a estrutura em vez do uso.
+    if (cfg.args?.names?.length) {
+      h(`argumentos: ${cfg.args.names.join(` ${cfg.args.separator} `)}`)
+    }
     h(`casa: ${CASAMENTOS[cfg.match] || cfg.match}`)
   } else {
     if (cfg.containsLink === true) h('com link')

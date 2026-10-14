@@ -24,20 +24,41 @@ export function registrarRotasAutomations (roteador, db) {
     if (!obterAutomation.get(params.id)) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
 
     // automation_runs referencia automations sem ON DELETE CASCADE (migração
-    // 002), então uma automação que já executou não pode simplesmente sumir —
-    // o banco recusa. Antes isso vazava como 500 "erro interno"; agora explica
-    // o que houve e qual é a saída. Apagar o histórico junto seria destruir
-    // auditoria, então continua sendo decisão de quem opera, não do sistema.
-    const execucoes = db.prepare('SELECT COUNT(*) AS total FROM automation_runs WHERE automation_id = ?').get(params.id)
-    if (execucoes.total > 0) {
+    // 002), então uma automação com histórico não pode simplesmente sumir — o
+    // banco recusa. Apagar o histórico junto seria destruir auditoria, então
+    // continua sendo decisão de quem opera, não do sistema.
+    //
+    // MAS "no_match" NÃO É HISTÓRICO. É o registro de que a automação foi
+    // avaliada e não casou com nada: ela não respondeu, não gravou, não
+    // enviou. Contar isso como execução tornava quase toda automação ao vivo
+    // impossível de apagar — uma recém-instalada que nunca casou acumulava
+    // dezenas de "execuções" só por existir enquanto outras mensagens
+    // chegavam. Foi o que aconteceu com um comando instalado há meia hora:
+    // "já executou 38 vez(es)", e as 38 eram no_match.
+    //
+    // Então as de no_match vão junto, e só as que FIZERAM alguma coisa seguram
+    // a remoção.
+    const comHistorico = db.prepare(
+      "SELECT COUNT(*) AS total FROM automation_runs WHERE automation_id = ? AND status != 'no_match'"
+    ).get(params.id)
+    if (comHistorico.total > 0) {
       throw new ErroHttp(409,
-        `Esta automação já executou ${execucoes.total} vez(es) e o histórico dessas execuções depende dela. ` +
+        `Esta automação já executou ${comHistorico.total} vez(es) e o histórico dessas execuções depende dela. ` +
         'Para tirá-la do ar sem perder o histórico, use "Despublicar" ou desligue a automação.')
     }
 
-    const resultado = db.prepare('DELETE FROM automations WHERE id = ?').run(params.id)
-    if (!resultado.changes) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
-    return { removed: true, id: params.id }
+    const apagar = db.transaction(() => {
+      // Um no_match não gera comando nenhum, mas apagar por fora da ordem das
+      // chaves estrangeiras deixaria linha órfã se um dia gerar.
+      db.prepare(`DELETE FROM outbound_commands WHERE run_id IN
+        (SELECT id FROM automation_runs WHERE automation_id = ?)`).run(params.id)
+      const semCasar = db.prepare('DELETE FROM automation_runs WHERE automation_id = ?').run(params.id)
+      const resultado = db.prepare('DELETE FROM automations WHERE id = ?').run(params.id)
+      return { changes: resultado.changes, semCasar: semCasar.changes }
+    })
+    const { changes, semCasar } = apagar()
+    if (!changes) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
+    return { removed: true, id: params.id, avaliacoesSemCasarRemovidas: semCasar }
   })
   roteador.get('/automations/:id/revisions', ({ params }) => {
     if (!obterAutomation.get(params.id)) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)

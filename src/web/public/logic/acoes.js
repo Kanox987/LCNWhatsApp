@@ -44,7 +44,8 @@ export const GATILHOS = Object.freeze([
         ajuda: 'exato = a mensagem tem que ser só isso · começa com = aceita o que vier depois · palavra solta = acha em qualquer posição da frase · exato ou com argumento = igual, ou seguido de um espaço e mais texto (é o que permite "/adv fulano").'
       },
       { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'externo = o bot ignora as próprias mensagens (padrão seguro) · qualquer um = responde também quando VOCÊ manda do número onde o bot roda, que é o normal para comando de uso pessoal.' },
-      { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número do bot passa — é assim que se cadastra o primeiro.' }
+      { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número do bot passa — é assim que se cadastra o primeiro.' },
+      { chave: 'args', rotulo: 'Partes do que vem depois', ajuda: 'Divide o texto que a pessoa escreve depois do comando em partes com nome, separadas por um símbolo que você escolhe. Com "pacote / autor", quem digitar "/rename Meu Pacote / Zé" entrega as duas partes separadas, cada uma disponível como {{argumentos.pacote}} e {{argumentos.autor}}. A última parte leva o resto, então o separador pode aparecer dentro dela. Sem isto, o texto inteiro só existe como {{message.args}}.' }
     ]
   },
   {

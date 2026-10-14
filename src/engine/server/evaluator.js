@@ -422,6 +422,27 @@ export function extrairArgumentos (texto, comando) {
   return ''
 }
 
+// As partes nomeadas do argumento, do jeito que o gatilho declarou.
+//
+// Só entram as que vieram: parte vazia não vira string vazia, porque string
+// vazia no meio de um texto some sem deixar rastro e o marcador literal não.
+function dividirArgumentos (texto, declarado) {
+  const bruto = typeof texto === 'string' ? texto.trim() : ''
+  const nomes = declarado.names
+  if (!bruto) return {}
+  const pedacos = bruto.split(declarado.separator)
+  const partes = pedacos.length > nomes.length
+    // A última leva o resto, com o separador de volta no meio.
+    ? [...pedacos.slice(0, nomes.length - 1), pedacos.slice(nomes.length - 1).join(declarado.separator)]
+    : pedacos
+  const saida = {}
+  partes.forEach((valor, i) => {
+    const limpo = String(valor).trim()
+    if (limpo && nomes[i]) saida[nomes[i]] = limpo
+  })
+  return saida
+}
+
 // Resolve um operando para seu valor BRUTO (número continua número), nunca
 // para o texto já interpolado: comparar "10" com "3" como texto daria 10 < 3.
 function resolverOperando (db, operando, evento, contexto) {
@@ -996,6 +1017,20 @@ function executarFluxo (db, documento, triggerId, evento) {
       // já que ali ninguém digitou comando nenhum.
       ...(primeiroLink(evento.message?.text) ? { link: primeiroLink(evento.message.text) } : {})
     }),
+    // As partes do que a pessoa escreveu depois do comando, com os nomes que o
+    // gatilho declarou. A divisão acontece AQUI, uma vez, a partir da
+    // declaração — nunca dentro de um texto interpolado.
+    //
+    // A última parte leva o resto: "/rename Pacote / do / Zé" com dois nomes
+    // dá pacote="Pacote" e autor="do / Zé". Cortar no primeiro separador
+    // descartaria texto sem avisar.
+    //
+    // Parte que não veio fica AUSENTE, e o marcador aparece literal na
+    // resposta. É o sinal de erro desta base: melhor a pessoa ver
+    // "{{argumentos.autor}}" do que receber um pacote com autor vazio.
+    ...(gatilho?.config?.args?.names?.length
+      ? { argumentos: dividirArgumentos(extrairArgumentos(evento.message?.text, gatilho?.config?.command), gatilho.config.args) }
+      : {}),
     // isOwner entra como campo do remetente (e não como variável de usuário)
     // porque é uma propriedade do evento, não algo que a automação grava.
     sender: { ...evento.sender, isOwner: ehDono(db, evento.sender?.id), number: soDigitos(evento.sender?.id) },

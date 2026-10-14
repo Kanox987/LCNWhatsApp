@@ -215,6 +215,40 @@ try {
   check('cliente monta querystring da listagem', requisicoes[0]?.options?.path === '/executions?automationId=ping+teste&runStatus=matched_live&commandStatus=failed&limit=2')
   check('cliente obtém detalhe pelo runId', requisicoes[1]?.options?.method === 'GET' && requisicoes[1]?.options?.path === '/executions/42')
   check('cliente confirmar usa a nova rota de comandos', requisicoes[2]?.options?.method === 'POST' && requisicoes[2]?.options?.path === '/commands/cmd%2F42/result')
+  // --- APAGAR: "no_match" não é histórico ---------------------------------
+  //
+  // O registro de no_match diz que a automação foi avaliada e NÃO casou: não
+  // respondeu, não gravou, não enviou. Contar isso como execução tornava quase
+  // toda automação ao vivo impossível de apagar — um comando instalado há meia
+  // hora recusou ser removido dizendo "já executou 38 vez(es)", e as 38 eram
+  // avaliações em que ele não fez nada.
+  {
+    const revId = inserirAutomacao('so-no-match', 1)
+    for (const n of [901, 902, 903]) {
+      inserirRun({ numero: n, automationId: 'so-no-match', revisionId: revId, status: 'no_match', createdAt: '2026-09-12T00:00:00.000Z', messageText: 'oi' })
+    }
+    const r = await api.resolver('DELETE', '/automations/so-no-match', contexto())
+    check('automação que só acumulou no_match pode ser apagada', r?.removed === true)
+    check('e as avaliações que não casaram vão junto', r?.avaliacoesSemCasarRemovidas === 3)
+    const sobrou = db.prepare("SELECT COUNT(*) AS n FROM automation_runs WHERE automation_id = 'so-no-match'").get()
+    check('sem deixar linha órfã no histórico', sobrou.n === 0)
+  }
+  {
+    // Execução que FEZ alguma coisa continua segurando a remoção: apagar o
+    // histórico junto seria destruir auditoria, e isso é decisão de quem opera.
+    const revId = inserirAutomacao('executou', 1)
+    inserirRun({ numero: 911, automationId: 'executou', revisionId: revId, status: 'no_match', createdAt: '2026-09-12T00:00:00.000Z', messageText: 'oi' })
+    inserirRun({ numero: 912, automationId: 'executou', revisionId: revId, status: 'matched_live', createdAt: '2026-09-12T00:00:01.000Z', messageText: '/x' })
+    let erro = null
+    try { await api.resolver('DELETE', '/automations/executou', contexto()) } catch (e) { erro = e }
+    check('automação que executou de verdade NÃO é apagada', erro?.status === 409)
+    // A contagem na mensagem é a das que fizeram algo — dizer "2" aqui faria a
+    // pessoa procurar uma execução que não existe.
+    check('e a mensagem conta só as que fizeram algo', /já executou 1 vez/.test(erro?.message || ''))
+    const intacta = db.prepare("SELECT COUNT(*) AS n FROM automation_runs WHERE automation_id = 'executou'").get()
+    check('e nada do histórico foi tocado na recusa', intacta.n === 2)
+  }
+
 } catch (erro) {
   falhas++
   console.error('❌ erro inesperado nos testes de histórico de execuções:', erro)

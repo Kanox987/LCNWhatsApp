@@ -346,6 +346,27 @@
             },
             "requireOwner": {
               "type": "boolean"
+            },
+            "args": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["separator", "names"],
+              "description": "Divide o que a pessoa escreveu DEPOIS do comando em partes com nome. É o que permite \"/rename Pacote do Zé / Zé\" sem lógica dentro do texto: a divisão vira declaração, e cada parte fica disponível como {{argumentos.<nome>}}. Sem isto, o texto inteiro só existe como {{message.args}}.",
+              "properties": {
+                "separator": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 3,
+                  "description": "O que separa as partes. A última parte leva o resto, então o separador pode aparecer dentro dela."
+                },
+                "names": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 5,
+                  "uniqueItems": true,
+                  "items": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" }
+                }
+              }
             }
           }
         }

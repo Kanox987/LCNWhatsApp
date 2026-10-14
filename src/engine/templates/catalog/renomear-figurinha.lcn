@@ -1,6 +1,6 @@
-template renomear-figurinha v1
+template renomear-figurinha v2
   nome: Renomear figurinha
-  descrição: Responda uma figurinha com o comando e o bot devolve a MESMA figurinha com outro nome de pacote e autor. Escrevendo um nome junto com o comando, é ele que vale; sozinho, vale o nome configurado. A imagem não é recodificada — só o bloco de informação muda, então nada de qualidade se perde.
+  descrição: Responda uma figurinha com o comando e o bot devolve a MESMA figurinha com outro nome de pacote e autor. Escrevendo "/rename Pacote do Zé / Zé" dá para trocar os dois de uma vez; só o pacote também vale; sozinho, valem os nomes configurados. A imagem não é recodificada — só o bloco de informação muda, então nada de qualidade se perde.
   categoria: utilitarios
 
 automação
@@ -12,6 +12,7 @@ automação
   acessa: texto, figurinha
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
+  argumentos: pacote / autor
   precisa de uma mídia: na citada ou na mensagem
   sem ela: "{{params.semMidiaText}}"
 
@@ -19,8 +20,8 @@ automação
     chama {{params.conexao}}.trocar_metadados
       com
         arquivo: a mídia
-        pacote: "{{message.args}}"
-        autor: {{params.autor}}
+        pacote: "{{argumentos.pacote}}"
+        autor: "{{argumentos.autor}}"
       erro: "{{params.errorText}}"
   senão
     chama {{params.conexao}}.trocar_metadados
@@ -33,7 +34,7 @@ automação
 configurável
   command: texto = "/rename"
     rótulo: Comando
-    ajuda: A palavra que a pessoa digita respondendo a figurinha. Escrevendo um nome depois do comando — "/rename Pacote do Zé" — é esse nome que vai para o pacote.
+    ajuda: A palavra que a pessoa digita respondendo a figurinha. Depois dela vêm o pacote e o autor, separados por barra — "/rename Pacote do Zé / Zé". O autor leva o resto, então ele pode ter barra no nome.
   conexao: texto = "imagem"
     rótulo: Serviço que renomeia
     ajuda: O identificador da conexão, como está na aba Conexões.
@@ -63,6 +64,9 @@ avisa nota
   Só troca a etiqueta: a figurinha devolvida é byte por byte a mesma imagem, com outro nome de pacote e autor. Marcar uma foto em vez de uma figurinha não funciona — para isso use o comando de figurinha.
 
 avisa nota
-  O autor continua sendo o configurado aqui. Só o nome do pacote vem do que a pessoa escreve junto com o comando.
+  Sem escrever nada, valem o pacote e o autor configurados aqui. Escrevendo os dois, valem os dois.
+
+avisa compatibilidade
+  Escrevendo SÓ o pacote ("/rename Meu Pacote"), o autor fica em branco na figurinha — o serviço entende "não mandou" como "apaga". Escreva os dois, ou nenhum.
 
 # nós: gatilho-comando, veio-nome, renomear-com-o-nome, renomear-com-o-padrao

@@ -526,6 +526,35 @@ export function compilar (texto) {
       case 'id': doc.id = valor; break
       case 'revisão': doc.revision = Number(valor); break
       case 'nome': doc.name = valor; break
+      // Dividir o que vem depois do comando, com nome para cada parte.
+      //
+      // "/rename Pacote do Zé / Zé" precisa virar duas coisas, e a divisão NÃO
+      // pode morar dentro do texto: interpolação é troca de texto pura, e
+      // enfiar um separador ali seria a mesma string que esconde um algoritmo
+      // que o `precisa de um link` acabou de matar. Então ela vira declaração,
+      // e o separador é o que estiver escrito ENTRE os nomes — o que a linha
+      // mostra é o que a pessoa vai digitar.
+      case 'argumentos': {
+        if (tipoDoGatilho !== 'trigger.command') {
+          throw new ErroDeSintaxe('"argumentos" é só de comando — um vigia não tem o que vem depois da palavra digitada.', l.n)
+        }
+        const partes = valor.split(/\s*([^\s\w\u00c0-\u017f])\s*/).filter((x) => x !== '')
+        const nomes = partes.filter((_, i) => i % 2 === 0)
+        const separadores = [...new Set(partes.filter((_, i) => i % 2 === 1))]
+        if (nomes.length < 2 || separadores.length !== 1) {
+          throw new ErroDeSintaxe('escreva os nomes separados por um símbolo só, como "argumentos: pacote / autor"', l.n)
+        }
+        for (const nome of nomes) {
+          if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(nome)) {
+            throw new ErroDeSintaxe(`nome de argumento inválido: "${nome}" — comece por letra, use letras, números e _`, l.n)
+          }
+        }
+        if (new Set(nomes).size !== nomes.length) {
+          throw new ErroDeSintaxe('dois argumentos com o mesmo nome: o segundo apagaria o primeiro', l.n)
+        }
+        gatilhoConfig.args = { separator: separadores[0], names: nomes }
+        break
+      }
       case 'menu': {
         const [rotulo, ...resto] = valor.split('—')
         display = { menuLabel: rotulo.trim() }
