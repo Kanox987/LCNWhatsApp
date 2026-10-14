@@ -173,9 +173,14 @@ export const ACOES = Object.freeze([
 ])
 
 // --- operadores da condição ----------------------------------------------
+// Os códigos aqui são os do DOCUMENTO, e o nome tem que bater exatamente com
+// o que o schema aceita e o motor executa. `ne` não batia: o schema e o
+// runtime falam `neq`, então `!=` compilava para um operador que não existe e
+// a automação era RECUSADA na publicação. Ninguém tinha esbarrado porque
+// nenhum template do catálogo usava "diferente de".
 export const OPERADORES = Object.freeze({
   eq: '==',
-  ne: '!=',
+  neq: '!=',
   lt: '<',
   lte: '<=',
   gt: '>',

@@ -257,5 +257,32 @@ configurável
   check('o erro diz em que linha está', /linha 4/.test(comLinha?.message || ''), comLinha?.message)
 }
 
+// --- TODO operador da linguagem existe no schema e no runtime ------------
+//
+// `!=` compilava para `ne`, e o schema e o motor falam `neq`: a automação era
+// recusada na publicação com "must be equal to constant", que não aponta para
+// lugar nenhum. Ninguém esbarrou porque nenhum template usava "diferente de" —
+// e foi assim que a divergência atravessou a linguagem inteira sem aparecer.
+//
+// Este caso vale mais que o conserto: ele cruza as três listas, então a
+// próxima divergência morre aqui em vez de aparecer na cara de quem publica.
+{
+  const { OPERADORES } = await import('../src/lcn/vocabulario.js')
+  const { OPERADORES_DE_COMPARACAO } = await import('../src/engine/server/runtimeCapabilities.js')
+  const esquema = JSON.parse(
+    (await import('fs')).readFileSync('src/engine/server/schema/automation.v1.schema.json', 'utf8')
+  )
+  const doSchema = esquema.definitions.conditionCompare.properties.config.properties.operator.enum
+
+  const daLinguagem = Object.keys(OPERADORES)
+  check('a linguagem e o runtime conhecem os MESMOS operadores',
+    JSON.stringify([...daLinguagem].sort()) === JSON.stringify([...OPERADORES_DE_COMPARACAO].sort()),
+    `linguagem=${[...daLinguagem].sort().join(',')} runtime=${[...OPERADORES_DE_COMPARACAO].sort().join(',')}`)
+  check('e o schema também',
+    JSON.stringify([...daLinguagem].sort()) === JSON.stringify([...doSchema].sort()),
+    `linguagem=${[...daLinguagem].sort().join(',')} schema=${[...doSchema].sort().join(',')}`)
+}
+
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LINGUAGEM PASSARAM')
 process.exit(falhas ? 1 : 0)
