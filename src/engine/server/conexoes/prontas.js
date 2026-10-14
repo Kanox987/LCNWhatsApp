@@ -67,6 +67,8 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
     descricao: 'Transforma foto, vídeo ou GIF em figurinha. Vídeo vira figurinha animada. Grava o nome do pacote e o autor que o WhatsApp mostra.',
     metodo: 'POST',
     caminho: '/figurinha',
+    // Vídeo leva segundos; com `remover_fundo` entra a IA, que leva ~9 s.
+    esperaSegundos: 120,
     entradas: [
       { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
       { nome: 'pacote', tipo: 'texto', obrigatoria: false },
@@ -126,6 +128,7 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
     descricao: 'Troca o formato de foto, animação, vídeo ou áudio. O formato de saída é escolhido na chamada.',
     metodo: 'POST',
     caminho: '/converter',
+    esperaSegundos: 180,
     entradas: [
       { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
       {
@@ -153,6 +156,8 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
     descricao: 'Recorta o objeto principal de uma foto e deixa o fundo transparente, ou troca o fundo por uma cor.',
     metodo: 'POST',
     caminho: '/remover-fundo',
+    // Medido no serviço: ~9 s no melhor modelo, mais a espera por vaga de IA.
+    esperaSegundos: 180,
     entradas: [
       { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
       { nome: 'modelo', tipo: 'opção', opcoes: ['isnet-general-use', 'silueta', 'u2netp'], obrigatoria: false },
@@ -166,14 +171,20 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
   },
   {
     nome: 'melhorar',
-    descricao: 'Melhora uma foto. "ia" reconstrói detalhe e aumenta a resolução; "leve" só ajusta contraste e nitidez, na hora.',
+    descricao: 'Melhora uma foto. "4k" decide sozinho como chegar perto de 4K (IA, Lanczos, ou só ajuste quando já é grande). "ia" força o modelo em 2x ou 4x. "leve" só ajusta contraste e nitidez, na hora.',
     metodo: 'POST',
     caminho: '/melhorar',
+    // A mais demorada do serviço: o modo 4k vai de ~2 s a ~2 min conforme o
+    // quanto a foto precisa crescer, e o próprio serviço aceita timeout_s de
+    // até 900. Com os 20 s de antes, toda foto pequena morria no meio.
+    esperaSegundos: 600,
     entradas: [
       { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
-      { nome: 'modo', tipo: 'opção', opcoes: ['ia', 'leve'], obrigatoria: false },
+      { nome: 'modo', tipo: 'opção', opcoes: ['4k', 'ia', 'leve'], obrigatoria: false },
       { nome: 'escala', tipo: 'número', obrigatoria: false },
       { nome: 'formato', tipo: 'opção', opcoes: ['png', 'jpg', 'webp'], obrigatoria: false },
+      { nome: 'qualidade', tipo: 'número', obrigatoria: false },
+      { nome: 'limite_bytes', tipo: 'número', obrigatoria: false },
       { nome: 'timeout_s', tipo: 'número', obrigatoria: false },
       RESPOSTA_JSON
     ],

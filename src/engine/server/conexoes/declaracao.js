@@ -320,6 +320,35 @@ export function validarFuncao (funcao) {
     throw new ErroDeDeclaracao(`${onde}: ${metodo} não tem corpo, então não dá para mandar arquivo nela. Use POST, PUT ou PATCH.`)
   }
 
+  // QUANTO ESPERAR POR ESTA FUNÇÃO, e por que isto é declarado.
+  //
+  // 20 segundos serve para quase tudo e não serve para nada que pense: a
+  // melhoria de foto em 4K leva de 15 s a 2 minutos nesta máquina, e um teto
+  // fixo no meu código abortaria a chamada no meio — com o trabalho já feito
+  // do outro lado. Teto fixo é a única coisa que quem monta o comando não
+  // consegue contornar, e aqui ele não tem razão de ser: quem sabe quanto a
+  // função demora é quem declara a função.
+  //
+  // O teto de 900 s existe só para o pedido não ficar pendurado para sempre
+  // se o serviço nunca responder.
+  const espera = funcao.esperaSegundos
+  if (espera !== undefined && espera !== null && espera !== '') {
+    const n = Number(espera)
+    if (!Number.isFinite(n) || n <= 0 || n > 900) {
+      throw new ErroDeDeclaracao(`${onde}: a espera vai de 1 a 900 segundos — veio "${espera}".`)
+    }
+    return {
+      nome,
+      descricao: typeof funcao.descricao === 'string' ? funcao.descricao : '',
+      metodo,
+      caminho,
+      enderecoProprio,
+      esperaSegundos: Math.round(n),
+      entradas,
+      resposta: validarResposta(funcao.resposta, onde)
+    }
+  }
+
   return {
     nome,
     descricao: typeof funcao.descricao === 'string' ? funcao.descricao : '',

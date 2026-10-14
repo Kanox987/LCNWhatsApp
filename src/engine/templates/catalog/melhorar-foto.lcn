@@ -1,6 +1,6 @@
-template melhorar-foto v1
+template melhorar-foto v2
   nome: Melhorar a foto
-  descrição: Responda uma foto com o comando e o bot devolve ela com mais resolução e detalhe reconstruído, ou só com contraste e nitidez ajustados. Quem melhora é o serviço de imagem, com modelo de IA rodando na própria máquina.
+  descrição: Responda uma foto com o comando e o bot devolve ela maior e mais nítida, mirando 4K. O serviço decide sozinho como chegar lá: IA quando a foto é pequena, redimensionamento fino quando ela já é grande, e só ajuste de contraste e nitidez quando ela já é 4K. Roda na própria máquina.
   categoria: utilitarios
 
 automação
@@ -19,8 +19,8 @@ automação
     com
       arquivo: a mídia
       modo: {{params.modo}}
-      escala: {{params.escala}}
       formato: {{params.formato}}
+      qualidade: {{params.qualidade}}
     avisa: "{{params.ackText}}"
     legenda: "{{params.caption}}"
     erro: "{{params.errorText}}"
@@ -32,22 +32,22 @@ configurável
   conexao: texto = "imagem"
     rótulo: Serviço que melhora
     ajuda: O identificador da conexão, como está na aba Conexões.
-  modo: opção (ia, leve) = "ia"
+  modo: opção (4k, ia, leve) = "4k"
     rótulo: Como melhorar
-    ajuda: ia reconstrói detalhe e aumenta a resolução, e leva de 15 a 60 segundos conforme o tamanho da foto. leve só ajusta contraste e nitidez, na hora.
-  escala: número = 4
-    rótulo: Quantas vezes aumentar
-    ajuda: No modo ia, 2 ou 4. No modo leve, de 1 a 4. Aumentar mais custa mais tempo e mais memória.
-  formato: opção (png, jpg, webp) = "jpg"
+    ajuda: 4k é o automático e o recomendado — o serviço olha o tamanho da foto e escolhe entre IA, redimensionamento fino ou só ajuste, mirando 3840x2160. ia força o modelo e só aceita foto de até 2,1 megapixels (1920x1080); acima disso ele recusa. leve só ajusta contraste e nitidez, na hora.
+  formato: opção (jpg, png, webp) = "jpg"
     rótulo: Formato da saída
-    ajuda: jpg sai bem menor e é o que costuma caber no envio. png não perde nada e fica grande.
+    ajuda: jpg é o que costuma caber no envio. Uma foto 4K em png passa fácil de 10 MB e vira documento em vez de foto.
+  qualidade: número = 92
+    rótulo: Qualidade
+    ajuda: De 1 a 100, vale para jpg e webp. 92 é o padrão do serviço e já é bem alto.
   allowFrom: opção (external, any) = "external"
     rótulo: Quem pode acionar
     ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
   semMidiaText: texto = "Responde uma foto com este comando, ou manda a foto com ele na legenda."
     rótulo: Aviso quando não vier foto
     ajuda: Resposta quando não há foto nenhuma por perto. Vídeo não serve para este comando.
-  ackText: texto = "🔍 Melhorando… no modo ia isso pode levar quase um minuto."
+  ackText: texto = "🔍 Melhorando… foto pequena leva uns segundos, foto grande pode levar um ou dois minutos."
     rótulo: Aviso ao começar
     ajuda: É o comando mais demorado do serviço. Sem aviso, a pessoa repete o comando e enfileira outro trabalho.
   caption: texto = ""
@@ -64,7 +64,7 @@ avisa exige
   Exige o serviço de imagem configurado na aba Conexões.
 
 avisa nota
-  No modo ia a foto de entrada vai até cerca de 1,2 megapixel (por exemplo 1264x948). Acima disso o serviço recusa dizendo o tamanho que caberia — foto de celular moderna costuma passar desse limite, então vale avisar quem usa.
+  No modo automático (4k) não há limite de tamanho de entrada: foto que já é grande não é expandida, só ajustada. O limite de 2,1 megapixels vale apenas quando se força o modo ia.
 
 avisa nota
   Um pedido de IA por vez; os outros esperam na fila. Com a fila cheia, a resposta é para tentar de novo em instantes.

@@ -1,4 +1,4 @@
-template figurinha v2
+template figurinha v3
   nome: Figurinha
   descrição: Transforma uma imagem ou vídeo curto em figurinha do WhatsApp. A pessoa manda a mídia com o comando na legenda, ou responde uma mídia com o comando. Precisa do ffmpeg instalado na máquina que roda o número.
   categoria: utilitarios
@@ -47,7 +47,7 @@ configurável
     ajuda: Identificador do pool de números que vai responder este comando.
 
 avisa exige
-  Exige o ffmpeg instalado na máquina que roda este número — é programa de fora, não faz parte do LCN. A aba Visão geral mostra se ele está lá. Sem ele, o comando responde com erro em vez de gerar a figurinha.
+  Este comando converte na PRÓPRIA máquina do número e depende de um programa instalado lá (ffmpeg). Se você quer um comando de figurinha que não dependa da máquina — e que ainda grave nome de pacote e autor —, use o "Figurinha (pelo serviço de imagem)", que passa por uma conexão configurada na aba Conexões.
 
 avisa compatibilidade
   Vídeos viram figurinha animada e são cortados nos primeiros segundos — é limite do próprio WhatsApp, não do sistema.

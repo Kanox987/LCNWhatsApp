@@ -129,9 +129,9 @@ export function criarExecutorDeConexao ({
   esperaMaximaMs = 300000,
   limiteBytes = 64 * 1024 * 1024
 } = {}) {
-  async function chamar (url, opcoes) {
+  async function chamar (url, opcoes, esperaMs = TIMEOUT_REQUISICAO_MS) {
     const controle = new AbortController()
-    const timer = setTimeout(() => controle.abort(), TIMEOUT_REQUISICAO_MS)
+    const timer = setTimeout(() => controle.abort(), esperaMs)
     try {
       return await buscar(url, { ...opcoes, signal: controle.signal })
     } catch {
@@ -254,7 +254,11 @@ export function criarExecutorDeConexao ({
     const anexo = arquivo && campoDeMidia ? { ...arquivo, campo: campoDeMidia } : null
 
     const pedido = montarRequisicao(url, funcao.metodo, corpo, cabecalhos, anexo)
-    const primeira = await jsonOuErro(await chamar(pedido.url, pedido.opcoes), `chamar ${funcao.nome}`, funcao.resposta?.campoDoErro)
+    // A espera é da FUNÇÃO quando ela declara uma. Sem isto, uma melhoria de
+    // foto de dois minutos morria aos 20 segundos — com o serviço ainda
+    // trabalhando do outro lado, e ninguém sabendo por quê.
+    const espera = Number.isFinite(funcao.esperaSegundos) ? funcao.esperaSegundos * 1000 : TIMEOUT_REQUISICAO_MS
+    const primeira = await jsonOuErro(await chamar(pedido.url, pedido.opcoes, espera), `chamar ${funcao.nome}`, funcao.resposta?.campoDoErro)
 
     // Resposta com arquivos NA HORA, sem protocolo de trabalho: conversão é
     // rápida, e obrigar um serviço de dois segundos a devolver identificador e

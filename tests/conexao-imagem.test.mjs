@@ -234,5 +234,32 @@ check('tipo de envio inventado é recusado, listando os válidos',
 
 check('as duas conexões prontas continuam válidas', CONEXOES_PRONTAS.every((c) => !!validarConfiguracao(c.config)))
 
+// --- quanto esperar é da FUNÇÃO, não do meu código -----------------------
+//
+// 20 segundos serve para quase tudo e não serve para nada que pense: a
+// melhoria em 4K leva de 2 s a 2 min, e o teto fixo abortava a chamada no
+// meio — com o trabalho já feito do outro lado e ninguém sabendo por quê.
+check('a melhoria declara uma espera longa', porNome.get('melhorar').esperaSegundos >= 300,
+  String(porNome.get('melhorar').esperaSegundos))
+check('e a troca de metadados, que é instantânea, não declara nada',
+  porNome.get('trocar_metadados').esperaSegundos === undefined)
+check('espera fora da faixa é recusada na declaração',
+  !!recusa(() => validarFuncao({ nome: 'f', caminho: '/x', esperaSegundos: 5000, resposta: { forma: 'texto' } })))
+check('e espera zero também', !!recusa(() => validarFuncao({ nome: 'f', caminho: '/x', esperaSegundos: 0, resposta: { forma: 'texto' } })))
+
+{
+  // O que importa é a espera CHEGAR ao fetch: sem isso a declaração seria
+  // decorativa e a chamada longa continuaria morrendo aos 20 s.
+  let prazoVisto = null
+  const buscar = async (_url, opcoes) => {
+    prazoVisto = opcoes?.signal ? 'tem signal' : 'sem signal'
+    return { ok: true, status: 200, json: async () => ({ arquivo_base64: 'eA==', mime: 'image/jpeg' }) }
+  }
+  const demorada = { ...DECL, funcoes: [{ ...porNome.get('melhorar') }] }
+  const r = await criarExecutorDeConexao({ buscar, dormir: async () => {} })
+    .executar(demorada, 'melhorar', {}, ARQUIVO)
+  check('a chamada longa acontece e volta com arquivo', r.midias.length === 1 && prazoVisto === 'tem signal')
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO SERVIÇO DE IMAGEM PASSARAM')
 process.exit(falhas ? 1 : 0)

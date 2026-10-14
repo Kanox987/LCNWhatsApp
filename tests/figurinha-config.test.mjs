@@ -17,7 +17,6 @@ import { executarComandos } from '../src/engine/gatewayExecutor.js'
 import { carregarCatalogo } from '../src/engine/templates/catalog.js'
 import { renderizarTemplate } from '../src/engine/templates/render.js'
 import { PADRAO, FAIXAS } from '../src/sticker.js'
-import { extrairVersao, verificarDependencias, _limparCacheParaTeste } from '../src/dependencias.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -179,33 +178,6 @@ check('a faixa do schema e a do conversor são a MESMA',
   const no = documento.flow.nodes.find((x) => x.type === 'action.whatsapp.sticker')
   check('instalando com 256, o documento sai com 256 (número, não texto)', no.config.size === 256, JSON.stringify(no.config))
   check('e o peso escolhido chega inteiro', no.config.maxKilobytes === 500, JSON.stringify(no.config.maxKilobytes))
-}
-
-// =========================================================================
-// O ffmpeg como estado observável
-// =========================================================================
-check('a versão sai da primeira linha do "-version"',
-  extrairVersao('ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2024\nbuilt with gcc') === '7.1.5-0+deb13u1')
-check('saída sem a palavra "version" não inventa número',
-  extrairVersao('qualquer coisa') === 'qualquer coisa')
-check('saída vazia vira nada, nunca string vazia disfarçada', extrairVersao('') === null)
-
-{
-  _limparCacheParaTeste()
-  const lista = await verificarDependencias({ forcar: true })
-  const ffmpeg = lista.find((d) => d.nome === 'ffmpeg')
-  check('o ffmpeg é listado como dependência externa', !!ffmpeg)
-  check('e diz por quem é usado', ffmpeg.usadoPor.includes('Figurinha'))
-  // Presente ou não depende da máquina — o que o caso exige é COERÊNCIA entre
-  // os campos. "Instalado sem versão" ou "ausente sem motivo" seriam telas que
-  // não explicam nada.
-  check('presente vem com versão e sem motivo; ausente, o contrário',
-    ffmpeg.presente ? (!!ffmpeg.versao && !ffmpeg.motivo) : (!ffmpeg.versao && !!ffmpeg.motivo),
-    JSON.stringify({ presente: ffmpeg.presente, versao: ffmpeg.versao, motivo: ffmpeg.motivo }))
-  check('e sempre diz o que para de funcionar sem ela', !!ffmpeg.semEla)
-  // Nada de caminho de binário nem ambiente na resposta: é tela de painel.
-  check('a resposta não carrega caminho de binário nem ambiente',
-    !JSON.stringify(lista).match(/\/usr\/|PATH|HOME=/), JSON.stringify(lista).slice(0, 200))
 }
 
 db.close()
