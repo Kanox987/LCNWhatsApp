@@ -59,9 +59,14 @@ function linhaDeAcao (no) {
   // O bloco de campos abertos vem PRIMEIRO: as entradas são o que a função
   // recebe, e ler isso antes dos textos de aviso é a ordem em que a pessoa
   // pensa — o que eu mando, depois o que eu digo.
-  if (def.mapa && cfg[def.mapa.chave] && Object.keys(cfg[def.mapa.chave]).length) {
+  const entradasDoMapa = def.mapa ? (cfg[def.mapa.chave] || {}) : {}
+  const nomeDoArquivo = def.arquivo ? cfg[def.arquivo.chave] : null
+  if (def.mapa && (Object.keys(entradasDoMapa).length || nomeDoArquivo)) {
     linhas.push(`${IDENT}${def.mapa.bloco}`)
-    for (const [nome, valor] of Object.entries(cfg[def.mapa.chave])) {
+    // O arquivo primeiro: numa chamada que converte mídia, ele é o assunto, e
+    // o resto são ajustes em cima dele.
+    if (nomeDoArquivo) linhas.push(`${IDENT}${IDENT}${nomeDoArquivo}: ${def.arquivo.palavra}`)
+    for (const [nome, valor] of Object.entries(entradasDoMapa)) {
       // O caminho de volta do `o link`: o marcador interno nunca aparece na
       // linguagem.
       if (String(valor) === '{{precisa.link}}') {

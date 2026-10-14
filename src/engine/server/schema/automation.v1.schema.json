@@ -1148,6 +1148,11 @@
               "additionalProperties": { "type": "string" },
               "description": "O que a função recebe, por nome de entrada. Os valores aceitam variáveis ({{message.link}}) e são interpolados antes de sair. Entrada obrigatória que faltar é recusada na publicação, não na hora da chamada."
             },
+            "mediaInput": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Qual entrada da função recebe o ARQUIVO da mensagem — a foto, o vídeo ou o áudio que chegou pelo WhatsApp. Fica fora de \"inputs\" de propósito: ali o valor passa pelo interpolador, e token de mídia no interpolador é o que o invariante 4 proíbe. O motor só repassa o token; quem resolve e anexa os bytes é o gateway."
+            },
             "ackText": {
               "type": "string",
               "description": "Avisa que começou. Chamada externa demora, e silêncio parece que não funcionou."

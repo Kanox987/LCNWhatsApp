@@ -21,7 +21,17 @@ const ESPERA_ENTRE_CONSULTAS_MS = 1500
 const ESPERA_MAXIMA_ENTRE_CONSULTAS_MS = 5000
 
 // O que o serviço chama de tipo, traduzido para o que o WhatsApp aceita.
-const TIPO_WHATSAPP = { video: 'video', audio: 'audio', imagem: 'image', image: 'image' }
+const TIPO_WHATSAPP = {
+  video: 'video',
+  audio: 'audio',
+  imagem: 'image',
+  image: 'image',
+  // Figurinha não é "uma imagem com outro nome": é outro tipo de envio no
+  // WhatsApp, sem legenda e sem miniatura. Um serviço que converte precisa
+  // poder dizer isso, senão o webp chegaria como foto.
+  figurinha: 'sticker',
+  sticker: 'sticker'
+}
 
 // Duas faces do mesmo erro, como no downloader: `message` é o diagnóstico
 // (endereço, status, caminho de arquivo) e `paraPessoa` é o que pode ir para o
@@ -62,11 +72,23 @@ function aplicarCredencial (url, cabecalhos, { autenticacao, chave, enviaSegredo
 
 // As entradas viram corpo ou query, conforme o método. GET não tem corpo, e
 // mandar um faria o serviço recusar de um jeito que ninguém liga à automação.
-function montarRequisicao (url, metodo, entradas, cabecalhos) {
+//
+// Com ARQUIVO, o corpo deixa de ser JSON e vira multipart — é o único formato
+// que leva bytes e campos na mesma requisição sem inventar codificação. O
+// `Content-Type` NÃO é escrito à mão aqui de propósito: ele precisa carregar o
+// boundary que o FormData gera, e fixá-lo faria o serviço receber um corpo que
+// não consegue separar.
+function montarRequisicao (url, metodo, entradas, cabecalhos, arquivo) {
   if (metodo === 'GET' || metodo === 'DELETE') {
     const comQuery = new URL(url)
     for (const [nome, valor] of Object.entries(entradas)) comQuery.searchParams.set(nome, String(valor))
     return { url: comQuery.toString(), opcoes: { method: metodo, headers: cabecalhos } }
+  }
+  if (arquivo) {
+    const forma = new FormData()
+    for (const [nome, valor] of Object.entries(entradas)) forma.set(nome, String(valor))
+    forma.set(arquivo.campo, new Blob([arquivo.buffer], { type: arquivo.mime || 'application/octet-stream' }), arquivo.nome || 'arquivo')
+    return { url, opcoes: { method: metodo, headers: cabecalhos, body: forma } }
   }
   return {
     url,
@@ -146,7 +168,7 @@ export function criarExecutorDeConexao ({
 
   // `declaracao` é o que a rota interna do motor devolve: endereço,
   // autenticação, funções e a chave já resolvida.
-  async function executar (declaracao, nomeDaFuncao, entradas) {
+  async function executar (declaracao, nomeDaFuncao, entradas, arquivo = null) {
     const funcao = (declaracao?.funcoes || []).find((f) => f.nome === nomeDaFuncao)
     if (!funcao) {
       // Diagnóstico e conversa separados: o nome da função é detalhe de
@@ -168,13 +190,44 @@ export function criarExecutorDeConexao ({
     // Os padrões declarados entram no que a automação não informou.
     const corpo = { ...entradas }
     for (const entrada of funcao.entradas || []) {
+      if (entrada.tipo === 'mídia') continue
       if (corpo[entrada.nome] === undefined && entrada.padrao !== undefined && entrada.padrao !== null && entrada.padrao !== '') {
         corpo[entrada.nome] = entrada.padrao
       }
     }
 
-    const pedido = montarRequisicao(url, funcao.metodo, corpo, cabecalhos)
+    // O arquivo vai no campo que a FUNÇÃO declarou, não no que o comando
+    // escreveu. Se a declaração mudou e o nome não existe mais, isto é erro de
+    // configuração: mandar num campo que o serviço não espera faria a chamada
+    // falhar do outro lado, com uma mensagem que não aponta para cá.
+    const campoDeMidia = (funcao.entradas || []).find((e) => e.tipo === 'mídia')?.nome || null
+    if (arquivo && !campoDeMidia) {
+      throw new ErroDeConexao(
+        `A função "${funcao.nome}" não declara entrada de mídia, mas o comando mandou um arquivo.`,
+        { paraPessoa: 'Este comando e a configuração do serviço não combinam mais. Avise o dono do bot.' }
+      )
+    }
+    const anexo = arquivo && campoDeMidia ? { ...arquivo, campo: campoDeMidia } : null
+
+    const pedido = montarRequisicao(url, funcao.metodo, corpo, cabecalhos, anexo)
     const primeira = await jsonOuErro(await chamar(pedido.url, pedido.opcoes), `chamar ${funcao.nome}`)
+
+    // Resposta com arquivos NA HORA, sem protocolo de trabalho: conversão é
+    // rápida, e obrigar um serviço de dois segundos a devolver identificador e
+    // aceitar consulta seria complicar o lado de quem escreve a API.
+    //
+    // Este ramo existia declarável e NÃO buscava arquivo nenhum — quem
+    // declarasse `forma: mídia` recebia "não devolveu arquivo" sempre. Era
+    // ramo morto, sem teste.
+    if (funcao.resposta?.forma === 'mídia') {
+      const erroDireto = funcao.resposta.campoDoErro ? porCaminho(primeira, funcao.resposta.campoDoErro) : null
+      if (erroDireto) throw new ErroDeConexao(String(erroDireto))
+      return {
+        forma: 'mídia',
+        ...(await buscarArquivos(porCaminho(primeira, funcao.resposta?.campo), { base: declaracao.endereco, cabecalhos })),
+        descricao: typeof primeira?.descricao === 'string' ? primeira.descricao : null
+      }
+    }
 
     if (funcao.resposta?.forma !== 'trabalho') {
       return { forma: funcao.resposta?.forma || 'texto', dados: porCaminho(primeira, funcao.resposta?.campo) }

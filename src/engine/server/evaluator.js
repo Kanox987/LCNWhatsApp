@@ -662,15 +662,37 @@ function executarNo (db, no, evento, contexto, comandos) {
         if (bruto) entradas[nome] = bruto
       }
 
-      // Falta o que a função precisa (o caso comum: nenhum link por perto).
-      // Avisar é melhor que chamar o serviço com entrada vazia e deixar ele
-      // recusar com uma mensagem que ninguém entende.
-      if (!Object.keys(entradas).length && no.config?.notFoundText) {
+      // A mídia da mensagem, quando a função declara receber arquivo.
+      //
+      // O token NÃO passa pelo mapa de entradas: ali tudo é interpolado, e
+      // token de mídia no interpolador é o que o invariante 4 proíbe. Ele viaja
+      // num campo próprio do comando, exatamente como na figurinha.
+      //
+      // As duas origens, as mesmas da figurinha e as duas necessárias: a mídia
+      // mandada COM o comando na legenda, e o comando RESPONDENDO uma mídia.
+      const citadaDeMidia = evento.message?.quotedMediaRef
+      const refDeMidia = no.config?.mediaInput
+        ? (evento.message?.mediaRef || citadaDeMidia?.token || null)
+        : null
+
+      // Falta o que a função precisa — e "falta" tem duas formas. Sem nenhuma
+      // entrada (o caso comum: nenhum link por perto), ou pedindo arquivo e não
+      // havendo arquivo. A segunda não podia cair no teste da primeira: um
+      // comando que manda `tamanho: 512` junto tem entrada, e chamaria o
+      // serviço sem o arquivo que é o assunto da chamada.
+      const faltaArquivo = !!no.config?.mediaInput && !refDeMidia
+      if ((faltaArquivo || !Object.keys(entradas).length) && no.config?.notFoundText) {
         comandos.push({
           commandType: 'whatsapp.reply',
           payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto), replyTo: referenciaDoLink(evento) }
         })
         return 'success'
+      }
+      // Sem arquivo e sem texto de falta, não se chama o serviço: ele receberia
+      // um pedido sem o conteúdo e recusaria com uma mensagem que não aponta
+      // para cá. Fica registrado como erro, com o motivo.
+      if (faltaArquivo) {
+        throw new ErroDeFluxo(`A função "${no.config.function}" recebe arquivo, e não havia mídia nem na mensagem nem na citada.`)
       }
 
       comandos.push({
@@ -682,6 +704,11 @@ function executarNo (db, no, evento, contexto, comandos) {
           // O que a FUNÇÃO recebe fica separado de como a resposta é
           // APRESENTADA: um é contrato com o serviço, o outro é conversa.
           entradas,
+          ...(refDeMidia ? {
+            mediaInput: no.config.mediaInput,
+            mediaRef: refDeMidia,
+            sourceKind: evento.message?.mediaRef ? evento.message.kind : (citadaDeMidia?.mediaKind || null)
+          } : {}),
           entrega: no.config?.delivery || 'album',
           replyTo: referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),

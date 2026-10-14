@@ -160,7 +160,33 @@ export function validarAutomacao (db, documento) {
     }
 
     const informadas = node.config?.inputs && typeof node.config.inputs === 'object' ? node.config.inputs : {}
+
+    // A entrada de ARQUIVO não vive em `inputs` — ela é nomeada em
+    // `mediaInput`, porque o token não pode passar pelo interpolador. Aqui é o
+    // lugar de conferir que os dois lados concordam: o nome existe na função, e
+    // é de fato a entrada de mídia. Sem isto, trocar o nome na declaração
+    // deixaria o comando mandando arquivo num campo que o serviço ignora.
+    const entradaDeMidia = (funcao.entradas || []).find((e) => e.tipo === 'mídia')
+    const nomeDeMidia = typeof node.config?.mediaInput === 'string' ? node.config.mediaInput.trim() : ''
+    if (nomeDeMidia) {
+      if (!entradaDeMidia) {
+        erros.push({ path: `${caminho}/mediaInput`, message: `a função "${funcao.nome}" não recebe arquivo.` })
+      } else if (entradaDeMidia.nome !== nomeDeMidia) {
+        erros.push({
+          path: `${caminho}/mediaInput`,
+          message: `a entrada de arquivo da função "${funcao.nome}" se chama "${entradaDeMidia.nome}", não "${nomeDeMidia}".`
+        })
+      }
+    } else if (entradaDeMidia && entradaDeMidia.obrigatoria !== false) {
+      erros.push({
+        path: `${caminho}/mediaInput`,
+        message: `a função "${funcao.nome}" precisa do arquivo em "${entradaDeMidia.nome}" — diga de onde ele vem.`
+      })
+    }
+
     for (const entrada of funcao.entradas || []) {
+      // Já conferida acima, e ela nunca aparece em `inputs`.
+      if (entrada.tipo === 'mídia') continue
       const temValor = Object.hasOwn(informadas, entrada.nome) && String(informadas[entrada.nome] ?? '').trim()
       const temPadrao = entrada.padrao !== undefined && entrada.padrao !== null && entrada.padrao !== ''
       if (entrada.obrigatoria !== false && !temValor && !temPadrao) {
@@ -178,13 +204,23 @@ export function validarAutomacao (db, documento) {
         }
       }
     }
-    const declaradas = new Set((funcao.entradas || []).map((e) => e.nome))
+    // A entrada de mídia fica FORA deste conjunto de propósito: escrevê-la em
+    // `inputs` é engano, e um engano que passaria calado. Ali o valor é
+    // interpolado como texto, então o serviço receberia a string que a pessoa
+    // escreveu em vez do arquivo — e a chamada falharia do outro lado.
+    const declaradas = new Set((funcao.entradas || []).filter((e) => e.tipo !== 'mídia').map((e) => e.nome))
     for (const nome of Object.keys(informadas)) {
+      if (declaradas.has(nome)) continue
+      if (entradaDeMidia && nome === entradaDeMidia.nome) {
+        erros.push({
+          path: `${caminho}/inputs/${nome}`,
+          message: `"${nome}" é a entrada de ARQUIVO da função "${funcao.nome}" e não vai aqui — diga de onde o arquivo vem, não um valor de texto.`
+        })
+        continue
+      }
       // Entrada que a função não declara seria descartada em silêncio, e quem
       // escreveu ficaria esperando um efeito que nunca vem.
-      if (!declaradas.has(nome)) {
-        erros.push({ path: `${caminho}/inputs/${nome}`, message: `a função "${funcao.nome}" não recebe "${nome}".` })
-      }
+      erros.push({ path: `${caminho}/inputs/${nome}`, message: `a função "${funcao.nome}" não recebe "${nome}".` })
     }
   })
 

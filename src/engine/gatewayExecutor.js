@@ -308,7 +308,9 @@ async function enviarEmSequencia (client, chatId, midias, legenda, opcoesCitacao
     if (m.tipo === 'document') conteudo.fileName = m.nome
     // Legenda só na primeira: repetida em cada uma, o mesmo texto apareceria
     // dez vezes seguidas.
-    if (i === 0 && legenda && m.tipo !== 'audio') conteudo.caption = legenda
+    // Áudio e figurinha não têm legenda no WhatsApp: mandar uma faria a
+    // biblioteca recusar o envio inteiro por causa de um campo decorativo.
+    if (i === 0 && legenda && m.tipo !== 'audio' && m.tipo !== 'sticker') conteudo.caption = legenda
     await comTimeout(
       // Citar só a primeira: dez respostas citando a mesma mensagem poluem a
       // conversa sem informar nada a mais.
@@ -366,9 +368,26 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
 // Isto é o que tira o `baixa` de dentro do compilador: endereço, método,
 // credencial e o formato da resposta passam a ser dado que o dono edita na aba
 // Conexões, em vez de código que só eu mexo.
+// Nome e tipo do arquivo que sai daqui. O serviço do outro lado decide o que
+// fazer pelo que recebe, então mandar tudo como "arquivo"/octet-stream faria
+// qualquer API ter que adivinhar.
+const MIME_POR_TIPO = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/ogg', document: 'application/octet-stream' }
+const EXTENSAO_POR_TIPO = { image: 'jpg', video: 'mp4', audio: 'ogg', document: 'bin' }
+
+function mimeProvavel (tipo) {
+  return MIME_POR_TIPO[tipo] || 'application/octet-stream'
+}
+
+function nomeDeArquivoDaMidia (tipo, mime) {
+  // A extensão sai do mime quando ele veio, porque ele é o que o WhatsApp
+  // realmente disse; o tipo é só a categoria.
+  const doMime = typeof mime === 'string' ? mime.split('/')[1]?.split(';')[0] : null
+  return `arquivo.${doMime || EXTENSAO_POR_TIPO[tipo] || 'bin'}`
+}
+
 async function executarChamadaDeConexao (client, comando, deps) {
-  const { chatId, conexao, funcao, entradas, entrega, replyTo, ackText, caption, errorText } = comando.payload
-  const { clienteEngine, criarExecutorDeConexao } = deps
+  const { chatId, conexao, funcao, entradas, entrega, replyTo, ackText, caption, errorText, mediaInput, mediaRef } = comando.payload
+  const { clienteEngine, criarExecutorDeConexao, mediaRefCache, baixarBuffer, limiteBytes } = deps
   if (!clienteEngine?.conexoes?.resolvida) throw new Error('sem acesso ao motor para resolver a conexão')
 
   const avisar = criarAvisador(client, comando, { chatId, replyTo, errorText })
@@ -387,10 +406,36 @@ async function executarChamadaDeConexao (client, comando, deps) {
     }
   }
 
+  // O arquivo da mensagem, quando a função pede um.
+  //
+  // Mesma fronteira da figurinha e do /recover: o motor mandou um token opaco,
+  // e só ESTE processo consegue trocá-lo por bytes. O motor nunca viu a mídia.
+  let arquivo = null
+  if (mediaInput && mediaRef) {
+    const entrada = mediaRefCache.resolver(mediaRef)
+    if (!entrada) {
+      // TTL curto de propósito. Erro CONHECIDO, não ambíguo: nada foi enviado.
+      const recado = 'A mídia deste comando expirou antes de eu conseguir usá-la. Manda de novo.'
+      await avisar(recado)
+      throw new Error('a mídia da chamada de conexão expirou antes do comando voltar do motor')
+    }
+    const buffer = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
+    // O mime vem do nó da mídia — é o que o WhatsApp disse que aquilo é, e vale
+    // mais que a categoria. `entrada.tipo` é só "image/video/audio".
+    const mime = entrada.node?.mimetype || mimeProvavel(entrada.tipo)
+    arquivo = {
+      buffer,
+      // Nome e tipo são do ARQUIVO, não do campo: é por eles que o serviço do
+      // outro lado sabe o que recebeu.
+      nome: nomeDeArquivoDaMidia(entrada.tipo, mime),
+      mime
+    }
+  }
+
   let resultado
   try {
     const declaracao = await clienteEngine.conexoes.resolvida(conexao)
-    resultado = await criarExecutorDeConexao().executar(declaracao, funcao, entradas || {})
+    resultado = await criarExecutorDeConexao().executar(declaracao, funcao, entradas || {}, arquivo)
   } catch (erro) {
     await avisar(mensagemParaPessoa(erro))
     throw erro

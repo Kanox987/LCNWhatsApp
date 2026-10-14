@@ -51,7 +51,20 @@ export const FORMAS_DE_RESPOSTA = Object.freeze({
   trabalho: 'trabalho'
 })
 
-export const TIPOS_DE_ENTRADA = Object.freeze(['texto', 'número', 'opção', 'liga/desliga'])
+// A entrada `mídia` é diferente das outras três em natureza, não em formato.
+//
+// As outras levam um VALOR que a automação escreveu ou interpolou. Esta leva o
+// ARQUIVO da mensagem — a foto, o vídeo, o áudio que chegou pelo WhatsApp. O
+// motor nunca vê esses bytes (invariante 4): ele só sabe que a função pede
+// mídia, e quem resolve o token e anexa o arquivo é o gateway.
+//
+// Por isso ela não aparece em `inputs` no documento: vive num campo próprio
+// (`mediaInput`), que diz QUAL entrada da função recebe o arquivo. Se entrasse
+// pelo mapa de entradas, passaria pelo interpolador — e token de mídia no
+// interpolador é exatamente o que o invariante 4 proíbe.
+export const TIPO_MIDIA = 'mídia'
+
+export const TIPOS_DE_ENTRADA = Object.freeze(['texto', 'número', 'opção', 'liga/desliga', TIPO_MIDIA])
 
 // COMO a credencial viaja — não só como ela se chama.
 //
@@ -170,6 +183,14 @@ function validarEntrada (entrada, ondeEstou) {
     }
     return { nome, tipo, opcoes, obrigatoria: entrada.obrigatoria !== false, padrao: entrada.padrao }
   }
+  if (tipo === TIPO_MIDIA) {
+    // Padrão não existe para arquivo: não há "arquivo padrão" que faça sentido,
+    // e aceitar o campo deixaria alguém declarar um valor que nunca é usado.
+    if (entrada.padrao !== undefined && entrada.padrao !== null && entrada.padrao !== '') {
+      throw new ErroDeDeclaracao(`${onde} "${nome}": entrada de mídia não tem padrão — o arquivo vem da mensagem.`)
+    }
+    return { nome, tipo, obrigatoria: entrada.obrigatoria !== false }
+  }
   return { nome, tipo, obrigatoria: entrada.obrigatoria !== false, padrao: entrada.padrao }
 }
 
@@ -180,7 +201,16 @@ function validarResposta (resposta, onde) {
       `${onde}: a resposta precisa de uma forma conhecida (${Object.values(FORMAS_DE_RESPOSTA).join(', ')}).`
     )
   }
-  if (forma !== FORMAS_DE_RESPOSTA.trabalho) return { forma, campo: resposta.campo || null }
+  if (forma !== FORMAS_DE_RESPOSTA.trabalho) {
+    return {
+      forma,
+      campo: resposta.campo || null,
+      // Também na resposta imediata: um serviço que converte em dois segundos
+      // ainda precisa de um jeito de dizer "não deu, e o motivo é este" sem
+      // depender de status HTTP, e esse texto é o que chega à pessoa.
+      campoDoErro: resposta.campoDoErro ? String(resposta.campoDoErro) : null
+    }
+  }
 
   // O protocolo assíncrono, declarado em vez de embutido. Cada campo aqui é
   // algo que hoje está fixo dentro de src/downloader.js.
@@ -232,6 +262,20 @@ export function validarFuncao (funcao) {
   for (const e of entradas) {
     if (vistos.has(e.nome)) throw new ErroDeDeclaracao(`${onde}: a entrada "${e.nome}" está declarada duas vezes.`)
     vistos.add(e.nome)
+  }
+
+  const deMidia = entradas.filter((e) => e.tipo === TIPO_MIDIA)
+  if (deMidia.length > 1) {
+    // Uma mensagem traz UMA mídia. Duas entradas de arquivo prometeriam algo
+    // que o WhatsApp não entrega, e a segunda chegaria vazia na chamada.
+    throw new ErroDeDeclaracao(
+      `${onde}: só uma entrada de mídia por função — vieram ${deMidia.map((e) => `"${e.nome}"`).join(' e ')}.`
+    )
+  }
+  if (deMidia.length && (metodo === 'GET' || metodo === 'DELETE')) {
+    // Arquivo viaja no corpo. GET e DELETE não têm corpo, então a declaração
+    // nasceria impossível — e a falha apareceria só na primeira chamada.
+    throw new ErroDeDeclaracao(`${onde}: ${metodo} não tem corpo, então não dá para mandar arquivo nela. Use POST, PUT ou PATCH.`)
   }
 
   return {

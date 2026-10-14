@@ -185,6 +185,13 @@ function lerAcao (linha, filhas) {
       // um algoritmo. O marcador interno existe porque o motor interpola; a
       // linguagem nunca o mostra.
       if (cru === 'o link') { mapa[filha.texto.slice(0, sep).trim()] = '{{precisa.link}}'; continue }
+      // `a mídia` é o arquivo da mensagem, e ele NÃO entra no mapa de entradas:
+      // o que vai para o serviço são bytes, não texto interpolado. Fica num
+      // campo próprio, que diz só QUAL entrada da função recebe o arquivo.
+      if (def.arquivo && cru === def.arquivo.palavra) {
+        config[def.arquivo.chave] = filha.texto.slice(0, sep).trim()
+        continue
+      }
       mapa[filha.texto.slice(0, sep).trim()] = cru.startsWith('"') ? descitar(cru, filha.n) : cru
     }
     if (Object.keys(mapa).length) config[def.mapa.chave] = mapa

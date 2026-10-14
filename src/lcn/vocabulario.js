@@ -84,6 +84,11 @@ export const ACOES = Object.freeze([
     // `midia.baixar` na mesma linha: a conexão e a função, separadas por ponto.
     alvo: { conexao: 'connectionRef', funcao: 'function' },
     mapa: { bloco: 'com', chave: 'inputs' },
+    // A entrada que recebe o ARQUIVO da mensagem. Escrita dentro do mesmo
+    // bloco `com`, porque é uma entrada da função como as outras — mas guardada
+    // fora de `inputs`, porque ali tudo passa pelo interpolador e token de
+    // mídia no interpolador é o que o invariante 4 proíbe.
+    arquivo: { palavra: 'a mídia', chave: 'mediaInput' },
     campos: [
       { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { album: 'carrossel', separate: 'separado' } },
       { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },

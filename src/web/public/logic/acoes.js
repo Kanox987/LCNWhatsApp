@@ -125,6 +125,7 @@ export const ACOES = Object.freeze([
       { chave: 'connectionRef', rotulo: 'Qual serviço', ajuda: 'O identificador da conexão, como está na aba Conexões.' },
       { chave: 'function', rotulo: 'Qual função', ajuda: 'O nome da função declarada naquela conexão. A publicação recusa uma que não exista, e diz quais existem.' },
       { chave: 'inputs', rotulo: 'O que mandar', ajuda: 'As entradas que a função declarou, por nome. Aceitam variáveis: {{message.link}}, {{sender.name}}. Entrada obrigatória que faltar é recusada na publicação, não na hora da chamada.' },
+      { chave: 'mediaInput', rotulo: 'Qual entrada recebe o arquivo', ajuda: 'Só para função que recebe mídia (converter uma figurinha, ler uma imagem). O arquivo é a foto, o vídeo ou o áudio da mensagem — mandado com o comando ou numa mensagem respondida. Fica separado de "O que mandar" porque ali os valores passam por interpolação de texto, e arquivo não é texto.' },
       { chave: 'ackText', rotulo: 'Aviso ao começar', ajuda: 'Consulta externa demora. Sem aviso, parece que o comando não funcionou.' },
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Quando a resposta vier como arquivo. Vazio usa a descrição que o serviço trouxer.' },
       { chave: 'notFoundText', rotulo: 'Se faltar o que mandar', ajuda: 'Resposta quando nenhuma entrada resolveu — por exemplo, nenhum link por perto.' },
