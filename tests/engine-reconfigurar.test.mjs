@@ -131,6 +131,63 @@ try {
 
   const inexistente = await capturarErro('GET', '/automations/nao-existe/reconfigure', null)
   check('automação inexistente -> 404', inexistente?.status === 404)
+
+  // --- O TEMPLATE MUDOU, e isso não é culpa de quem instalou ---------------
+  //
+  // A comparação de documento sozinha não distingue "editado à mão" de "o
+  // template é outro agora", e a tela acusava a pessoa nos dois casos. Medido
+  // no ar: o `figurinha` passou de v1 para v2 quando ganhou tamanho, segundos,
+  // qualidade e peso, e o formulário fechou dizendo "você alterou à mão" — com
+  // o efeito de deixar os campos NOVOS inalcançáveis exatamente para quem já
+  // tinha o comando instalado.
+  //
+  // A versão da instalação está guardada; é ela que responde o que a diferença
+  // de documento não responde.
+  const versaoGuardada = (id) => db.prepare('SELECT template_version FROM automation_template_provenance WHERE automation_id = ?').get(id)?.template_version
+  const fingirVersaoAntiga = (id) => db.prepare('UPDATE automation_template_provenance SET template_version = 0 WHERE automation_id = ?').run(id)
+
+  {
+    // O caso duro: versão antiga E documento divergente (o `meu-ping` foi
+    // editado à mão nos casos acima). Não há como saber se a divergência vem
+    // do template novo ou da edição — o template antigo não existe mais no
+    // catálogo. Então não se adivinha: abre, e diz o que salvar vai fazer.
+    fingirVersaoAntiga('meu-ping')
+    const r = await api.resolver('GET', '/automations/meu-ping/reconfigure', contexto())
+    check('template em versão nova ABRE o formulário, em vez de acusar',
+      r.podeReconfigurar === true, r.motivo)
+    check('e não sobra acusação nenhuma de edição à mão',
+      !/alterada à mão/.test(r.motivo || ''), r.motivo)
+    check('o aviso diz as duas versões, a instalada e a do catálogo',
+      /versão 0/.test(r.aviso || '') && /1/.test(String(r.versaoDoCatalogo)),
+      `${r.versaoInstalada} -> ${r.versaoDoCatalogo}`)
+    // Honestidade sobre o que não se sabe: pode haver edição à mão por baixo.
+    check('e avisa que uma edição à mão por baixo se perderia',
+      /se perde/.test(r.aviso || ''), r.aviso)
+    check('a tela recebe a versão do catálogo para mostrar', r.templateVersion === 1, String(r.templateVersion))
+
+    // E aplicar FUNCIONA — é o ponto: era isto que estava bloqueado.
+    await api.resolver('PUT', '/automations/meu-ping/reconfigure', contexto({
+      parameters: { command: '/depois-da-versao', poolId: 'p' }
+    }))
+    const ativa = await api.resolver('GET', '/automations/meu-ping', contexto())
+    check('salvar com o template novo publica o valor novo',
+      comandoDe(ativa.draft.document) === '/depois-da-versao', comandoDe(ativa.draft.document))
+    // Sem isto o aviso voltaria para sempre, mesmo depois de adotada a versão.
+    check('e a proveniência passa a guardar a versão do catálogo',
+      versaoGuardada('meu-ping') === 1, String(versaoGuardada('meu-ping')))
+
+    const depois = await api.resolver('GET', '/automations/meu-ping/reconfigure', contexto())
+    check('reabrindo, o aviso de versão já não aparece', !depois.aviso, depois.aviso)
+  }
+
+  {
+    // Versão antiga e documento IGUAL ao que o template produz: nada da pessoa
+    // está em jogo, e o aviso precisa dizer isso em vez de assustar.
+    fingirVersaoAntiga('meu-ping')
+    const r = await api.resolver('GET', '/automations/meu-ping/reconfigure', contexto())
+    check('sem divergência, o aviso não ameaça perder nada',
+      r.podeReconfigurar === true && /nada seu se perde/.test(r.aviso || ''), r.aviso)
+  }
 } catch (erro) {
   falhas++
   console.error('❌ erro inesperado:', erro)

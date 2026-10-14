@@ -63,6 +63,10 @@
             "items": { "type": "string", "minLength": 1 },
             "description": "As escolhas possíveis. Só faz sentido com type: enum."
           },
+          "multiline": {
+            "type": "boolean",
+            "description": "Campo de várias linhas. O painel mostra uma área de texto em vez de uma caixa de uma linha — e isso NÃO é estética: uma caixa de uma linha apaga as quebras de linha em silêncio, e salvar publicaria o texto achatado. Ausente, o painel deduz pelo padrão (se ele já tem quebra, a área de texto aparece sozinha); declarar serve para o campo que NASCE com uma linha e ainda assim precisa aceitar várias."
+          },
           "default": {}
         },
         "allOf": [
@@ -75,6 +79,11 @@
             "comment": "lista em tipo que não é enum é engano silencioso: as opções seriam ignoradas e o campo viraria texto livre.",
             "if": { "required": ["options"] },
             "then": { "properties": { "type": { "const": "enum" } } }
+          },
+          {
+            "comment": "várias linhas só faz sentido em texto. Num número ou num liga/desliga o campo nem é digitado, então a declaração seria ignorada — e declaração ignorada é promessa quebrada.",
+            "if": { "properties": { "multiline": { "const": true } }, "required": ["multiline"] },
+            "then": { "properties": { "type": { "const": "string" } } }
           }
         ]
       }

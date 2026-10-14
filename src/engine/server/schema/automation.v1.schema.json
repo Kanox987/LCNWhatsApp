@@ -1145,8 +1145,8 @@
             },
             "inputs": {
               "type": "object",
-              "additionalProperties": { "type": "string" },
-              "description": "O que a função recebe, por nome de entrada. Os valores aceitam variáveis ({{message.link}}) e são interpolados antes de sair. Entrada obrigatória que faltar é recusada na publicação, não na hora da chamada."
+              "additionalProperties": { "type": ["string", "number", "boolean"] },
+              "description": "O que a função recebe, por nome de entrada. Os valores aceitam variáveis ({{message.link}}) e são interpolados antes de sair. Número e liga/desliga entram como número e booleano: a entrada declarada na conexão TEM tipo, e um campo de peso instalado pelo formulário chega aqui como número — exigir texto recusaria na publicação um documento correto. Entrada obrigatória que faltar é recusada na publicação, não na hora da chamada."
             },
             "mediaInput": {
               "type": "string",

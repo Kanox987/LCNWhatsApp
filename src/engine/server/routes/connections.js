@@ -102,13 +102,32 @@ function segredoValidado (secret) {
   return Object.keys(secret).length ? secret : null
 }
 
-// As prontas entram uma vez, e apagar tem que COLAR.
+// As prontas entram uma vez CADA, e apagar tem que COLAR.
 //
 // Sem esta marca, quem apagasse a conexão do download a veria voltar no próximo
 // arranque — o sistema desfazendo a decisão da pessoa em silêncio, que é
 // exatamente o tipo de coisa que faz ninguém confiar na tela. Mesmo mecanismo
 // do primeiro dono (`__owners_initialized__`).
+//
+// A marca guarda a LISTA de ids já semeados, e não um "já fiz" geral. Era
+// geral, e a consequência apareceu na primeira conexão pronta nova: ela nunca
+// chegaria a quem já tinha o sistema instalado — o marcador dizia "já semeei"
+// e a conexão de imagem simplesmente não existiria lá. Por id, cada pronta
+// entra uma vez e apagar continua colando.
 const CHAVE_PRONTAS = '__conexoes_prontas__'
+
+// O marcador antigo era `true`, e naquele momento existia UMA pronta: a de
+// download. Converter para `['midia']` é exato, não é palpite — é o que estava
+// semeado quando a marca foi escrita.
+function jaSemeadas (db) {
+  const linha = db.prepare(
+    "SELECT value_json FROM entity_attributes WHERE scope_kind = 'global' AND scope_id = ? AND key = ?"
+  ).get(ID_GLOBAL, CHAVE_PRONTAS)
+  if (!linha) return []
+  const valor = jsonOuNull(linha.value_json)
+  if (Array.isArray(valor)) return valor.map(String)
+  return valor === true ? ['midia'] : []
+}
 
 // A semente aponta para a chave QUE JÁ EXISTE.
 //
@@ -137,17 +156,16 @@ function credencialDoGateway () {
 }
 
 function semearProntas (db) {
-  const jaFeito = db.prepare(
-    "SELECT value_json FROM entity_attributes WHERE scope_kind = 'global' AND scope_id = ? AND key = ?"
-  ).get(ID_GLOBAL, CHAVE_PRONTAS)
-  if (jaFeito) return
+  const feitas = new Set(jaSemeadas(db))
+  const faltando = CONEXOES_PRONTAS.filter((c) => !feitas.has(c.id))
+  if (!faltando.length) return
 
   const agora = new Date().toISOString()
   const doGateway = credencialDoGateway()
   const inserir = db.prepare(`INSERT OR IGNORE INTO connections
     (id, kind, config_json, secret_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`)
   db.transaction(() => {
-    for (const pronta of CONEXOES_PRONTAS) {
+    for (const pronta of faltando) {
       const config = { ...pronta.config }
       // A chave nunca é COPIADA para o banco: a conexão aponta para o mesmo
       // arquivo que o gateway já usa. Copiar criaria uma segunda cópia do
@@ -159,8 +177,11 @@ function semearProntas (db) {
       // O valor do segredo continua fora do banco — a conexão só sabe ONDE ele está.
       inserir.run(pronta.id, pronta.kind, JSON.stringify(validarConfiguracao(config)), null, agora, agora)
     }
+    const marca = JSON.stringify([...feitas, ...faltando.map((c) => c.id)].sort())
     db.prepare(`INSERT INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at)
-      VALUES ('global', ?, ?, 'true', ?)`).run(ID_GLOBAL, CHAVE_PRONTAS, agora)
+      VALUES ('global', ?, ?, ?, ?)
+      ON CONFLICT(scope_kind, scope_id, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`)
+      .run(ID_GLOBAL, CHAVE_PRONTAS, marca, agora)
   })()
 }
 

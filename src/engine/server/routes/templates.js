@@ -147,10 +147,19 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
     if (!template) {
       return { podeReconfigurar: false, motivo: `O template "${proveniencia.template_id}" não está mais no catálogo desta instalação.`, parameters: [] }
     }
-    const analise = analisarReconfiguracao({ documento, template, valores, renderizar: renderizarTemplate })
+    const analise = analisarReconfiguracao({
+      documento,
+      template,
+      valores,
+      renderizar: renderizarTemplate,
+      // Sem esta linha a análise não tem como saber que o template mudou, e
+      // acusa a pessoa de ter editado à mão o que ela nunca tocou.
+      versaoInstalada: proveniencia.template_version ?? null
+    })
     return {
       ...analise,
       templateId: template.templateId,
+      templateVersion: template.templateVersion,
       // Cada campo já vem com o valor ATUAL, não com o padrão do template:
       // quem abre o formulário quer ver como está, não como nasceria.
       parameters: (template.parameters || []).map((definicao) => ({
@@ -168,7 +177,13 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
     if (!proveniencia) throw new ErroHttp(400, 'Esta automação não veio de um template.')
     if (!template) throw new ErroHttp(400, `O template "${proveniencia.template_id}" não está mais no catálogo desta instalação.`)
 
-    const analise = analisarReconfiguracao({ documento, template, valores, renderizar: renderizarTemplate })
+    const analise = analisarReconfiguracao({
+      documento,
+      template,
+      valores,
+      renderizar: renderizarTemplate,
+      versaoInstalada: proveniencia.template_version ?? null
+    })
     // Recusar aqui, e não só na tela: a tela pode estar desatualizada, e
     // regerar por cima de uma edição manual a apagaria sem perguntar.
     if (!analise.podeReconfigurar) throw new ErroHttp(409, analise.motivo)

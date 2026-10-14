@@ -1,0 +1,68 @@
+template figurinha-frase v1
+  nome: Figurinha de frase
+  descrição: Escreva "/frase bom dia" e o bot devolve a frase como figurinha. A letra fica do maior tamanho que couber, com quebra de linha automática, e emoji sai colorido. Com fundo ou letra "arco-iris" a figurinha sai animada. Não precisa de mídia nenhuma.
+  categoria: utilitarios
+
+automação
+  nome: Figurinha de frase
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Vira sua frase em figurinha
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  chama {{params.conexao}}.figurinha_de_frase
+    com
+      texto: "{{message.args}}"
+      fundo: {{params.fundo}}
+      letra: {{params.letra}}
+      efeito: {{params.efeito}}
+      pacote: {{params.pacote}}
+      autor: {{params.autor}}
+    sem dados: "{{params.semTextoText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/frase"
+    rótulo: Comando
+    ajuda: A pessoa digita o comando e a frase na mesma linha. Até 200 caracteres.
+  conexao: texto = "imagem"
+    rótulo: Serviço que converte
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  fundo: texto = "arco-iris"
+    rótulo: Cor do fundo
+    ajuda: transparente, preto, branco, vermelho, verde, azul, amarelo, laranja, rosa, roxo, cinza, ciano, uma cor em #RRGGBB, ou arco-iris. Com arco-iris a figurinha fica animada.
+  letra: texto = "branco"
+    rótulo: Cor da letra
+    ajuda: As mesmas cores do fundo, inclusive arco-iris. Evite letra e fundo da mesma cor.
+  efeito: opção (piscar, suave, nenhum) = "piscar"
+    rótulo: Movimento do arco-íris
+    ajuda: piscar troca a cor em degraus; suave desliza; nenhum deixa parada. Só tem efeito quando há arco-iris no fundo ou na letra.
+  pacote: texto = "LCN Frases"
+    rótulo: Nome do pacote
+    ajuda: Aparece quando alguém abre a figurinha no WhatsApp.
+  autor: texto = "LCN"
+    rótulo: Autor do pacote
+    ajuda: Aparece junto do nome do pacote.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semTextoText: texto = "Escreve a frase junto com o comando. Exemplo: /frase bom dia a todos"
+    rótulo: Aviso quando vier sem frase
+    ajuda: Resposta quando o comando é usado sozinho, sem nada escrito depois.
+  errorText: texto = "Não consegui fazer a figurinha: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo. Frase comprida demais tem motivo próprio ("a frase não cabe nem com a letra no menor tamanho").
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões.
+
+avisa nota
+  Este é o único comando de figurinha que não precisa de mídia: a entrada é o que a pessoa escreveu depois do comando.
+
+# nós: gatilho-comando, converter

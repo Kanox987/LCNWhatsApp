@@ -337,7 +337,11 @@ function depsConexao ({ resolve = true, midias = [{ buffer: Buffer.from('WEBP'),
   const no = documento.flow.nodes.find((x) => x.type === 'action.connection.call')
   check('"a mídia" compila para o campo próprio, não para uma entrada',
     no.config.mediaInput === 'arquivo' && !('arquivo' in (no.config.inputs || {})), JSON.stringify(no.config))
-  check('e a entrada comum continua no mapa', no.config.inputs.tamanho === '512')
+  // Sem aspas e parecendo número, o valor MANTÉM o tipo — a entrada declarada
+  // na conexão tem tipo, e transformar 512 em "512" fazia a ida e volta deixar
+  // de bater. Quem quer a string escreve com aspas, como na condição.
+  check('e a entrada comum continua no mapa, como NÚMERO', no.config.inputs.tamanho === 512,
+    JSON.stringify(no.config.inputs))
 
   const volta = descompilar(documento)
   check('a volta escreve "arquivo: a mídia", nunca o campo interno',

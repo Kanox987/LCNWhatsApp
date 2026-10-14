@@ -48,7 +48,31 @@ export class ErroDeDeclaracao extends Error {}
 export const FORMAS_DE_RESPOSTA = Object.freeze({
   texto: 'texto',
   midia: 'mídia',
-  trabalho: 'trabalho'
+  trabalho: 'trabalho',
+  // O serviço devolve O ARQUIVO na própria resposta, em base64 dentro do JSON.
+  //
+  // É a forma de quem converte em segundos — figurinha, troca de formato,
+  // remoção de fundo. `mídia` espera uma LISTA de endereços para buscar
+  // depois, e `trabalho` espera protocolo de acompanhamento; obrigar um
+  // serviço de dois segundos a qualquer um dos dois complicaria o lado de
+  // quem escreve a API sem ganhar nada.
+  arquivo: 'arquivo'
+})
+
+// Como o arquivo que volta deve ser ENVIADO no WhatsApp.
+//
+// Figurinha não é "uma imagem com outro nome": é outro tipo de envio, sem
+// legenda e sem miniatura. E um webp pode ser as duas coisas, então o mime não
+// basta para decidir — quem sabe é a função, e por isso ela declara.
+//
+// Ausente, deduz-se do mime: é o caso de uma função de conversão, onde o tipo
+// da saída depende do formato que a automação pediu.
+export const TIPOS_DE_ENVIO = Object.freeze({
+  figurinha: 'sticker',
+  foto: 'image',
+  'vídeo': 'video',
+  'áudio': 'audio',
+  documento: 'document'
 })
 
 // A entrada `mídia` é diferente das outras três em natureza, não em formato.
@@ -201,6 +225,24 @@ function validarResposta (resposta, onde) {
       `${onde}: a resposta precisa de uma forma conhecida (${Object.values(FORMAS_DE_RESPOSTA).join(', ')}).`
     )
   }
+  if (forma === FORMAS_DE_RESPOSTA.arquivo) {
+    const tipo = resposta.tipo ? String(resposta.tipo) : null
+    if (tipo && !Object.hasOwn(TIPOS_DE_ENVIO, tipo)) {
+      throw new ErroDeDeclaracao(
+        `${onde}: tipo de envio desconhecido "${tipo}". Use: ${Object.keys(TIPOS_DE_ENVIO).join(', ')} — ou deixe em branco para deduzir do tipo do arquivo.`
+      )
+    }
+    return {
+      forma,
+      // Sem saber ONDE o conteúdo vem, não há o que entregar. Aceitar isto
+      // ausente faria a chamada terminar sempre em "não veio arquivo".
+      campo: exigirTexto(resposta.campo, `${onde} — o campo que traz o arquivo`),
+      campoDoMime: resposta.campoDoMime ? String(resposta.campoDoMime) : null,
+      tipo,
+      campoDoErro: resposta.campoDoErro ? String(resposta.campoDoErro) : null
+    }
+  }
+
   if (forma !== FORMAS_DE_RESPOSTA.trabalho) {
     return {
       forma,

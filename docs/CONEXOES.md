@@ -44,7 +44,7 @@ declara, não na primeira chamada.
 
 ### A resposta que o LCN entende
 
-Três formas, declaradas na função:
+Quatro formas, declaradas na função:
 
 **`texto`** — a resposta vai para o WhatsApp como mensagem. É o caso de uma IA
 ou de uma consulta de preço. O LCN lê um campo do seu JSON (o caminho é
@@ -54,11 +54,18 @@ declarado, ex.: `resposta.texto`).
 identificador, e o LCN pergunta até terminar. É o que o serviço de download
 usa, e é a forma **exercitada em produção**.
 
-**`mídia`** — resultado com arquivos **na mesma resposta**, sem protocolo de
-acompanhamento. É a forma certa para quem converte em segundos: obrigar um
-serviço de dois segundos a devolver identificador e aceitar consulta
-complicaria o seu lado sem ganhar nada. Você devolve a lista de arquivos no
-campo declarado, e o LCN busca cada um.
+**`arquivo`** — **um** arquivo, na própria resposta, em base64 dentro do JSON.
+É a forma certa para quem converte em segundos: obrigar um serviço de dois
+segundos a devolver identificador e aceitar consulta complicaria o seu lado sem
+ganhar nada. Você declara em que campo o conteúdo vem (`arquivo_base64`), em
+qual o tipo (`mime`), e, quando a saída é sempre a mesma coisa, **como ela deve
+ser enviada** (`figurinha`, `foto`, `vídeo`, `áudio`, `documento`). Sem esse
+último, o tipo sai do `mime` — que é o certo para uma função de conversão, onde
+a saída depende do formato pedido.
+
+**`mídia`** — vários arquivos, apontados por endereço. Você devolve uma lista no
+campo declarado e o LCN busca cada um, com a mesma credencial. É a forma de um
+serviço que produz um carrossel.
 
 ### A forma `trabalho`, campo por campo
 
@@ -128,87 +135,54 @@ servir, ou dê um prazo curto.
 
 ---
 
-## O exemplo completo: converter figurinha
+## O exemplo vivo: a LCNimg
 
-Hoje a figurinha é feita com **ffmpeg instalado na mesma máquina do número** —
-programa de fora, que o LCN não controla. A Visão geral do painel mostra se ele
-está lá, e os números da conversão são configuráveis por comando. Mas a
-dependência continua sendo local.
+A **LCNimg** (`/home/administrator/LCNimg` na VPS, `http://127.0.0.1:8767`) é o
+primeiro serviço declarado nesta forma, e a conexão `imagem` já vem pronta no
+sistema. Cinco funções:
 
-O caminho decidido é outro: **quem quiser o serviço, usa uma API.** O lado do
-LCN está pronto; abaixo o contrato do outro lado.
+| função | o que faz |
+|---|---|
+| `figurinha` | foto, vídeo ou GIF → figurinha, com nome de pacote e autor |
+| `figurinha_de_frase` | uma frase → figurinha (sem arquivo nenhum) |
+| `converter` | troca o formato: mp3, png, mp4, ogg, gif… |
+| `remover_fundo` | recorta o objeto e apaga o fundo |
+| `melhorar` | aumenta resolução e reconstrói detalhe |
 
-### A função
+O que uma API precisa fazer para encaixar assim, no concreto:
 
-```
-POST /figurinha
-Authorization: Bearer <chave>
-Content-Type: multipart/form-data
+**Receber o arquivo em multipart.** Campo com o nome que a função declarar
+(`arquivo`), e os outros parâmetros como campos de texto no mesmo corpo.
 
-  arquivo       a foto ou o vídeo, em bytes
-  tamanho       lado em pixels      (96 a 1024, padrão 512)
-  segundos      do vídeo            (1 a 30, padrão 6)
-  qualidade     1 a 100             (padrão 80 foto / 50 vídeo)
-  pesoMaximoKB  peso da figurinha   (64 a 10240, padrão 1024)
-  pacote        nome do pacote      (opcional)
-  autor         autor do pacote     (opcional)
-```
-
-Resposta, na forma `mídia` — tudo numa resposta só:
+**Devolver o arquivo em base64 no JSON**, com o tipo junto:
 
 ```json
-{ "arquivos": [ { "url": "/arquivos/ab12.webp",
-                  "mime": "image/webp",
-                  "bytes": 48213,
-                  "tipo": "figurinha" } ] }
+{ "arquivo_base64": "UklGR…", "mime": "image/webp", "peso": "18,2 KB" }
 ```
 
-E quando não der, o campo de erro declarado, com uma frase que serve para quem
-usou o comando:
+A LCNimg devolve o arquivo cru por padrão e o JSON quando se pede
+`resposta=json` — por isso a declaração tem uma entrada `resposta` com lista
+fechada de um item (`json`). Lista de um item parece esquisito e é deliberado:
+quem editar para outra coisa é recusado na publicação, em vez de descobrir na
+primeira chamada.
+
+**Explicar a falha numa frase que sirva a quem usou o comando.** Isto é o que
+mais rende: o campo de erro declarado vai direto para o WhatsApp.
 
 ```json
-{ "erro": "esse vídeo é longo demais para virar figurinha" }
+{ "erro": "peso_excedido",
+  "mensagem": "Ficou com 151,5 KB e o limite é 2,9 KB, mesmo em qualidade 15 e 8 fps. Encurte a mídia." }
 ```
 
-Se a conversão for demorada o bastante para a requisição estourar os 20 s, use
-a forma `trabalho` em vez desta — o contrato está acima.
+"O serviço respondeu 422" não diz nada; a frase acima diz o que fazer. A única
+exceção é `401`/`403`: credencial é configuração do dono, e a frase do serviço
+não vai para a conversa — quem digitou não tem o que fazer com ela.
 
-### O que a API precisa garantir
+**Dizer `figurinha` quando for figurinha.** Um `image/webp` pode ser figurinha
+ou foto, e o mime não separa os dois. Quem sabe é a função, e por isso ela
+declara. Sem isso a figurinha chega como foto, com legenda e miniatura.
 
-**Saída em WebP, e nada mais.** Figurinha do WhatsApp é WebP: estática para
-foto, **animada** para vídeo. Qualquer outro formato é recusado pelo aplicativo.
-
-**512x512 mantendo a proporção.** A sobra entra como **transparência**, não
-como esticamento. É o que o ffmpeg faz hoje com
-`scale=...:force_original_aspect_ratio=decrease` mais `pad` com
-`color=#00000000`.
-
-**Respeitar o peso.** Acima de `pesoMaximoKB`, falhe dizendo **quanto deu e
-quanto cabia** — é a diferença entre "tente baixar a qualidade" e "não
-funcionou".
-
-**Limite de entrada.** Recuse arquivo de entrada absurdo antes de chamar
-ffmpeg, com motivo.
-
-**O ganho que só a API tem:** o nome do pacote e o autor ficam gravados no EXIF
-do WebP, e é o que o WhatsApp mostra quando alguém abre a figurinha. O caminho
-local **não faz isso hoje** — as figurinhas saem sem pacote e sem autor. Se a
-sua API escrever esse pedaço, o `/fig` ganha algo que ele nunca teve.
-
-### Como o comando chama isso
-
-A conexão declarada:
-
-```
-endereço:  http://127.0.0.1:8766
-autenticação: bearer
-função converter
-  POST /figurinha
-  entradas: arquivo (mídia), tamanho (número), qualidade (número), pacote (texto)
-  resposta: mídia, campo "arquivos", erro em "erro"
-```
-
-E o comando, em `.lcn`:
+### Como o comando chama
 
 ```
 automação fig
@@ -221,12 +195,14 @@ automação fig
   precisa de uma mídia: na mensagem ou na citada
   sem ela: "Manda uma foto ou vídeo curto junto com o comando."
 
-  chama figurinha.converter
+  chama imagem.figurinha
     com
       arquivo: a mídia
-      tamanho: 512
-      pacote: Meu pacote
-    erro: "Não consegui converter: {{erro}}"
+      pacote: LCN Figurinhas
+      autor: LCN
+      limite_bytes: 1048576
+    avisa: "🎨 Convertendo…"
+    erro: "Não consegui fazer a figurinha: {{erro}}"
 ```
 
 `arquivo: a mídia` é o que amarra as duas pontas. O arquivo **não** é escrito
@@ -236,6 +212,10 @@ nunca resolve (invariante 4). Quem troca o token por bytes é o gateway, no
 momento da chamada. Escrever `arquivo: "{{alguma coisa}}"` é recusado na
 publicação, dizendo por quê.
 
-A publicação também confere que os dois lados concordam: se a entrada de
-arquivo da função se chama outra coisa, o comando é recusado com o nome certo
-na mensagem — em vez de mandar o arquivo num campo que o serviço ignora.
+Entre aspas é texto; sem aspas e parecendo número, é número — `limite_bytes:
+1048576` chega como número porque a entrada declarada tem tipo. Quem quer a
+string escreve `"1048576"`.
+
+A publicação confere que os dois lados concordam: se a entrada de arquivo da
+função se chama outra coisa, o comando é recusado com o nome certo na mensagem,
+em vez de mandar o arquivo num campo que o serviço ignora.

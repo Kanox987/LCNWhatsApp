@@ -61,11 +61,23 @@ async function painelReconfiguracao (automation, { refresh }) {
     }
   })
 
+  // O template mudou desde a instalação: o formulário ABRE, e o aviso diz o que
+  // salvar vai fazer. Antes isto fechava o formulário acusando a pessoa de ter
+  // editado à mão — e deixava os campos novos do template inalcançáveis
+  // justamente para quem já tinha o comando instalado.
+  const aviso = info.aviso
+    ? el('div', { className: 'notice notice-warning' }, [
+      el('strong', { text: 'O template mudou desde que você instalou.' }),
+      el('p', { text: info.aviso })
+    ])
+    : null
+
   return el('div', { className: 'stack' }, [
+    aviso,
     el('p', { className: 'muted compact', text: 'Salvar aplica os valores e republica a automação. O destino escolhido na instalação é preservado.' }),
     el('div', { className: 'form-grid' }, campos),
     el('div', { className: 'button-row' }, [salvar])
-  ])
+  ].filter(Boolean))
 }
 
 async function renderList ({ navigate, refresh }) {

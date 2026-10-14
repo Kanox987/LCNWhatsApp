@@ -56,7 +56,7 @@ function ondeDiverge (atual, doTemplate) {
 //
 // `renderizar` é injetado para este módulo não depender do motor — e para o
 // teste poder exercitar a decisão sem catálogo em disco.
-export function analisarReconfiguracao ({ documento, template, valores, renderizar }) {
+export function analisarReconfiguracao ({ documento, template, valores, renderizar, versaoInstalada = null }) {
   if (!template) {
     return { podeReconfigurar: false, motivo: 'Esta automação não veio de um template, então não tem formulário para preencher.' }
   }
@@ -75,6 +75,36 @@ export function analisarReconfiguracao ({ documento, template, valores, renderiz
   }
 
   const divergencias = ondeDiverge(semOsDeFora(documento), semOsDeFora(doTemplate))
+  // O TEMPLATE MUDOU, e isso não é culpa de quem instalou.
+  //
+  // A comparação sozinha não distingue "foi editado à mão" de "o template é
+  // outro agora" — e por isso a tela acusava sempre a pessoa. Medido: o
+  // `figurinha` passou de v1 para v2 quando ganhou tamanho, segundos,
+  // qualidade e peso, e o formulário fechou dizendo "você alterou à mão". O
+  // efeito foi pior que o texto: os campos NOVOS ficaram inalcançáveis
+  // justamente para quem já tinha o comando instalado.
+  //
+  // A versão da instalação está guardada (automation_template_provenance), e
+  // compará-la responde o que a diferença de documento não responde. O que NÃO
+  // dá para saber é se, além da versão nova, também houve edição à mão: o
+  // template antigo não existe mais no catálogo para comparar. Então aqui não
+  // se adivinha — abre o formulário e diz exatamente o que salvar vai fazer.
+  const versaoDoCatalogo = template.templateVersion ?? null
+  const trocouDeVersao = versaoInstalada !== null && versaoDoCatalogo !== null &&
+    versaoInstalada !== versaoDoCatalogo
+  if (trocouDeVersao) {
+    return {
+      podeReconfigurar: true,
+      motivo: null,
+      divergencias,
+      versaoInstalada,
+      versaoDoCatalogo,
+      aviso: `Este comando foi instalado na versão ${versaoInstalada} do template e o catálogo já está na ${versaoDoCatalogo}. ` +
+        (divergencias.length
+          ? `Salvar aqui adota a versão nova, e com ela o que mudou: ${divergencias.join(', ')}. Se você também editou algo à mão depois de instalar, essa edição se perde — confira pelo texto antes de salvar.`
+          : 'Salvar aqui adota a versão nova. O que a automação faz hoje continua igual ao template, então nada seu se perde.')
+    }
+  }
   if (divergencias.length) {
     return {
       podeReconfigurar: false,

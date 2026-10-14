@@ -14,7 +14,7 @@
 // O QUE NÃO MUDA. A automação continua sem escolher destino: ela nomeia uma
 // função declarada. É isso que dispensa a proteção contra SSRF exigida pelo
 // `action.http` genérico — quem aponta o endereço é o dono, não o comando.
-import { resolverDestino } from './server/conexoes/declaracao.js'
+import { resolverDestino, TIPOS_DE_ENVIO } from './server/conexoes/declaracao.js'
 
 const TIMEOUT_REQUISICAO_MS = 20000
 const ESPERA_ENTRE_CONSULTAS_MS = 1500
@@ -31,6 +31,27 @@ const TIPO_WHATSAPP = {
   // poder dizer isso, senão o webp chegaria como foto.
   figurinha: 'sticker',
   sticker: 'sticker'
+}
+
+// O tipo de envio DEDUZIDO do mime, para a função que não declara um fixo — é
+// o caso de uma conversão, onde a saída depende do formato pedido. Um webp cai
+// em foto de propósito: figurinha é escolha da função, não do formato.
+function tipoPeloMime (mime) {
+  if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  // O que não se classifica vai como documento, que é o único formato que o
+  // WhatsApp aceita para qualquer coisa.
+  return 'document'
+}
+
+// Nome do arquivo que sai. Documento SEM nome chega como "arquivo" na conversa,
+// e quem recebe não sabe nem a extensão.
+const EXTENSAO_ESTRANHA = /[^a-z0-9]/
+function nomeParaMime (mime) {
+  const sub = mime.split('/')[1]?.split(';')[0]?.toLowerCase() || ''
+  const ext = !sub || EXTENSAO_ESTRANHA.test(sub) ? 'bin' : sub
+  return `arquivo.${ext}`
 }
 
 // Duas faces do mesmo erro, como no downloader: `message` é o diagnóstico
@@ -121,15 +142,38 @@ export function criarExecutorDeConexao ({
     }
   }
 
-  async function jsonOuErro (resposta, oQue) {
+  // A FRASE DO SERVIÇO, quando ela serve a quem usou o comando.
+  //
+  // "Ficou com 151,5 KB e o limite é 2,9 KB, mesmo em qualidade 15 e 8 fps" diz
+  // exatamente o que fazer; "o serviço respondeu 422" não diz nada. Quem sabe
+  // escrever essa frase é o serviço, e a declaração diz em que campo ela vem.
+  //
+  // Credencial recusada continua sendo FALHA_NOSSA: 401/403 é configuração do
+  // dono, e não há nada que quem digitou possa fazer com isso.
+  async function textoDoErro (resposta, campoDoErro) {
+    if (!campoDoErro) return null
+    try {
+      const corpo = await resposta.json()
+      const frase = porCaminho(corpo, campoDoErro)
+      return typeof frase === 'string' && frase.trim() ? frase.trim() : null
+    } catch {
+      return null
+    }
+  }
+
+  async function jsonOuErro (resposta, oQue, campoDoErro = null) {
     if (resposta.status === 401 || resposta.status === 403) {
       throw new ErroDeConexao(`O serviço recusou a credencial ao ${oQue} (${resposta.status}).`, { paraPessoa: FALHA_NOSSA })
     }
-    if (resposta.status === 429) {
-      throw new ErroDeConexao('O serviço pediu para esperar — tem muita coisa na fila agora. Tente de novo daqui a pouco.')
-    }
     if (!resposta.ok) {
-      throw new ErroDeConexao(`O serviço respondeu ${resposta.status} ao ${oQue}.`, { paraPessoa: FALHA_NOSSA })
+      const frase = await textoDoErro(resposta, campoDoErro)
+      if (resposta.status === 429) {
+        throw new ErroDeConexao(frase || 'O serviço pediu para esperar — tem muita coisa na fila agora. Tente de novo daqui a pouco.')
+      }
+      throw new ErroDeConexao(
+        `O serviço respondeu ${resposta.status} ao ${oQue}${frase ? `: ${frase}` : ''}.`,
+        { paraPessoa: frase || FALHA_NOSSA }
+      )
     }
     try {
       return await resposta.json()
@@ -157,7 +201,7 @@ export function criarExecutorDeConexao ({
       // Passados 30s, perguntar de 5 em 5 em vez de 1,5: o pedido curto
       // continua respondendo rápido, e o longo para de encher o log.
       await dormir(agora() - comeco > 30000 ? ESPERA_MAXIMA_ENTRE_CONSULTAS_MS : ESPERA_ENTRE_CONSULTAS_MS)
-      estado = await jsonOuErro(await chamar(url, { method: 'GET', headers: cabecalhos }), `acompanhar ${oQueFaz}`)
+      estado = await jsonOuErro(await chamar(url, { method: 'GET', headers: cabecalhos }), `acompanhar ${oQueFaz}`, forma.campoDoErro)
       const atual = String(porCaminho(estado, forma.campoDoEstado) ?? '')
       // Estado desconhecido ENCERRA a espera. Girar num estado que esta versão
       // não conhece é pior que parar e dizer o que veio.
@@ -210,7 +254,7 @@ export function criarExecutorDeConexao ({
     const anexo = arquivo && campoDeMidia ? { ...arquivo, campo: campoDeMidia } : null
 
     const pedido = montarRequisicao(url, funcao.metodo, corpo, cabecalhos, anexo)
-    const primeira = await jsonOuErro(await chamar(pedido.url, pedido.opcoes), `chamar ${funcao.nome}`)
+    const primeira = await jsonOuErro(await chamar(pedido.url, pedido.opcoes), `chamar ${funcao.nome}`, funcao.resposta?.campoDoErro)
 
     // Resposta com arquivos NA HORA, sem protocolo de trabalho: conversão é
     // rápida, e obrigar um serviço de dois segundos a devolver identificador e
@@ -226,6 +270,36 @@ export function criarExecutorDeConexao ({
         forma: 'mídia',
         ...(await buscarArquivos(porCaminho(primeira, funcao.resposta?.campo), { base: declaracao.endereco, cabecalhos })),
         descricao: typeof primeira?.descricao === 'string' ? primeira.descricao : null
+      }
+    }
+
+    // O ARQUIVO veio na própria resposta, em base64. Um arquivo, um envio.
+    if (funcao.resposta?.forma === 'arquivo') {
+      const conteudo = porCaminho(primeira, funcao.resposta.campo)
+      if (typeof conteudo !== 'string' || !conteudo) {
+        throw new ErroDeConexao(
+          `O serviço respondeu sem "${funcao.resposta.campo}" ao chamar ${funcao.nome}.`,
+          { paraPessoa: FALHA_NOSSA }
+        )
+      }
+      const buffer = Buffer.from(conteudo, 'base64')
+      if (!buffer.length) throw new ErroDeConexao('O arquivo veio vazio.', { paraPessoa: FALHA_NOSSA })
+      if (buffer.length > limiteBytes) {
+        const mb = (n) => `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
+        throw new ErroDeConexao(`O arquivo tem ${mb(buffer.length)} e o limite para envio é ${mb(limiteBytes)}.`)
+      }
+      const mime = (funcao.resposta.campoDoMime ? porCaminho(primeira, funcao.resposta.campoDoMime) : null) ||
+        'application/octet-stream'
+      // O tipo DECLARADO ganha do deduzido: um webp pode ser figurinha ou foto,
+      // e só a função sabe qual dos dois ela produz.
+      const tipo = funcao.resposta.tipo
+        ? TIPOS_DE_ENVIO[funcao.resposta.tipo]
+        : tipoPeloMime(String(mime))
+      return {
+        forma: 'mídia',
+        midias: [{ buffer, nome: nomeParaMime(String(mime)), mime: String(mime), tipo }],
+        foraPorTamanho: 0,
+        descricao: null
       }
     }
 

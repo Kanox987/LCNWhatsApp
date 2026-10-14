@@ -192,7 +192,19 @@ function lerAcao (linha, filhas) {
         config[def.arquivo.chave] = filha.texto.slice(0, sep).trim()
         continue
       }
-      mapa[filha.texto.slice(0, sep).trim()] = cru.startsWith('"') ? descitar(cru, filha.n) : cru
+      // Entre aspas é TEXTO, sempre. Sem aspas, o tipo é o que a entrada
+      // declarada espera: um campo de peso recebe número, e a entrada da
+      // conexão tem tipo. Antes tudo virava texto, e o número instalado pelo
+      // formulário voltava como string — a ida e volta deixava de bater, que é
+      // o sinal de que a linguagem está perdendo informação.
+      //
+      // Quem quer a STRING "512" escreve com aspas. É a mesma convenção da
+      // condição, onde `>= 3` compara número e `>= "3"` compara texto.
+      const nome = filha.texto.slice(0, sep).trim()
+      if (cru.startsWith('"')) { mapa[nome] = descitar(cru, filha.n); continue }
+      if (/^-?\d+(\.\d+)?$/.test(cru)) { mapa[nome] = Number(cru); continue }
+      if (cru === 'true' || cru === 'false') { mapa[nome] = cru === 'true'; continue }
+      mapa[nome] = cru
     }
     if (Object.keys(mapa).length) config[def.mapa.chave] = mapa
   }
@@ -296,6 +308,11 @@ function lerBlocosDeTemplate (linhas, inicio, template) {
           const valor = f.texto.slice(sep + 1).trim()
           if (chave === 'rótulo') param.label = valor
           else if (chave === 'ajuda') param.help = valor
+          // Campo de várias linhas. Serve para o que NASCE com uma linha e
+          // ainda assim precisa aceitar várias — o padrão com quebra o painel
+          // já reconhece sozinho. Sem isto, um campo de uma linha nunca
+          // poderia receber uma segunda, e isso seria teto no meu código.
+          else if (chave === 'várias linhas') param.multiline = valor === 'sim' || valor === 'true'
           else throw new ErroDeSintaxe(`configuração não tem campo "${chave}"`, f.n)
         }
         template.parameters.push(param)

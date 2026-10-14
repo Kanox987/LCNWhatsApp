@@ -26,6 +26,32 @@ function valorInicial (definition, valorAtual) {
   return Object.prototype.hasOwnProperty.call(definition, 'default') ? definition.default : undefined
 }
 
+// TEXTO DE VÁRIAS LINHAS PRECISA DE ÁREA DE TEXTO, e isto não é estética.
+//
+// `<input type="text">` APAGA quebra de linha, em silêncio — é o navegador que
+// faz isso ao receber o valor. A legenda do /recover chegava à tela já
+// achatada, e salvar publicava o texto destruído. Medido no `auto-recover` que
+// estava no ar: entravam 142 caracteres com 5 quebras, sobravam 137 sem
+// nenhuma. Perda de dados a um clique de distância, nos DOIS formulários — o de
+// instalação e o de reconfiguração usam este mesmo controle.
+//
+// Duas formas de saber, e as duas são necessárias:
+//
+//   - o template DECLARA `várias linhas: sim`. É o caso do campo que nasce com
+//     uma linha e ainda assim precisa aceitar várias. Sem isso, um campo de uma
+//     linha nunca poderia receber uma segunda — teto no meu código.
+//   - o valor que está lá JÁ TEM quebra. Decide sozinho, porque exigir a
+//     declaração deixaria sem proteção todo template já escrito, inclusive os
+//     de fora deste repositório.
+//
+// Separada de `criarControleParametro` porque o resto deste módulo precisa de
+// `document` — e é por isso que ele nunca teve teste. A decisão não precisa.
+export function ehCampoDeVariasLinhas (definition, valor) {
+  if (definition?.type !== 'string') return false
+  if (definition.multiline === true) return true
+  return String(valor ?? '').includes('\n')
+}
+
 export function criarControleParametro (definition, pools = [], valorAtual) {
   const inicial = valorInicial(definition, valorAtual)
   const temInicial = inicial !== undefined
@@ -60,6 +86,13 @@ export function criarControleParametro (definition, pools = [], valorAtual) {
       selected: escolhido === null ? false : escolhido === opcao,
       text: opcao
     })))
+  }
+  if (ehCampoDeVariasLinhas(definition, inicial)) {
+    const area = el('textarea', { rows: 4, required: true })
+    // `value` por propriedade, não por atributo: no textarea o atributo é o
+    // conteúdo inicial e trocá-lo depois não mexe no que a pessoa vê.
+    area.value = temInicial ? String(inicial) : ''
+    return area
   }
   return el('input', {
     type: definition.type === 'number' ? 'number' : 'text',

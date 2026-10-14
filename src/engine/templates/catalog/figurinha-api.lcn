@@ -1,0 +1,73 @@
+template figurinha-api v1
+  nome: Figurinha (pelo serviço de imagem)
+  descrição: Transforma foto, vídeo ou GIF em figurinha, com o NOME DO PACOTE e o AUTOR que o WhatsApp mostra ao abrir a figurinha. Vídeo vira figurinha animada. Pode remover o fundo da foto no mesmo passo. Quem converte é o serviço de imagem declarado na aba Conexões — este comando não depende de programa instalado na máquina do número.
+  categoria: utilitarios
+
+automação
+  nome: Figurinha (pelo serviço de imagem)
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Transforma foto ou vídeo em figurinha
+  pool: {{params.poolId}}
+  acessa: texto, foto, vídeo
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.figurinha
+    com
+      arquivo: a mídia
+      pacote: {{params.pacote}}
+      autor: {{params.autor}}
+      modo: {{params.modo}}
+      remover_fundo: {{params.removerFundo}}
+      limite_bytes: {{params.pesoMaximoBytes}}
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/fig"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Funciona dos dois jeitos: mandando a mídia com o comando na legenda, ou respondendo uma mídia já enviada.
+  conexao: texto = "imagem"
+    rótulo: Serviço que converte
+    ajuda: O identificador da conexão, como está na aba Conexões. Trocar de serviço é trocar este campo — o comando não muda.
+  pacote: texto = "LCN Figurinhas"
+    rótulo: Nome do pacote
+    ajuda: Aparece quando alguém abre a figurinha no WhatsApp e vê de onde ela veio. Figurinhas com o mesmo pacote e autor ficam agrupadas.
+  autor: texto = "LCN"
+    rótulo: Autor do pacote
+    ajuda: Aparece junto do nome do pacote.
+  modo: opção (transparente, quadrado, esticar) = "transparente"
+    rótulo: Como encaixar no quadrado
+    ajuda: transparente mantém a imagem inteira e deixa a sobra transparente. quadrado preenche o quadrado e corta o excesso pelo centro. esticar deforma para caber.
+  removerFundo: opção (sim, nao) = "nao"
+    rótulo: Remover o fundo
+    ajuda: Só vale para foto, e leva alguns segundos a mais. Em vídeo o serviço ignora.
+  pesoMaximoBytes: número = 1048576
+    rótulo: Peso máximo (bytes)
+    ajuda: 1048576 é 1 MB, o que o WhatsApp costuma aceitar. O serviço desce a qualidade até caber; quando nem no menor degrau couber, ele responde dizendo quanto deu e quanto cabia.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  semMidiaText: texto = "Manda uma foto ou um vídeo curto junto com o comando, ou responde uma mídia com ele."
+    rótulo: Aviso quando não vier mídia
+    ajuda: Resposta quando o comando chega sem nenhuma foto ou vídeo por perto.
+  ackText: texto = "🎨 Convertendo…"
+    rótulo: Aviso ao começar
+    ajuda: Conversão leva alguns segundos, e mais ainda com o fundo removido. Sem aviso, parece que o comando não funcionou.
+  errorText: texto = "Não consegui fazer a figurinha: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo. O serviço explica em frase ("ficou com 151,5 KB e o limite é 2,9 KB"); falha nossa vira uma frase limpa, sem endereço nem credencial.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões, com o endereço e a chave. Sem isso o comando responde que o serviço está fora do ar.
+
+avisa nota
+  Não precisa de ffmpeg na máquina do número: quem converte é o serviço. É a diferença entre este comando e a "Figurinha" antiga.
+
+# nós: gatilho-comando, converter

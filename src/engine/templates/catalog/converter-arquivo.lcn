@@ -1,0 +1,65 @@
+template converter-arquivo v1
+  nome: Converter formato
+  descrição: Responda uma mídia com "/converter mp3" (ou png, mp4, ogg, gif…) e o bot devolve o arquivo no formato pedido. Serve para tirar o áudio de um vídeo, virar foto em PNG, reduzir um vídeo, fazer GIF. O formato vai escrito junto com o comando.
+  categoria: utilitarios
+
+automação
+  nome: Converter formato
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Converte a mídia para outro formato
+  pool: {{params.poolId}}
+  acessa: texto, foto, vídeo, áudio
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.converter
+    com
+      arquivo: a mídia
+      formato: "{{message.args}}"
+      limite_bytes: {{params.pesoMaximoBytes}}
+    avisa: "{{params.ackText}}"
+    sem dados: "{{params.semFormatoText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/converter"
+    rótulo: Comando
+    ajuda: A pessoa escreve o formato depois do comando — "/converter mp3". Os formatos são jpg, png, webp, gif, bmp, tiff, avif, ico, mp4, webm, mov, mkv, mp3, ogg e m4a.
+  conexao: texto = "imagem"
+    rótulo: Serviço que converte
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  pesoMaximoBytes: número = 16000000
+    rótulo: Peso máximo (bytes)
+    ajuda: 16000000 é cerca de 16 MB, perto do que o WhatsApp aceita em vídeo. O serviço reduz a qualidade até caber e, quando não couber, diz quanto deu e quanto cabia.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semMidiaText: texto = "Responde uma foto, vídeo ou áudio com este comando, ou manda a mídia com ele na legenda."
+    rótulo: Aviso quando não vier mídia
+    ajuda: Resposta quando não há mídia nenhuma por perto.
+  semFormatoText: texto = "Diz para qual formato. Exemplo: /converter mp3"
+    rótulo: Aviso quando não vier formato
+    ajuda: Resposta quando o comando vem sem nada escrito depois dele.
+  ackText: texto = "🔄 Convertendo…"
+    rótulo: Aviso ao começar
+    ajuda: Vídeo leva alguns segundos. Sem aviso, parece que o comando não funcionou.
+  errorText: texto = "Não consegui converter: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo. Formato que o serviço não conhece, vídeo sem áudio e arquivo ilegível têm motivos próprios.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões.
+
+avisa nota
+  Documento não entra: o bot só alcança foto, vídeo e áudio da conversa. Mandar um arquivo como documento e pedir conversão não funciona ainda.
+
+avisa nota
+  Formato que não existe é recusado pelo serviço com o motivo — a lista aceita está na ajuda do comando.
+
+# nós: gatilho-comando, converter

@@ -1,0 +1,76 @@
+template remover-fundo v1
+  nome: Remover o fundo da foto
+  descrição: Responda uma foto com o comando e o bot devolve a mesma foto com o fundo apagado, em PNG transparente. Dá também para trocar o fundo por uma cor. Quem recorta é o serviço de imagem, com modelo de IA rodando na própria máquina.
+  categoria: utilitarios
+
+automação
+  nome: Remover o fundo da foto
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Apaga o fundo de uma foto
+  pool: {{params.poolId}}
+  acessa: texto, foto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.remover_fundo
+    com
+      arquivo: a mídia
+      modelo: {{params.modelo}}
+      formato: {{params.formato}}
+      fundo: {{params.fundo}}
+      recortar: {{params.recortar}}
+    avisa: "{{params.ackText}}"
+    legenda: "{{params.caption}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/fundo"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita respondendo uma foto, ou mandando a foto com o comando na legenda.
+  conexao: texto = "imagem"
+    rótulo: Serviço que recorta
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  modelo: opção (isnet-general-use, silueta, u2netp) = "isnet-general-use"
+    rótulo: Qualidade do recorte
+    ajuda: isnet-general-use recorta melhor e leva cerca de 9 segundos. silueta é meio-termo. u2netp é o mais rápido e o mais grosseiro.
+  formato: opção (png, webp) = "png"
+    rótulo: Formato da saída
+    ajuda: Os dois guardam transparência. PNG é o mais compatível.
+  fundo: texto = ""
+    rótulo: Trocar o fundo por uma cor
+    ajuda: Deixe vazio para o fundo ficar transparente. Preencha com uma cor (branco, preto, #ff0000) para o fundo virar essa cor em vez de transparente.
+  recortar: opção (sim, nao) = "nao"
+    rótulo: Cortar rente ao objeto
+    ajuda: sim corta as bordas vazias da imagem, deixando só o objeto.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semMidiaText: texto = "Responde uma foto com este comando, ou manda a foto com ele na legenda."
+    rótulo: Aviso quando não vier foto
+    ajuda: Resposta quando não há foto nenhuma por perto. Vídeo não serve para este comando.
+  ackText: texto = "✂️ Recortando… isso leva alguns segundos."
+    rótulo: Aviso ao começar
+    ajuda: O recorte leva de 5 a 10 segundos. Sem aviso, parece travado.
+  caption: texto = ""
+    rótulo: Legenda da foto devolvida
+    ajuda: Deixe vazio para mandar sem legenda.
+  errorText: texto = "Não consegui remover o fundo: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo. Foto grande demais e arquivo ilegível têm motivos próprios.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões.
+
+avisa nota
+  Só foto. Vídeo o serviço recusa, e a recusa chega como texto explicando.
+
+avisa nota
+  Roda um modelo de IA na CPU da máquina, e por isso leva segundos e consome memória. Um pedido de IA por vez; os outros esperam na fila.
+
+# nós: gatilho-comando, recortar

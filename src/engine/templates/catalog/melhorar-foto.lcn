@@ -1,0 +1,72 @@
+template melhorar-foto v1
+  nome: Melhorar a foto
+  descrição: Responda uma foto com o comando e o bot devolve ela com mais resolução e detalhe reconstruído, ou só com contraste e nitidez ajustados. Quem melhora é o serviço de imagem, com modelo de IA rodando na própria máquina.
+  categoria: utilitarios
+
+automação
+  nome: Melhorar a foto
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Melhora a resolução de uma foto
+  pool: {{params.poolId}}
+  acessa: texto, foto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.melhorar
+    com
+      arquivo: a mídia
+      modo: {{params.modo}}
+      escala: {{params.escala}}
+      formato: {{params.formato}}
+    avisa: "{{params.ackText}}"
+    legenda: "{{params.caption}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/melhorar"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita respondendo uma foto, ou mandando a foto com o comando na legenda.
+  conexao: texto = "imagem"
+    rótulo: Serviço que melhora
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  modo: opção (ia, leve) = "ia"
+    rótulo: Como melhorar
+    ajuda: ia reconstrói detalhe e aumenta a resolução, e leva de 15 a 60 segundos conforme o tamanho da foto. leve só ajusta contraste e nitidez, na hora.
+  escala: número = 4
+    rótulo: Quantas vezes aumentar
+    ajuda: No modo ia, 2 ou 4. No modo leve, de 1 a 4. Aumentar mais custa mais tempo e mais memória.
+  formato: opção (png, jpg, webp) = "jpg"
+    rótulo: Formato da saída
+    ajuda: jpg sai bem menor e é o que costuma caber no envio. png não perde nada e fica grande.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semMidiaText: texto = "Responde uma foto com este comando, ou manda a foto com ele na legenda."
+    rótulo: Aviso quando não vier foto
+    ajuda: Resposta quando não há foto nenhuma por perto. Vídeo não serve para este comando.
+  ackText: texto = "🔍 Melhorando… no modo ia isso pode levar quase um minuto."
+    rótulo: Aviso ao começar
+    ajuda: É o comando mais demorado do serviço. Sem aviso, a pessoa repete o comando e enfileira outro trabalho.
+  caption: texto = ""
+    rótulo: Legenda da foto devolvida
+    ajuda: Deixe vazio para mandar sem legenda.
+  errorText: texto = "Não consegui melhorar a foto: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo. Foto acima do tamanho que a IA aceita tem motivo próprio, com os números.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões.
+
+avisa nota
+  No modo ia a foto de entrada vai até cerca de 1,2 megapixel (por exemplo 1264x948). Acima disso o serviço recusa dizendo o tamanho que caberia — foto de celular moderna costuma passar desse limite, então vale avisar quem usa.
+
+avisa nota
+  Um pedido de IA por vez; os outros esperam na fila. Com a fila cheia, a resposta é para tentar de novo em instantes.
+
+# nós: gatilho-comando, melhorar

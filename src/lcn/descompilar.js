@@ -73,10 +73,19 @@ function linhaDeAcao (no) {
         linhas.push(`${IDENT}${IDENT}${nome}: o link`)
         continue
       }
-      // Aspas só quando precisam: valor com espaço, marcador ou vazio. Palavra
-      // simples fica limpa, como foi escrita.
+      // Número e liga/desliga saem SEM aspas: é assim que voltam com o tipo
+      // que têm. Com aspas eles voltariam como texto, e a ida e volta deixaria
+      // de bater — a linguagem perderia informação sem nada avisando.
+      if (typeof valor === 'number' || typeof valor === 'boolean') {
+        linhas.push(`${IDENT}${IDENT}${nome}: ${valor}`)
+        continue
+      }
+      // Aspas quando precisam: valor com espaço, marcador ou vazio. E TAMBÉM
+      // quando o texto se parece com número ou com true/false — sem elas,
+      // a string "512" voltaria como o número 512.
       const texto = String(valor)
-      const precisaAspas = texto === '' || /[\s"{}]/.test(texto)
+      const precisaAspas = texto === '' || /[\s"{}]/.test(texto) ||
+        /^-?\d+(\.\d+)?$/.test(texto) || texto === 'true' || texto === 'false'
       linhas.push(`${IDENT}${IDENT}${nome}: ${precisaAspas ? citar(texto) : texto}`)
     }
   }
@@ -244,6 +253,7 @@ export function descompilar (documento, template = null) {
         linhas.push(`${IDENT}${p.key}: ${tipo}${opcoes}${padrao}`)
         if (p.label) linhas.push(`${IDENT}${IDENT}rótulo: ${p.label}`)
         if (p.help) linhas.push(`${IDENT}${IDENT}ajuda: ${p.help}`)
+        if (p.multiline === true) linhas.push(`${IDENT}${IDENT}várias linhas: sim`)
       }
     }
     if (template.variables?.length) {
