@@ -56,9 +56,22 @@ const comandosDe = (r, id) => r.results.find((x) => x.automationId === id)?.comm
 // adaptador NUNCA produzia, porque a legenda da foto era descartada. O teste
 // ficava verde e o comando ficava mudo no WhatsApp real. Evento de teste que o
 // produtor real não consegue gerar não prova nada.
+// A figurinha deixou de ser ação do motor: quem converte é um serviço
+// declarado, e a ação é `connection.call` com o arquivo da mensagem. O que
+// estes casos guardam continua sendo o mesmo e continua valendo — são as DUAS
+// formas reais de usar um comando de mídia.
 publicar('fig', [
   { id: 'g', type: 'trigger.command', config: { command: '/fig', match: 'exact_or_args', allowFrom: 'external' } },
-  { id: 's', type: 'action.whatsapp.sticker', config: { notFoundText: 'Manda uma imagem com /fig, ou responda uma.' } }
+  {
+    id: 's',
+    type: 'action.connection.call',
+    config: {
+      connectionRef: 'imagem',
+      function: 'figurinha',
+      mediaInput: 'arquivo',
+      notFoundText: 'Manda uma imagem com /fig, ou responda uma.'
+    }
+  }
 ], [{ from: 'g', to: 's', on: 'matched' }], { acceptedMessageKinds: ['text', 'image', 'video'] })
 
 let idMsg = 0
@@ -74,7 +87,7 @@ const doAdaptador = (message) => construirEventoDeMensagem(
 const eventoLegenda = doAdaptador({ imageMessage: { url: 'x', mimetype: 'image/jpeg', caption: '/fig' } })
 check('adaptador: a legenda da foto vira o texto da mensagem', eventoLegenda.message.text === '/fig', JSON.stringify(eventoLegenda.message.text))
 const cmdLegenda = comandosDe(avaliarEvento(db, eventoLegenda), 'fig')[0]
-check('figurinha na legenda da foto: gera whatsapp.sticker', cmdLegenda?.commandType === 'whatsapp.sticker', cmdLegenda?.commandType)
+check('figurinha na legenda da foto: gera a chamada ao serviço', cmdLegenda?.commandType === 'connection.call', cmdLegenda?.commandType)
 check('figurinha na legenda: o payload leva TOKEN, não a mídia', typeof cmdLegenda?.payload?.mediaRef === 'string' && cmdLegenda.payload.mediaRef.length > 0)
 check('figurinha na legenda: nenhum segredo de mídia no payload',
   !JSON.stringify(cmdLegenda?.payload || {}).match(/mediaKey|directPath|fileEncSha|Buffer/))
@@ -89,12 +102,12 @@ const eventoCitando = doAdaptador({
 check('adaptador: foto comum citada NÃO é rotulada visualização única', eventoCitando.message.quotedMediaRef?.kind === 'media', eventoCitando.message.quotedMediaRef?.kind)
 check('adaptador: e o tipo real da mídia citada é preservado', eventoCitando.message.quotedMediaRef?.mediaKind === 'image')
 const cmdCitando = comandosDe(avaliarEvento(db, eventoCitando), 'fig')[0]
-check('figurinha respondendo uma foto: gera whatsapp.sticker', cmdCitando?.commandType === 'whatsapp.sticker', cmdCitando?.commandType)
+check('figurinha respondendo uma foto: gera a chamada ao serviço', cmdCitando?.commandType === 'connection.call', cmdCitando?.commandType)
 check('figurinha respondendo: usa o token da mídia CITADA', cmdCitando?.payload?.mediaRef === eventoCitando.message.quotedMediaRef.token)
 
 // USO 3: o comando sozinho, sem foto nenhuma — aí sim é o aviso.
 const cmdSozinho = comandosDe(avaliarEvento(db, doAdaptador({ conversation: '/fig' })), 'fig')[0]
-check('figurinha sem mídia nenhuma: não gera comando de figurinha', cmdSozinho?.commandType !== 'whatsapp.sticker')
+check('figurinha sem mídia nenhuma: não chama o serviço', cmdSozinho?.commandType !== 'connection.call')
 check('figurinha sem mídia nenhuma: avisa por texto o que faltou', cmdSozinho?.payload?.text === 'Manda uma imagem com /fig, ou responda uma.')
 
 // Legenda sem comando não pode acionar nada — o texto agora existe, então vale
@@ -271,24 +284,13 @@ const engineFake = { execucoes: { confirmar: async () => ({ ok: true }) } }
 const depsFig = {
   mediaRefCache: { resolver: (t) => (t === 'ok' ? { node: {}, tipo: 'image', interno: {} } : null) },
   baixarBuffer: async () => Buffer.from('imagem-crua'),
-  converterParaFigurinha: async (buf) => Buffer.concat([Buffer.from('WEBP:'), buf]),
-  podeVirarFigurinha: (t) => t === 'image' || t === 'video',
-  ehAnimada: (t) => t === 'video',
   limiteBytes: 1000,
   resolverJidProprio: () => '5511900000002@s.whatsapp.net'
 }
 
-const c1 = clienteFake()
-await executarComandos(c1, [{ id: 'c1', commandType: 'whatsapp.sticker', payload: { chatId: CHAT, mediaRef: 'ok' } }], engineFake, depsFig)
-check('gateway: figurinha é enviada como type sticker', c1.enviados[0]?.conteudo?.type === 'sticker')
-check('gateway: envia o WebP convertido, não o buffer cru', c1.enviados[0]?.conteudo?.media?.toString().startsWith('WEBP:'))
-
-let confirmado = null
-const engineQueRegistra = { execucoes: { confirmar: async (_id, r) => { confirmado = r.status } } }
-const c2 = clienteFake()
-await executarComandos(c2, [{ id: 'c2', commandType: 'whatsapp.sticker', payload: { chatId: CHAT, mediaRef: 'expirou' } }], engineQueRegistra, depsFig)
-check('gateway: token expirado não envia nada', c2.enviados.length === 0)
-check('gateway: token expirado vira "failed" (erro conhecido), não "outcome_unknown"', confirmado === 'failed')
+// O envio COMO figurinha continua existindo — ele virou parte da entrega da
+// chamada de conexão, e está coberto em tests/conexao-imagem.test.mjs, onde o
+// serviço declara `tipo: figurinha` e o gateway manda `type: 'sticker'`.
 
 const c3 = clienteFake()
 await executarComandos(c3, [{ id: 'c3', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'saved_messages', destinationId: null, mediaRef: 'ok', caption: 'oi' } }], engineFake, depsFig)

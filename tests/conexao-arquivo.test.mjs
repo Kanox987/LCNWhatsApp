@@ -143,7 +143,16 @@ const db = abrirBanco(':memory:')
 const agora = new Date().toISOString()
 db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p', 'Pool', agora, agora)
 db.prepare('INSERT INTO connections (id, kind, config_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-  .run('figurinha', 'http', JSON.stringify({ endereco: 'https://conv.exemplo.com', autenticacao: { tipo: 'bearer' }, funcoes: [validarFuncao(funcaoBase)] }), agora, agora)
+  .run('figurinha', 'http', JSON.stringify({
+    endereco: 'https://conv.exemplo.com',
+    autenticacao: { tipo: 'bearer' },
+    funcoes: [
+      validarFuncao(funcaoBase),
+      // Função que recebe SÓ o arquivo. É a forma real de "/toimg" e
+      // "/roubar": nada para escrever, só a mídia marcada.
+      validarFuncao({ ...funcaoBase, nome: 'so_arquivo', entradas: [{ nome: 'arquivo', tipo: 'mídia' }] })
+    ]
+  }), agora, agora)
 
 const CHAT = '5511900000001@s.whatsapp.net'
 function doc (id, config) {
@@ -207,6 +216,17 @@ publicar('fig-mudo', { mediaInput: 'arquivo', inputs: { tamanho: '512' } })
   // ou comando respondendo uma mídia.
   const p = rodar('fig-api', evento({ citada: true })).commands[0].payload
   check('respondendo uma mídia, usa o token da citada', p.mediaRef === 'TOKEN-DA-CITADA', p.mediaRef)
+}
+{
+  // Função que recebe SÓ o arquivo: não há entrada de texto nenhuma, e isso
+  // não é falta. Com o arquivo na mão, o serviço é chamado.
+  publicar('so-arquivo', { function: 'so_arquivo', mediaInput: 'arquivo', notFoundText: 'Manda uma foto.' })
+  const r = rodar('so-arquivo', evento())
+  check('comando que só manda o arquivo CHAMA o serviço',
+    r.commands[0]?.commandType === 'connection.call', JSON.stringify(r.commands.map((c) => c.commandType)))
+  check('e o arquivo vai junto', r.commands[0]?.payload.mediaRef === 'TOKEN-DA-PROPRIA')
+  const semNada = rodar('so-arquivo', evento({ comMidia: false }))
+  check('sem o arquivo, aí sim é falta', semNada.commands[0]?.payload.text === 'Manda uma foto.')
 }
 {
   const r = rodar('fig-api', evento({ comMidia: false }))

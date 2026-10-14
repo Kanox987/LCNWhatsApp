@@ -177,9 +177,6 @@
                 "$ref": "#/definitions/actionVariableIncrement"
               },
               {
-                "$ref": "#/definitions/actionWhatsappSticker"
-              },
-              {
                 "$ref": "#/definitions/actionWhatsappRecover"
               },
               {
@@ -811,58 +808,7 @@
         }
       }
     },
-    "actionWhatsappSticker": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "type",
-        "config"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "type": {
-          "const": "action.whatsapp.sticker"
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "notFoundText": {
-              "type": "string"
-            },
-            "size": {
-              "type": "integer",
-              "minimum": 96,
-              "maximum": 1024,
-              "description": "Lado da figurinha em pixels. 512 é o tamanho canônico do WhatsApp. A proporção original é mantida e a sobra fica transparente."
-            },
-            "maxSeconds": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 30,
-              "description": "Quantos segundos do vídeo entram na figurinha animada. Não afeta figurinha de foto."
-            },
-            "quality": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "description": "Qualidade do WebP. Ausente, usa 80 para foto e 50 para vídeo — animada precisa de mais compressão para caber."
-            },
-            "maxKilobytes": {
-              "type": "integer",
-              "minimum": 64,
-              "maximum": 10240,
-              "description": "Peso máximo da figurinha pronta, em KB. Acima disso o comando responde explicando quanto deu e quanto cabia, em vez de mandar algo que o WhatsApp recusaria. Em KB e não em bytes porque é um número que uma pessoa escreve."
-            }
-          }
-        }
-      }
-    },
-    "actionVariableIncrement": {
+"actionVariableIncrement": {
       "type": "object",
       "additionalProperties": false,
       "required": [

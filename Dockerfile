@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 # Imagem base do LCNWhatsApp — enxuta.
-# O ffmpeg é OBRIGATÓRIO: a figurinha converte imagem e vídeo para WebP
-# animado por ele (src/sticker.js). Sem ffmpeg o /fig responde "o ffmpeg não
-# está instalado nesta máquina" — falha clara, mas só na hora do uso, que foi
-# como a imagem ficou tempo demais sem ele.
+# Sem ffmpeg: ele estava aqui por causa da figurinha, que convertia na própria
+# máquina. Agora quem converte é um serviço declarado na aba Conexões, e o bot
+# não executa programa externo nenhum — o que também quer dizer que esta imagem
+# não precisa mais carregar um codec inteiro.
 # zapo-js e sharp vêm com binários pré-compilados (prebuild-install baixa o
 # .node certo pra plataforma). better-sqlite3 (store de sessão) também busca
 # um binário pré-compilado por padrão — build-essential/python3 ficam só como
@@ -15,7 +15,7 @@
 FROM node:22-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates ffmpeg python3 make g++ util-linux \
+    ca-certificates python3 make g++ util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

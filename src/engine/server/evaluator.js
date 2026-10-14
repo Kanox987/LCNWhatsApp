@@ -558,44 +558,6 @@ function executarNo (db, no, evento, contexto, comandos) {
       return 'success'
     }
 
-    case 'action.whatsapp.sticker': {
-      // O motor NUNCA vê a mídia: repassa o token opaco que só o processo do
-      // gateway que o criou sabe resolver (mediaRefCache). Quem baixa e
-      // converte é o gateway — mesma fronteira que /recover e visu única já
-      // respeitam. Sem mídia no evento, não gera comando de figurinha: manda
-      // (se configurado) só um aviso de texto explicando o que faltou.
-      // Duas formas de mandar a mídia, e as duas precisam funcionar: a foto
-      // COM o comando na legenda, e o comando RESPONDENDO uma foto já enviada.
-      // A segunda é a mais usada nos bots de referência, e era a que faltava —
-      // a referência da citação existia no evento e esta ação não a consultava.
-      const citada = evento.message?.quotedMediaRef
-      const mediaRef = evento.message?.mediaRef || citada?.token
-      if (mediaRef) {
-        // Tamanho, duração, qualidade e peso são do COMANDO, não do meu código.
-        // Só viajam os que o documento declarou: campo ausente deixa o gateway
-        // usar o padrão, em vez de o motor inventar um número e fixá-lo.
-        const conversao = {}
-        for (const campo of ['size', 'maxSeconds', 'quality', 'maxKilobytes']) {
-          if (Number.isFinite(no.config?.[campo])) conversao[campo] = no.config[campo]
-        }
-        comandos.push({
-          commandType: 'whatsapp.sticker',
-          payload: {
-            chatId: evento.chat.id,
-            mediaRef,
-            sourceKind: evento.message?.mediaRef ? evento.message.kind : (citada?.mediaKind || null),
-            ...conversao
-          }
-        })
-      } else if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
-        comandos.push({
-          commandType: 'whatsapp.reply',
-          payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
-        })
-      }
-      return 'success'
-    }
-
     case 'action.media.download': {
       // O motor NÃO fala com a rede. Ele resolve a URL, decide qual mensagem
       // marcar na resposta, e passa isso ao gateway — que é quem chama o
@@ -681,7 +643,12 @@ function executarNo (db, no, evento, contexto, comandos) {
       // comando que manda `tamanho: 512` junto tem entrada, e chamaria o
       // serviço sem o arquivo que é o assunto da chamada.
       const faltaArquivo = !!no.config?.mediaInput && !refDeMidia
-      if ((faltaArquivo || !Object.keys(entradas).length) && no.config?.notFoundText) {
+      // "Nenhuma entrada resolveu" só é falta quando NÃO há arquivo. Uma função
+      // que recebe só o arquivo — virar figurinha em imagem, trocar o pacote de
+      // uma figurinha — não tem entrada de texto nenhuma, e tratar isso como
+      // falta fazia o comando responder "manda o arquivo" com o arquivo na mão.
+      const semNada = !Object.keys(entradas).length && !refDeMidia
+      if ((faltaArquivo || semNada) && no.config?.notFoundText) {
         comandos.push({
           commandType: 'whatsapp.reply',
           payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto), replyTo: referenciaDoLink(evento) }

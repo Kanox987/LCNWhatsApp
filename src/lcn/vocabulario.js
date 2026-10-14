@@ -33,17 +33,6 @@ export const ACOES = Object.freeze([
     ]
   },
   {
-    palavra: 'figurinha',
-    tipo: 'action.whatsapp.sticker',
-    campos: [
-      { chave: 'size', rotulo: 'tamanho', tipo: 'numero' },
-      { chave: 'maxSeconds', rotulo: 'segundos', tipo: 'numero' },
-      { chave: 'quality', rotulo: 'qualidade', tipo: 'numero' },
-      { chave: 'maxKilobytes', rotulo: 'peso máximo em KB', tipo: 'numero' },
-      { chave: 'notFoundText', rotulo: 'sem mídia', tipo: 'texto' }
-    ]
-  },
-  {
     palavra: 'recupera',
     tipo: 'action.whatsapp.recover',
     campos: [

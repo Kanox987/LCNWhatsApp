@@ -109,45 +109,6 @@ async function executarResposta (client, comando) {
   )
 }
 
-// Figurinha: o motor mandou só o token opaco da mídia, porque ele nunca vê o
-// conteúdo. Resolver o token, baixar e converter é trabalho deste processo —
-// e só DESTE, já que o token só existe na memória de quem o criou.
-// A conversão tem timeout próprio, maior que o do envio, porque o ffmpeg
-// pode levar segundos num vídeo; por isso não fica dentro do comTimeout do send.
-async function executarFigurinha (client, comando, deps) {
-  const { mediaRefCache, baixarBuffer, converterParaFigurinha, podeVirarFigurinha, ehAnimada, limiteBytes } = deps
-
-  const entrada = mediaRefCache.resolver(comando.payload.mediaRef)
-  if (!entrada) {
-    // TTL do cache é curto de propósito. Um comando que volta tarde demais do
-    // motor não tem mais como resolver a mídia — e é erro conhecido, não
-    // resultado ambíguo: nada foi enviado.
-    throw new Error('a mídia desta figurinha expirou antes do comando voltar do motor')
-  }
-  if (!podeVirarFigurinha(entrada.tipo)) {
-    throw new Error(`não dá pra fazer figurinha de ${entrada.tipo}`)
-  }
-
-  const bruto = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
-  // `limiteBytes` acima é o teto de ENTRADA (o que se aceita baixar do
-  // WhatsApp, limite de operação da máquina); `maxBytes` abaixo é o teto da
-  // figurinha PRONTA, que é escolha de quem montou o comando. Confundir os
-  // dois faria a configuração do comando mexer no consumo do processo.
-  const figurinha = await converterParaFigurinha(bruto, {
-    animada: ehAnimada(entrada.tipo),
-    tamanho: comando.payload.size,
-    duracaoMaxSegundos: comando.payload.maxSeconds,
-    qualidade: comando.payload.quality,
-    limiteBytes: Number.isFinite(comando.payload.maxKilobytes) ? comando.payload.maxKilobytes * 1024 : undefined
-  })
-
-  await comTimeout(
-    () => enviarERegistrar(client, comando.payload.chatId, { type: 'sticker', media: figurinha }),
-    TIMEOUT_ENVIO_MS,
-    `timeout ao enviar a figurinha do comando ${comando.id}`
-  )
-}
-
 // Recuperação de visualização única — o comando que deu origem ao projeto.
 // O motor decidiu que era pra recuperar; aqui a mídia é de fato baixada (o
 // token só resolve neste processo) e reenviada como mídia normal.
@@ -787,7 +748,6 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
 
     const executor = {
       'whatsapp.reply': executarResposta,
-      'whatsapp.sticker': executarFigurinha,
       'whatsapp.recover': executarRecover,
       'whatsapp.menu': executarMenu,
       'whatsapp.delete': executarApagar,
@@ -826,17 +786,15 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
   }
 }
 
-// Carregadas sob demanda para que um gateway que nunca manda figurinha não
-// pague o import de ffmpeg/visu, e para o teste poder injetar tudo sem tocar
-// em disco nem em processo externo.
+// Carregadas sob demanda para o teste poder injetar tudo sem tocar em disco
+// nem em processo externo.
 let padroesCarregados = null
 async function resolverDependencias (deps) {
   if (deps.mediaRefCache) return deps
   if (!padroesCarregados) {
-    const [cache, visu, sticker, acervo, downloader, conexao] = await Promise.all([
+    const [cache, visu, acervo, downloader, conexao] = await Promise.all([
       import('./mediaRefCache.js'),
       import('../visu.js'),
-      import('../sticker.js'),
       import('../mediaLibrary.js'),
       import('../downloader.js'),
       import('./conexaoExecutor.js')
@@ -846,9 +804,6 @@ async function resolverDependencias (deps) {
       acervo,
       criarExecutorDeConexao: conexao.criarExecutorDeConexao,
       baixarBuffer: visu.baixarBuffer,
-      converterParaFigurinha: sticker.converterParaFigurinha,
-      podeVirarFigurinha: sticker.podeVirarFigurinha,
-      ehAnimada: sticker.ehAnimada,
       // meJid vem com sufixo
       // de dispositivo (":12@") e o self-chat só aceita a forma sem ele.
       resolverJidProprio: (client) => {

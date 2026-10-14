@@ -1,10 +1,10 @@
-template figurinha-api v2
-  nome: Figurinha (pelo serviço de imagem)
-  descrição: Transforma foto, vídeo ou GIF em figurinha, com o NOME DO PACOTE e o AUTOR que o WhatsApp mostra ao abrir a figurinha. Vídeo vira figurinha animada. Pode remover o fundo da foto no mesmo passo. Quem converte é o serviço de imagem declarado na aba Conexões — este comando não depende de programa instalado na máquina do número.
+template figurinha-api v3
+  nome: Figurinha
+  descrição: Transforma foto, vídeo ou GIF em figurinha, com o NOME DO PACOTE e o AUTOR que o WhatsApp mostra ao abrir a figurinha. Vídeo vira figurinha animada. Pode remover o fundo da foto no mesmo passo. Quem converte é o serviço de imagem declarado na aba Conexões — nada precisa estar instalado na máquina do número.
   categoria: utilitarios
 
 automação
-  nome: Figurinha (pelo serviço de imagem)
+  nome: Figurinha
   tipo: comando
   dispara com: {{params.command}}
   menu: {{params.command}} — Transforma foto ou vídeo em figurinha
@@ -81,9 +81,6 @@ configurável
 
 avisa exige
   Exige o serviço de imagem configurado na aba Conexões, com o endereço e a chave. Sem isso o comando responde que o serviço está fora do ar.
-
-avisa nota
-  Não precisa de ffmpeg na máquina do número: quem converte é o serviço. É a diferença entre este comando e a "Figurinha" antiga.
 
 avisa nota
   Duas formas de encaixar, escolhidas na hora: o comando sozinho usa o modo padrão (imagem inteira, sobra transparente) e o comando seguido de "s" estica para preencher o quadrado.

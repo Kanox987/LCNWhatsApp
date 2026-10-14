@@ -7,7 +7,6 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.whatsapp.reply',
   'action.variable.set',
   'action.variable.increment',
-  'action.whatsapp.sticker',
   'action.whatsapp.recover',
   'action.menu.render',
   'action.menu.config',
