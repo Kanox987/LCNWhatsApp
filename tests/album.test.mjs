@@ -8,7 +8,7 @@
 // A parte delicada é o proto cru. Estes casos travam os campos contra o proto
 // oficial da zapo-js — é o que separa isto do erro da citação, onde inventamos
 // um campo que a biblioteca descartava em silêncio.
-import { montarFilho, montarPai, podeVirarAlbum } from '../src/engine/album.js'
+import { fatiarLegenda, montarFilho, montarPai, podeVirarAlbum } from '../src/engine/album.js'
 import { executarComandos } from '../src/engine/gatewayExecutor.js'
 
 let falhas = 0
@@ -53,10 +53,57 @@ check('apontando para a chave do pai', assoc.parentMessageKey.id === 'PAI1' && a
 check('marcada como nossa (fromMe)', assoc.parentMessageKey.fromMe === true)
 check('com índice começando em 1', assoc.messageIndex === 1)
 
-// Legenda repetida em cada mídia apareceria dez vezes no mesmo bloco.
-check('só a primeira mídia leva legenda', filho.imageMessage.caption === 'olha')
-const segundo = montarFilho(img('b'), upload, { chatId: 'g@g.us', paiId: 'PAI1', indice: 2, legenda: 'olha' })
-check('e a segunda não repete a legenda', segundo.imageMessage.caption === undefined)
+// QUEM DECIDE A LEGENDA NÃO É AQUI, e isso mudou de propósito.
+//
+// Antes `montarFilho` escrevia a legenda só na primeira mídia e descartava
+// para as outras. O dono apontou o limite disso: a legenda do carrossel
+// comporta menos que a de uma foto solta, e um post com texto longo chegava
+// cortado. O desenho dele: "a legenda na primeira foto e o que não couber vai
+// jogando pra segunda, terceira e assim sucessivamente".
+//
+// Então o fatiamento virou função própria (`fatiarLegenda`) e esta aqui só
+// escreve o pedaço que recebeu. Uma decisão a menos escondida na montagem.
+check('a mídia leva a fatia que recebeu', filho.imageMessage.caption === 'olha')
+const segundo = montarFilho(img('b'), upload, { chatId: 'g@g.us', paiId: 'PAI1', indice: 2, legenda: 'resto da legenda' })
+check('e a segunda leva a FATIA dela, não a repetição da primeira', segundo.imageMessage.caption === 'resto da legenda')
+const semLegenda = montarFilho(img('c'), upload, { chatId: 'g@g.us', paiId: 'PAI1', indice: 3, legenda: null })
+check('mídia sem fatia vai sem legenda nenhuma', semLegenda.imageMessage.caption === undefined)
+
+// --- o fatiamento -------------------------------------------------------
+{
+  const curta = fatiarLegenda('bom dia', 3, 100)
+  check('legenda que cabe fica inteira na primeira', JSON.stringify(curta.fatias) === '["bom dia"]' && curta.sobra === '')
+
+  // Corta em PARÁGRAFO quando dá: partir no meio de uma frase para ganhar
+  // vinte caracteres deixa o texto pior do que entrou.
+  const comParagrafos = ['Primeiro parágrafo aqui.', 'Segundo parágrafo aqui.', 'Terceiro parágrafo aqui.'].join('\n\n')
+  const porParagrafo = fatiarLegenda(comParagrafos, 3, 30)
+  check('corta no fim do parágrafo quando ele cabe', porParagrafo.fatias[0] === 'Primeiro parágrafo aqui.', porParagrafo.fatias[0])
+  check('e a seguinte começa no parágrafo seguinte', porParagrafo.fatias[1] === 'Segundo parágrafo aqui.', porParagrafo.fatias[1])
+
+  // Sem parágrafo, corta no espaço — nunca no meio da palavra.
+  const corrido = 'palavra '.repeat(20).trim()
+  const porEspaco = fatiarLegenda(corrido, 3, 30)
+  check('sem parágrafo, corta no espaço', porEspaco.fatias.every((f) => !f.startsWith('vra') && !f.endsWith('pala')),
+    JSON.stringify(porEspaco.fatias))
+  check('e nenhuma fatia passa do limite', porEspaco.fatias.every((f) => f.length <= 30),
+    JSON.stringify(porEspaco.fatias.map((f) => f.length)))
+
+  // Palavra sozinha maior que o pedaço: aí sim corta seco, porque a
+  // alternativa é não entregar nada.
+  const palavrao = 'a'.repeat(80)
+  const seco = fatiarLegenda(palavrao, 2, 30)
+  check('palavra maior que o pedaço é cortada no limite', seco.fatias[0].length === 30, String(seco.fatias[0].length))
+
+  // O QUE SOBRA NÃO SOME. Cortar o fim da legenda em silêncio seria sumir com
+  // parte do post — quem entrega manda a sobra num texto depois.
+  const grande = 'z'.repeat(500)
+  const sobrou = fatiarLegenda(grande, 2, 100)
+  check('o que não coube volta como sobra', sobrou.sobra.length === 300, String(sobrou.sobra.length))
+  check('e nunca mais fatias do que mídias', sobrou.fatias.length === 2, String(sobrou.fatias.length))
+
+  check('sem legenda, nenhuma fatia', JSON.stringify(fatiarLegenda(null, 3, 100)) === '{"fatias":[],"sobra":""}')
+}
 
 // --- ponta a ponta: álbum aceito -----------------------------------------
 const comando = (id) => ({

@@ -1,5 +1,5 @@
 import * as enviadas from '../enviadas.js'
-import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
+import { fatiarLegenda, montarFilho, montarPai, podeVirarAlbum } from './album.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -286,6 +286,11 @@ async function enviarEmSequencia (client, chatId, midias, legenda, opcoesCitacao
 // mídia pendurada nele por `messageAssociation`. Ver src/engine/album.js para
 // por que isto é proto cru e por que a queda abaixo é parte do desenho.
 async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
+  // A legenda dividida entre as mídias, na ordem — desenho do dono: a primeira
+  // leva o começo e o que não couber vai para a seguinte. O que sobrar depois
+  // da última vira um texto logo abaixo do álbum, porque cortar o fim da
+  // legenda em silêncio seria sumir com parte do post.
+  const { fatias, sobra } = fatiarLegenda(legenda, midias.length)
   let pai
   try {
     pai = await comTimeout(
@@ -300,7 +305,7 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
         type: m.tipo === 'video' ? 'video' : 'image',
         mimetype: m.mime
       })
-      const filho = montarFilho(m, upload, { chatId, paiId: pai.id, indice: i + 1, legenda })
+      const filho = montarFilho(m, upload, { chatId, paiId: pai.id, indice: i + 1, legenda: fatias[i] || null })
       await comTimeout(
         () => enviarERegistrar(client, chatId, filho),
         TIMEOUT_ENVIO_MS * 4,
@@ -311,6 +316,13 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
     // agrupou" e "o álbum nem foi tentado" ficam indistinguíveis — e são
     // problemas em lugares completamente diferentes.
     console.log(`[engine] álbum ${comandoId}: pai ${pai.id} fechado com ${midias.length} mídia(s)`)
+    if (sobra) {
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, { type: 'text', text: sobra }),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao enviar o resto da legenda do comando ${comandoId}`
+      )
+    }
   } catch (erro) {
     // Queda para sequência, e ela é DELIBERADA: o protocolo tem álbum, mas nada
     // garante que o servidor aceite de um bot ou que o app de quem recebe
