@@ -1,5 +1,5 @@
 import * as enviadas from '../enviadas.js'
-import { fatiarLegenda, montarFilho, montarPai, podeVirarAlbum } from './album.js'
+import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import { montarCard, montarCarrossel, podeVirarCarrossel } from './carrossel.js'
 
 const TIMEOUT_ENVIO_MS = 15000
@@ -287,11 +287,6 @@ async function enviarEmSequencia (client, chatId, midias, legenda, opcoesCitacao
 // mídia pendurada nele por `messageAssociation`. Ver src/engine/album.js para
 // por que isto é proto cru e por que a queda abaixo é parte do desenho.
 async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
-  // A legenda dividida entre as mídias, na ordem — desenho do dono: a primeira
-  // leva o começo e o que não couber vai para a seguinte. O que sobrar depois
-  // da última vira um texto logo abaixo do álbum, porque cortar o fim da
-  // legenda em silêncio seria sumir com parte do post.
-  const { fatias, sobra } = fatiarLegenda(legenda, midias.length)
   let pai
   try {
     pai = await comTimeout(
@@ -306,7 +301,10 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
         type: m.tipo === 'video' ? 'video' : 'image',
         mimetype: m.mime
       })
-      const filho = montarFilho(m, upload, { chatId, paiId: pai.id, indice: i + 1, legenda: fatias[i] || null })
+      // Só a primeira leva legenda, que é como um álbum de verdade aparece.
+      // Picar o texto entre as mídias foi tentado e o dono recusou: "ficou
+      // muito feio".
+      const filho = montarFilho(m, upload, { chatId, paiId: pai.id, indice: i + 1, legenda: i === 0 ? legenda : null })
       await comTimeout(
         () => enviarERegistrar(client, chatId, filho),
         TIMEOUT_ENVIO_MS * 4,
@@ -317,13 +315,6 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
     // agrupou" e "o álbum nem foi tentado" ficam indistinguíveis — e são
     // problemas em lugares completamente diferentes.
     console.log(`[engine] álbum ${comandoId}: pai ${pai.id} fechado com ${midias.length} mídia(s)`)
-    if (sobra) {
-      await comTimeout(
-        () => enviarERegistrar(client, chatId, { type: 'text', text: sobra }),
-        TIMEOUT_ENVIO_MS,
-        `timeout ao enviar o resto da legenda do comando ${comandoId}`
-      )
-    }
   } catch (erro) {
     // Queda para sequência, e ela é DELIBERADA: o protocolo tem álbum, mas nada
     // garante que o servidor aceite de um bot ou que o app de quem recebe
@@ -559,14 +550,20 @@ async function executarGuardarNoAcervo (client, comando, deps) {
 // sempre chega. O conteúdo nunca depende de o formato bonito funcionar.
 async function enviarComoCarrossel (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
   try {
-    const { fatias, sobra } = fatiarLegenda(legenda, midias.length)
     const cards = []
-    for (const [i, m] of midias.entries()) {
+    for (const m of midias) {
       const upload = await client.message.upload(m.buffer, {
         type: m.tipo === 'video' ? 'video' : 'image',
         mimetype: m.mime
       })
-      cards.push(montarCard(m, upload, { legenda: fatias[i] || '' }))
+      // CARD SEM LEGENDA, de propósito.
+      //
+      // A primeira tentativa foi espalhar a legenda pelos cards, e o dono
+      // olhou o resultado: "mudei de ideia, não vai dar para fazer isso, ficou
+      // muito feio". O card é estreito e a legenda de um post do Instagram é
+      // longa — texto picado dentro de cada quadrinho polui o carrossel
+      // inteiro. A legenda vai inteira numa mensagem logo abaixo.
+      cards.push(montarCard(m, upload))
     }
     await comTimeout(
       () => enviarERegistrar(client, chatId, montarCarrossel(cards), opcoesCitacao),
@@ -574,11 +571,11 @@ async function enviarComoCarrossel (client, chatId, midias, legenda, opcoesCitac
       `timeout ao enviar o carrossel do comando ${comandoId}`
     )
     console.log(`[engine] carrossel ${comandoId}: uma mensagem com ${cards.length} card(s)`)
-    if (sobra) {
+    if (legenda) {
       await comTimeout(
-        () => enviarERegistrar(client, chatId, { type: 'text', text: sobra }),
+        () => enviarERegistrar(client, chatId, { type: 'text', text: legenda }),
         TIMEOUT_ENVIO_MS,
-        `timeout ao enviar o resto da legenda do comando ${comandoId}`
+        `timeout ao enviar a legenda do comando ${comandoId}`
       )
     }
   } catch (erro) {
@@ -809,6 +806,45 @@ async function executarMensagemRica (client, comando) {
 async function executarEnvioDeArquivo (client, comando, deps) {
   const { acervo } = deps
   const payload = comando.payload
+
+  // UMA PASTA INTEIRA, no formato escolhido.
+  //
+  // É o que faz o carrossel virar peça de comando em vez de consequência de um
+  // download: a pasta do acervo é o conjunto, e a entrega é a mesma escada de
+  // sempre (carrossel -> álbum -> uma a uma).
+  if (payload.pasta) {
+    const arquivos = acervo.listarDaPasta(payload.pasta)
+    if (!arquivos.length) {
+      if (payload.notFoundText) {
+        await comTimeout(
+          () => enviarERegistrar(client, payload.chatId, { type: 'text', text: payload.notFoundText }),
+          TIMEOUT_ENVIO_MS,
+          `timeout ao avisar da pasta vazia no comando ${comando.id}`
+        )
+      }
+      throw new Error(`pasta vazia ou inexistente no acervo: ${payload.pasta}`)
+    }
+    // Texto guardado no acervo não é mídia e não entra num carrossel. Mandar
+    // junto como documento seria entregar um .txt no meio das fotos.
+    const midias = arquivos
+      .filter((r) => r.kind !== 'text')
+      .map((r) => ({
+        buffer: acervo.lerConteudo(r.id),
+        nome: r.name,
+        mime: r.mimetype,
+        tipo: r.kind === 'document' ? 'document' : r.kind
+      }))
+    if (!midias.length) throw new Error(`a pasta "${payload.pasta}" só tem texto, e texto não vai em carrossel`)
+
+    await entregarMidias(client, payload.chatId, midias, {
+      legenda: payload.caption || null,
+      entrega: payload.entrega,
+      opcoesCitacao: opcoesDeCitacao(payload.replyTo),
+      comandoId: comando.id
+    })
+    return
+  }
+
   // Por id OU por caminho. O id é estável e nunca muda; o caminho é o que uma
   // pessoa consegue escrever no WhatsApp ("produtos/fotos/capa.jpg"). Os dois
   // resolvem para o mesmo registro.

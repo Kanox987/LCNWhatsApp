@@ -1,0 +1,54 @@
+template carrossel-do-acervo v1
+  nome: Carrossel de uma pasta do acervo
+  descrição: Manda em UMA mensagem, como carrossel que a pessoa desliza, todas as mídias de uma pasta do acervo. Serve para catálogo de produto, portfólio, pacote de fotos — qualquer conjunto que você já subiu pelo painel. A pasta pode ser fixa ou vir escrita junto com o comando.
+  categoria: utilitarios
+
+automação
+  nome: Carrossel de uma pasta do acervo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Manda as fotos de uma pasta em carrossel
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  envia arquivo
+    pasta: "{{params.pasta}}"
+    entrega: {{params.entrega}}
+    legenda: "{{params.legenda}}"
+    sem arquivo: "{{params.semArquivoText}}"
+
+configurável
+  command: texto = "/catalogo"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para receber o conjunto.
+  pasta: texto = "produtos"
+    rótulo: Pasta do acervo
+    ajuda: O nome da pasta, como aparece na aba Acervo. Escreva {{message.args}} aqui para a pessoa escolher a pasta no próprio comando — "/catalogo bolos".
+  entrega: opção (carrossel, album, separate) = "carrossel"
+    rótulo: Como entregar
+    ajuda: carrossel manda UMA mensagem com as mídias em cards que a pessoa desliza. album deixa o aplicativo agrupar num bloco — chega em qualquer aparelho, mas continua sendo uma pilha de fotos. separate manda uma mensagem por arquivo. Nos três casos todas chegam.
+  legenda: texto = ""
+    rótulo: Legenda
+    ajuda: Enviada como mensagem comum logo depois do carrossel. Deixe vazio para mandar só as mídias.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  semArquivoText: texto = "Não achei nada nessa pasta do acervo."
+    rótulo: Aviso quando a pasta está vazia
+    ajuda: Resposta quando a pasta não existe ou não tem mídia nenhuma.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa compatibilidade
+  O carrossel é mensagem interativa e depende do aplicativo de quem recebe. Quando não é aceito, as mídias caem para álbum e, se nem isso, para uma mensagem por arquivo — chegam sempre, só muda a aparência.
+
+avisa nota
+  A ordem é a do NOME do arquivo, não a da subida. Nomeie como "01.jpg", "02.jpg" para controlar a sequência.
+
+avisa nota
+  Texto guardado no acervo fica de fora: carrossel é de mídia. Com uma mídia só na pasta, o envio é comum — não há o que deslizar.
+
+# nós: gatilho-comando, enviar

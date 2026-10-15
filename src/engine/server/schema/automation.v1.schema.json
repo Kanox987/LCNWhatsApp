@@ -469,7 +469,8 @@
           "additionalProperties": false,
           "anyOf": [
             { "required": ["fileId"] },
-            { "required": ["path"] }
+            { "required": ["path"] },
+            { "required": ["folder"] }
           ],
           "properties": {
             "fileId": {
@@ -481,6 +482,16 @@
               "type": "string",
               "minLength": 1,
               "description": "O caminho no acervo, como \"produtos/fotos/capa.jpg\". Aceita variáveis, e é o que uma pessoa consegue escrever no WhatsApp. Sem pasta, o nome sozinho resolve — desde que não haja dois com o mesmo nome, porque devolver um dos dois calado faria a pessoa mandar o errado sem entender por quê."
+            },
+            "folder": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Uma pasta do acervo inteira, em ordem de nome. É o que permite um comando mandar um CONJUNTO — um carrossel de fotos, um pacote — em vez de um arquivo só. Aceita variáveis, então a pasta pode vir do que a pessoa escreveu."
+            },
+            "delivery": {
+              "enum": ["carrossel", "album", "separate"],
+              "default": "carrossel",
+              "description": "Só vale com \"folder\", e só quando a pasta tem mais de uma mídia. \"carrossel\" manda UMA mensagem com cards que a pessoa desliza; \"album\" deixa o aplicativo agrupar; \"separate\" manda uma por arquivo. O carrossel cai para álbum e o álbum para sequência quando não são aceitos."
             },
             "caption": {
               "type": "string"

@@ -78,6 +78,29 @@ const solto = foto('solto.jpg')
 check('arquivo sem pasta fica na raiz', solto.folder === null && solto.path === 'solto.jpg')
 check('e é achado pelo nome', acervo.porCaminho('solto.jpg')?.id === solto.id)
 
+// --- a pasta como CONJUNTO ----------------------------------------------
+//
+// É o que faz um comando mandar um carrossel próprio: a pasta é a unidade, e
+// não o arquivo. Sem isto, "envia arquivo" só sabia mandar um.
+{
+  const lista = acervo.listarDaPasta('produtos/fotos')
+  check('lista o que está na pasta', lista.length === 1 && lista[0].id === capa.id, JSON.stringify(lista.map((r) => r.name)))
+  check('pasta que não existe devolve lista vazia', acervo.listarDaPasta('nao/existe').length === 0)
+  check('sem pasta, lista vazia — não é "tudo"', acervo.listarDaPasta('').length === 0)
+  // "Tudo" seria o pior padrão possível aqui: um comando mal preenchido
+  // despejaria o acervo inteiro na conversa.
+
+  // ORDEM É A DO NOME, não a da subida: quem monta um conjunto nomeia os
+  // arquivos para ler na ordem, e a ordem de upload é acidente.
+  foto('10.jpg', 'album')
+  foto('2.jpg', 'album')
+  foto('1.jpg', 'album')
+  const ordenada = acervo.listarDaPasta('album').map((r) => r.name)
+  check('a ordem é a do nome, e 10 vem depois de 2',
+    JSON.stringify(ordenada) === '["1.jpg","2.jpg","10.jpg"]', JSON.stringify(ordenada))
+  check('maiúscula na pasta não atrapalha', acervo.listarDaPasta('ALBUM').length === 3)
+}
+
 fs.rmSync(pasta, { recursive: true, force: true })
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE PASTA NO ACERVO PASSARAM')
 process.exit(falhas ? 1 : 0)

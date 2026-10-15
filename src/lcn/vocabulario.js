@@ -99,6 +99,10 @@ export const ACOES = Object.freeze([
       // quem quer a referência estável que não muda se o arquivo for renomeado.
       { chave: 'path', inline: true, tipo: 'texto' },
       { chave: 'fileId', rotulo: 'id', tipo: 'texto' },
+      // Uma pasta inteira em vez de um arquivo: é assim que um comando monta
+      // o próprio carrossel.
+      { chave: 'folder', rotulo: 'pasta', tipo: 'texto' },
+      { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { carrossel: 'carrossel', album: 'álbum', separate: 'separado' } },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
       { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' }
     ]

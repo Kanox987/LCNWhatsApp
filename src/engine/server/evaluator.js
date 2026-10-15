@@ -818,6 +818,11 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           // escreve. O motor só repassa — quem enxerga o acervo é o gateway.
           ...(no.config.fileId ? { fileId: no.config.fileId } : {}),
           ...(no.config.path ? { caminho: interpolar(no.config.path, contexto) } : {}),
+          // Uma PASTA inteira: é assim que um comando monta o próprio conjunto
+          // — um carrossel de fotos, um pacote. A entrega só viaja quando o
+          // comando escolheu; o padrão vive num lugar só, do lado que entrega.
+          ...(no.config.folder ? { pasta: interpolar(no.config.folder, contexto) } : {}),
+          ...(no.config.delivery ? { entrega: no.config.delivery } : {}),
           ...(no.config.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
           ...(no.config.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {})
         }

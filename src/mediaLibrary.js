@@ -304,6 +304,25 @@ export function listarPastas () {
   return [...pastas].sort()
 }
 
+// Tudo que está numa pasta, em ordem de nome.
+//
+// É o que permite um comando mandar um CONJUNTO em vez de um arquivo: a pasta
+// vira a unidade. Ordem por nome e não por data de upload porque quem monta um
+// conjunto nomeia os arquivos para ler na ordem ("01.jpg", "02.jpg") — e a
+// ordem de upload é acidente, não intenção.
+//
+// Comparação sem diferenciar maiúscula, igual a `porCaminho`: quem digita no
+// WhatsApp não vai acertar a caixa.
+export function listarDaPasta (pasta) {
+  const alvo = normalizarPasta(pasta)
+  if (!alvo) return []
+  const chave = alvo.toLowerCase()
+  return lerIndice()
+    .filter((r) => (r.folder || '').toLowerCase() === chave)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }))
+    .map(exporArquivo)
+}
+
 // Quantos arquivos têm o mesmo caminho — usado para avisar antes de gravar.
 export function quantosEm (pasta, nome) {
   const alvo = `${pasta ? pasta + '/' : ''}${nome}`.toLowerCase()
