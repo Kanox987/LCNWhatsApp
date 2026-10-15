@@ -611,10 +611,18 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           chatId: evento.chat.id,
           url,
           modo: no.config?.modo || null,
-          // Como entregar quando o post tem VÁRIAS mídias. O padrão é o
-          // carrossel; "separate" existe para quem prefere uma mensagem por
-          // arquivo — decisão de quem monta o comando, não do código.
-          entrega: no.config?.delivery || 'album',
+          // Como entregar quando o post tem VÁRIAS mídias.
+          //
+          // O PADRÃO TEM QUE ESTAR NUM LUGAR SÓ. Ele estava em dois: aqui e na
+          // entrega, do lado do gateway. Quando o carrossel virou o padrão, eu
+          // troquei lá e esqueci daqui — e como este lado SEMPRE preenche o
+          // campo, o gateway nunca via "não pediu nada" e o carrossel nunca
+          // acontecia. O log dizia `pedido=album` para um comando que não
+          // pedia álbum nenhum.
+          //
+          // Agora quem não escolhe não manda nada, e o padrão existe só onde a
+          // entrega acontece.
+          ...(no.config?.delivery ? { entrega: no.config.delivery } : {}),
           replyTo: referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
           ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
@@ -709,7 +717,8 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           // sairiam ao mesmo tempo, cada um pegando a mídia da mensagem: a
           // sequência compila hoje e faz a coisa errada em silêncio.
           ...(temSucessor ? { encadeado: true, retomarDe: no.id } : {}),
-          entrega: no.config?.delivery || 'album',
+          // Quem não escolheu não manda nada: o padrão vive só na entrega.
+          ...(no.config?.delivery ? { entrega: no.config.delivery } : {}),
           replyTo: referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
           ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),

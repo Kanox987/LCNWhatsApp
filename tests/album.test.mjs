@@ -121,6 +121,12 @@ const comando = (id, extra = {}) => ({
 const tresFotos = { midias: [img('1.jpg'), img('2.jpg'), img('3.jpg')], foraPorTamanho: 0, descricao: null }
 
 // Sem pedir nada, o padrão é o CARROSSEL — uma mensagem só.
+//
+// O CASO ABAIXO PASSA PELO MOTOR DE PROPÓSITO, e não só pela entrega: o padrão
+// estava escrito em DOIS lugares, e o motor preenchia "album" em todo comando
+// que não escolhia. O gateway nunca via "não pediu nada", então o carrossel
+// nunca acontecia — e o log dizia `pedido=album` para um comando que não
+// pedia álbum nenhum. Testar só a entrega deixaria isso passar de novo.
 {
   const envios = []
   const client = {
@@ -261,6 +267,75 @@ const tresFotos = { midias: [img('1.jpg'), img('2.jpg'), img('3.jpg')], foraPorT
   check('com entrega "separado", nenhum álbum é aberto', !envios.some((e) => e.albumMessage))
   check('e as três mídias saem como mensagens comuns', envios.length === 3 && envios.every((e) => e.type === 'image'),
     String(envios.length))
+}
+
+// --- o padrão vive num lugar só -----------------------------------------
+//
+// Este caso olha o que o MOTOR emite. Era aqui que o padrão duplicado morava:
+// o documento não escolhia entrega, o motor preenchia "album", e o carrossel
+// nunca acontecia por mais correto que o lado da entrega estivesse.
+{
+  const { abrirBanco } = await import('../src/engine/server/db.js')
+  const { avaliarEvento } = await import('../src/engine/server/evaluator.js')
+  const { criarServicoAutomacoes } = await import('../src/engine/server/automationsService.js')
+
+  const db = abrirBanco(':memory:')
+  const agora = new Date().toISOString()
+  db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p', 'Pool', agora, agora)
+  const servico = criarServicoAutomacoes(db)
+
+  const publicar = (id, config) => {
+    servico.criarEPublicar({
+      id,
+      document: {
+        schemaVersion: 1,
+        id,
+        revision: 1,
+        enabled: true,
+        name: id,
+        scope: { include: [{ kind: 'everywhere' }], exclude: [] },
+        inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
+        responder: { strategy: 'weighted_rendezvous', poolId: 'p' },
+        flow: {
+          nodes: [
+            { id: 'g', type: 'trigger.command', config: { command: '/dow', match: 'exact_or_args', allowFrom: 'any' } },
+            { id: 'd', type: 'action.media.download', config: { url: '{{message.link}}', ...config } }
+          ],
+          edges: [{ from: 'g', to: 'd', on: 'matched' }]
+        }
+      }
+    })
+    db.prepare('UPDATE automations SET deployment_mode = ?, enabled = ? WHERE id = ?').run('live', 0, id)
+  }
+
+  publicar('sem-escolha', {})
+  publicar('com-escolha', { delivery: 'separate' })
+
+  let n = 0
+  const rodar = (id) => {
+    n++
+    db.prepare('UPDATE automations SET enabled = 0').run()
+    db.prepare('UPDATE automations SET enabled = 1 WHERE id = ?').run(id)
+    const r = avaliarEvento(db, {
+      provider: 'zapo',
+      accountId: 'conta',
+      eventId: `conta:c:s:e${n}`,
+      occurredAt: agora,
+      replay: false,
+      chat: { id: '5511@s.whatsapp.net', kind: 'direct' },
+      sender: { id: '5511@s.whatsapp.net', authoredBySelf: false, authoredByBot: false },
+      message: { kind: 'text', text: '/dow https://instagram.com/p/x' },
+      providerRef: { provider: 'zapo', id: `e${n}` }
+    })
+    return (r.results || []).find((x) => x.automationId === id)?.commands[0]?.payload
+  }
+
+  const semEscolha = rodar('sem-escolha')
+  check('comando que não escolhe entrega NÃO manda entrega nenhuma',
+    !('entrega' in semEscolha), JSON.stringify(semEscolha.entrega))
+  const comEscolha = rodar('com-escolha')
+  check('e quem escolhe continua mandando o que escolheu', comEscolha.entrega === 'separate', comEscolha.entrega)
+  db.close()
 }
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE ÁLBUM PASSARAM')
