@@ -307,6 +307,10 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
         `timeout ao enviar a mídia ${i + 1}/${midias.length} do álbum do comando ${comandoId}`
       )
     }
+    // O sucesso também fala. Sem isto, "o álbum saiu e o aplicativo não
+    // agrupou" e "o álbum nem foi tentado" ficam indistinguíveis — e são
+    // problemas em lugares completamente diferentes.
+    console.log(`[engine] álbum ${comandoId}: pai ${pai.id} fechado com ${midias.length} mídia(s)`)
   } catch (erro) {
     // Queda para sequência, e ela é DELIBERADA: o protocolo tem álbum, mas nada
     // garante que o servidor aceite de um bot ou que o app de quem recebe
@@ -537,7 +541,20 @@ async function executarGuardarNoAcervo (client, comando, deps) {
 // um for ajustado, o outro fica para trás sem ninguém notar.
 async function entregarMidias (client, chatId, midias, { legenda, entrega, opcoesCitacao, comandoId }) {
   // Quem montou o comando escolheu; "album" é só o padrão.
-  if (entrega !== 'separate' && podeVirarAlbum(midias)) {
+  const comoAlbum = entrega !== 'separate' && podeVirarAlbum(midias)
+
+  // POR QUE ESTA LINHA EXISTE. O dono relatou que um post de várias fotos não
+  // chega em carrossel, e não deu para responder por quê: o caminho inteiro
+  // era mudo. Álbum só avisava quando CAÍA para sequência, então "nada no log"
+  // significava as duas coisas ao mesmo tempo — "nem tentou" e "tentou e deu
+  // certo". Agora cada entrega diz o que recebeu e por onde foi.
+  //
+  // `podeVirarAlbum` exige mais de uma mídia e TODAS foto ou vídeo. Quando a
+  // resposta for "sequência", os tipos aqui dizem qual das duas condições
+  // faltou, sem precisar de outro teste.
+  console.log(`[engine] entrega ${comandoId}: ${midias.length} mídia(s) [${midias.map((m) => m.tipo).join(', ')}], pedido=${entrega || 'album'} -> ${comoAlbum ? 'álbum' : 'sequência'}`)
+
+  if (comoAlbum) {
     await enviarComoAlbum(client, chatId, midias, legenda, opcoesCitacao, comandoId)
   } else {
     await enviarEmSequencia(client, chatId, midias, legenda, opcoesCitacao, comandoId)
