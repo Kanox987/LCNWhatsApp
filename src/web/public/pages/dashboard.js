@@ -12,7 +12,21 @@ const ROTULOS_SAUDE = {
 function connectedBadge (connected) {
   if (connected === true) return badge('Conectado', 'success')
   if (connected === false) return badge('Desconectado', 'danger')
+  // Nem o status do serviço se sabe. Dizer "desconectado" aqui seria afirmar
+  // o que não se sabe, que é o mesmo erro do "Conectado" de antes, invertido.
   return badge('Sem informação', 'neutral')
+}
+
+// Quando o registro foi escrito. Com o serviço parado é o que data o "último
+// número visto" — sem isso, a pessoa não sabe se foi há um minuto ou em março.
+function desdeQuando (ms) {
+  if (!Number.isFinite(ms)) return null
+  const minutos = Math.floor((Date.now() - ms) / 60000)
+  if (minutos < 1) return 'agora há pouco'
+  if (minutos < 60) return `há ${minutos} min`
+  const horas = Math.floor(minutos / 60)
+  if (horas < 24) return `há ${horas} h`
+  return `há ${Math.floor(horas / 24)} dia(s)`
 }
 
 function healthBadge (health) {
@@ -36,8 +50,17 @@ function instanceCard (instance, navigate) {
     el('dl', { className: 'metrics-grid' }, [
       el('div', {}, [el('dt', { text: 'Serviço' }), el('dd', { text: instance.unitStatus || '—' })]),
       el('div', {}, [el('dt', { text: 'Saúde' }), el('dd', {}, healthBadge(instance.health))]),
-      el('div', {}, [el('dt', { text: 'Número' }), el('dd', { text: instance.phoneNumber || instance.expectedPhoneE164 || '—' })])
+      // O RÓTULO MUDA COM A VERDADE. Com o serviço parado, o número que está
+      // guardado é o ÚLTIMO VISTO — não é "o número conectado". Chamar os dois
+      // de "Número" fazia a tela parecer dizer que havia sessão ali.
+      el('div', {}, [
+        el('dt', { text: instance.connected === true ? 'Número' : 'Último número visto' }),
+        el('dd', { text: instance.phoneNumber || instance.expectedPhoneE164 || '—' })
+      ])
     ]),
+    instance.connected === true || !desdeQuando(instance.estadoEm)
+      ? null
+      : el('p', { className: 'muted compact', text: `Último registro ${desdeQuando(instance.estadoEm)}.` }),
     el('div', { className: 'instance-card-foot button-row' }, [
       // Conectar é a ação principal de um número desconectado, e ficava
       // escondida atrás de "Abrir detalhes": quem acabou de instalar não tem

@@ -255,6 +255,36 @@ const descoberta = comDescoberta.find((i) => i.instanceId === 'simples:outro')
 check('o segundo número do modo simples aparece na lista', !!descoberta)
 check('e traz o número dele, lido da própria pasta', descoberta?.phoneNumber === '5599999999999', descoberta?.phoneNumber)
 check('sem pid próprio, aparece como parado', descoberta?.unitStatus === 'parado', descoberta?.unitStatus)
+
+// "CONECTADO" CRUZA COM O PROCESSO ESTAR VIVO.
+//
+// O state.json acima diz `conectado: true` e o serviço está PARADO — é
+// exatamente o estado que sobra depois de um `kill -9`, de uma queda ou de um
+// container removido, porque nada invalida esse campo. O painel dizia
+// "Conectado" para um número que não estava rodando, e foi assim que ele
+// marcou como conectado justamente o número que nem pareia.
+check('serviço parado NUNCA aparece como conectado', descoberta?.connected === false,
+  String(descoberta?.connected))
+// Serviço parado é ausência de sessão, não dúvida. O mesmo vale para a saúde:
+// o registro ficou do jeito que estava quando o processo caiu.
+check('e a saúde dele não é afirmada a partir de registro velho',
+  descoberta?.health === 'desconhecida', descoberta?.health)
+// O número continua saindo — ele é desta instância. O que muda é o que ele
+// significa, e a tela diz isso com a data do registro.
+check('o número continua disponível, como último visto', descoberta?.phoneNumber === '5599999999999')
+
+// --- PASTA SOZINHA NÃO É INSTÂNCIA --------------------------------------
+//
+// `LCN_INSTANCIA=suite npm test` cria `data/instancias/suite/` vazia, e ela
+// aparecia como um número real em três telas. O sinal de que um bot rodou ali
+// é o state.json, não o diretório.
+fsDesc.mkdirSync(pathDesc.join(raizDesc, 'instancias', 'pasta-vazia'), { recursive: true })
+const comVazia = serviceBare.listar()
+check('pasta sem state.json não vira instância',
+  !comVazia.some((i) => i.instanceId === 'simples:pasta-vazia'),
+  JSON.stringify(comVazia.map((i) => i.instanceId)))
+check('e a que tem state.json continua aparecendo',
+  comVazia.some((i) => i.instanceId === 'simples:outro'))
 check('o principal continua na lista, separado', comDescoberta.some((i) => i.instanceId === 'bare'))
 
 check('obter() resolve a instância descoberta', serviceBare.obter('simples:outro')?.instanceId === 'simples:outro')

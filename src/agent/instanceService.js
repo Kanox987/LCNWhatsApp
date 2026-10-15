@@ -145,7 +145,15 @@ export function instanciasSimplesDescobertas (raizDados) {
   } catch {
     return []
   }
-  return nomes.map((nome) => ({
+  return nomes
+    // PASTA SOZINHA NÃO É INSTÂNCIA. Qualquer subdiretório virava um número na
+    // tela, e o `data/instancias/suite/` que a ferramenta de teste cria
+    // aparecia como se fosse um número real — em três telas. Exigir o
+    // `state.json` é exigir o sinal de que algum bot de fato rodou ali.
+    .filter((nome) => {
+      try { return fs.statSync(path.join(pasta, nome, 'state.json')).isFile() } catch { return false }
+    })
+    .map((nome) => ({
     instanceId: `${PREFIXO_SIMPLES}${nome}`,
     label: `Número "${nome}" (modo simples)`,
     isBare: true,
@@ -155,7 +163,7 @@ export function instanciasSimplesDescobertas (raizDados) {
     expectedPhoneE164: null,
     resources: { memory: null, cpus: null },
     createdAt: null
-  }))
+    }))
 }
 
 // Um processo com este pid está vivo? É como o modo simples sabe se o bot está
@@ -252,16 +260,54 @@ export function criarInstanceService ({
     return instancia
   }
 
+  // O serviço está DE PÉ? `statusUnit` devolve a palavra de três origens
+  // diferentes (pid próprio, serviço do bare, systemctl), então a leitura fica
+  // num lugar só — espalhar a comparação por string seria convidar um valor
+  // novo a passar despercebido.
+  function vivoPeloStatus (status) {
+    if (status === 'rodando' || status === 'active' || status === 'activating') return true
+    if (status === 'parado' || status === 'inactive' || status === 'failed') return false
+    return null // 'indisponivel' e o que mais vier: não dá para afirmar nada
+  }
+
   function resumir (instancia) {
     const estado = estadoDa(instancia)
+    const unitStatus = statusUnit(instancia)
+    const vivo = vivoPeloStatus(unitStatus)
+
+    // "CONECTADO" PRECISA CRUZAR COM O PROCESSO ESTAR VIVO.
+    //
+    // `state.json` guarda `conectado: true` e NADA o invalida quando o
+    // processo morre: não há checagem de pid, lock, heartbeat nem frescor. Só
+    // um desligamento gracioso zera o campo — `kill -9`, queda, OOM ou
+    // container removido deixam `true` para sempre. O painel então dizia
+    // "Conectado" para um número que não estava rodando, e foi assim que ele
+    // marcou como conectado justamente o que nem pareia.
+    //
+    // A ironia é que o próprio `resumir` já sabia: `unitStatus` vem de
+    // `statusUnit` e estava ali do lado, sem ninguém cruzar os dois.
+    //
+    // Serviço parado é ausência de sessão, não dúvida: aí `false` é a verdade,
+    // não um palpite. Dúvida é quando nem o status se sabe — e aí vai `null`,
+    // que a tela mostra como "sem informação".
+    const conectado = vivo === true
+      ? (estado?.conectado ?? null)
+      : (vivo === false ? false : null)
+
     return {
       instanceId: instancia.instanceId,
       label: instancia.label,
       expectedPhoneE164: instancia.expectedPhoneE164 || null,
-      unitStatus: statusUnit(instancia),
-      connected: estado?.conectado ?? null,
+      unitStatus,
+      connected: conectado,
+      // O número continua saindo: ele é desta instância. O que muda é o que
+      // ele significa quando o serviço está parado — último número visto, e é
+      // a tela que diz isso, com `estadoEm` para datar.
       phoneNumber: estado?.numero ?? null,
-      health: estado?.saude?.status ?? 'desconhecida',
+      estadoEm: estado?.atualizadoEm ?? null,
+      // Saúde de um serviço parado é o mesmo caso: o registro ficou do jeito
+      // que estava quando ele caiu.
+      health: vivo === false ? 'desconhecida' : (estado?.saude?.status ?? 'desconhecida'),
       isBare: instancia.isBare === true
     }
   }
