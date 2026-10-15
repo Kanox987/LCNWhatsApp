@@ -11,14 +11,18 @@ function formatUptime (uptimeMs) {
   return `${Math.floor(horas / 24)}d ${horas % 24}h`
 }
 
-function lifecycleCard (instance, refresh) {
-  // Modo simples ("bare") não sabe iniciar do zero por API — precisa do
-  // terminal (npm start/node index.js) porque relançar o processo do
-  // painel web não é o mesmo binário do bot. Uma vez rodando, pausar/
-  // reiniciar já funcionam (ver instanceService.js).
-  const acoesDisponiveis = instance.isBare
-    ? [['Parar', 'stop', 'danger'], ['Reiniciar', 'restart', 'secondary']]
-    : [['Iniciar', 'start', 'primary'], ['Parar', 'stop', 'danger'], ['Reiniciar', 'restart', 'secondary']]
+function lifecycleCard (instance, refresh, navigate) {
+  // LIGAR DO ZERO FUNCIONA EM TODOS, e este texto dizia o contrário.
+  //
+  // O comentário antigo era verdade quando `iniciarBot()` reexecutava o
+  // processo atual — relançar o painel não sobe um bot. Hoje ele executa o
+  // `index.js` explicitamente e destacado, e o número do modo simples tem o
+  // mesmo caminho parametrizado pelo nome. Esconder "Iniciar" deixava um
+  // número recém-criado sem como subir pela tela que acabou de criá-lo.
+  const acoesDisponiveis = [['Iniciar', 'start', 'primary'], ['Parar', 'stop', 'danger'], ['Reiniciar', 'restart', 'secondary']]
+  // Só número do modo simples descoberto é removível: o principal não, e
+  // instância gerenciada sai pelo registro.
+  const podeRemover = String(instance.instanceId || '').startsWith('simples:')
   const actions = acoesDisponiveis.map(([label, action, variant]) => button(label, {
     variant,
     onClick: async (event) => {
@@ -36,10 +40,40 @@ function lifecycleCard (instance, refresh) {
   }))
   return el('section', { className: 'panel' }, [
     el('div', { className: 'panel-heading' }, [
-      el('div', {}, [el('h2', { text: 'Ciclo de vida' }), el('p', { text: instance.isBare ? 'Modo simples: pra ligar do zero, use o terminal (npm start ou node index.js).' : 'Controle o serviço desta instância no sistema.' })]),
+      el('div', {}, [
+        el('h2', { text: 'Ciclo de vida' }),
+        el('p', { text: 'Ligue, pare e reinicie este número por aqui — não precisa de terminal.' })
+      ]),
       badge(instance.unitStatus || 'desconhecido', instance.unitStatus === 'active' || instance.unitStatus === 'rodando' ? 'success' : 'neutral')
     ]),
-    el('div', { className: 'button-row' }, actions)
+    el('div', { className: 'button-row' }, actions),
+    podeRemover
+      ? el('div', { className: 'stack' }, [
+        el('p', { className: 'muted compact', text: 'Remover apaga os dados E a sessão deste número. Ele não volta sozinho: quem reaproveitar o nome vai parear de novo. Pare o número antes.' }),
+        el('div', { className: 'button-row' }, [button('Remover este número', {
+          variant: 'danger',
+          onClick: async (event) => {
+            const control = event.currentTarget
+            // Confirmar escrevendo o nome: um clique só, num botão vermelho
+            // perto de "Parar", apaga sessão de WhatsApp sem volta.
+            const nome = String(instance.instanceId).slice('simples:'.length)
+            // eslint-disable-next-line no-alert
+            const digitado = window.prompt(`Isto apaga os dados e a sessão de "${nome}". Para confirmar, escreva o nome dele:`)
+            if (digitado === null) return
+            if (digitado.trim() !== nome) { notify('O nome não bateu — nada foi removido.', 'warning'); return }
+            setBusy(control, true, 'Removendo…')
+            try {
+              await api.instances.remover(instance.instanceId)
+              notify(`Número "${nome}" removido.`)
+              navigate('/')
+            } catch (error) {
+              notify(error.message, 'danger')
+              setBusy(control, false)
+            }
+          }
+        })])
+      ])
+      : null
   ])
 }
 
@@ -243,7 +277,7 @@ export async function renderInstance ({ params, navigate, refresh }) {
       el('div', {}, [el('span', { text: 'Serviço' }), el('strong', { text: instance.unitStatus || '—' })]),
       el('div', {}, [el('span', { text: 'Criada em' }), el('strong', { text: formatDate(instance.createdAt) })])
     ]),
-    el('div', { className: 'two-columns' }, [lifecycleCard(instance, refresh), pairingCard(pairing)]),
+    el('div', { className: 'two-columns' }, [lifecycleCard(instance, refresh, navigate), pairingCard(pairing)]),
     optimizationCard(id, optimization),
     usageCard(usageResult.usage, usageResult.error),
     logsCard(id)

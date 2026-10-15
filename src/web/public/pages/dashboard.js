@@ -1,5 +1,5 @@
 import { api } from '../api.js'
-import { badge, button, el, emptyState, notify, setBusy, setPageHeader } from '../ui.js'
+import { badge, button, el, emptyState, field, notify, setBusy, setPageHeader } from '../ui.js'
 
 const ROTULOS_SAUDE = {
   saudavel: 'Saudável',
@@ -95,8 +95,47 @@ export async function renderDashboard ({ navigate, refresh }) {
     eyebrow: 'Visão geral',
     title: 'Instâncias',
     description: 'Acompanhe seus números, o serviço de cada instância e o estado da conexão.',
-    actions: [button('Atualizar', { onClick: refresh })]
+    actions: [button('Novo número', { variant: 'primary', onClick: () => abrirCriacao() }), button('Atualizar', { onClick: refresh })]
   })
+
+  // ADICIONAR UM NÚMERO SEM TERMINAL.
+  //
+  // Era a última coisa que só a linha de comando fazia
+  // (`LCN_INSTANCIA=pessoal node index.js`), e quem aluga o sistema não tem
+  // terminal nenhum. O formulário abre no topo da própria lista: criar um
+  // número é o começo de tudo, não um detalhe escondido atrás de um menu.
+  function abrirCriacao () {
+    const existente = document.getElementById('criar-numero')
+    if (existente) { existente.querySelector('input')?.focus(); return }
+
+    const nome = el('input', { type: 'text', placeholder: 'pessoal', required: true, maxlength: '40' })
+    const caixa = el('div', { className: 'notice', id: 'criar-numero' }, [
+      el('strong', { text: 'Novo número' }),
+      field('Nome', nome,
+        'Letras, números, ponto, hífen e _ — ele vira o nome de uma pasta, então nada de espaço, barra ou acento. É só uma etiqueta interna: o número de telefone vem do pareamento.'),
+      el('p', { className: 'muted compact', text: 'O número nasce parado. Depois de criar, use "Conectar" para ler o QR.' }),
+      el('div', { className: 'button-row' }, [
+        button('Criar', {
+          variant: 'primary',
+          onClick: async (evento) => {
+            const controle = evento.currentTarget
+            setBusy(controle, true, 'Criando…')
+            try {
+              const criada = await api.instances.criar(nome.value.trim())
+              notify(`Número "${criada.instanceId}" criado. Ligue e conecte para parear.`)
+              await refresh()
+            } catch (erro) {
+              notify(erro.message, 'danger')
+              setBusy(controle, false)
+            }
+          }
+        }),
+        button('Cancelar', { onClick: () => caixa.remove() })
+      ])
+    ])
+    document.getElementById('page')?.querySelector('.stack-lg')?.prepend(caixa)
+    nome.focus()
+  }
 
   const [instances, healthResult] = await Promise.all([
     api.instances.list(),

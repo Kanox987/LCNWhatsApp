@@ -22,7 +22,7 @@ import { spawnSync } from 'child_process'
 import QRCode from 'qrcode'
 import { lerRegistro, buscarPorId, listarInstancias as listarInstanciasRegistro } from '../instances/registry.js'
 import { caminhoInstancia, nomeContainer } from '../instances/paths.js'
-import { ARQ_ESTADO as ARQ_ESTADO_BARE, ARQ_CONFIG as ARQ_CONFIG_BARE } from '../paths.js'
+import { ARQ_ESTADO as ARQ_ESTADO_BARE, ARQ_CONFIG as ARQ_CONFIG_BARE, RAIZ } from '../paths.js'
 import * as processoDaInstancia from './processoDaInstancia.js'
 import { statusServico as statusServicoBare, iniciarBot as iniciarBotBare, pararBot as pararBotBare, reiniciarBot as reiniciarBotBare, logsServico as logsServicoBare } from '../runtime.js'
 
@@ -404,6 +404,79 @@ export function criarInstanceService ({
     return { instanceId: id, action: acao, ok: true }
   }
 
+  // CRIAR UM NÚMERO NOVO, sem terminal.
+  //
+  // Era a última coisa que só dava para fazer pela linha de comando
+  // (`LCN_INSTANCIA=pessoal node index.js`), e quem aluga o sistema não tem
+  // terminal. Um número do modo simples é uma pasta mais um processo; criar é
+  // preparar a pasta, e o `state.json` inicial é o que diz "alguém quis este
+  // número aqui" — sem ele a varredura (com razão) ignoraria o diretório.
+  //
+  // O NOME É SANEADO ANTES DE VIRAR CAMINHO, e isto é o ponto delicado: é o
+  // único lugar onde texto de fora decide um diretório. A lista de caracteres
+  // é a MESMA da varredura, porque um nome que passa aqui e é ignorado lá
+  // criaria uma pasta que nunca aparece.
+  const NOME_DE_INSTANCIA = /^[\w.-]{1,40}$/
+  function criar (nomeBruto) {
+    const nome = String(nomeBruto ?? '').trim()
+    if (!NOME_DE_INSTANCIA.test(nome)) {
+      throw new Error('O nome aceita letras, números, ponto, hífen e _ (até 40). Nada de barra, espaço ou acento — ele vira o nome de uma pasta.')
+    }
+    // ".." passa no teste acima (são dois pontos), e viraria um caminho acima
+    // da raiz de dados. Recusar explicitamente é mais honesto que depender de
+    // o regex cobrir isso por acidente.
+    if (nome === '.' || nome === '..') throw new Error('Esse nome não pode ser usado.')
+    if (nome === 'bare') throw new Error('"bare" é o nome do número principal.')
+
+    const pasta = path.join(raizDeDados(), 'instancias', nome)
+    const arqEstado = path.join(pasta, 'state.json')
+    if (fs.existsSync(arqEstado)) throw new Error(`Já existe um número chamado "${nome}".`)
+
+    fs.mkdirSync(pasta, { recursive: true })
+    // Estado inicial honesto: não conectado, sem número. É o que a tela vai
+    // mostrar até alguém parear.
+    // SEM `atualizadoEm`: esse campo é o BATIMENTO, e só um processo rodando
+    // tem o direito de escrevê-lo. Gravá-lo aqui faria o número recém-criado
+    // nascer parecendo vivo — o mesmo "conectado que nunca expira" que a
+    // correção do batimento acabou de matar, reintroduzido pela porta da
+    // criação.
+    fs.writeFileSync(arqEstado, JSON.stringify({
+      conectado: false,
+      numero: null,
+      criadoEm: Date.now()
+    }, null, 2) + '\n', { mode: 0o600 })
+
+    const id = `${PREFIXO_SIMPLES}${nome}`
+    const instancia = instanciasSimplesDescobertas(raizDeDados()).find((i) => i.instanceId === id)
+    if (!instancia) throw new Error(`Criei a pasta de "${nome}" mas ela não apareceu na varredura.`)
+    return resumir(instancia)
+  }
+
+  // REMOVER. Apaga a pasta de dados E a sessão: sem a sessão, o número não
+  // volta sozinho — quem reaproveitar o nome vai parear de novo. É destrutivo
+  // e irreversível, então tem duas travas.
+  function remover (id) {
+    if (id === ID_BARE) throw new Error('O número principal não pode ser removido por aqui.')
+    const instancia = exigir(id)
+    if (!instancia.nomeSimples) {
+      throw new Error('Só número do modo simples é removido por aqui; instância gerenciada sai pelo registro.')
+    }
+    // PARAR ANTES. Apagar a pasta de um processo vivo deixaria um bot rodando
+    // sem estado, escrevendo num diretório que já não existe.
+    const status = statusUnit(instancia)
+    if (vivoPeloStatus(status) !== false) {
+      throw new Error(`O número "${instancia.nomeSimples}" ainda está rodando (${status}). Pare antes de remover.`)
+    }
+
+    // Caminho montado a partir da instância ENCONTRADA na varredura, nunca do
+    // texto recebido — é o que impede um id inventado de apagar outra coisa.
+    const pastaDados = path.dirname(instancia.arqEstado)
+    const pastaSessao = path.join(RAIZ, 'sessao', 'instancias', instancia.nomeSimples)
+    fs.rmSync(pastaDados, { recursive: true, force: true })
+    fs.rmSync(pastaSessao, { recursive: true, force: true })
+    return { instanceId: id, removed: true, nome: instancia.nomeSimples }
+  }
+
   const iniciar = (id) => executarAcaoCicloDeVida(id, 'start')
   const parar = (id) => executarAcaoCicloDeVida(id, 'stop')
   const reiniciar = (id) => executarAcaoCicloDeVida(id, 'restart')
@@ -565,5 +638,5 @@ export function criarInstanceService ({
     return { lines: saida.trimEnd().split('\n') }
   }
 
-  return { listar, obter, iniciar, parar, reiniciar, pareamento, obterOtimizacao, definirOtimizacao, obterUso, obterLogs }
+  return { listar, obter, criar, remover, iniciar, parar, reiniciar, pareamento, obterOtimizacao, definirOtimizacao, obterUso, obterLogs }
 }

@@ -19,6 +19,10 @@ export function criarAplicacao ({
     instancias: {
       listar: () => instanceService.listar(),
       obter: (id) => instanceService.obter(id),
+      // Criar e remover número SEM TERMINAL — era a última coisa que só a
+      // linha de comando fazia, e quem aluga o sistema não tem terminal.
+      criar: (nome) => instanceService.criar(nome),
+      remover: (id) => instanceService.remover(id),
       iniciar: (id) => instanceService.iniciar(id),
       parar: (id) => instanceService.parar(id),
       reiniciar: (id) => instanceService.reiniciar(id),

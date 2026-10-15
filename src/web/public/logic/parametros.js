@@ -14,6 +14,19 @@ export const TYPE_LABELS = {
   enum: 'Escolha da lista'
 }
 
+// Os pools que dá para ESCOLHER.
+//
+// O prefixo `__` é do sistema: `__native__` existe para as automações nativas
+// (o /menu) e escolhê-lo numa instalação colocaria um comando do usuário no
+// pool reservado. É a mesma família do `__owner__` que o motor passou a
+// recusar — lá a escrita foi bloqueada, aqui a tela oferecia de bandeja.
+//
+// Função separada porque o resto deste módulo precisa de `document`: a
+// decisão não precisa, e assim ela tem caso de teste.
+export function poolsOferecidos (pools) {
+  return (Array.isArray(pools) ? pools : []).filter((p) => !String(p?.id ?? '').startsWith('__'))
+}
+
 export function rotuloTipo (definition) {
   return TYPE_LABELS[definition?.type] || definition?.type
 }
@@ -57,10 +70,11 @@ export function criarControleParametro (definition, pools = [], valorAtual) {
   const temInicial = inicial !== undefined
 
   if (definition.key === 'poolId') {
+    const oferecidos = poolsOferecidos(pools)
     const control = el('select', { required: true }, [
-      el('option', { value: '', text: pools.length ? 'Selecione um pool' : 'Nenhum pool cadastrado' })
+      el('option', { value: '', text: oferecidos.length ? 'Selecione um pool' : 'Nenhum pool cadastrado' })
     ])
-    for (const pool of pools) {
+    for (const pool of oferecidos) {
       control.append(el('option', {
         value: pool.id,
         selected: temInicial && String(inicial) === pool.id,

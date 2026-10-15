@@ -68,6 +68,8 @@ export const api = {
   instances: {
     list: () => request('/instances'),
     get: (id) => request(`/instances/${segment(id)}`),
+    criar: (nome) => request('/instances', { method: 'POST', body: { nome } }),
+    remover: (id) => request(`/instances/${segment(id)}`, { method: 'DELETE' }),
     action: (id, action) => request(`/instances/${segment(id)}/${action}`, { method: 'POST' }),
     pairing: (id) => request(`/instances/${segment(id)}/pairing`),
     optimization: (id) => request(`/instances/${segment(id)}/optimization`),

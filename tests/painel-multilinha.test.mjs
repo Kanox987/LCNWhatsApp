@@ -18,7 +18,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { ehCampoDeVariasLinhas } from '../src/web/public/logic/parametros.js'
+import { ehCampoDeVariasLinhas, poolsOferecidos } from '../src/web/public/logic/parametros.js'
 import { compilar } from '../src/lcn/compilar.js'
 import { descompilar } from '../src/lcn/descompilar.js'
 import { carregarCatalogo } from '../src/engine/templates/catalog.js'
@@ -58,6 +58,21 @@ check('escolha da lista nunca', ehCampoDeVariasLinhas({ key: 'o', type: 'enum', 
 check('definição ausente não quebra', ehCampoDeVariasLinhas(undefined, 'a\nb') === false)
 check('valor ausente não quebra', ehCampoDeVariasLinhas(texto(), undefined) === false)
 check('valor nulo não quebra', ehCampoDeVariasLinhas(texto(), null) === false)
+
+// --- o pool reservado não é oferecido -----------------------------------
+//
+// `__native__` existe para as automações do sistema (o /menu). Escolhê-lo numa
+// instalação colocaria um comando do usuário no pool reservado — mesma família
+// do `__owner__`, que o motor recusa escrever. Lá a escrita foi bloqueada;
+// aqui a tela oferecia de bandeja.
+{
+  const pools = [{ id: '__native__' }, { id: 'pool-local' }, { id: 'outro' }]
+  const oferecidos = poolsOferecidos(pools).map((p) => p.id)
+  check('o pool do sistema fica fora da lista', !oferecidos.includes('__native__'), JSON.stringify(oferecidos))
+  check('e os do usuário continuam todos', JSON.stringify(oferecidos) === '["pool-local","outro"]', JSON.stringify(oferecidos))
+  check('lista vazia não quebra', JSON.stringify(poolsOferecidos([])) === '[]')
+  check('entrada inválida não quebra', JSON.stringify(poolsOferecidos(null)) === '[]')
+}
 
 // --- a palavra na linguagem, ida e volta --------------------------------
 {

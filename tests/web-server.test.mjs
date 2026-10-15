@@ -27,6 +27,8 @@ function criarAplicacaoFake () {
     instancias: {
       listar: registrar('instancias.listar', [{ instanceId: 'wa-000001' }]),
       obter: registrar('instancias.obter', { instanceId: 'wa-000001' }),
+      criar: registrar('instancias.criar', { instanceId: 'simples:novo' }),
+      remover: registrar('instancias.remover', { removed: true }),
       iniciar: registrar('instancias.iniciar', { ok: true }),
       pareamento: registrar('instancias.pareamento', { qr: null }),
       obterOtimizacao: registrar('instancias.obterOtimizacao', { bandwidthLimit: {} }),
@@ -111,6 +113,22 @@ try {
   const r2 = await fetch(`${base}/api/v1/instances/wa-000001/start`, { method: 'POST' })
   check('POST .../start: chama instancias.iniciar com o id certo', aplicacao.chamadas.some((c) => c.nome === 'instancias.iniciar' && c.args[0] === 'wa-000001'))
   check('POST .../start: status 200', r2.status === 200)
+
+  // Criar e remover número pelo painel: era a última coisa que só a linha de
+  // comando fazia, e quem aluga o sistema não tem terminal.
+  const rCriar = await fetch(`${base}/api/v1/instances`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ nome: 'novo' })
+  })
+  check('POST /api/v1/instances: 201 para recurso novo', rCriar.status === 201, String(rCriar.status))
+  check('e passa o nome adiante',
+    aplicacao.chamadas.some((c) => c.nome === 'instancias.criar' && c.args[0] === 'novo'))
+
+  const rRemover = await fetch(`${base}/api/v1/instances/simples:novo`, { method: 'DELETE' })
+  check('DELETE /api/v1/instances/:id: status 200', rRemover.status === 200, String(rRemover.status))
+  check('e passa o id adiante',
+    aplicacao.chamadas.some((c) => c.nome === 'instancias.remover' && c.args[0] === 'simples:novo'))
 
   const r3 = await fetch(`${base}/api/v1/instances/wa-000001/directory?kind=contact&q=maria`)
   const chamadaDiretorio = aplicacao.chamadas.find((c) => c.nome === 'diretorio.listar')

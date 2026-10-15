@@ -52,7 +52,11 @@ export function criarRoteadorWeb (aplicacao) {
       : aplicacao.acervo.descrever(params.id, body?.description)
   ))
   roteador.delete('/api/v1/media/:id', ({ params }) => aplicacao.acervo.remover(params.id))
+  roteador.post('/api/v1/instances', ({ body }) => resposta(201, aplicacao.instancias.criar(body?.nome)))
   roteador.get('/api/v1/instances/:id', ({ params }) => aplicacao.instancias.obter(params.id))
+  // Remover apaga dados E sessão: o número não volta sozinho. O motor recusa
+  // enquanto o processo estiver vivo — ver instanceService.remover.
+  roteador.delete('/api/v1/instances/:id', ({ params }) => aplicacao.instancias.remover(params.id))
   roteador.post('/api/v1/instances/:id/start', ({ params }) => aplicacao.instancias.iniciar(params.id))
   roteador.post('/api/v1/instances/:id/stop', ({ params }) => aplicacao.instancias.parar(params.id))
   roteador.post('/api/v1/instances/:id/restart', ({ params }) => aplicacao.instancias.reiniciar(params.id))
