@@ -273,6 +273,30 @@ check('e a saúde dele não é afirmada a partir de registro velho',
 // significa, e a tela diz isso com a data do registro.
 check('o número continua disponível, como último visto', descoberta?.phoneNumber === '5599999999999')
 
+// --- O BATIMENTO ATRAVESSA O QUE O PID NÃO ATRAVESSA --------------------
+//
+// Quando o número roda em outro container, o pid dele não existe aqui — e,
+// pior, pode casar por acaso com um processo daqui. O `state.json` fica num
+// volume compartilhado e é reescrito a cada 30s mesmo parado, então ele é o
+// sinal que vale de qualquer lugar.
+fsDesc.writeFileSync(pathDesc.join(pastaOutro, 'state.json'),
+  JSON.stringify({ conectado: true, numero: '5599999999999', atualizadoEm: Date.now(), saude: { status: 'saudavel' } }))
+{
+  const comBatimento = serviceBare.listar().find((i) => i.instanceId === 'simples:outro')
+  check('estado escrito agora há pouco conta como rodando', comBatimento?.unitStatus === 'rodando',
+    comBatimento?.unitStatus)
+  check('e aí "conectado" volta a valer', comBatimento?.connected === true, String(comBatimento?.connected))
+}
+{
+  // Batimento velho e nenhum processo vivo: morreu. É o estado que sobra
+  // depois de um kill -9, e é exatamente o que dizia "Conectado" para sempre.
+  fsDesc.writeFileSync(pathDesc.join(pastaOutro, 'state.json'),
+    JSON.stringify({ conectado: true, numero: '5599999999999', atualizadoEm: Date.now() - 3600000 }))
+  const parada = serviceBare.listar().find((i) => i.instanceId === 'simples:outro')
+  check('batimento velho e sem processo: parado', parada?.unitStatus === 'parado', parada?.unitStatus)
+  check('e NÃO conectado', parada?.connected === false, String(parada?.connected))
+}
+
 // --- PASTA SOZINHA NÃO É INSTÂNCIA --------------------------------------
 //
 // `LCN_INSTANCIA=suite npm test` cria `data/instancias/suite/` vazia, e ela

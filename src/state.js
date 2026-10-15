@@ -70,6 +70,33 @@ export function gravar () {
   } catch {}
 }
 
+// BATIMENTO: o arquivo é reescrito de tempos em tempos mesmo sem nada mudar.
+//
+// Sem isto, `atualizadoEm` só avança quando algo acontece — e um processo
+// morto deixa um arquivo que parece atual por horas. Era a raiz do painel
+// dizer "Conectado" sobre um número que não estava rodando: `conectado: true`
+// ficava gravado e NADA o invalidava. Checagem de pid não resolve sozinha
+// quando o número roda em outro container, porque o pid de lá não existe
+// aqui; o arquivo, num volume compartilhado, atravessa.
+//
+// 30 segundos é curto o bastante para a tela não mentir por muito tempo e
+// longo o bastante para ser I/O irrelevante. `unref` para o batimento nunca
+// segurar o processo vivo sozinho.
+export const BATIMENTO_MS = 30000
+let batimento = null
+
+export function iniciarBatimento (ms = BATIMENTO_MS) {
+  if (batimento) return batimento
+  batimento = setInterval(gravar, ms)
+  if (typeof batimento.unref === 'function') batimento.unref()
+  return batimento
+}
+
+export function pararBatimento () {
+  if (batimento) clearInterval(batimento)
+  batimento = null
+}
+
 export function definirConexao (info) {
   estado = { ...estado, ...info }
   agendarFlush()

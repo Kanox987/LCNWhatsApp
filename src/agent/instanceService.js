@@ -230,9 +230,30 @@ export function criarInstanceService ({
     return lerJson(caminhoEstado(instancia))
   }
 
+  // O estado foi escrito agora há pouco?
+  //
+  // É o batimento do `state.js`: o processo reescreve o arquivo a cada 30s
+  // mesmo sem nada acontecer. Isso atravessa o que o pid não atravessa —
+  // quando o número roda em OUTRO container, o pid dele não existe aqui (e
+  // pior: pode casar por acaso com um processo daqui), enquanto o arquivo
+  // está num volume compartilhado.
+  //
+  // A folga é generosa de propósito: um batimento perdido por carga não pode
+  // fazer a tela declarar o número morto.
+  const FOLGA_DO_BATIMENTO_MS = 150000
+  function estadoRecente (estado) {
+    const em = estado?.atualizadoEm
+    return Number.isFinite(em) && (Date.now() - em) < FOLGA_DO_BATIMENTO_MS
+  }
+
   function statusUnit (instancia) {
-    // Descoberta: o estado vem do pid dela, não do bot principal.
-    if (instancia.arqPid) return pidVivoDe(instancia.arqPid) ? 'rodando' : 'parado'
+    // Descoberta: o estado é o DELA, não o do bot principal. O batimento vem
+    // primeiro porque vale de qualquer lugar; o pid é a segunda opinião, para
+    // o processo que está vivo e simplesmente não teve o que escrever.
+    if (instancia.arqPid) {
+      if (estadoRecente(estadoDa(instancia))) return 'rodando'
+      return pidVivoDe(instancia.arqPid) ? 'rodando' : 'parado'
+    }
     if (instancia.isBare) {
       try { return bareStatusServico() } catch { return 'indisponivel' }
     }

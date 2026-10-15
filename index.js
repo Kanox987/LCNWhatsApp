@@ -47,6 +47,11 @@ console.error = espelhar(console.error.bind(console))
 const cfg = garantirConfig()
 iniciarSaida(cfg)        // no-op enquanto outputApi.enabled = false
 state.gravar()
+// Batimento: o estado é reescrito de tempos em tempos mesmo parado. É o que
+// permite a outro processo (o painel, inclusive de outro container) saber que
+// ESTE aqui continua vivo — sem isso, `conectado: true` fica gravado para
+// sempre quando o processo morre de queda.
+state.iniciarBatimento()
 
 iniciar().catch((e) => {
   console.error('Falha ao iniciar:', e)
