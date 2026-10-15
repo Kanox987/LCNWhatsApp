@@ -69,14 +69,28 @@ export async function renderExecutions ({ refresh }) {
   })
   const [automations, initial] = await Promise.all([
     api.automations.list(),
-    api.executions.list({ limit: 25 })
+    // A primeira carga precisa bater com o filtro que o select mostra. Pedir
+    // tudo aqui e dizer "O que aconteceu" na tela seria a tela descrevendo
+    // errado o que está mostrando.
+    api.executions.list({ limit: 25, runStatus: 'aconteceu' })
   ])
 
   const root = el('div', { className: 'stack-lg' })
   const automationSelect = el('select', {}, [el('option', { value: '', text: 'Todas as automações' })])
   for (const automation of automations) automationSelect.append(el('option', { value: automation.id, text: automation.draft?.document?.name || automation.id }))
+  // A TELA ABRE MOSTRANDO O QUE ACONTECEU.
+  //
+  // Cada mensagem recebida gera um registro por automação ao vivo, e quase
+  // todos são "sem correspondência" — a automação foi avaliada e não casou.
+  // Com 21 automações ligadas, o histórico passou de 450 mil linhas e a
+  // execução que a pessoa veio procurar ficava soterrada em páginas de
+  // "não fiz nada". Esta é a tela que o dono usa para descobrir por que um
+  // comando falhou; abrir no ruído é desperdiçar o instrumento.
+  //
+  // "Tudo, inclusive o que não casou" continua a um clique.
   const runStatus = el('select', {}, [
-    el('option', { value: '', text: 'Todos os resultados' }),
+    el('option', { value: 'aconteceu', text: 'O que aconteceu (padrão)', selected: true }),
+    el('option', { value: '', text: 'Tudo, inclusive o que não casou' }),
     el('option', { value: 'matched_shadow', text: 'Correspondência em sombra' }),
     el('option', { value: 'matched_live', text: 'Executada ao vivo' }),
     el('option', { value: 'no_match', text: 'Sem correspondência' }),

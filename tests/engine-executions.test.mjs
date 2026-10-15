@@ -215,6 +215,34 @@ try {
   check('cliente monta querystring da listagem', requisicoes[0]?.options?.path === '/executions?automationId=ping+teste&runStatus=matched_live&commandStatus=failed&limit=2')
   check('cliente obtém detalhe pelo runId', requisicoes[1]?.options?.method === 'GET' && requisicoes[1]?.options?.path === '/executions/42')
   check('cliente confirmar usa a nova rota de comandos', requisicoes[2]?.options?.method === 'POST' && requisicoes[2]?.options?.path === '/commands/cmd%2F42/result')
+  // --- "O QUE ACONTECEU": a tela abre sem o ruído ------------------------
+  //
+  // Cada mensagem recebida gera um registro POR AUTOMAÇÃO ao vivo, e quase
+  // todos são `no_match`. Com 21 automações ligadas o histórico passou de 450
+  // mil linhas, e a execução que a pessoa veio procurar ficava soterrada —
+  // numa tela que existe justamente para achar por que um comando falhou.
+  {
+    const revId = inserirAutomacao('mistura', 1)
+    inserirRun({ numero: 801, automationId: 'mistura', revisionId: revId, status: 'no_match', createdAt: '2026-09-12T00:00:00.000Z', messageText: 'oi' })
+    inserirRun({ numero: 802, automationId: 'mistura', revisionId: revId, status: 'matched_live', createdAt: '2026-09-12T00:00:01.000Z', messageText: '/x' })
+    inserirRun({ numero: 803, automationId: 'mistura', revisionId: revId, status: 'error', createdAt: '2026-09-12T00:00:02.000Z', messageText: '/y' })
+
+    const soOqueAconteceu = await api.resolver('GET', '/executions', contexto(null, 'automationId=mistura&runStatus=aconteceu'))
+    const status = soOqueAconteceu.items.map((i) => i.runStatus).sort()
+    check('o filtro "aconteceu" traz o que fez algo', JSON.stringify(status) === '["error","matched_live"]', JSON.stringify(status))
+    check('e deixa o "não casou" de fora', !status.includes('no_match'))
+
+    // Os no_match NÃO somem do banco: é o UNIQUE deles que sustenta o
+    // at-most-once. O que muda é o que a tela mostra primeiro.
+    const tudo = await api.resolver('GET', '/executions', contexto(null, 'automationId=mistura'))
+    check('sem filtro, tudo continua lá', tudo.items.length === 3, String(tudo.items.length))
+
+    const invalido = await capturarErro('GET', '/executions', null)
+    check('e um runStatus inventado continua sendo recusado',
+      (await (async () => { try { await api.resolver('GET', '/executions', contexto(null, 'runStatus=inventado')); return null } catch (e) { return e } })())?.status === 400,
+      String(invalido))
+  }
+
   // --- APAGAR: "no_match" não é histórico ---------------------------------
   //
   // O registro de no_match diz que a automação foi avaliada e NÃO casou: não

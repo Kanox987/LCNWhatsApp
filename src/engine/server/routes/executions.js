@@ -5,6 +5,19 @@ const LIMITE_PADRAO = 50
 const LIMITE_MAXIMO = 200
 const TAMANHO_PREVIEW = 200
 const STATUS_RUN = new Set(['matched_shadow', 'matched_live', 'no_match', 'error'])
+
+// "O QUE ACONTECEU": tudo menos `no_match`.
+//
+// Não é um status; é o filtro que faz esta tela servir para o que ela existe.
+// Cada mensagem que chega gera um registro POR AUTOMAÇÃO ao vivo, e quase
+// todos são `no_match` — a automação foi avaliada e não casou. Com 21
+// automações ligadas, o histórico passou de 450 mil linhas em que quase nada
+// aconteceu, e a execução que a pessoa foi procurar fica soterrada.
+//
+// Os `no_match` NÃO somem do banco, e isso é deliberado: é o
+// `UNIQUE(event_id, automation_revision_id)` deles que sustenta o
+// at-most-once. O que muda é o que a tela mostra primeiro.
+const FILTRO_ACONTECEU = 'aconteceu'
 const STATUS_COMANDO = new Set(['pending', 'sent', 'failed', 'outcome_unknown'])
 
 function jsonOuNull (valor) {
@@ -107,7 +120,9 @@ export function registrarRotasExecutions (roteador, db) {
     const cursor = decodificarCursor(query.get('cursor'))
     const limite = lerLimite(query)
 
-    if (runStatus && !STATUS_RUN.has(runStatus)) throw new ErroHttp(400, `runStatus inválido: ${runStatus}.`)
+    if (runStatus && runStatus !== FILTRO_ACONTECEU && !STATUS_RUN.has(runStatus)) {
+      throw new ErroHttp(400, `runStatus inválido: ${runStatus}.`)
+    }
     if (commandStatus && !STATUS_COMANDO.has(commandStatus)) throw new ErroHttp(400, `commandStatus inválido: ${commandStatus}.`)
     if (from && to && from > to) throw new ErroHttp(400, 'from não pode ser posterior a to.')
 
@@ -117,7 +132,9 @@ export function registrarRotasExecutions (roteador, db) {
       clausulas.push('ar.automation_id = @automationId')
       parametros.automationId = automationId
     }
-    if (runStatus) {
+    if (runStatus === FILTRO_ACONTECEU) {
+      clausulas.push("ar.status != 'no_match'")
+    } else if (runStatus) {
       clausulas.push('ar.status = @runStatus')
       parametros.runStatus = runStatus
     }
