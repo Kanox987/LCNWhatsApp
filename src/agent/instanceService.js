@@ -23,6 +23,7 @@ import QRCode from 'qrcode'
 import { lerRegistro, buscarPorId, listarInstancias as listarInstanciasRegistro } from '../instances/registry.js'
 import { caminhoInstancia, nomeContainer } from '../instances/paths.js'
 import { ARQ_ESTADO as ARQ_ESTADO_BARE, ARQ_CONFIG as ARQ_CONFIG_BARE } from '../paths.js'
+import * as processoDaInstancia from './processoDaInstancia.js'
 import { statusServico as statusServicoBare, iniciarBot as iniciarBotBare, pararBot as pararBotBare, reiniciarBot as reiniciarBotBare, logsServico as logsServicoBare } from '../runtime.js'
 
 export const ID_BARE = 'bare'
@@ -357,6 +358,23 @@ export function criarInstanceService ({
   function executarAcaoCicloDeVida (id, acao) {
     if (id === ID_BARE) return executarAcaoCicloDeVidaBare(acao)
     const instancia = exigir(id)
+
+    // NÚMERO DESCOBERTO NÃO TEM UNIDADE DE SERVIÇO, e mandar a ação para o
+    // systemd era pedir `systemctl --user undefined.service` — erro sobre uma
+    // unidade que nunca existiu. Ele é uma pasta mais um processo com
+    // `LCN_INSTANCIA=<nome>`, então o ciclo de vida dele é o mesmo da linha de
+    // comando: `node index.js` destacado, parado pelo pid-file da própria
+    // pasta.
+    if (instancia.nomeSimples) {
+      const resultado = acao === 'start'
+        ? processoDaInstancia.iniciar(instancia.nomeSimples, instancia.arqPid)
+        : (acao === 'stop'
+            ? processoDaInstancia.parar(instancia.nomeSimples, instancia.arqPid)
+            : processoDaInstancia.reiniciar(instancia.nomeSimples, instancia.arqPid))
+      if (!resultado.ok) throw new Error(resultado.out)
+      return { instanceId: id, action: acao, ok: true, detail: resultado.out }
+    }
+
     const resultado = exec('systemctl', ['--user', acao, unidadeDa(instancia)])
     if (!resultado.ok) {
       const detalhe = (resultado.stderr || resultado.stdout).trim()
