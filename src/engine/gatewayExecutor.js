@@ -1,5 +1,6 @@
 import * as enviadas from '../enviadas.js'
 import { fatiarLegenda, montarFilho, montarPai, podeVirarAlbum } from './album.js'
+import { montarCard, montarCarrossel, podeVirarCarrossel } from './carrossel.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -551,9 +552,45 @@ async function executarGuardarNoAcervo (client, comando, deps) {
 // Estava embutida no download; virou função porque agora são dois caminhos que
 // terminam do mesmo jeito. Duplicar traria o problema de sempre: o dia em que
 // um for ajustado, o outro fica para trás sem ninguém notar.
+// O carrossel de verdade: UMA mensagem com as mídias em cards.
+//
+// Cai para o álbum quando não é aceito, e o álbum cai para sequência. A
+// escada é deliberada, igual à do menu com botões: do melhor formato ao que
+// sempre chega. O conteúdo nunca depende de o formato bonito funcionar.
+async function enviarComoCarrossel (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
+  try {
+    const { fatias, sobra } = fatiarLegenda(legenda, midias.length)
+    const cards = []
+    for (const [i, m] of midias.entries()) {
+      const upload = await client.message.upload(m.buffer, {
+        type: m.tipo === 'video' ? 'video' : 'image',
+        mimetype: m.mime
+      })
+      cards.push(montarCard(m, upload, { legenda: fatias[i] || '' }))
+    }
+    await comTimeout(
+      () => enviarERegistrar(client, chatId, montarCarrossel(cards), opcoesCitacao),
+      TIMEOUT_ENVIO_MS * 4,
+      `timeout ao enviar o carrossel do comando ${comandoId}`
+    )
+    console.log(`[engine] carrossel ${comandoId}: uma mensagem com ${cards.length} card(s)`)
+    if (sobra) {
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, { type: 'text', text: sobra }),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao enviar o resto da legenda do comando ${comandoId}`
+      )
+    }
+  } catch (erro) {
+    console.warn(`[engine] Carrossel não foi aceito (${mensagemDoErro(erro)}) — tentando como álbum.`)
+    await enviarComoAlbum(client, chatId, midias, legenda, opcoesCitacao, comandoId)
+  }
+}
+
 async function entregarMidias (client, chatId, midias, { legenda, entrega, opcoesCitacao, comandoId }) {
-  // Quem montou o comando escolheu; "album" é só o padrão.
-  const comoAlbum = entrega !== 'separate' && podeVirarAlbum(midias)
+  // Quem montou o comando escolheu; "carrossel" é só o padrão.
+  const comoCarrossel = (!entrega || entrega === 'carrossel') && podeVirarCarrossel(midias)
+  const comoAlbum = !comoCarrossel && entrega !== 'separate' && podeVirarAlbum(midias)
 
   // POR QUE ESTA LINHA EXISTE. O dono relatou que um post de várias fotos não
   // chega em carrossel, e não deu para responder por quê: o caminho inteiro
@@ -564,9 +601,12 @@ async function entregarMidias (client, chatId, midias, { legenda, entrega, opcoe
   // `podeVirarAlbum` exige mais de uma mídia e TODAS foto ou vídeo. Quando a
   // resposta for "sequência", os tipos aqui dizem qual das duas condições
   // faltou, sem precisar de outro teste.
-  console.log(`[engine] entrega ${comandoId}: ${midias.length} mídia(s) [${midias.map((m) => m.tipo).join(', ')}], pedido=${entrega || 'album'} -> ${comoAlbum ? 'álbum' : 'sequência'}`)
+  const caminho = comoCarrossel ? 'carrossel' : (comoAlbum ? 'álbum' : 'sequência')
+  console.log(`[engine] entrega ${comandoId}: ${midias.length} mídia(s) [${midias.map((m) => m.tipo).join(', ')}], pedido=${entrega || 'carrossel'} -> ${caminho}`)
 
-  if (comoAlbum) {
+  if (comoCarrossel) {
+    await enviarComoCarrossel(client, chatId, midias, legenda, opcoesCitacao, comandoId)
+  } else if (comoAlbum) {
     await enviarComoAlbum(client, chatId, midias, legenda, opcoesCitacao, comandoId)
   } else {
     await enviarEmSequencia(client, chatId, midias, legenda, opcoesCitacao, comandoId)

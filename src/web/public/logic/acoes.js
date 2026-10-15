@@ -132,7 +132,7 @@ export const ACOES = Object.freeze([
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Quando a resposta vier como arquivo. Vazio usa a descrição que o serviço trouxer.' },
       { chave: 'notFoundText', rotulo: 'Se faltar o que mandar', ajuda: 'Resposta quando nenhuma entrada resolveu — por exemplo, nenhum link por perto.' },
       { chave: 'errorText', rotulo: 'Se falhar', ajuda: 'Escreva {{erro}} onde quiser que apareça o motivo. Erro do serviço sobre o link chega inteiro; erro nosso vira uma frase limpa, sem endereço nem credencial.' },
-      { chave: 'delivery', rotulo: 'Como entregar quando vem mais de um arquivo', ajuda: 'Carrossel agrupa num álbum só; separado manda uma mensagem por arquivo. Nos dois casos todas as mídias são entregues.' }
+      { chave: 'delivery', rotulo: 'Como entregar quando vem mais de um arquivo', ajuda: 'Carrossel manda UMA mensagem com as mídias em cards que a pessoa desliza — é o que agrupa de verdade. Álbum manda uma mensagem por mídia e deixa o aplicativo juntar num bloco: chega em qualquer cliente, mas continua sendo uma pilha de fotos. Separado manda uma por arquivo. Nos três casos todas as mídias chegam: o carrossel cai para álbum e o álbum cai para sequência quando não são aceitos.' }
     ]
   },
   {
@@ -148,7 +148,7 @@ export const ACOES = Object.freeze([
     campos: [
       { chave: 'url', rotulo: 'O link', ajuda: 'Aceita variável: {{quoted.link}} pega o link da mensagem marcada, {{message.link}} pega o da própria mensagem. Se não houver link, o comando avisa em vez de tentar.' },
       { chave: 'modo', rotulo: 'O que baixar', ajuda: 'auto deixa o serviço escolher · video traz imagem e som · audio traz só a trilha · thumbnail traz só a capa.' },
-      { chave: 'delivery', rotulo: 'Como entregar quando vem mais de um arquivo', ajuda: 'Carrossel agrupa tudo num álbum só — é o padrão, e o WhatsApp tem álbum de verdade, com contagem separada de foto e vídeo. Separado manda uma mensagem por arquivo. Nos dois casos TODAS as mídias são entregues: antes o bot baixava as 10 fotos de um post e mandava 1, e num post misto o vídeo ganhava e as fotos sumiam sem aviso. Se o servidor recusar o álbum, a entrega cai sozinha para uma por uma.' },
+      { chave: 'delivery', rotulo: 'Como entregar quando vem mais de um arquivo', ajuda: 'Carrossel manda UMA mensagem com as mídias em cards que a pessoa desliza — é o que agrupa de verdade. Álbum manda uma mensagem por mídia e deixa o aplicativo juntar num bloco: chega em qualquer cliente, mas continua sendo uma pilha de fotos. Separado manda uma por arquivo. Nos três casos todas as mídias chegam: o carrossel cai para álbum e o álbum cai para sequência quando não são aceitos.' },
       { chave: 'ackText', rotulo: 'Aviso ao começar', ajuda: 'Enviado na hora, marcando a mensagem do link. Download demora, e silêncio parece que o comando não funcionou.' },
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Acompanha a mídia. Sem legenda, entra a descrição que o serviço trouxer (título do vídeo, por exemplo).' },
       { chave: 'notFoundText', rotulo: 'Se não houver link', ajuda: 'Enviado quando o comando é usado sem link nenhum por perto.' },

@@ -52,7 +52,7 @@ export const ACOES = Object.freeze([
       // código do documento para a palavra escrita no .lcn, nos dois sentidos —
       // a linguagem é em português, e "album"/"separate" no meio do texto
       // seriam as únicas palavras estrangeiras do arquivo.
-      { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { album: 'carrossel', separate: 'separado' } },
+      { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { carrossel: 'carrossel', album: 'álbum', separate: 'separado' } },
       { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
       { chave: 'notFoundText', rotulo: 'sem mídia', tipo: 'texto' },
@@ -83,7 +83,7 @@ export const ACOES = Object.freeze([
     // virarem um cano, em vez de duas chamadas soltas sobre a mesma mídia.
     origemDoArquivo: { palavra: 'o resultado', chave: 'mediaFrom', valor: 'resultado' },
     campos: [
-      { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { album: 'carrossel', separate: 'separado' } },
+      { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { carrossel: 'carrossel', album: 'álbum', separate: 'separado' } },
       { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
       { chave: 'notFoundText', rotulo: 'sem dados', tipo: 'texto' },

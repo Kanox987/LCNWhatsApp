@@ -1144,9 +1144,9 @@
               "description": "O que responder quando falta o que a função precisa (por exemplo, nenhum link na mensagem)."
             },
             "delivery": {
-              "enum": ["album", "separate"],
-              "default": "album",
-              "description": "Como entregar quando a resposta traz VÁRIAS mídias. \"album\" agrupa num carrossel; \"separate\" manda uma por mensagem. Em qualquer caso todas são entregues."
+              "enum": ["carrossel", "album", "separate"],
+              "default": "carrossel",
+              "description": "Como entregar quando vêm VÁRIAS mídias. \"carrossel\" manda UMA mensagem com as mídias em cards que a pessoa desliza. \"album\" manda uma mensagem por mídia e deixa o aplicativo agrupar num bloco — chega em qualquer cliente, mas continua sendo uma pilha de fotos. \"separate\" manda uma por mensagem, sem agrupar. Em qualquer caso todas são entregues: o carrossel cai para álbum e o álbum cai para sequência quando não são aceitos."
             }
           }
         }
@@ -1192,11 +1192,12 @@
             },
             "delivery": {
               "enum": [
+                "carrossel",
                 "album",
                 "separate"
               ],
-              "default": "album",
-              "description": "Como entregar quando o post tem VÁRIAS mídias (carrossel do Instagram, post de várias fotos do Pinterest). \"album\" agrupa num carrossel só — o WhatsApp tem álbum de verdade, com contagem separada de foto e vídeo. \"separate\" manda uma mensagem por arquivo. Em qualquer caso TODAS as mídias são entregues: antes o bot baixava as 10 fotos e mandava 1, e num post misto o vídeo ganhava e as fotos sumiam sem aviso. Se o servidor recusar o álbum, a entrega cai sozinha para uma por uma — o conteúdo nunca deixa de chegar."
+              "default": "carrossel",
+              "description": "Como entregar quando o post tem VÁRIAS mídias (post de várias fotos do Instagram ou do Pinterest). \"carrossel\" manda UMA mensagem com as mídias em cards que a pessoa desliza — é o formato que agrupa de verdade. \"album\" manda uma mensagem por mídia e deixa o aplicativo juntar num bloco: chega em qualquer cliente, mas continua sendo uma pilha de fotos. \"separate\" manda uma por arquivo, sem agrupar. Em qualquer caso TODAS as mídias são entregues: antes o bot baixava as 10 fotos e mandava 1, e num post misto o vídeo ganhava e as fotos sumiam sem aviso. O carrossel cai para álbum e o álbum cai para sequência quando não são aceitos — o conteúdo nunca deixa de chegar."
             },
             "ackText": {
               "type": "string",

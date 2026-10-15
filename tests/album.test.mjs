@@ -105,13 +105,46 @@ check('mídia sem fatia vai sem legenda nenhuma', semLegenda.imageMessage.captio
   check('sem legenda, nenhuma fatia', JSON.stringify(fatiarLegenda(null, 3, 100)) === '{"fatias":[],"sobra":""}')
 }
 
-// --- ponta a ponta: álbum aceito -----------------------------------------
-const comando = (id) => ({
+// --- ponta a ponta -------------------------------------------------------
+//
+// O PADRÃO MUDOU, e a razão está na reclamação do dono: "isso não é carrossel,
+// o sistema está mandando uma foto atrás da outra. Eu quero um carrossel
+// bonitinho, uma única mensagem com as fotos uma do lado da outra".
+//
+// Álbum e carrossel são coisas diferentes com o mesmo nome em português. O
+// álbum são N mensagens que o aplicativo agrupa; o carrossel é UMA mensagem
+// com cards. Ele queria a segunda, e eu tinha entregado a primeira.
+const comando = (id, extra = {}) => ({
   id, commandType: 'media.download',
-  payload: { chatId: 'g@g.us', url: 'https://insta/p/x', ackText: null, errorText: 'erro' }
+  payload: { chatId: 'g@g.us', url: 'https://insta/p/x', ackText: null, errorText: 'erro', ...extra }
 })
 const tresFotos = { midias: [img('1.jpg'), img('2.jpg'), img('3.jpg')], foraPorTamanho: 0, descricao: null }
 
+// Sem pedir nada, o padrão é o CARROSSEL — uma mensagem só.
+{
+  const envios = []
+  const client = {
+    message: {
+      send: async (chat, conteudo) => { envios.push(conteudo); return { id: 'MSG1' } },
+      upload: async () => upload
+    }
+  }
+  await executarComandos(client, [comando('c0')],
+    { execucoes: { confirmar: async () => {} } },
+    { mediaRefCache: {}, criarBaixador: () => ({ baixar: async () => tresFotos }) })
+
+  check('o padrão manda UMA mensagem', envios.length === 1, String(envios.length))
+  const cards = envios[0]?.interactiveMessage?.carouselMessage?.cards
+  check('e ela é um carrossel com um card por mídia', cards?.length === 3, String(cards?.length))
+  check('cada card carrega a mídia no cabeçalho',
+    cards.every((c) => c.header?.hasMediaAttachment === true && c.header?.imageMessage?.url === upload.url))
+  // Card sem a parte interativa fica incompleto — o carrossel É uma mensagem
+  // interativa, mesmo quando não tem botão nenhum.
+  check('e tem a parte interativa, mesmo sem botão',
+    cards.every((c) => Array.isArray(c.nativeFlowMessage?.buttons)))
+}
+
+// --- álbum: continua existindo, agora a pedido --------------------------
 {
   const envios = []
   const client = {
@@ -120,15 +153,58 @@ const tresFotos = { midias: [img('1.jpg'), img('2.jpg'), img('3.jpg')], foraPorT
       upload: async () => upload
     }
   }
-  await executarComandos(client, [comando('c1')],
+  await executarComandos(client, [comando('c1', { entrega: 'album' })],
     { execucoes: { confirmar: async () => {} } },
     { mediaRefCache: {}, criarBaixador: () => ({ baixar: async () => tresFotos }) })
 
-  check('sai o pai e as três mídias', envios.length === 4, String(envios.length))
+  check('pedindo álbum, sai o pai e as três mídias', envios.length === 4, String(envios.length))
   check('o primeiro envio é o álbum', Boolean(envios[0].albumMessage))
   check('e os três seguintes se prendem a ele',
     envios.slice(1).every((e) => e.messageContextInfo?.messageAssociation?.parentMessageKey?.id === 'PAI1'))
   check('em ordem', envios.slice(1).map((e) => e.messageContextInfo.messageAssociation.messageIndex).join(',') === '1,2,3')
+}
+
+// --- a escada: carrossel recusado cai para ÁLBUM, álbum para SEQUÊNCIA ---
+//
+// Mensagem interativa depende do aplicativo de quem recebe. A queda não é
+// tratamento de erro, é parte do desenho — igual ao menu com botões.
+{
+  const envios = []
+  const client = {
+    message: {
+      send: async (chat, conteudo) => {
+        if (conteudo.interactiveMessage) throw new Error('carrossel recusado pelo servidor')
+        envios.push(conteudo)
+        return { id: 'PAI1' }
+      },
+      upload: async () => upload
+    }
+  }
+  await executarComandos(client, [comando('c1b')],
+    { execucoes: { confirmar: async () => {} } },
+    { mediaRefCache: {}, criarBaixador: () => ({ baixar: async () => tresFotos }) })
+
+  check('carrossel recusado: cai para álbum', Boolean(envios[0]?.albumMessage), JSON.stringify(Object.keys(envios[0] || {})))
+  check('e as três mídias chegam assim mesmo', envios.length === 4, String(envios.length))
+}
+{
+  const envios = []
+  const client = {
+    message: {
+      send: async (chat, conteudo) => {
+        if (conteudo.interactiveMessage || conteudo.albumMessage) throw new Error('recusado pelo servidor')
+        envios.push(conteudo)
+        return { id: 'X' }
+      },
+      upload: async () => upload
+    }
+  }
+  await executarComandos(client, [comando('c1c')],
+    { execucoes: { confirmar: async () => {} } },
+    { mediaRefCache: {}, criarBaixador: () => ({ baixar: async () => tresFotos }) })
+
+  check('os dois recusados: as mídias ainda chegam, uma a uma', envios.length === 3, String(envios.length))
+  check('e sem associação órfã', envios.every((e) => e.type === 'image' && !e.messageContextInfo))
 }
 
 // --- ponta a ponta: álbum RECUSADO cai para sequência ---------------------
@@ -148,7 +224,7 @@ const tresFotos = { midias: [img('1.jpg'), img('2.jpg'), img('3.jpg')], foraPorT
       upload: async () => upload
     }
   }
-  await executarComandos(client, [comando('c2')],
+  await executarComandos(client, [comando('c2', { entrega: 'album' })],
     { execucoes: { confirmar: async () => {} } },
     { mediaRefCache: {}, criarBaixador: () => ({ baixar: async () => tresFotos }) })
 
