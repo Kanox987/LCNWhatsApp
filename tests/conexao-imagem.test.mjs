@@ -167,7 +167,7 @@ for (const nome of ['figurinha', 'figurinha_de_frase', 'converter', 'fundo', 're
   // O número cresce quando um comando novo entra, e é de propósito: se um dia
   // ele CAIR, é porque um comando parou de apontar para a conexão de imagem —
   // e isso não deve passar despercebido.
-  check('todos os comandos do serviço de imagem foram conferidos', conferidos === 16, String(conferidos))
+  check('todos os comandos do serviço de imagem foram conferidos', conferidos === 17, String(conferidos))
 }
 
 // --- os comandos novos existem e pedem a ação certa ----------------------

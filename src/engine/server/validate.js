@@ -166,22 +166,60 @@ export function validarAutomacao (db, documento) {
     // lugar de conferir que os dois lados concordam: o nome existe na função, e
     // é de fato a entrada de mídia. Sem isto, trocar o nome na declaração
     // deixaria o comando mandando arquivo num campo que o serviço ignora.
-    const entradaDeMidia = (funcao.entradas || []).find((e) => e.tipo === 'mídia')
+    const entradasDeMidia = (funcao.entradas || []).filter((e) => e.tipo === 'mídia')
+    const nomesDeMidia = new Set(entradasDeMidia.map((e) => e.nome))
     const nomeDeMidia = typeof node.config?.mediaInput === 'string' ? node.config.mediaInput.trim() : ''
+    const nomeDeMidia2 = typeof node.config?.mediaInput2 === 'string' ? node.config.mediaInput2.trim() : ''
     if (nomeDeMidia) {
-      if (!entradaDeMidia) {
+      if (!entradasDeMidia.length) {
         erros.push({ path: `${caminho}/mediaInput`, message: `a função "${funcao.nome}" não recebe arquivo.` })
-      } else if (entradaDeMidia.nome !== nomeDeMidia) {
+      } else if (!nomesDeMidia.has(nomeDeMidia)) {
         erros.push({
           path: `${caminho}/mediaInput`,
-          message: `a entrada de arquivo da função "${funcao.nome}" se chama "${entradaDeMidia.nome}", não "${nomeDeMidia}".`
+          message: `a entrada de arquivo da função "${funcao.nome}" se chama ${entradasDeMidia.map((e) => `"${e.nome}"`).join(' ou ')}, não "${nomeDeMidia}".`
         })
       }
-    } else if (entradaDeMidia && entradaDeMidia.obrigatoria !== false) {
-      erros.push({
-        path: `${caminho}/mediaInput`,
-        message: `a função "${funcao.nome}" precisa do arquivo em "${entradaDeMidia.nome}" — diga de onde ele vem.`
-      })
+    } else {
+      // Entrada de arquivo OBRIGATÓRIA sem ninguém dizer de onde ela vem é
+      // chamada que nasce faltando o assunto.
+      const obrigatoria = entradasDeMidia.find((e) => e.obrigatoria !== false)
+      if (obrigatoria) {
+        erros.push({
+          path: `${caminho}/mediaInput`,
+          message: `a função "${funcao.nome}" precisa do arquivo em "${obrigatoria.nome}" — diga de onde ele vem.`
+        })
+      }
+    }
+
+    // O SEGUNDO arquivo. Três enganos possíveis, e os três calados em
+    // produção: apontar para uma entrada que não recebe arquivo, apontar para a
+    // MESMA entrada do primeiro (o segundo sobrescreveria o primeiro), e as
+    // duas origens iguais (os dois campos receberiam a mesma foto, e a troca de
+    // fundo devolveria a pessoa colada nela mesma).
+    if (nomeDeMidia2) {
+      if (!nomeDeMidia) {
+        erros.push({ path: `${caminho}/mediaInput2`, message: 'o segundo arquivo só existe junto do primeiro.' })
+      }
+      if (!nomesDeMidia.has(nomeDeMidia2)) {
+        erros.push({
+          path: `${caminho}/mediaInput2`,
+          message: `a função "${funcao.nome}" não recebe arquivo em "${nomeDeMidia2}". Entradas de arquivo: ${[...nomesDeMidia].join(', ') || 'nenhuma'}.`
+        })
+      }
+      if (nomeDeMidia2 === nomeDeMidia) {
+        erros.push({
+          path: `${caminho}/mediaInput2`,
+          message: `os dois arquivos apontam para a mesma entrada "${nomeDeMidia2}" — o segundo entraria por cima do primeiro.`
+        })
+      }
+      const origem1 = node.config?.mediaFrom || 'mensagem'
+      const origem2 = node.config?.mediaFrom2 || 'mensagem'
+      if (origem1 === origem2) {
+        erros.push({
+          path: `${caminho}/mediaFrom2`,
+          message: `os dois arquivos vêm de "${origem1}" e receberiam a mesma foto. Diga que um é a citada e o outro a anexada.`
+        })
+      }
     }
 
     for (const entrada of funcao.entradas || []) {
@@ -211,7 +249,7 @@ export function validarAutomacao (db, documento) {
     const declaradas = new Set((funcao.entradas || []).filter((e) => e.tipo !== 'mídia').map((e) => e.nome))
     for (const nome of Object.keys(informadas)) {
       if (declaradas.has(nome)) continue
-      if (entradaDeMidia && nome === entradaDeMidia.nome) {
+      if (nomesDeMidia.has(nome)) {
         erros.push({
           path: `${caminho}/inputs/${nome}`,
           message: `"${nome}" é a entrada de ARQUIVO da função "${funcao.nome}" e não vai aqui — diga de onde o arquivo vem, não um valor de texto.`

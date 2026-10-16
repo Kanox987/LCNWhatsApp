@@ -357,11 +357,18 @@ export function validarFuncao (funcao) {
   }
 
   const deMidia = entradas.filter((e) => e.tipo === TIPO_MIDIA)
-  if (deMidia.length > 1) {
-    // Uma mensagem traz UMA mídia. Duas entradas de arquivo prometeriam algo
-    // que o WhatsApp não entrega, e a segunda chegaria vazia na chamada.
+  if (deMidia.length > 2) {
+    // DUAS, e não uma nem quantas quiser.
+    //
+    // Era uma, com este motivo escrito aqui: "uma mensagem traz UMA mídia".
+    // Estava errado por um — a mensagem de um comando traz duas, a que ela
+    // RESPONDE e a que vem ANEXADA, e é exatamente disso que a troca de fundo
+    // precisa: a foto da pessoa e a foto que vira o fundo.
+    //
+    // Três não têm de onde sair. Declarar uma terceira prometeria o que o
+    // WhatsApp não entrega, e ela chegaria vazia na chamada.
     throw new ErroDeDeclaracao(
-      `${onde}: só uma entrada de mídia por função — vieram ${deMidia.map((e) => `"${e.nome}"`).join(' e ')}.`
+      `${onde}: no máximo duas entradas de mídia por função (uma mensagem de comando traz a mídia citada e a anexada) — vieram ${deMidia.map((e) => `"${e.nome}"`).join(', ')}.`
     )
   }
   if (deMidia.length && (metodo === 'GET' || metodo === 'DELETE')) {

@@ -73,15 +73,33 @@ export const ACOES = Object.freeze([
     // `midia.baixar` na mesma linha: a conexão e a função, separadas por ponto.
     alvo: { conexao: 'connectionRef', funcao: 'function' },
     mapa: { bloco: 'com', chave: 'inputs' },
-    // A entrada que recebe o ARQUIVO da mensagem. Escrita dentro do mesmo
-    // bloco `com`, porque é uma entrada da função como as outras — mas guardada
-    // fora de `inputs`, porque ali tudo passa pelo interpolador e token de
-    // mídia no interpolador é o que o invariante 4 proíbe.
-    arquivo: { palavra: 'a mídia', chave: 'mediaInput' },
-    // De ONDE vem o arquivo. "a mídia" é a da mensagem; "o resultado" é o que
-    // a chamada anterior devolveu — é o que faz duas chamadas em sequência
-    // virarem um cano, em vez de duas chamadas soltas sobre a mesma mídia.
-    origemDoArquivo: { palavra: 'o resultado', chave: 'mediaFrom', valor: 'resultado' },
+    // AS ENTRADAS QUE RECEBEM ARQUIVO. Escritas dentro do mesmo bloco `com`,
+    // porque são entradas da função como as outras — mas guardadas fora de
+    // `inputs`, porque ali tudo passa pelo interpolador e token de mídia no
+    // interpolador é o que o invariante 4 proíbe.
+    //
+    // São DUAS porque existe função que precisa de duas fotos: trocar o fundo
+    // recebe a foto da pessoa e a foto que vira o fundo. Uma mensagem de
+    // comando pode carregar as duas — a que ela responde e a que vem anexada —
+    // e é a palavra escrita aqui que diz qual é qual.
+    //
+    // A PRIMEIRA linha de arquivo do bloco preenche `mediaInput`, a segunda
+    // `mediaInput2`. A ordem é a da escrita, que é a mesma em que a função
+    // declara: primeiro o assunto, depois o acessório.
+    arquivos: [
+      // Sem dizer de onde: a mídia da mensagem e, se não houver, a da citada.
+      // É o comportamento de sempre, e o que quase todo comando quer.
+      { palavra: 'a mídia', chave: 'mediaInput', origem: 'mediaFrom' },
+      // A CITADA, e só ela. Existe para desempatar quando são duas: a foto
+      // respondida é o assunto, a anexada é o fundo.
+      { palavra: 'a mídia citada', chave: 'mediaInput', origem: 'mediaFrom', valor: 'citada' },
+      // A ANEXADA, e só ela. O outro lado do mesmo desempate.
+      { palavra: 'a mídia anexada', chave: 'mediaInput', origem: 'mediaFrom', valor: 'mensagem' },
+      // O que a chamada ANTERIOR devolveu — é o que faz duas chamadas em
+      // sequência virarem um cano, em vez de duas chamadas soltas sobre a
+      // mesma mídia.
+      { palavra: 'o resultado', chave: 'mediaInput', origem: 'mediaFrom', valor: 'resultado' }
+    ],
     campos: [
       { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { carrossel: 'carrossel', album: 'álbum', separate: 'separado' } },
       { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },

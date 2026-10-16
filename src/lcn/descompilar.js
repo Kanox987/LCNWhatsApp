@@ -60,15 +60,23 @@ function linhaDeAcao (no) {
   // recebe, e ler isso antes dos textos de aviso é a ordem em que a pessoa
   // pensa — o que eu mando, depois o que eu digo.
   const entradasDoMapa = def.mapa ? (cfg[def.mapa.chave] || {}) : {}
-  const nomeDoArquivo = def.arquivo ? cfg[def.arquivo.chave] : null
-  if (def.mapa && (Object.keys(entradasDoMapa).length || nomeDoArquivo)) {
+  // Os arquivos, na ordem em que o comando os nomeia: `mediaInput` e, quando
+  // a função recebe duas fotos, `mediaInput2`.
+  const arquivosEscritos = []
+  for (const sufixo of ['', '2']) {
+    const nome = cfg[`mediaInput${sufixo}`]
+    if (!nome) continue
+    const origem = cfg[`mediaFrom${sufixo}`]
+    // A palavra que devolve a MESMA origem. Sem origem declarada é "a mídia",
+    // que é a da mensagem ou a da citada — o comportamento de sempre.
+    const palavra = (def.arquivos || []).find((a) => (a.valor || null) === (origem || null))?.palavra
+    if (palavra) arquivosEscritos.push(`${IDENT}${IDENT}${nome}: ${palavra}`)
+  }
+  if (def.mapa && (Object.keys(entradasDoMapa).length || arquivosEscritos.length)) {
     linhas.push(`${IDENT}${def.mapa.bloco}`)
     // O arquivo primeiro: numa chamada que converte mídia, ele é o assunto, e
     // o resto são ajustes em cima dele.
-    if (nomeDoArquivo) {
-      const daChamadaAnterior = def.origemDoArquivo && cfg[def.origemDoArquivo.chave] === def.origemDoArquivo.valor
-      linhas.push(`${IDENT}${IDENT}${nomeDoArquivo}: ${daChamadaAnterior ? def.origemDoArquivo.palavra : def.arquivo.palavra}`)
-    }
+    linhas.push(...arquivosEscritos)
     for (const [nome, valor] of Object.entries(entradasDoMapa)) {
       // O caminho de volta do `o link`: o marcador interno nunca aparece na
       // linguagem.

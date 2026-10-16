@@ -376,7 +376,7 @@ function nomeDeArquivoDaMidia (tipo, mime) {
 }
 
 async function executarChamadaDeConexao (client, comando, deps) {
-  const { chatId, conexao, funcao, entradas, entrega, replyTo, ackText, caption, errorText, mediaInput, mediaRef } = comando.payload
+  const { chatId, conexao, funcao, entradas, entrega, replyTo, ackText, caption, errorText, mediaInput, mediaRef, mediaInput2, mediaRef2 } = comando.payload
   const { clienteEngine, criarExecutorDeConexao, mediaRefCache, baixarBuffer, limiteBytes } = deps
   if (!clienteEngine?.conexoes?.resolvida) throw new Error('sem acesso ao motor para resolver a conexão')
 
@@ -400,9 +400,14 @@ async function executarChamadaDeConexao (client, comando, deps) {
   //
   // Mesma fronteira da figurinha e do /recover: o motor mandou um token opaco,
   // e só ESTE processo consegue trocá-lo por bytes. O motor nunca viu a mídia.
-  let arquivo = null
-  if (mediaInput && mediaRef) {
-    const entrada = mediaRefCache.resolver(mediaRef)
+  //
+  // São DOIS porque existe função de duas fotos: trocar o fundo recebe a foto
+  // da pessoa e a foto que vira o fundo, e a mensagem de um comando carrega as
+  // duas — a citada e a anexada. Qual entrada recebe qual já veio decidido pelo
+  // motor; aqui só se troca token por bytes.
+  const resolverArquivo = async (ref, campo) => {
+    if (!campo || !ref) return null
+    const entrada = mediaRefCache.resolver(ref)
     if (!entrada) {
       // TTL curto de propósito. Erro CONHECIDO, não ambíguo: nada foi enviado.
       const recado = 'A mídia deste comando expirou antes de eu conseguir usá-la. Manda de novo.'
@@ -419,19 +424,24 @@ async function executarChamadaDeConexao (client, comando, deps) {
     // O mime vem do nó da mídia — é o que o WhatsApp disse que aquilo é, e vale
     // mais que a categoria. `entrada.tipo` é só "image/video/audio".
     const mime = entrada.node?.mimetype || mimeProvavel(entrada.tipo)
-    arquivo = {
-      buffer,
+    return {
       // Nome e tipo são do ARQUIVO, não do campo: é por eles que o serviço do
       // outro lado sabe o que recebeu.
+      buffer,
       nome: nomeDeArquivoDaMidia(entrada.tipo, mime),
-      mime
+      mime,
+      // O campo só é escrito para o SEGUNDO: o do primeiro vem da declaração,
+      // que é quem sabe qual entrada da função recebe o arquivo.
+      ...(campo === mediaInput2 ? { campo } : {})
     }
   }
+  const arquivo = await resolverArquivo(mediaRef, mediaInput)
+  const arquivo2 = await resolverArquivo(mediaRef2, mediaInput2)
 
   let resultado
   try {
     const declaracao = await clienteEngine.conexoes.resolvida(conexao)
-    resultado = await criarExecutorDeConexao().executar(declaracao, funcao, entradas || {}, arquivo)
+    resultado = await criarExecutorDeConexao().executar(declaracao, funcao, entradas || {}, arquivo, arquivo2)
   } catch (erro) {
     await avisar(mensagemParaPessoa(erro))
     throw erro

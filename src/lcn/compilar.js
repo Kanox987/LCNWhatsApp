@@ -170,6 +170,9 @@ function lerAcao (linha, filhas) {
   if (def.mapa) {
     const mapa = {}
     let dentro = false
+    // Quantas linhas de arquivo já foram escritas neste bloco: a primeira vai
+    // para `mediaInput`, a segunda para `mediaInput2`.
+    let arquivosEscritos = 0
     for (const filha of filhas) {
       if (filha.indent === base && filha.texto === def.mapa.bloco) { dentro = true; continue }
       if (filha.indent === base) { dentro = false; continue }
@@ -185,17 +188,22 @@ function lerAcao (linha, filhas) {
       // um algoritmo. O marcador interno existe porque o motor interpola; a
       // linguagem nunca o mostra.
       if (cru === 'o link') { mapa[filha.texto.slice(0, sep).trim()] = '{{precisa.link}}'; continue }
-      // `a mídia` é o arquivo da mensagem, e ele NÃO entra no mapa de entradas:
-      // o que vai para o serviço são bytes, não texto interpolado. Fica num
-      // campo próprio, que diz só QUAL entrada da função recebe o arquivo.
-      if (def.arquivo && cru === def.arquivo.palavra) {
-        config[def.arquivo.chave] = filha.texto.slice(0, sep).trim()
-        continue
-      }
-      // "o resultado": o arquivo vem da chamada ANTERIOR, não da mensagem.
-      if (def.origemDoArquivo && cru === def.origemDoArquivo.palavra) {
-        config[def.arquivo.chave] = filha.texto.slice(0, sep).trim()
-        config[def.origemDoArquivo.chave] = def.origemDoArquivo.valor
+      // `a mídia` é um ARQUIVO, e ele NÃO entra no mapa de entradas: o que vai
+      // para o serviço são bytes, não texto interpolado. Fica num campo
+      // próprio, que diz só QUAL entrada da função recebe o arquivo.
+      //
+      // A PRIMEIRA linha de arquivo do bloco é `mediaInput`; a segunda,
+      // `mediaInput2`. São duas porque existe função de duas fotos (trocar o
+      // fundo), e a mensagem de comando carrega duas: a citada e a anexada.
+      const dicionario = def.arquivos?.find((a) => cru === a.palavra)
+      if (dicionario) {
+        const sufixo = arquivosEscritos === 0 ? '' : '2'
+        if (arquivosEscritos >= 2) {
+          throw new ErroDeSintaxe('uma chamada recebe no máximo dois arquivos', filha.n)
+        }
+        config[`${dicionario.chave}${sufixo}`] = filha.texto.slice(0, sep).trim()
+        if (dicionario.valor) config[`${dicionario.origem}${sufixo}`] = dicionario.valor
+        arquivosEscritos++
         continue
       }
       // Entre aspas é TEXTO, sempre. Sem aspas, o tipo é o que a entrada

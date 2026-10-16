@@ -1129,14 +1129,23 @@
               "description": "O que a função recebe, por nome de entrada. Os valores aceitam variáveis ({{message.link}}) e são interpolados antes de sair. Número e liga/desliga entram como número e booleano: a entrada declarada na conexão TEM tipo, e um campo de peso instalado pelo formulário chega aqui como número — exigir texto recusaria na publicação um documento correto. Entrada obrigatória que faltar é recusada na publicação, não na hora da chamada."
             },
             "mediaFrom": {
-              "enum": ["mensagem", "resultado"],
+              "enum": ["mensagem", "citada", "resultado"],
               "default": "mensagem",
-              "description": "De onde vem o arquivo: da MENSAGEM que acionou o comando, ou do RESULTADO da chamada anterior. É o que faz duas chamadas em sequência virarem um cano — melhorar a foto e depois virar figurinha — em vez de duas chamadas soltas sobre a mesma mídia."
+              "description": "De onde vem o arquivo. \"mensagem\" é o da mensagem que acionou o comando e, não havendo, o da citada — é o padrão e o que quase todo comando quer. \"citada\" é SÓ o da mensagem respondida, e existe para desempatar quando a função recebe duas fotos. \"resultado\" é o que a chamada anterior devolveu, e é o que faz duas chamadas em sequência virarem um cano — melhorar a foto e depois virar figurinha — em vez de duas chamadas soltas sobre a mesma mídia."
             },
             "mediaInput": {
               "type": "string",
               "minLength": 1,
               "description": "Qual entrada da função recebe o ARQUIVO da mensagem — a foto, o vídeo ou o áudio que chegou pelo WhatsApp. Fica fora de \"inputs\" de propósito: ali o valor passa pelo interpolador, e token de mídia no interpolador é o que o invariante 4 proíbe. O motor só repassa o token; quem resolve e anexa os bytes é o gateway."
+            },
+            "mediaInput2": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A SEGUNDA entrada de arquivo, para a função que recebe duas fotos — trocar o fundo recebe a foto da pessoa e a foto que vira o fundo. A mensagem de um comando carrega duas mídias: a que ela responde e a que vem anexada. Só existe junto de mediaInput, e nunca aponta para a mesma entrada."
+            },
+            "mediaFrom2": {
+              "enum": ["mensagem", "citada"],
+              "description": "De onde vem o SEGUNDO arquivo. Precisa ser diferente da origem do primeiro — com as duas iguais, os dois campos receberiam a mesma foto."
             },
             "ackText": {
               "type": "string",

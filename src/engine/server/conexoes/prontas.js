@@ -216,6 +216,9 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
     esperaSegundos: 180,
     entradas: [
       { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
+      // A SEGUNDA foto: a que vira o fundo, e só a ação `trocar` a usa. Opcional
+      // porque as outras três ações chamam a mesma função com uma foto só.
+      { nome: 'imagem_fundo', tipo: 'mídia', obrigatoria: false },
       { nome: 'acao', tipo: 'opção', opcoes: ['remover', 'desfocar', 'trocar', 'cor'], obrigatoria: false, padrao: 'desfocar' },
       { nome: 'modelo', tipo: 'opção', opcoes: ['isnet-general-use', 'silueta', 'u2netp'], obrigatoria: false },
       // O quanto o fundo borra, de 1 a 10. É o botão do efeito retrato.

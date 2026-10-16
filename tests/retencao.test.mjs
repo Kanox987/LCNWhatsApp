@@ -12,7 +12,11 @@ import { ID_GLOBAL } from '../src/engine/server/attributeScopes.js'
 let falhas = 0
 const check = (nome, ok) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}`) }
 
-const AGORA = Date.parse('2026-10-15T12:00:00.000Z')
+// AGORA é o relógio de verdade, e não uma data fixa, porque as rotas varrem
+// com o relógio delas: com uma data fixa no passado, o registro "novo" da
+// montagem ia envelhecendo sozinho e o caso passava a apagar um a mais — o
+// teste quebrava sozinho no dia seguinte.
+const AGORA = Date.now()
 const horasAtras = (h) => new Date(AGORA - h * 3600 * 1000).toISOString()
 
 function bancoComHistorico () {

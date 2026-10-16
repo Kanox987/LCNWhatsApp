@@ -99,16 +99,20 @@ function aplicarCredencial (url, cabecalhos, { autenticacao, chave, enviaSegredo
 // `Content-Type` NÃO é escrito à mão aqui de propósito: ele precisa carregar o
 // boundary que o FormData gera, e fixá-lo faria o serviço receber um corpo que
 // não consegue separar.
-function montarRequisicao (url, metodo, entradas, cabecalhos, arquivo) {
+function montarRequisicao (url, metodo, entradas, cabecalhos, arquivos = []) {
   if (metodo === 'GET' || metodo === 'DELETE') {
     const comQuery = new URL(url)
     for (const [nome, valor] of Object.entries(entradas)) comQuery.searchParams.set(nome, String(valor))
     return { url: comQuery.toString(), opcoes: { method: metodo, headers: cabecalhos } }
   }
-  if (arquivo) {
+  if (arquivos.length) {
     const forma = new FormData()
     for (const [nome, valor] of Object.entries(entradas)) forma.set(nome, String(valor))
-    forma.set(arquivo.campo, new Blob([arquivo.buffer], { type: arquivo.mime || 'application/octet-stream' }), arquivo.nome || 'arquivo')
+    // Um campo por arquivo. São até dois: a função que troca o fundo recebe a
+    // foto da pessoa e a foto que vira o fundo.
+    for (const a of arquivos) {
+      forma.set(a.campo, new Blob([a.buffer], { type: a.mime || 'application/octet-stream' }), a.nome || 'arquivo')
+    }
     return { url, opcoes: { method: metodo, headers: cabecalhos, body: forma } }
   }
   return {
@@ -246,7 +250,7 @@ export function criarExecutorDeConexao ({
 
   // `declaracao` é o que a rota interna do motor devolve: endereço,
   // autenticação, funções e a chave já resolvida.
-  async function executar (declaracao, nomeDaFuncao, entradas, arquivo = null) {
+  async function executar (declaracao, nomeDaFuncao, entradas, arquivo = null, arquivo2 = null) {
     const funcao = (declaracao?.funcoes || []).find((f) => f.nome === nomeDaFuncao)
     if (!funcao) {
       // Diagnóstico e conversa separados: o nome da função é detalhe de
@@ -278,16 +282,35 @@ export function criarExecutorDeConexao ({
     // escreveu. Se a declaração mudou e o nome não existe mais, isto é erro de
     // configuração: mandar num campo que o serviço não espera faria a chamada
     // falhar do outro lado, com uma mensagem que não aponta para cá.
-    const campoDeMidia = (funcao.entradas || []).find((e) => e.tipo === 'mídia')?.nome || null
-    if (arquivo && !campoDeMidia) {
+    const camposDeMidia = (funcao.entradas || []).filter((e) => e.tipo === 'mídia').map((e) => e.nome)
+    if (arquivo && !camposDeMidia.length) {
       throw new ErroDeConexao(
         `A função "${funcao.nome}" não declara entrada de mídia, mas o comando mandou um arquivo.`,
         { paraPessoa: 'Este comando e a configuração do serviço não combinam mais. Avise o dono do bot.' }
       )
     }
-    const anexo = arquivo && campoDeMidia ? { ...arquivo, campo: campoDeMidia } : null
+    // O PRIMEIRO arquivo vai no campo que a FUNÇÃO declarou, não no que o
+    // comando escreveu: se a declaração mudou e o nome não existe mais, isto é
+    // erro de configuração, e mandar num campo que o serviço não espera faria a
+    // chamada falhar do outro lado com uma mensagem que não aponta para cá.
+    //
+    // O SEGUNDO traz o campo consigo, porque com duas entradas de mídia a
+    // função sozinha não desempata qual é qual — quem decide é o comando, e o
+    // publish já conferiu que o nome existe na função.
+    const anexos = []
+    if (arquivo) anexos.push({ ...arquivo, campo: arquivo.campo || camposDeMidia[0] })
+    if (arquivo2) {
+      const campo2 = arquivo2.campo || camposDeMidia.find((n) => n !== anexos[0]?.campo)
+      if (!campo2) {
+        throw new ErroDeConexao(
+          `A função "${funcao.nome}" recebe um arquivo só, mas o comando mandou dois.`,
+          { paraPessoa: 'Este comando e a configuração do serviço não combinam mais. Avise o dono do bot.' }
+        )
+      }
+      anexos.push({ ...arquivo2, campo: campo2 })
+    }
 
-    const pedido = montarRequisicao(url, funcao.metodo, corpo, cabecalhos, anexo)
+    const pedido = montarRequisicao(url, funcao.metodo, corpo, cabecalhos, anexos)
     // A espera é da FUNÇÃO quando ela declara uma. Sem isto, uma melhoria de
     // foto de dois minutos morria aos 20 segundos — com o serviço ainda
     // trabalhando do outro lado, e ninguém sabendo por quê.

@@ -36,10 +36,20 @@ const funcaoBase = {
   check('"mídia" é um tipo de entrada válido', f.entradas[0].tipo === 'mídia', f.entradas[0].tipo)
   check('e a forma de resposta imediata guarda o campo do erro', f.resposta.campoDoErro === 'erro')
 }
-// Uma mensagem traz UMA mídia: duas entradas de arquivo prometeriam algo que o
-// WhatsApp não entrega, e a segunda chegaria vazia na chamada.
-check('duas entradas de mídia são recusadas na declaração',
-  !!recusa(() => validarFuncao({ ...funcaoBase, entradas: [{ nome: 'a', tipo: 'mídia' }, { nome: 'b', tipo: 'mídia' }] })))
+// DUAS entradas de arquivo passam, e três não.
+//
+// Este caso dizia o contrário, com este motivo: "uma mensagem traz UMA mídia".
+// Estava errado por um — a mensagem de um comando traz a que ela RESPONDE e a
+// que vem ANEXADA, e é disso que a troca de fundo precisa: a foto da pessoa e
+// a foto que vira o fundo. Uma terceira não teria de onde sair.
+check('duas entradas de mídia são aceitas — é o caso da troca de fundo',
+  validarFuncao({ ...funcaoBase, entradas: [{ nome: 'a', tipo: 'mídia' }, { nome: 'b', tipo: 'mídia' }] })
+    .entradas.filter((e) => e.tipo === 'mídia').length === 2)
+check('três entradas de mídia são recusadas — não há terceira mídia na mensagem',
+  !!recusa(() => validarFuncao({
+    ...funcaoBase,
+    entradas: [{ nome: 'a', tipo: 'mídia' }, { nome: 'b', tipo: 'mídia' }, { nome: 'c', tipo: 'mídia' }]
+  })))
 // Arquivo viaja no corpo; GET não tem corpo. Recusar aqui evita uma declaração
 // que nasce impossível e só falha na primeira chamada.
 check('GET com entrada de mídia é recusado',

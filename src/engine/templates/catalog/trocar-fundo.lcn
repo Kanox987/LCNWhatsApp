@@ -1,0 +1,77 @@
+template trocar-fundo v1
+  nome: Trocar o fundo por outra foto
+  descrição: Responda a foto da pessoa com o comando e mande junto a foto que vai virar o fundo — o bot recorta quem está na frente e põe sobre a outra. Para não ficar com cara de recorte colado, a beirada é esfumada, a luz e a cor de quem está na frente são puxadas de leve para as do fundo novo, e dá para desfocar o fundo, que é o que faz parecer foto de celular.
+  categoria: utilitarios
+
+automação
+  nome: Trocar o fundo por outra foto
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Troca o fundo da foto por outra foto
+  pool: {{params.poolId}}
+  acessa: texto, foto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  chama {{params.conexao}}.fundo
+    com
+      arquivo: a mídia citada
+      imagem_fundo: a mídia anexada
+      acao: "trocar"
+      desfocar_fundo: {{params.desfocarFundo}}
+      harmonizar: {{params.harmonizar}}
+      suavizar_bordas: {{params.suavizarBordas}}
+      formato: {{params.formato}}
+    avisa: "{{params.ackText}}"
+    legenda: "{{params.caption}}"
+    sem dados: "{{params.comoUsarText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/trocarfundo"
+    rótulo: Comando
+    ajuda: Use RESPONDENDO a foto da pessoa e mandando a foto do fundo junto com o comando, na legenda dela. São duas fotos, e é por isso que uma vem respondida e a outra anexada.
+  conexao: texto = "imagem"
+    rótulo: Serviço que troca o fundo
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  desfocarFundo: número = 2
+    rótulo: Desfocar o fundo novo
+    ajuda: De 0 a 10. Um pouco de desfoque ajuda a parecer foto de celular com fundo desfocado, e disfarça diferença de nitidez entre as duas fotos. 0 deixa o fundo como veio.
+  harmonizar: opção (sim, nao) = "sim"
+    rótulo: Harmonizar luz e cor
+    ajuda: sim puxa de leve a luz e a cor de quem está na frente para as do fundo novo, e deixa um pouco do fundo vazar na beirada. É o que faz os dois parecerem estar no mesmo lugar.
+  suavizarBordas: número = 3
+    rótulo: Suavizar a beirada
+    ajuda: De 0 a 10. Esfuma a borda do recorte, tirando a franja do fundo antigo.
+  formato: opção (jpg, png, webp) = "jpg"
+    rótulo: Formato da saída
+    ajuda: jpg basta, já que o fundo não fica transparente.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  ackText: texto = "🖼️ Recortando e montando no fundo novo…"
+    rótulo: Aviso ao começar
+    ajuda: Enviado na hora. A IA de recorte leva alguns segundos.
+  caption: texto = ""
+    rótulo: Legenda
+    ajuda: Deixe vazio para mandar a foto sem legenda.
+  comoUsarText: texto = "Este comando precisa de DUAS fotos: responde a foto da pessoa e manda a foto do fundo junto com o comando."
+    rótulo: Aviso quando faltar uma das fotos
+    ajuda: Resposta quando só veio uma foto — é o engano mais provável de quem usa o comando pela primeira vez.
+  errorText: texto = "Não consegui trocar o fundo: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo — arquivo que não é foto, serviço fora do ar.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões, com a função "fundo" — a mesma do desfocar e do fundo colorido.
+
+avisa nota
+  É o único comando que recebe DUAS fotos. A respondida é quem fica; a anexada vira o fundo. Trocar a ordem troca o resultado.
+
+avisa nota
+  A foto do fundo é ajustada ao tamanho da original: ela preenche e é cortada pelo centro, sem faixas nas bordas.
+
+# nós: gatilho-comando, trocar-o-fundo

@@ -662,13 +662,36 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       // As duas origens, as mesmas da figurinha e as duas necessárias: a mídia
       // mandada COM o comando na legenda, e o comando RESPONDENDO uma mídia.
       const citadaDeMidia = evento.message?.quotedMediaRef
-      // De ONDE vem o arquivo. "resultado" é o da chamada anterior, e ele só
-      // existe numa retomada — o token chega no contexto, não no evento.
-      const daChamadaAnterior = no.config?.mediaFrom === 'resultado'
-      const refDeMidia = no.config?.mediaInput
-        ? (daChamadaAnterior
-            ? (contexto.__resultado?.token || null)
-            : (evento.message?.mediaRef || citadaDeMidia?.token || null))
+      // De ONDE vem cada arquivo, por origem declarada:
+      //
+      //   mensagem (padrão) — a da mensagem e, não havendo, a da citada
+      //   citada            — só a da citada
+      //   resultado         — o que a chamada anterior devolveu, e ele só
+      //                       existe numa retomada: o token chega no contexto,
+      //                       não no evento
+      //
+      // As duas primeiras existem porque a mensagem de um comando carrega DUAS
+      // mídias — a que ela responde e a anexada —, e a função que recebe duas
+      // fotos precisa de um jeito de dizer qual é qual.
+      const tokenDaOrigem = (origem) => {
+        if (origem === 'resultado') return contexto.__resultado?.token || null
+        if (origem === 'citada') return citadaDeMidia?.token || null
+        if (origem === 'anexada') return evento.message?.mediaRef || null
+        return evento.message?.mediaRef || citadaDeMidia?.token || null
+      }
+      const tipoDaOrigem = (origem, token) => {
+        if (origem === 'resultado') return contexto.__resultado?.tipo || null
+        if (origem === 'citada') return citadaDeMidia?.mediaKind || null
+        if (token && token === evento.message?.mediaRef) return evento.message.kind
+        return citadaDeMidia?.mediaKind || null
+      }
+      const refDeMidia = no.config?.mediaInput ? tokenDaOrigem(no.config?.mediaFrom) : null
+      // O SEGUNDO arquivo. "mensagem" aqui é a ANEXADA e só ela: com o primeiro
+      // vindo da citada, deixar o segundo cair na citada faria os dois campos
+      // receberem a mesma foto — e a troca de fundo devolveria a pessoa colada
+      // nela mesma, sem nada avisando.
+      const ref2 = no.config?.mediaInput2
+        ? tokenDaOrigem(no.config?.mediaFrom2 === 'citada' ? 'citada' : 'anexada')
         : null
 
       // Falta o que a função precisa — e "falta" tem duas formas. Sem nenhuma
@@ -676,7 +699,10 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       // havendo arquivo. A segunda não podia cair no teste da primeira: um
       // comando que manda `tamanho: 512` junto tem entrada, e chamaria o
       // serviço sem o arquivo que é o assunto da chamada.
-      const faltaArquivo = !!no.config?.mediaInput && !refDeMidia
+      // Falta arquivo quando o comando nomeia um e ele não veio — e isso vale
+      // para os DOIS. Chamar a troca de fundo com uma foto só faria o serviço
+      // recusar com uma mensagem que não aponta para cá.
+      const faltaArquivo = (!!no.config?.mediaInput && !refDeMidia) || (!!no.config?.mediaInput2 && !ref2)
       // "Nenhuma entrada resolveu" só é falta quando NÃO há arquivo. Uma função
       // que recebe só o arquivo — virar figurinha em imagem, trocar o pacote de
       // uma figurinha — não tem entrada de texto nenhuma, e tratar isso como
@@ -708,9 +734,12 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           ...(refDeMidia ? {
             mediaInput: no.config.mediaInput,
             mediaRef: refDeMidia,
-            sourceKind: daChamadaAnterior
-              ? (contexto.__resultado?.tipo || null)
-              : (evento.message?.mediaRef ? evento.message.kind : (citadaDeMidia?.mediaKind || null))
+            sourceKind: tipoDaOrigem(no.config?.mediaFrom, refDeMidia)
+          } : {}),
+          ...(ref2 ? {
+            mediaInput2: no.config.mediaInput2,
+            mediaRef2: ref2,
+            sourceKind2: tipoDaOrigem(no.config?.mediaFrom2 === 'citada' ? 'citada' : 'anexada', ref2)
           } : {}),
           // CANO: tem passo depois, então o gateway NÃO entrega — ele devolve
           // o resultado e o motor retoma daqui. Sem esta marca os dois passos
