@@ -1,0 +1,66 @@
+template tocar-musica v1
+  nome: Tocar música
+  descrição: Escreva o comando com o nome da música e o bot baixa o áudio do YouTube e manda na conversa, com a capa e o nome da faixa. Prefere a versão do YouTube Music quando ela existe, que é a que vem sem palco, sem anúncio e com o nome certo da faixa. Para colar um link em vez de digitar o nome, use o comando de baixar mídia.
+  categoria: utilitarios
+
+automação
+  nome: Tocar música
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Baixa uma música pelo nome
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args != ""
+    chama {{params.conexao}}.musica
+      com
+        busca: "{{message.args}}"
+        audio_ext: {{params.formato}}
+      avisa: "{{params.ackText}}"
+      legenda: "{{params.caption}}"
+      entrega: separado
+      erro: "{{params.errorText}}"
+  senão
+    responde "{{params.semNomeText}}"
+
+configurável
+  command: texto = "/play"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita, seguida do nome da música — "/play evidências chitãozinho".
+  conexao: texto = "midia"
+    rótulo: Serviço que baixa
+    ajuda: O identificador da conexão, na aba Conexões. É lá que ficam o endereço do serviço e a credencial — trocar de serviço é trocar a conexão, sem mexer no comando.
+  formato: opção (m4a, mp3, opus, wav, flac) = "m4a"
+    rótulo: Formato do áudio
+    ajuda: m4a é o que o YouTube já entrega e sai sem recodificar, então é o mais rápido e o de melhor qualidade. mp3 abre em qualquer aparelho velho, e custa uma conversão.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda — é o normal para comando de uso pessoal.
+  ackText: texto = "🎵 Procurando e baixando…"
+    rótulo: Aviso ao começar
+    ajuda: Enviado na hora. Buscar e baixar leva alguns segundos — sem aviso, parece que o comando não funcionou.
+  caption: texto = ""
+    rótulo: Legenda
+    ajuda: Deixe vazio para usar o nome da faixa que o serviço trouxer. A legenda vai na capa, porque áudio no WhatsApp não tem legenda.
+  semNomeText: texto = "Escreva o nome da música depois do comando. Exemplo: /play evidências chitãozinho"
+    rótulo: Se não vier nome
+    ajuda: Resposta quando o comando é usado sozinho.
+  errorText: texto = "Não consegui baixar essa música: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo — nome que não achou nada, música bloqueada, serviço fora do ar.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Precisa da conexão de download cadastrada na aba Conexões, com endereço e credencial. Ela já vem pronta como "midia" — confira ali se a chave está resolvida.
+
+avisa nota
+  O serviço devolve DOIS arquivos: o áudio e a capa. Vão um depois do outro, e a legenda fica na capa — o WhatsApp não aceita legenda em áudio.
+
+avisa nota
+  Buscar pelo nome é ambíguo por natureza. Quando vier a versão errada, o comando de busca mostra as opções com o link de cada uma.
+
+# nós: gatilho-comando, veio-nome, baixar-a-musica, pedir-o-nome

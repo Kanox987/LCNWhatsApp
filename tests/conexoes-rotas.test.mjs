@@ -112,6 +112,27 @@ try {
   check('a barra final do endereço é aparada ANTES de guardar',
     comBarra.body.config.endereco === 'https://x.com', comBarra.body.config.endereco)
 
+  // --- função nova numa pronta já cadastrada -------------------------------
+  //
+  // A semente entra uma vez por id. Quando a pronta ganha uma função depois
+  // (foi o caso de `musica` e `buscar`), quem já tinha o sistema ficava sem
+  // ela — e o comando novo falhava com "a conexão não tem a função". A rota
+  // precisa DIZER o que falta, para a tela poder oferecer.
+  const soComBaixar = (await api.resolver('GET', '/connections-prontas', contexto())).find((p) => p.id === 'midia')
+  check('a pronta cadastrada e completa não acusa função faltando',
+    Array.isArray(soComBaixar?.funcoesQueFaltam) && soComBaixar.funcoesQueFaltam.length === 0,
+    JSON.stringify(soComBaixar?.funcoesQueFaltam))
+
+  const atual = await api.resolver('GET', '/connections/midia', contexto())
+  await api.resolver('PUT', '/connections/midia', contexto({
+    config: { ...atual.config, funcoes: (atual.config.funcoes || []).filter((f) => f.nome === 'baixar') }
+  }))
+  const faltando = (await api.resolver('GET', '/connections-prontas', contexto())).find((p) => p.id === 'midia')
+  check('com função de menos, a rota diz QUAIS faltam',
+    faltando.funcoesQueFaltam.includes('musica') && faltando.funcoesQueFaltam.includes('buscar'),
+    JSON.stringify(faltando.funcoesQueFaltam))
+  check('e não acusa a que está lá', !faltando.funcoesQueFaltam.includes('baixar'))
+
   // --- apagar tem que COLAR ------------------------------------------------
   //
   // Sem a marca de "prontas já semeadas", a conexão apagada voltaria no próximo

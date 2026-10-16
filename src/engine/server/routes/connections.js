@@ -195,14 +195,31 @@ export function registrarRotasConnections (roteador, db) {
   // O catálogo de declarações prontas, para a tela oferecer "criar a partir
   // de". Elas são o exemplo de como se declara uma conexão — quem quiser ligar
   // uma IA abre a do download, vê a forma, e escreve a sua.
-  roteador.get('/connections-prontas', () => CONEXOES_PRONTAS.map((c) => ({
-    id: c.id,
-    kind: c.kind,
-    titulo: c.titulo,
-    descricao: c.descricao,
-    config: c.config,
-    jaCadastrada: Boolean(obter.get(c.id))
-  })))
+  // FUNÇÃO NOVA NUMA PRONTA JÁ CADASTRADA.
+  //
+  // A semente roda uma vez por id: a conexão de mídia nasceu com `baixar`, e
+  // quando a pronta ganhou `musica` e `buscar` a conexão de quem já tinha o
+  // sistema continuou com uma função só — o comando novo instalaria e falharia
+  // com "a conexão não tem a função". Antes, consertar isso era mexer no banco
+  // pelo terminal, e quem aluga o sistema não tem terminal.
+  //
+  // O que sai daqui é só a LISTA do que falta; trazer é um clique na tela, e
+  // nunca automático: a conexão é do dono, e uma função que ele apagou de
+  // propósito não pode voltar sozinha — é a mesma razão de "apagar tem que
+  // colar".
+  roteador.get('/connections-prontas', () => CONEXOES_PRONTAS.map((c) => {
+    const linha = obter.get(c.id)
+    const atuais = new Set(((jsonOuNull(linha?.config_json) || {}).funcoes || []).map((f) => f.nome))
+    return {
+      id: c.id,
+      kind: c.kind,
+      titulo: c.titulo,
+      descricao: c.descricao,
+      config: c.config,
+      jaCadastrada: Boolean(linha),
+      funcoesQueFaltam: linha ? (c.config.funcoes || []).filter((f) => !atuais.has(f.nome)).map((f) => f.nome) : []
+    }
+  }))
 
   // A conexão RESOLVIDA, com a chave — só para o gateway.
   //

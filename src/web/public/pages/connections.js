@@ -19,11 +19,27 @@ import { api } from '../api.js'
 import { badge, button, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
 
 const METODOS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-const TIPOS = ['texto', 'número', 'opção', 'liga/desliga']
+// `mídia` é entrada de ARQUIVO — a foto, o vídeo, o áudio que chegou pela
+// conversa. Faltava nesta lista, e sem ela o serviço de figurinha era
+// impossível de declarar pelo painel: quem abrisse a conexão para mexer em
+// outra coisa salvava as funções de imagem sem a entrada do arquivo.
+const TIPOS = ['texto', 'número', 'opção', 'liga/desliga', 'mídia']
 const FORMAS = [
   ['texto', 'Texto — a resposta já vem pronta'],
-  ['mídia', 'Mídia — a resposta traz arquivos'],
+  ['mídia', 'Mídia — a resposta aponta os arquivos para buscar'],
+  ['arquivo', 'Arquivo — o arquivo vem na própria resposta, em base64'],
+  ['lista', 'Lista — a resposta traz várias opções para escolher'],
   ['trabalho', 'Trabalho — o serviço devolve um identificador e a gente acompanha']
+]
+// Como o arquivo que volta é ENVIADO. Vazio deduz do tipo do arquivo, que é o
+// certo para uma conversão: a saída depende do formato pedido na chamada.
+const TIPOS_DE_ENVIO = [
+  ['', 'Deduzir do tipo do arquivo'],
+  ['figurinha', 'Figurinha'],
+  ['foto', 'Foto'],
+  ['vídeo', 'Vídeo'],
+  ['áudio', 'Áudio'],
+  ['documento', 'Documento']
 ]
 
 const ehUrlInteira = (caminho) => /^https?:\/\//i.test(String(caminho || ''))
@@ -149,15 +165,36 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
   for (const e of funcao?.entradas || []) entradas.append(linhaDeEntrada(e, removerEntrada))
 
   const forma = el('select', {}, FORMAS.map(([v, rotulo]) => el('option', { value: v, selected: (funcao?.resposta?.forma || 'texto') === v, text: rotulo })))
-  const campo = el('input', { type: 'text', value: funcao?.resposta?.campo || '', placeholder: 'choices' })
   const campoDoTrabalho = el('input', { type: 'text', value: funcao?.resposta?.campoDoTrabalho || '', placeholder: 'job' })
   const caminhoDeAcompanhamento = el('input', { type: 'text', value: funcao?.resposta?.caminhoDeAcompanhamento || '', placeholder: '/jobs/{job}' })
   const campoDoEstado = el('input', { type: 'text', value: funcao?.resposta?.campoDoEstado || '', placeholder: 'estado' })
   const estadosEmAndamento = el('input', { type: 'text', value: (funcao?.resposta?.estadosEmAndamento || []).join(', '), placeholder: 'na_fila, baixando' })
   const campoDoResultado = el('input', { type: 'text', value: funcao?.resposta?.campoDoResultado || '', placeholder: 'midias' })
-  const campoDoErro = el('input', { type: 'text', value: funcao?.resposta?.campoDoErro || '', placeholder: 'erro' })
+  const campoDoErro = el('input', { type: 'text', value: funcao?.resposta?.campoDoErro || '', placeholder: 'erro' })  // do acompanhamento de trabalho
+  const campoDaDescricao = el('input', { type: 'text', value: funcao?.resposta?.campoDaDescricao || '', placeholder: 'descricao' })
+  // Um input por bloco, e não um compartilhado: `field()` ANEXA o nó, e o
+  // mesmo nó em dois blocos desapareceria do primeiro.
+  const campoSimples = el('input', { type: 'text', value: funcao?.resposta?.campo || '', placeholder: 'resposta' })
+  const erroSimples = el('input', { type: 'text', value: funcao?.resposta?.campoDoErro || '', placeholder: 'erro' })
+  const campoDoArquivo = el('input', { type: 'text', value: funcao?.resposta?.campo || '', placeholder: 'arquivo_base64' })
+  const erroDoArquivo = el('input', { type: 'text', value: funcao?.resposta?.campoDoErro || '', placeholder: 'mensagem' })
+  const campoDaLista = el('input', { type: 'text', value: funcao?.resposta?.campo || '', placeholder: 'achados' })
+  const erroDaLista = el('input', { type: 'text', value: funcao?.resposta?.campoDoErro || '', placeholder: 'detail' })
+  const campoDoMime = el('input', { type: 'text', value: funcao?.resposta?.campoDoMime || '', placeholder: 'mime' })
+  const tipoDeEnvio = el('select', {}, TIPOS_DE_ENVIO.map(([v, rotulo]) => el('option', { value: v, selected: (funcao?.resposta?.tipo || '') === v, text: rotulo })))
+  const linhaDaLista = el('input', { type: 'text', value: funcao?.resposta?.linha || '', placeholder: '{{n}}. {{titulo}} — {{autor}}' })
+  const cabecalhoDaLista = el('input', { type: 'text', value: funcao?.resposta?.cabecalho || '', placeholder: 'Achei isto:' })
+  const vazioDaLista = el('input', { type: 'text', value: funcao?.resposta?.vazio || '', placeholder: 'Não achei nada com esse nome.' })
+  const limiteDaLista = el('input', { type: 'number', min: '1', step: '1', value: funcao?.resposta?.limite ?? '' })
+  // QUANTO ESPERAR por esta função. Estava só na declaração, invisível na tela:
+  // quem trocasse o serviço de melhoria de foto por outro não tinha como dizer
+  // que ele demora dois minutos, e a chamada morria aos vinte segundos.
+  const espera = el('input', { type: 'number', min: '1', max: '900', step: '1', value: funcao?.esperaSegundos ?? '' })
 
-  const blocoSimples = field('Campo da resposta', campo, 'Opcional: de qual campo tirar o resultado.')
+  const blocoSimples = el('div', { className: 'form-grid' }, [
+    field('Campo da resposta', campoSimples, 'Opcional: de qual campo tirar o resultado.'),
+    field('Campo do erro', erroSimples, 'Opcional: a frase que o serviço escreve para quem usou o comando.')
+  ])
   // O protocolo de acompanhamento também nasce fechado. Nas conexões prontas
   // ele já vem correto, e quem está ligando uma IA nunca precisa abri-lo — mas
   // ele fica ali, à mão, que era o ponto: não pode estar escondido no código.
@@ -175,11 +212,42 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     el('div', { className: 'form-grid' }, [
       field('Campo do resultado', campoDoResultado),
       field('Campo do erro', campoDoErro, 'Opcional.')
+    ]),
+    field('Campo da legenda', campoDaDescricao, 'Opcional: de onde sai o texto que acompanha o que foi entregue. Vazio usa "descricao".')
+  ])
+  const blocoArquivo = el('div', { className: 'stack' }, [
+    el('p', { className: 'muted compact', text: 'O serviço converte em segundos e devolve o arquivo na resposta, em base64. É a forma das funções de figurinha e de conversão.' }),
+    el('div', { className: 'form-grid' }, [
+      field('Campo do arquivo', campoDoArquivo, 'Onde vem o conteúdo em base64.'),
+      field('Campo do tipo do arquivo', campoDoMime, 'Opcional: de onde sai o mime.')
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Como enviar', tipoDeEnvio, 'Figurinha não é foto com outro nome: é outro tipo de envio, sem legenda.'),
+      field('Campo do erro', erroDoArquivo, 'Opcional: a frase que o serviço escreve para quem usou o comando.')
     ])
   ])
+
+  const blocoLista = el('div', { className: 'stack' }, [
+    el('p', { className: 'muted compact', text: 'A resposta traz várias opções e o bot manda um texto numerado. É a forma da busca.' }),
+    el('div', { className: 'form-grid' }, [
+      field('Campo da lista', campoDaLista, 'Onde vem a lista na resposta.'),
+      field('Como escrever cada item', linhaDaLista, 'Use {{n}} para o número e {{campo}} para os campos do item.')
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Primeira linha', cabecalhoDaLista, 'Opcional: aceita {{campo}} da resposta.'),
+      field('Quando não vier nada', vazioDaLista, 'Opcional.')
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Quantos itens mostrar', limiteDaLista, 'Opcional: vazio mostra todos os que vierem.'),
+      field('Campo do erro', erroDaLista, 'Opcional.')
+    ])
+  ])
+
   const sincronizarForma = () => {
     blocoTrabalho.hidden = forma.value !== 'trabalho'
-    blocoSimples.hidden = forma.value === 'trabalho'
+    blocoArquivo.hidden = forma.value !== 'arquivo'
+    blocoLista.hidden = forma.value !== 'lista'
+    blocoSimples.hidden = forma.value !== 'texto' && forma.value !== 'mídia'
   }
   forma.addEventListener('change', sincronizarForma)
   sincronizarForma()
@@ -209,6 +277,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     ]),
     field('Descrição', descricao),
     field('Caminho', caminho, 'Relativo ao endereço da conexão (/download) ou uma URL inteira de outro serviço.'),
+    field('Quanto esperar, em segundos', espera, 'Opcional, de 1 a 900. Vazio usa 20 segundos. Função que pensa (melhorar foto, IA) precisa de mais.'),
     aviso,
     el('div', { className: 'section-heading' }, [
       el('div', {}, [el('h3', { text: 'Entradas' }), el('p', { className: 'muted compact', text: 'O que a automação informa ao chamar.' })]),
@@ -218,6 +287,8 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     el('h3', { text: 'Resposta' }),
     field('Como a resposta chega', forma),
     blocoSimples,
+    blocoArquivo,
+    blocoLista,
     blocoTrabalho,
     el('div', { className: 'button-row' }, [button('Remover função', { variant: 'danger-quiet', onClick: () => aoRemover(cartao) })])
   ])
@@ -231,6 +302,8 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
       caminho: caminho.value.trim(),
       entradas: [...entradas.children].map((l) => l.ler())
     }
+    const segundos = Number(espera.value)
+    if (Number.isFinite(segundos) && segundos > 0) saida.esperaSegundos = Math.round(segundos)
     if (forma.value === 'trabalho') {
       saida.resposta = {
         forma: 'trabalho',
@@ -239,10 +312,30 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
         campoDoEstado: campoDoEstado.value.trim(),
         estadosEmAndamento: estadosEmAndamento.value.split(',').map((e) => e.trim()).filter(Boolean),
         campoDoResultado: campoDoResultado.value.trim(),
+        campoDaDescricao: campoDaDescricao.value.trim() || null,
         campoDoErro: campoDoErro.value.trim() || null
       }
+    } else if (forma.value === 'arquivo') {
+      saida.resposta = {
+        forma: 'arquivo',
+        campo: campoDoArquivo.value.trim(),
+        campoDoMime: campoDoMime.value.trim() || null,
+        tipo: tipoDeEnvio.value || null,
+        campoDoErro: erroDoArquivo.value.trim() || null
+      }
+    } else if (forma.value === 'lista') {
+      const limite = Number(limiteDaLista.value)
+      saida.resposta = {
+        forma: 'lista',
+        campo: campoDaLista.value.trim(),
+        linha: linhaDaLista.value.trim(),
+        cabecalho: cabecalhoDaLista.value.trim() || null,
+        vazio: vazioDaLista.value.trim() || null,
+        limite: Number.isFinite(limite) && limite > 0 ? Math.round(limite) : null,
+        campoDoErro: erroDaLista.value.trim() || null
+      }
     } else {
-      saida.resposta = { forma: forma.value, campo: campo.value.trim() || null }
+      saida.resposta = { forma: forma.value, campo: campoSimples.value.trim() || null, campoDoErro: erroSimples.value.trim() || null }
     }
     return saida
   }
@@ -524,6 +617,40 @@ export async function renderConnections ({ refresh }) {
     ))
   } else {
     coluna.append(...conexoes.map((c) => cartaoDeConexao(c, { editar: (x) => abrir(x), refresh })))
+  }
+
+  // FUNÇÃO NOVA QUE A PRONTA GANHOU e esta conexão ainda não tem.
+  //
+  // A semente entra uma vez por conexão; função acrescentada depois (foi o caso
+  // de `musica` e `buscar`, do comando de tocar música) não chegava a quem já
+  // tinha o sistema instalado, e o comando novo falhava com "a conexão não tem
+  // a função". Trazer é um clique, e é um clique DE PROPÓSITO: a declaração é
+  // do dono, e função que ele apagou não volta sozinha.
+  const comNovidade = prontas.filter((p) => p.jaCadastrada && p.funcoesQueFaltam?.length)
+  for (const pronta of comNovidade) {
+    const trazer = button('Trazer para esta conexão', { variant: 'primary' })
+    trazer.addEventListener('click', async () => {
+      setBusy(trazer, true, 'Trazendo…')
+      try {
+        const atual = conexoes.find((c) => c.id === pronta.id)
+        const novas = (pronta.config.funcoes || []).filter((f) => pronta.funcoesQueFaltam.includes(f.nome))
+        // O que o dono editou FICA: o endereço, a credencial e as funções
+        // atuais são as dele. Só entra o que não existe pelo nome.
+        await api.connections.update(pronta.id, {
+          config: { ...atual.config, funcoes: [...(atual.config?.funcoes || []), ...novas] }
+        })
+        notify(`${novas.length === 1 ? 'Função' : 'Funções'} ${novas.map((f) => f.nome).join(', ')} adicionada${novas.length === 1 ? '' : 's'} a ${pronta.id}.`)
+        await refresh()
+      } catch (error) {
+        notify(error.message, 'danger')
+        setBusy(trazer, false)
+      }
+    })
+    coluna.append(el('section', { className: 'notice notice-info stack' }, [
+      el('strong', { text: `A conexão "${pronta.id}" tem função nova disponível` }),
+      el('p', { text: `O sistema passou a declarar ${pronta.funcoesQueFaltam.join(', ')} neste serviço, e esta conexão ainda não tem. Sem elas, os comandos que as usam respondem que a função não existe.` }),
+      el('div', { className: 'button-row' }, [trazer])
+    ]))
   }
 
   // As prontas que ainda não estão cadastradas viram atalho — e servem de

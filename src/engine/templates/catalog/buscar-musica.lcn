@@ -1,0 +1,58 @@
+template buscar-musica v1
+  nome: Buscar música
+  descrição: Escreva o comando com um nome e o bot lista as primeiras músicas que o YouTube acha, com autor, duração e link — sem baixar nada. Serve para escolher entre homônimos antes de gastar um download: "Evidências" tem a versão do Chitãozinho, a do Bruno & Marrone e uma dúzia de covers.
+  categoria: utilitarios
+
+automação
+  nome: Buscar música
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra opções de música para baixar
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args != ""
+    chama {{params.conexao}}.buscar
+      com
+        busca: "{{message.args}}"
+        quantos: {{params.quantos}}
+      avisa: "{{params.ackText}}"
+      erro: "{{params.errorText}}"
+  senão
+    responde "{{params.semNomeText}}"
+
+configurável
+  command: texto = "/buscar"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita, seguida do que procurar — "/buscar evidências".
+  conexao: texto = "midia"
+    rótulo: Serviço que busca
+    ajuda: O identificador da conexão, na aba Conexões. É a mesma conexão que baixa.
+  quantos: número = 5
+    rótulo: Quantos resultados
+    ajuda: De 1 a 20. Cinco cabe na tela do celular sem rolar; vinte é o teto do serviço.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  ackText: texto = ""
+    rótulo: Aviso ao começar
+    ajuda: Deixe vazio — a busca é rápida, e um aviso só para ela seria uma mensagem a mais na conversa.
+  semNomeText: texto = "Escreva o que procurar depois do comando. Exemplo: /buscar evidências"
+    rótulo: Se não vier nome
+    ajuda: Resposta quando o comando é usado sozinho.
+  errorText: texto = "Não consegui buscar: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Precisa da conexão de download cadastrada na aba Conexões, com endereço e credencial. É a mesma conexão "midia" do download.
+
+avisa nota
+  A lista sai com o link de cada música. Para baixar a que você escolheu, mande o link para o comando de baixar mídia — ou repita a busca no comando de tocar, com mais palavras.
+
+# nós: gatilho-comando, veio-nome, buscar-as-opcoes, pedir-o-nome

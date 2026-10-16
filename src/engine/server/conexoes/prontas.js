@@ -18,6 +18,24 @@ import { FORMAS_DE_RESPOSTA } from './declaracao.js'
 // O acompanhamento de trabalho, declarado uma vez: as duas funções de download
 // compartilham o mesmo protocolo, e repetir o bloco convidaria as duas a
 // divergirem no dia em que uma fosse ajustada.
+// Música: o mesmo acompanhamento, com OUTRA legenda.
+//
+// A legenda de um post do Instagram é a descrição dele, e por isso o download
+// usa `descricao`. Em música a mesma chave traz o texto que o YouTube gera
+// sozinho — "Provided to YouTube by...", produtor, compositor, parágrafos — e
+// quem pediu uma música quer ver o nome dela. Por isso a função de música
+// declara `titulo`, e é só o que muda entre as duas.
+const TRABALHO_DE_MUSICA = Object.freeze({
+  forma: FORMAS_DE_RESPOSTA.trabalho,
+  campoDoTrabalho: 'job',
+  caminhoDeAcompanhamento: '/jobs/{job}',
+  campoDoEstado: 'estado',
+  estadosEmAndamento: ['na_fila', 'baixando'],
+  campoDoResultado: 'midias',
+  campoDaDescricao: 'titulo',
+  campoDoErro: 'erro'
+})
+
 const TRABALHO_DE_DOWNLOAD = Object.freeze({
   forma: FORMAS_DE_RESPOSTA.trabalho,
   campoDoTrabalho: 'job',
@@ -216,6 +234,61 @@ export const CONEXOES_PRONTAS = Object.freeze([
             { nome: 'modo', tipo: 'opção', opcoes: ['auto', 'video', 'audio', 'thumbnail'], obrigatoria: false, padrao: 'auto' }
           ],
           resposta: TRABALHO_DE_DOWNLOAD
+        },
+        {
+          // MÚSICA PELO NOME, que é o que o /play faz: ninguém cola link do
+          // YouTube para ouvir uma música, digita o nome dela.
+          //
+          // Função à parte e não um `modo` a mais no `baixar` porque as duas
+          // diferem em três coisas, não em uma: a entrada é o NOME e não o
+          // link, a espera é outra (resolver a busca é uma extração antes do
+          // download) e a legenda sai de outro campo. Era isto que o dono quis
+          // ao dizer "não existe problema em criar a função baixar que recebe
+          // um link ou baixar2 que recebe o mesmo link com outra configuração".
+          nome: 'musica',
+          descricao: 'Baixa uma música do YouTube pelo NOME, com a capa e o nome da faixa. Prefere a versão do YouTube Music quando existe.',
+          metodo: 'POST',
+          caminho: '/download',
+          // A busca é uma extração de metadados ANTES do download, e o próprio
+          // serviço troca de IP e tenta de novo quando o YouTube barra. Com os
+          // 20 s de sempre, a música que precisa de outra tentativa morria no
+          // meio do caminho.
+          esperaSegundos: 120,
+          entradas: [
+            { nome: 'busca', tipo: 'texto', obrigatoria: true },
+            // Declarado com padrão, e não fixo no código: é `musica` que faz o
+            // serviço trazer áudio + capa + faixa num trabalho só.
+            { nome: 'modo', tipo: 'opção', opcoes: ['musica', 'audio'], obrigatoria: false, padrao: 'musica' },
+            { nome: 'audio_ext', tipo: 'opção', opcoes: ['m4a', 'mp3', 'opus', 'wav', 'flac'], obrigatoria: false }
+          ],
+          resposta: TRABALHO_DE_MUSICA
+        },
+        {
+          // BUSCAR SEM BAIXAR. Serve para escolher entre homônimos antes de
+          // gastar um download — "Evidências" tem a versão do Chitãozinho, a
+          // do Bruno & Marrone e uma dúzia de covers.
+          nome: 'buscar',
+          descricao: 'Mostra as primeiras músicas que o YouTube acha para um nome, sem baixar nada. Serve para escolher qual pedir.',
+          metodo: 'POST',
+          caminho: '/buscar',
+          esperaSegundos: 60,
+          entradas: [
+            { nome: 'busca', tipo: 'texto', obrigatoria: true },
+            { nome: 'quantos', tipo: 'número', obrigatoria: false, padrao: 5 }
+          ],
+          resposta: {
+            forma: FORMAS_DE_RESPOSTA.lista,
+            campo: 'achados',
+            // O link entra na linha de propósito: é com ele que a pessoa pede
+            // a versão certa pelo /dow quando não é a primeira da lista.
+            linha: '*{{n}}.* {{titulo}}\n_{{autor}} · {{duracao_texto}}_\n{{url}}',
+            cabecalho: '🔎 Achei isto para "{{busca}}":',
+            vazio: 'Não achei nada com esse nome no YouTube.',
+            // O que o serviço recusa vem em `detail`, que é onde o FastAPI
+            // escreve a frase — "Termo longo demais (máximo 200)" diz à pessoa
+            // o que fazer; "o serviço respondeu 400" não diz nada.
+            campoDoErro: 'detail'
+          }
         }
       ]
     }

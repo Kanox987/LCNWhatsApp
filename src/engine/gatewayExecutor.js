@@ -264,21 +264,42 @@ async function executarDownload (client, comando, deps) {
 
 // Uma mídia por mensagem, na ordem. É o que sempre funciona, e é a queda do
 // álbum — nunca há caminho em que as mídias simplesmente não chegam.
+const SEM_LEGENDA = new Set(['audio', 'sticker'])
+
 async function enviarEmSequencia (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
+  // A legenda vai na PRIMEIRA mídia que aceita legenda — e, se nenhuma aceita,
+  // numa mensagem de texto depois.
+  //
+  // Antes ela só tentava a primeira, e caía no chão quando essa primeira era
+  // áudio ou figurinha. Foi o que apareceu na música: o serviço devolve o áudio
+  // e a capa, o áudio vem primeiro, e o nome da faixa — a única coisa que diz
+  // QUAL música chegou — não era enviado por lugar nenhum.
+  const comLegenda = legenda ? midias.findIndex((m) => !SEM_LEGENDA.has(m.tipo)) : -1
+
   for (const [i, m] of midias.entries()) {
     const conteudo = { type: m.tipo, media: m.buffer, mimetype: m.mime }
     if (m.tipo === 'document') conteudo.fileName = m.nome
-    // Legenda só na primeira: repetida em cada uma, o mesmo texto apareceria
-    // dez vezes seguidas.
-    // Áudio e figurinha não têm legenda no WhatsApp: mandar uma faria a
-    // biblioteca recusar o envio inteiro por causa de um campo decorativo.
-    if (i === 0 && legenda && m.tipo !== 'audio' && m.tipo !== 'sticker') conteudo.caption = legenda
+    // Uma só leva a legenda: repetida em cada uma, o mesmo texto apareceria
+    // dez vezes seguidas. Áudio e figurinha não têm legenda no WhatsApp —
+    // mandar uma faria a biblioteca recusar o envio inteiro por causa de um
+    // campo decorativo.
+    if (i === comLegenda) conteudo.caption = legenda
     await comTimeout(
       // Citar só a primeira: dez respostas citando a mesma mensagem poluem a
       // conversa sem informar nada a mais.
       () => enviarERegistrar(client, chatId, conteudo, i === 0 ? opcoesCitacao : undefined),
       TIMEOUT_ENVIO_MS * 4,
       `timeout ao enviar a mídia ${i + 1}/${midias.length} do comando ${comandoId}`
+    )
+  }
+
+  // Nenhuma mídia aceitou a legenda (um áudio sozinho, uma figurinha): o texto
+  // vai como mensagem, pelo mesmo caminho que o carrossel já usa.
+  if (legenda && comLegenda === -1) {
+    await comTimeout(
+      () => enviarERegistrar(client, chatId, { type: 'text', text: legenda }),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao enviar a legenda do comando ${comandoId}`
     )
   }
 }

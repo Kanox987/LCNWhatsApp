@@ -117,6 +117,40 @@ function montarRequisicao (url, metodo, entradas, cabecalhos, arquivo) {
   }
 }
 
+// O texto de uma linha da lista, com os campos daquele item.
+//
+// Marcador que não resolve FICA LITERAL, como em todo o resto do sistema: a
+// linha chega escrita "{{preco}}" e quem declarou vê na hora qual campo errou.
+// Apagar seria esconder o defeito atrás de um texto que parece certo.
+function escrever (modelo, valores) {
+  return String(modelo).replace(/\{\{\s*([\w.]+)\s*\}\}/g, (marcador, caminho) => {
+    const valor = porCaminho(valores, caminho)
+    if (valor === undefined || valor === null || valor === '') return marcador
+    return String(valor)
+  })
+}
+
+// A lista, virada mensagem.
+//
+// Numerada porque é para escolher: "manda o 2" só funciona se o 2 estiver
+// escrito. O número é `{{n}}` e fica disponível para a linha declarada usar
+// onde quiser — ou não usar.
+function montarLista (corpo, forma) {
+  const bruta = porCaminho(corpo, forma.campo)
+  const itens = Array.isArray(bruta) ? bruta : []
+  if (!itens.length) {
+    return forma.vazio || 'Não achei nada.'
+  }
+  const usados = forma.limite ? itens.slice(0, forma.limite) : itens
+  const linhas = usados.map((item, i) => escrever(forma.linha, { ...(item && typeof item === 'object' ? item : { valor: item }), n: i + 1 }))
+  const cabecalho = forma.cabecalho ? escrever(forma.cabecalho, corpo) : null
+  return [cabecalho, ...linhas].filter(Boolean).join('\n')
+}
+
+function textoOuNulo (valor) {
+  return typeof valor === 'string' && valor.trim() ? valor : null
+}
+
 function porCaminho (objeto, caminho) {
   if (!caminho) return objeto
   return String(caminho).split('.').reduce((atual, parte) => (atual == null ? atual : atual[parte]), objeto)
@@ -273,7 +307,7 @@ export function criarExecutorDeConexao ({
       return {
         forma: 'mídia',
         ...(await buscarArquivos(porCaminho(primeira, funcao.resposta?.campo), { base: declaracao.endereco, cabecalhos })),
-        descricao: typeof primeira?.descricao === 'string' ? primeira.descricao : null
+        descricao: textoOuNulo(porCaminho(primeira, funcao.resposta?.campoDaDescricao || 'descricao'))
       }
     }
 
@@ -307,6 +341,12 @@ export function criarExecutorDeConexao ({
       }
     }
 
+    if (funcao.resposta?.forma === 'lista') {
+      const erroDireto = funcao.resposta.campoDoErro ? porCaminho(primeira, funcao.resposta.campoDoErro) : null
+      if (erroDireto) throw new ErroDeConexao(String(erroDireto))
+      return { forma: 'texto', dados: montarLista(primeira, funcao.resposta) }
+    }
+
     if (funcao.resposta?.forma !== 'trabalho') {
       return { forma: funcao.resposta?.forma || 'texto', dados: porCaminho(primeira, funcao.resposta?.campo) }
     }
@@ -324,7 +364,7 @@ export function criarExecutorDeConexao ({
     return {
       forma: 'mídia',
       ...(await buscarArquivos(lista, { base: declaracao.endereco, cabecalhos })),
-      descricao: typeof final?.descricao === 'string' ? final.descricao : null
+      descricao: textoOuNulo(porCaminho(final, funcao.resposta.campoDaDescricao || 'descricao'))
     }
   }
 

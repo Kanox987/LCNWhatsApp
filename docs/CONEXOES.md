@@ -44,7 +44,7 @@ declara, não na primeira chamada.
 
 ### A resposta que o LCN entende
 
-Quatro formas, declaradas na função:
+Cinco formas, declaradas na função:
 
 **`texto`** — a resposta vai para o WhatsApp como mensagem. É o caso de uma IA
 ou de uma consulta de preço. O LCN lê um campo do seu JSON (o caminho é
@@ -67,6 +67,40 @@ a saída depende do formato pedido.
 campo declarado e o LCN busca cada um, com a mesma credencial. É a forma de um
 serviço que produz um carrossel.
 
+**`lista`** — a resposta traz **várias opções para a pessoa escolher**, e o LCN
+manda um texto numerado. É a forma de uma busca: "evidências" tem a versão do
+Chitãozinho, a do Bruno & Marrone e uma dúzia de covers, e mostrar a lista antes
+evita gastar um download no resultado errado.
+
+Você devolve a lista num campo e o LCN **não decide quais campos aparecem** —
+isso é declarado, porque quem sabe o que o seu serviço devolve é você:
+
+```json
+{ "busca": "evidencias",
+  "achados": [
+    { "titulo": "Evidências", "autor": "Chitãozinho & Xororó",
+      "duracao_texto": "4:59", "url": "https://..." }
+  ] }
+```
+
+```
+campo:      achados
+linha:      *{{n}}.* {{titulo}}\n_{{autor}} · {{duracao_texto}}_\n{{url}}
+cabecalho:  🔎 Achei isto para "{{busca}}":
+vazio:      Não achei nada com esse nome.
+limite:     5
+```
+
+- `{{n}}` é o número do item — é ele que faz "manda o 2" ser uma frase possível.
+- Os outros marcadores são campos **do item**; no cabeçalho, campos da resposta
+  inteira.
+- Marcador que não encontra valor **fica literal** na mensagem (`{{preco}}`).
+  É de propósito: quem declarou vê qual campo errou, em vez de uma linha que
+  parece certa com um pedaço faltando.
+- `vazio` é a frase de "não achei nada". Sem ela, lista vazia responde um padrão
+  genérico — e lista vazia é resposta normal de busca, não erro.
+- `limite` corta quantos itens aparecem. Vazio mostra todos os que vierem.
+
 ### A forma `trabalho`, campo por campo
 
 Cada campo abaixo é declarado na conexão, não fixo no código do LCN — você
@@ -88,6 +122,12 @@ GET  {endereço}{acompanhamento} -> { "<campoDoEstado>": "...",
 - `campoDoErro` preenchido encerra a chamada como erro, e **o texto vai para a
   pessoa no WhatsApp**. Escreva uma frase curta e útil ("esse link é de um post
   privado"), nunca stack trace nem endereço interno.
+- `campoDaDescricao` é de onde sai o **texto que acompanha o que foi entregue**.
+  O padrão é `descricao`, que serve a um post (a legenda do post É a descrição
+  dele). Em música a mesma chave traz o texto que o YouTube gera sozinho —
+  "Provided to YouTube by...", produtor, compositor — e o que a pessoa quer ver
+  é o nome da faixa, que está em `titulo`. Declare o campo que serve ao SEU
+  caso; quem sabe qual é é você.
 - Espera máxima: **5 minutos**. As consultas são de 1,5 s e passam a 5 s depois
   dos primeiros 30 s.
 

@@ -49,6 +49,18 @@ export const FORMAS_DE_RESPOSTA = Object.freeze({
   texto: 'texto',
   midia: 'mídia',
   trabalho: 'trabalho',
+  // O serviço devolve uma LISTA de coisas para a pessoa escolher.
+  //
+  // É a forma da busca: "/buscar evidências" traz cinco músicas, e o que
+  // interessa é um texto numerado, não arquivo nenhum. Sem esta forma, a
+  // resposta caía no `texto`, que manda o campo cru — e o campo cru de uma
+  // busca é uma lista de objetos JSON na conversa.
+  //
+  // Por que a LINHA é declarada e não montada por mim: quem sabe quais campos
+  // aquele serviço devolve é quem declarou o serviço. Uma busca de música
+  // mostra título, autor e duração; uma busca de produto mostraria preço. Fixar
+  // os campos aqui faria a forma servir a uma API só.
+  lista: 'lista',
   // O serviço devolve O ARQUIVO na própria resposta, em base64 dentro do JSON.
   //
   // É a forma de quem converte em segundos — figurinha, troca de formato,
@@ -243,6 +255,22 @@ function validarResposta (resposta, onde) {
     }
   }
 
+  if (forma === FORMAS_DE_RESPOSTA.lista) {
+    return {
+      forma,
+      // Sem saber onde está a lista não há o que numerar. Ausente, toda busca
+      // terminaria em "não veio nada".
+      campo: exigirTexto(resposta.campo, `${onde} — o campo que traz a lista`),
+      // A linha É o formato da resposta. Aceitar isto ausente devolveria uma
+      // lista de linhas vazias, que parece bug do serviço e é da declaração.
+      linha: exigirTexto(resposta.linha, `${onde} — como escrever cada item da lista`),
+      cabecalho: typeof resposta.cabecalho === 'string' ? resposta.cabecalho : null,
+      vazio: typeof resposta.vazio === 'string' && resposta.vazio.trim() ? resposta.vazio.trim() : null,
+      limite: limiteDeLista(resposta.limite, onde),
+      campoDoErro: resposta.campoDoErro ? String(resposta.campoDoErro) : null
+    }
+  }
+
   if (forma !== FORMAS_DE_RESPOSTA.trabalho) {
     return {
       forma,
@@ -267,8 +295,30 @@ function validarResposta (resposta, onde) {
       // desconhecido faria o acompanhamento girar para sempre.
       : (() => { throw new ErroDeDeclaracao(`${onde}: diga quais estados significam "ainda não acabou".`) })(),
     campoDoResultado: exigirTexto(resposta.campoDoResultado, `${onde} — o campo que traz o resultado`),
+    // DE ONDE SAI A LEGENDA do que foi entregue, declarado em vez de fixo.
+    //
+    // Era `descricao` chumbado no executor, e isso só servia ao download de
+    // post: a descrição de um post é a legenda dele. Em música a mesma chave
+    // traz o texto que o YouTube gera ("Provided to YouTube by..."), parágrafos
+    // de credenciais de produção, e o que a pessoa quer ver é o título. Quem
+    // sabe qual campo serve é quem declarou a função.
+    campoDaDescricao: resposta.campoDaDescricao ? String(resposta.campoDaDescricao) : 'descricao',
     campoDoErro: resposta.campoDoErro ? String(resposta.campoDoErro) : null
   }
+}
+
+// Quantos itens da lista chegam à conversa.
+//
+// Teto existe porque a mensagem é lida no celular e porque o serviço pode
+// devolver mais do que caberia; o número, não: quem declara escolhe, e o padrão
+// é "todos os que vieram".
+function limiteDeLista (valor, onde) {
+  if (valor === undefined || valor === null || valor === '') return null
+  const n = Number(valor)
+  if (!Number.isInteger(n) || n < 1) {
+    throw new ErroDeDeclaracao(`${onde}: o limite da lista é um número inteiro de 1 para cima — veio "${valor}".`)
+  }
+  return n
 }
 
 export function validarFuncao (funcao) {
