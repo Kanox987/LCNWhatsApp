@@ -30,7 +30,6 @@ import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
 import { executarComandos } from './engine/gatewayExecutor.js'
-import { criarFila, LIMITE_PADRAO } from './engine/fila.js'
 import { APARELHOS, resolverAparelho } from './aparelho.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
@@ -91,33 +90,6 @@ const SESSION_ID = 'default'
 // como variável livre não é "pegar a versão atual" — é ReferenceError, e foi
 // exatamente o que quebrou TODAS as automações que produzem comando: o motor
 // casava, gravava o comando, e o gateway estourava antes de executar.
-// A FILA, uma por processo — porque o recurso disputado é a conexão, e ela é
-// uma só. Nasce na primeira chamada para o limite poder vir da configuração
-// daquele número, que só existe quando o gateway já subiu.
-let filaDeComandos = null
-let limiteEmUso = null
-function filaDoProcesso (cfg, log) {
-  const limite = Number(cfg?.hardware?.comandosSimultaneos) || LIMITE_PADRAO
-  if (!filaDeComandos || limiteEmUso !== limite) {
-    limiteEmUso = limite
-    let avisou = 0
-    filaDeComandos = criarFila({
-      limite,
-      // A espera só vira log quando ela EXISTE, e no máximo uma vez a cada
-      // cinco segundos: numa rajada de trinta pedidos, trinta linhas iguais
-      // não informam mais que uma.
-      aoMudar: ({ esperando, emCurso }) => {
-        if (!esperando) return
-        const agora = Date.now()
-        if (agora - avisou < 5000) return
-        avisou = agora
-        try { log?.(`[engine] fila: ${emCurso} em curso, ${esperando} esperando (limite ${limite})`) } catch {}
-      }
-    })
-  }
-  return filaDeComandos
-}
-
 export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log) {
   // Esboço não vai ao motor.
   //
@@ -155,13 +127,14 @@ export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, 
       // O `cfg` chega ao executor porque ações como o download leem
       // configuração (endereço do serviço, token, limite de tamanho). Era a
       // lacuna que também travava a transcrição.
-      // PELA FILA. Cada mensagem que chega abria a sua própria cadeia e
-      // executava na hora, sem ninguém contando quantas estavam em curso —
-      // cinco buscas ao mesmo tempo são vinte e cinco capas subindo pela mesma
-      // conexão, e o que sobra é timeout. Ver engine/fila.js.
-      if (comandos.length) {
-        await filaDoProcesso(cfg, log).executar(() => executarComandos(client, comandos, clienteEngine, { cfg }))
-      }
+      // SEM FILA AQUI, e isso é uma correção de rumo.
+      //
+      // A primeira versão enfileirava o COMANDO INTEIRO, e ficou pior: um
+      // `/play` passa minutos só esperando a API de download, sem tocar na
+      // conexão, e segurando a vaga ele fazia um `/ping` esperar atrás de um
+      // download. A fila mudou para onde está a disputa de verdade — o envio e
+      // o upload, em gatewayExecutor.js.
+      if (comandos.length) await executarComandos(client, comandos, clienteEngine, { cfg })
     }
   // Engolir o erro aqui deixou o bot mudo por duas horas sem uma linha de log:
   // o comando ficava `pending` para sempre e não havia onde olhar. Continua

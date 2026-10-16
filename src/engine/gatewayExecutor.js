@@ -1,4 +1,5 @@
 import * as enviadas from '../enviadas.js'
+import { criarFila } from './fila.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
   ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
@@ -91,10 +92,59 @@ async function confirmarFailOpen (clienteEngine, comando, status, resultado = nu
 // mesma, sob pena de laço — de uma mensagem digitada por uma pessoa no celular
 // do bot, que pode e deve disparar automação. Um envio que escape daqui volta
 // a parecer "digitado por alguém".
+// TUDO QUE FALA COM O WHATSAPP PASSA POR AQUI, E A FILA É AQUI.
+//
+// A primeira versão da fila ficou em volta do COMANDO INTEIRO, e isso estava
+// errado por um motivo que o dono sentiu na hora: um `/play` passa quase todo
+// o tempo dele esperando a API de download — minutos, às vezes — e durante
+// essa espera ele não usa a conexão para nada. Segurando a vaga, ele fazia um
+// `/ping` esperar atrás de um download. O remédio ficou pior que a doença.
+//
+// O recurso disputado é o SOCKET: enviar e subir mídia. É só isso que a fila
+// protege agora. Um comando longo ocupa a conexão só nos instantes em que
+// realmente fala com ela, e solta entre um e outro.
+let ultimoAvisoDeFila = 0
+let filaDoSocket = null
+let limiteDaFila = null
+
+// O limite vem da configuração DAQUELE número (painel: "Comandos ao mesmo
+// tempo"), e é lido na primeira vez que alguém manda alguma coisa. Trocar o
+// valor vale a partir do próximo arranque — mexer na fila com trabalho dentro
+// dela trocaria um problema de lentidão por um de mensagem perdida.
+export function configurarFilaDoSocket (cfg) {
+  const limite = Number(cfg?.hardware?.comandosSimultaneos)
+  if (Number.isInteger(limite) && limite >= 1) limiteDaFila = limite
+}
+
+function socket () {
+  if (!filaDoSocket) {
+    filaDoSocket = criarFila({
+      limite: limiteDaFila || undefined,
+      // A espera só vira log quando ela EXISTE, e no máximo uma vez a cada
+      // cinco segundos: numa rajada de trinta pedidos, trinta linhas iguais
+      // não informam mais que uma.
+      aoMudar: ({ esperando, emCurso, limite }) => {
+        if (!esperando) return
+        const agora = Date.now()
+        if (agora - ultimoAvisoDeFila < 5000) return
+        ultimoAvisoDeFila = agora
+        console.log(`[engine] fila do envio: ${emCurso} em curso, ${esperando} esperando (limite ${limite})`)
+      }
+    })
+  }
+  return filaDoSocket
+}
+
 async function enviarERegistrar (client, destino, conteudo, opcoes) {
-  const resultado = await client.message.send(destino, conteudo, opcoes)
+  const resultado = await socket().executar(() => client.message.send(destino, conteudo, opcoes))
   enviadas.registrar(resultado?.id)
   return resultado
+}
+
+// Subir mídia é a parte CARA: cada foto do carrossel é um upload, e cinco
+// buscas ao mesmo tempo eram vinte e cinco subindo juntas pela mesma conexão.
+async function subirMidia (client, buffer, opcoes) {
+  return socket().executar(() => client.message.upload(buffer, opcoes))
 }
 
 function opcoesDeCitacao (replyTo) {
@@ -321,7 +371,7 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
     if (!pai?.id) throw new Error('o servidor não devolveu o id do álbum')
 
     for (const [i, m] of midias.entries()) {
-      const upload = await client.message.upload(m.buffer, {
+      const upload = await subirMidia(client, m.buffer, {
         type: m.tipo === 'video' ? 'video' : 'image',
         mimetype: m.mime
       })
@@ -484,7 +534,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
   if (resultado.forma === 'carrossel') {
     const cards = []
     for (const card of resultado.cards || []) {
-      const upload = await client.message.upload(card.midia.buffer, { type: 'image', mimetype: card.midia.mime })
+      const upload = await subirMidia(client, card.midia.buffer, { type: 'image', mimetype: card.midia.mime })
       cards.push(montarCard(card.midia, upload, { titulo: card.titulo, legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
     }
     const abertura = caption || resultado.cabecalho
@@ -665,7 +715,7 @@ async function enviarComoCarrossel (client, chatId, midias, legenda, opcoesCitac
   try {
     const cards = []
     for (const m of midias) {
-      const upload = await client.message.upload(m.buffer, {
+      const upload = await subirMidia(client, m.buffer, {
         type: m.tipo === 'video' ? 'video' : 'image',
         mimetype: m.mime
       })
@@ -999,6 +1049,7 @@ async function executarEnvioDeArquivo (client, comando, deps) {
 }
 
 export async function executarComandos (client, comandos, clienteEngine, deps = {}) {
+  configurarFilaDoSocket(deps?.cfg)
   for (const comando of Array.isArray(comandos) ? comandos : []) {
     let status
 
