@@ -1294,11 +1294,17 @@ export function avaliarEvento (db, evento) {
     const ordenados = [...candidatosPublicados(db)].sort((a, b) => {
       const peso = (c) => {
         const t = acharTrigger(jsonOuNull(c.doc_json))
-        return t?.type === 'trigger.command' ? 0 : 1
+        if (t?.type !== 'trigger.command') return 2
+        // Comando DO DONO antes do comando NATIVO: é o nativo que cede, e para
+        // ceder ele precisa ser avaliado depois.
+        return c.native ? 1 : 0
       }
       return peso(a) - peso(b)
     })
     let algumComandoCasou = false
+    // As palavras de comando que já casaram nesta mensagem, vindas de automação
+    // do dono. Serve ao nativo, logo abaixo.
+    const palavrasQueCasaram = new Set()
 
     for (const candidato of ordenados) {
       const existente = novo ? null : jaAvaliado(db, evento.eventId, candidato.revision_id)
@@ -1374,12 +1380,28 @@ export function avaliarEvento (db, evento) {
         const cedeAoComando = ehAutomatico && algumComandoCasou &&
           trigger.config.alsoOnCommands !== true
 
-        if (!cedeAoComando && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
+        // O NATIVO CEDE AO COMANDO DO DONO com a mesma palavra.
+        //
+        // O /menu nativo existe para o /menu funcionar sem ninguém instalar
+        // nada. Quando o dono instala o dele, os dois respondiam — duas
+        // mensagens de menu para quem digitou uma palavra, sem nada explicando.
+        // Medido no sistema do dono, com o nativo e o instalado ligados.
+        //
+        // Cede por EVENTO, e não por existir: o comando do dono pode estar
+        // limitado a um grupo, e ali ele responde; nas outras conversas, onde
+        // ele nem casou, o nativo continua sendo o padrão que ele é.
+        const palavraDoGatilho = !ehAutomatico && typeof trigger.config.command === 'string'
+          ? trigger.config.command.trim().toLowerCase()
+          : null
+        const cedeAoDono = candidato.native === 1 && palavraDoGatilho && palavrasQueCasaram.has(palavraDoGatilho)
+
+        if (!cedeAoComando && !cedeAoDono && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
           status = candidato.deployment_mode === 'live' ? 'matched_live' : 'matched_shadow'
           // Vale para sombra também: o comando CASOU, e é isso que consome a
           // mensagem. Só ao vivo aqui faria o mesmo evento se comportar
           // diferente conforme o modo de uma automação vizinha.
           if (!ehAutomatico) algumComandoCasou = true
+          if (!ehAutomatico && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
           if (status === 'matched_live') {
             try {
               // Savepoint por automação (transação aninhada do better-sqlite3):

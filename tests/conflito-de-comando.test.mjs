@@ -11,6 +11,8 @@ import { abrirBanco } from '../src/engine/server/db.js'
 import { criarApi } from '../src/engine/server/api.js'
 import { conflitosDeComando } from '../src/engine/server/conflitos.js'
 import { carregarCatalogo } from '../src/engine/templates/catalog.js'
+import { avaliarEvento } from '../src/engine/server/evaluator.js'
+import { criarServicoAutomacoes } from '../src/engine/server/automationsService.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -92,6 +94,62 @@ check('não publicada não conta', conflitosDeComando(db).length === 0)
   const repetidos = [...porComando.entries()].filter(([, ids]) => ids.length > 1)
   check('nenhum comando padrão se repete no catálogo', repetidos.length === 0,
     repetidos.map(([cmd, ids]) => `${cmd}: ${ids.join(' e ')}`).join(' | '))
+}
+
+// --- o nativo cede ao comando do dono -------------------------------------
+//
+// O /menu nativo existe para o /menu funcionar sem ninguém instalar nada.
+// Quando o dono instala o dele, os DOIS respondiam — duas mensagens de menu
+// para quem digitou uma palavra. Medido no sistema do dono.
+{
+  const banco = abrirBanco(':memory:')
+  const quando = new Date().toISOString()
+  banco.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p', 'Pool', quando, quando)
+
+  const doDono = {
+    schemaVersion: 1,
+    id: 'meu-menu',
+    revision: 1,
+    enabled: true,
+    name: 'Meu menu',
+    scope: { include: [{ kind: 'everywhere' }], exclude: [] },
+    inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
+    responder: { strategy: 'weighted_rendezvous', poolId: 'p' },
+    flow: {
+      nodes: [
+        { id: 'g', type: 'trigger.command', config: { command: '/menu', match: 'exact', allowFrom: 'any' } },
+        { id: 'r', type: 'action.whatsapp.reply', config: { text: 'o menu do dono' } }
+      ],
+      edges: [{ from: 'g', to: 'r', on: 'matched' }]
+    }
+  }
+  // Pelo SERVIÇO, e não por INSERT cru: é ele que grava os escopos, e sem eles
+  // a automação não casa com nada — o caso passaria a testar outra coisa.
+  criarServicoAutomacoes(banco).criarEPublicar({ document: doDono })
+  banco.prepare("UPDATE automations SET deployment_mode = 'live' WHERE id = 'meu-menu'").run()
+
+  const nativo = banco.prepare("SELECT id, enabled, active_revision_id FROM automations WHERE native = 1").get()
+  check('o menu nativo existe e está ligado', !!nativo && nativo.enabled === 1, JSON.stringify(nativo))
+
+  const r = avaliarEvento(banco, {
+    provider: 'zapo',
+    accountId: 'conta',
+    eventId: 'conta:c:s:menu1',
+    occurredAt: quando,
+    replay: false,
+    chat: { id: '5511@s.whatsapp.net', kind: 'direct' },
+    sender: { id: '5511@s.whatsapp.net', authoredBySelf: false, authoredByBot: false },
+    message: { kind: 'text', text: '/menu' },
+    providerRef: { provider: 'zapo', id: 'menu1' }
+  })
+  const casaram = (r.results || []).filter((x) => x.status === 'matched_live').map((x) => x.automationId)
+  check('só UMA automação responde /menu', casaram.length === 1, JSON.stringify(casaram))
+  check('e é a do dono, não a nativa', casaram[0] === 'meu-menu', casaram[0])
+  // E a tela não acusa isso como conflito: o motor já resolveu, e mandar a
+  // pessoa consertar o que está certo é pior que não avisar.
+  check('o encontro com a nativa não vira aviso na tela',
+    conflitosDeComando(banco).length === 0, JSON.stringify(conflitosDeComando(banco)))
+  banco.close()
 }
 
 db.close()

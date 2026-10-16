@@ -29,11 +29,15 @@ function comandoDoDocumento (documento) {
 // Desligada não entra: ela não responde nada, e acusá-la faria a tela apontar
 // um problema que não existe.
 export function conflitosDeComando (db) {
+  // NATIVA FICA DE FORA, e não por ser invisível na lista: o motor já resolve
+  // esse encontro — o comando nativo cede ao do dono com a mesma palavra, por
+  // evento. Acusar aqui seria apontar um problema que o sistema já tratou, e
+  // mandar a pessoa consertar o que está certo.
   const linhas = db.prepare(`
     SELECT a.id AS automation_id, r.doc_json
     FROM automations a
     JOIN automation_revisions r ON r.id = a.active_revision_id
-    WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL
+    WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL AND a.native = 0
   `).all()
 
   const porComando = new Map()
