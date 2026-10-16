@@ -217,6 +217,12 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
   const textoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.texto || '', placeholder: '⬇️ Baixar esta' })
   const comandoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.comando || '', placeholder: '/musica {{url}}' })
   const limiteDeCards = el('input', { type: 'number', min: '1', max: '10', step: '1', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.limite ?? '') : '' })
+  const estiloDoCarrossel = el('select', {}, [
+    ['completo', 'Completo — texto dentro e embrulho viewOnce (a forma do takeshi-bot)'],
+    ['simples', 'Simples — só os cards, texto em mensagem separada (a forma do /dow)'],
+    ['semEmbrulho', 'Sem embrulho — texto dentro, sem o viewOnce'],
+    ['diagnóstico', 'Diagnóstico — manda as três, numeradas, para descobrir qual aparece']
+  ].map(([v, rotulo]) => el('option', { value: v, selected: (funcao?.resposta?.estilo || 'completo') === v, text: rotulo })))
   const vazioDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.vazio || '') : '', placeholder: 'Não achei nada.' })
   const erroDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.campoDoErro || '') : '', placeholder: 'detail' })
 
@@ -296,6 +302,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
       field('Quantos cards', limiteDeCards, 'Até 10, que é o teto do WhatsApp. Vazio manda todos os que vierem.'),
       field('Quando não vier nada', vazioDoCarrossel, 'A frase de "não achei". Lista vazia é resposta normal de busca, não erro.')
     ]),
+    field('Forma da mensagem', estiloDoCarrossel, 'Versões diferentes do WhatsApp desenham formas diferentes — e quando não desenham, NÃO há erro nenhum: o envio é confirmado e a conversa fica vazia. Se o carrossel não aparecer, troque aqui e mande o comando de novo. "Diagnóstico" manda as três numeradas de uma vez.'),
     field('Campo do erro', erroDoCarrossel, 'Opcional: de onde o serviço traz a frase de recusa.')
   ])
 
@@ -402,6 +409,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
         botao: rotulo && comando ? { texto: rotulo, comando } : null,
         limite: Number.isFinite(limite) && limite > 0 ? Math.round(limite) : null,
         vazio: vazioDoCarrossel.value.trim() || null,
+        estilo: estiloDoCarrossel.value,
         campoDoErro: erroDoCarrossel.value.trim() || null
       }
     } else if (forma.value === 'lista') {

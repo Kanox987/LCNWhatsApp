@@ -390,6 +390,68 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('o segundo botão aponta para o outro', JSON.parse(carrossel.cards[1].nativeFlowMessage.buttons[0].buttonParamsJson).id === '/musica https://y/b')
 }
 
+// --- a forma da mensagem é declarada, e o diagnóstico manda todas ---------
+//
+// Mensagem interativa é aceita pelo servidor e desenhada (ou não) pelo
+// aplicativo de quem recebe. Quando ele não desenha, NÃO há erro em lugar
+// nenhum: o envio é confirmado e a conversa fica vazia. Sem a forma
+// declarada, a única saída seria eu editar arquivo a cada palpite.
+{
+  const porEstilo = async (estilo) => {
+    const enviados = []
+    const client = {
+      getCredentials: () => ({ meJid: '5511900000002@s.whatsapp.net' }),
+      message: {
+        send: async (jid, c) => { enviados.push(c); return { ok: true, id: 'X' } },
+        upload: async (buffer, opcoes) => ({ url: 'u', directPath: '/u', mediaKey: 'k', fileSha256: 's', fileEncSha256: 'e', fileLength: buffer.length, mediaKeyTimestamp: 1, mimetype: opcoes.mimetype })
+      }
+    }
+    const deps = {
+      mediaRefCache: { resolver: () => null },
+      baixarBuffer: async () => Buffer.from('x'),
+      limiteBytes: 999999,
+      resolverJidProprio: () => '5511900000002@s.whatsapp.net',
+      clienteEngine: { conexoes: { resolvida: async () => DECLARACAO }, execucoes: { confirmar: async () => ({ ok: true }) } },
+      criarExecutorDeConexao: () => ({
+        executar: async () => ({
+          forma: 'carrossel',
+          estilo,
+          cards: [{ midia: { buffer: Buffer.from('c'), mime: 'image/jpeg', tipo: 'image' }, titulo: 'T', corpo: 'C', rodape: 'R', botao: { texto: 'b', comando: '/musica x' } }],
+          cabecalho: '🔎 Achei:'
+        })
+      })
+    }
+    await executarComandos(client, [{
+      id: `e-${estilo}`,
+      commandType: 'connection.call',
+      payload: { chatId: '5511999@s.whatsapp.net', conexao: 'midia', funcao: 'buscar', entradas: {} }
+    }], deps.clienteEngine, deps)
+    return enviados
+  }
+
+  const completo = await porEstilo('completo')
+  check('"completo" embrulha em viewOnce', !!completo[0]?.viewOnceMessageV2)
+
+  const simples = await porEstilo('simples')
+  check('"simples" manda o texto antes, em mensagem própria', simples[0]?.type === 'text', JSON.stringify(simples[0]))
+  const cru = simples[1]?.interactiveMessage
+  check('e o carrossel sem embrulho nenhum', !!cru?.carouselMessage && !simples[1]?.viewOnceMessageV2)
+  // É a forma que o carrossel de fotos do /dow usa há semanas: nada de body,
+  // nada de messageVersion. Não se mexe no que está provado.
+  check('sem body e sem messageVersion, como o do /dow',
+    cru.body === undefined && cru.carouselMessage.messageVersion === undefined, JSON.stringify(Object.keys(cru)))
+
+  const semEmbrulho = await porEstilo('semEmbrulho')
+  check('"semEmbrulho" tem o texto dentro e nenhum viewOnce',
+    !semEmbrulho[0]?.viewOnceMessageV2 && semEmbrulho[0]?.interactiveMessage?.body?.text?.includes('Achei'))
+
+  const diagnostico = await porEstilo('diagnóstico')
+  const formas = diagnostico.filter((c) => c.viewOnceMessageV2 || c.interactiveMessage).length
+  check('"diagnóstico" manda as três formas de uma vez', formas === 3, String(formas))
+  check('e cada uma diz o nome dela, para a pessoa poder apontar qual apareceu',
+    JSON.stringify(diagnostico).includes('[completo]') && JSON.stringify(diagnostico).includes('[simples]'))
+}
+
 // --- carrossel recusado cai para texto, e nada se perde -------------------
 {
   const enviados = []

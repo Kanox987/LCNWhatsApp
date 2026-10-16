@@ -464,6 +464,7 @@ export function criarExecutorDeConexao ({
       return {
         forma: 'carrossel',
         cards,
+        estilo: forma.estilo,
         cabecalho: forma.cabecalho ? escrever(forma.cabecalho, primeira) : null
       }
     }

@@ -1,6 +1,6 @@
 import * as enviadas from '../enviadas.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
-import { montarCard, montarCarrossel, podeVirarCarrossel } from './carrossel.js'
+import { ESTILOS_DE_CARROSSEL, montarCard, montarCarrossel, podeVirarCarrossel } from './carrossel.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -485,16 +485,31 @@ async function executarChamadaDeConexao (client, comando, deps) {
       cards.push(montarCard(card.midia, upload, { titulo: card.titulo, legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
     }
     const abertura = caption || resultado.cabecalho
+    // A FORMA vem da declaração. "diagnóstico" manda as três, numeradas: uma
+    // tentativa só responde qual delas o aplicativo de quem recebe desenha —
+    // porque quando ele não desenha, não há erro em lugar nenhum para ler.
+    const estilos = resultado.estilo === 'diagnóstico' ? ESTILOS_DE_CARROSSEL : [resultado.estilo || 'completo']
     try {
-      await comTimeout(
-        // Texto dentro, com header, embrulhado em viewOnce e SEM citar a
-        // mensagem que acionou: é a forma que o takeshi-bot manda em zapo-js —
-        // lá o carrossel sai sem `quoted` por padrão.
-        () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto: abertura, viewOnce: true })),
-        TIMEOUT_ENVIO_MS * 4,
-        `timeout ao enviar o carrossel do comando ${comando.id}`
-      )
-      console.log(`[engine] carrossel ${comando.id}: uma mensagem com ${cards.length} card(s) e botão`)
+      for (const estilo of estilos) {
+        const texto = estilos.length > 1 ? `[${estilo}] ${abertura || ''}`.trim() : abertura
+        // Na forma "simples" o texto não cabe dentro da mensagem: vai antes.
+        if (estilo === 'simples' && texto) {
+          await comTimeout(
+            () => enviarERegistrar(client, chatId, { type: 'text', text: texto }),
+            TIMEOUT_ENVIO_MS,
+            `timeout ao abrir o carrossel do comando ${comando.id}`
+          )
+        }
+        await comTimeout(
+          // Sem citar a mensagem que acionou: é como o `sendCarousel` do
+          // takeshi-bot manda, e citação em mensagem interativa é mais uma
+          // chance de o aplicativo descartar tudo calado.
+          () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto, estilo })),
+          TIMEOUT_ENVIO_MS * 4,
+          `timeout ao enviar o carrossel do comando ${comando.id}`
+        )
+        console.log(`[engine] carrossel ${comando.id}: forma "${estilo}", ${cards.length} card(s) e botão`)
+      }
     } catch (erro) {
       // Mensagem interativa depende do aplicativo de quem recebe. Cair para
       // texto não é tratamento de erro, é parte do desenho: o conteúdo sempre
@@ -635,7 +650,11 @@ async function enviarComoCarrossel (client, chatId, midias, legenda, opcoesCitac
       cards.push(montarCard(m, upload))
     }
     await comTimeout(
-      () => enviarERegistrar(client, chatId, montarCarrossel(cards), opcoesCitacao),
+      // Forma "simples", que é a que este caminho sempre usou e a única
+      // PROVADA no aparelho do dono: só os cards, sem embrulho e sem texto
+      // dentro. Não se troca o que está provado por simetria com o caminho
+      // novo — a legenda continua indo em mensagem separada, logo abaixo.
+      () => enviarERegistrar(client, chatId, montarCarrossel(cards, { estilo: 'simples' }), opcoesCitacao),
       TIMEOUT_ENVIO_MS * 4,
       `timeout ao enviar o carrossel do comando ${comandoId}`
     )

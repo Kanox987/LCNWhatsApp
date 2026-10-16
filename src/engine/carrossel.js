@@ -122,12 +122,38 @@ export function montarCard (midia, upload, { titulo, legenda, rodape, botao } = 
 //
 // O embrulho é OPCIONAL aqui porque o carrossel de fotos do /dow funciona sem
 // ele há semanas, e não se troca o que está provado por simetria.
-export function montarCarrossel (cards, { texto = null, rodape = null, viewOnce = false } = {}) {
-  const interactiveMessage = { carouselMessage: { cards, messageVersion: 1 } }
-  if (texto) {
-    interactiveMessage.body = { text: texto }
-    interactiveMessage.header = { hasMediaAttachment: false }
+// AS FORMAS DO CARROSSEL, e por que são mais de uma.
+//
+// Mensagem interativa é aceita pelo servidor e desenhada (ou não) pelo
+// aplicativo de quem recebe — e versões diferentes do WhatsApp desenham
+// coisas diferentes. Quando não desenha, NÃO HÁ ERRO EM LUGAR NENHUM: o envio
+// é confirmado, o comando é marcado como enviado, e a conversa fica vazia.
+//
+// Por isso a forma é escolha declarada, e não constante no meu código. Quem
+// recebe "nada" troca a forma pelo painel e testa de novo, em vez de esperar
+// alguém editar arquivo.
+//
+//   completo  - viewOnce + texto dentro (com header) + messageVersion. É a
+//               forma do takeshi-bot, que usa esta mesma biblioteca.
+//   simples   - só os cards, sem embrulho e sem texto dentro. É a forma que o
+//               carrossel de fotos do /dow usa aqui há semanas, PROVADA neste
+//               aparelho — o texto vai em mensagem separada.
+//   semEmbrulho - o completo sem o viewOnce.
+export const ESTILOS_DE_CARROSSEL = Object.freeze(['completo', 'simples', 'semEmbrulho'])
+
+export function montarCarrossel (cards, { texto = null, rodape = null, estilo = 'completo' } = {}) {
+  const interactiveMessage = { carouselMessage: { cards } }
+  if (estilo !== 'simples') {
+    interactiveMessage.carouselMessage.messageVersion = 1
+    if (texto) {
+      // O texto NUNCA vai sozinho: sem um header ao lado dele, a mensagem foi
+      // aceita e não apareceu. Ver o histórico deste arquivo.
+      interactiveMessage.body = { text: texto }
+      interactiveMessage.header = { hasMediaAttachment: false }
+    }
+    if (rodape) interactiveMessage.footer = { text: rodape }
   }
-  if (rodape) interactiveMessage.footer = { text: rodape }
-  return viewOnce ? { viewOnceMessageV2: { message: { interactiveMessage } } } : { interactiveMessage }
+  return estilo === 'completo'
+    ? { viewOnceMessageV2: { message: { interactiveMessage } } }
+    : { interactiveMessage }
 }

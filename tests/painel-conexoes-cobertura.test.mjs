@@ -63,13 +63,18 @@ for (const tipo of Object.keys(TIPOS_DE_ENVIO)) {
 }
 
 // Campos que o motor passou a aceitar e que a tela precisa saber escrever.
-for (const campo of ['esperaSegundos', 'modeloDaDescricao', 'ordemDosTipos', 'campoDaDescricao']) {
+for (const campo of ['esperaSegundos', 'modeloDaDescricao', 'ordemDosTipos', 'campoDaDescricao', 'estilo']) {
   check(`a tela sabe escrever "${campo}"`, tela.includes(campo))
 }
 // O botão do card: rótulo e comando são o que fazem o carrossel ser mais que
 // uma galeria.
 check('a tela deixa escrever o rótulo e o comando do botão do card',
   tela.includes('textoDoBotao') && tela.includes('comandoDoBotao'))
+// A forma da mensagem precisa ser trocável PELA TELA: é a única saída de quem
+// recebe "nada" sem nenhum erro em lugar nenhum.
+for (const estilo of ['completo', 'simples', 'semEmbrulho', 'diagnóstico']) {
+  check(`a tela oferece a forma de carrossel "${estilo}"`, tela.includes(`'${estilo}'`))
+}
 
 if (falhas) {
   console.error(`\n${falhas} verificação(ões) falharam`)

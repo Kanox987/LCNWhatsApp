@@ -295,6 +295,17 @@ function validarResposta (resposta, onde) {
             comando: exigirTexto(botao.comando, `${onde} — o comando que o botão manda`)
           }
         : null,
+      // A FORMA DA MENSAGEM, porque uma só não serve a todo aparelho.
+      //
+      // Mensagem interativa é aceita pelo servidor e desenhada (ou não) pelo
+      // aplicativo de quem recebe. Quando não desenha, não há erro em lugar
+      // nenhum — o envio é confirmado e a conversa fica vazia. Declarar a
+      // forma é o que permite a quem recebeu "nada" trocar pela tela e testar
+      // de novo, sem depender de mim.
+      //
+      // "diagnóstico" manda TODAS as formas, numeradas, de uma vez: uma única
+      // tentativa responde qual delas aquele aparelho desenha.
+      estilo: estiloDeCarrossel(resposta.estilo, onde),
       // O WhatsApp não mostra carrossel de mais de dez cards. Declarar o teto
       // aqui evita montar uma mensagem que o aplicativo recusa inteira.
       limite: limiteDeLista(resposta.limite, onde),
@@ -392,6 +403,16 @@ function tipoDeEnvioValidado (tipo, onde) {
   throw new ErroDeDeclaracao(
     `${onde}: tipo desconhecido na ordem de envio: "${tipo}". Use: ${Object.keys(TIPOS_DE_ENVIO).join(', ')}.`
   )
+}
+
+const ESTILOS = Object.freeze(['completo', 'simples', 'semEmbrulho', 'diagnóstico'])
+
+function estiloDeCarrossel (valor, onde) {
+  if (valor === undefined || valor === null || valor === '') return 'completo'
+  if (!ESTILOS.includes(valor)) {
+    throw new ErroDeDeclaracao(`${onde}: forma de carrossel desconhecida: "${valor}". Use: ${ESTILOS.join(', ')}.`)
+  }
+  return valor
 }
 
 // Os candidatos a imagem de um card, sempre como lista — um nome de campo ou
