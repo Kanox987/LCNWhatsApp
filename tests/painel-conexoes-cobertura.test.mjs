@@ -72,7 +72,7 @@ check('a tela deixa escrever o rótulo e o comando do botão do card',
   tela.includes('textoDoBotao') && tela.includes('comandoDoBotao'))
 // A forma da mensagem precisa ser trocável PELA TELA: é a única saída de quem
 // recebe "nada" sem nenhum erro em lugar nenhum.
-for (const estilo of ['completo', 'simples', 'semEmbrulho', 'botoes', 'menu', 'diagnóstico']) {
+for (const estilo of ['completo', 'simples', 'semEmbrulho', 'bizNoStanza', 'fluxoNoTopo', 'botoes', 'menu', 'diagnóstico']) {
   check(`a tela oferece a forma de carrossel "${estilo}"`, tela.includes(`'${estilo}'`))
 }
 

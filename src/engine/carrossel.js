@@ -139,7 +139,41 @@ export function montarCard (midia, upload, { titulo, legenda, rodape, botao } = 
 //               carrossel de fotos do /dow usa aqui há semanas, PROVADA neste
 //               aparelho — o texto vai em mensagem separada.
 //   semEmbrulho - o completo sem o viewOnce.
-export const ESTILOS_DE_CARROSSEL = Object.freeze(['completo', 'simples', 'semEmbrulho'])
+export const ESTILOS_DE_CARROSSEL = Object.freeze(['completo', 'simples', 'semEmbrulho', 'bizNoStanza', 'fluxoNoTopo'])
+
+// O NÓ QUE DIZ AO WHATSAPP "ISTO É NATIVE FLOW".
+//
+// Conferido na zapo-js 1.8.2 que está instalada aqui, e é a explicação mais
+// provável para "carrossel sem botão aparece, com botão some":
+//
+//   resolveButtonAddonKindFrom(msg) olha `msg.interactiveMessage
+//   .nativeFlowMessage` — o do NÍVEL PRINCIPAL. Ele não percorre
+//   `carouselMessage.cards[].nativeFlowMessage`.
+//
+// Quando ele acha, a biblioteca anexa ao stanza um nó <biz> dizendo que a
+// mensagem é native flow (`buildButtonAddonNode`). Com os botões só dentro dos
+// cards, ele não acha nada, o nó não vai, e o aplicativo recebe um carrossel
+// que não se anuncia como interativo — então não desenha, sem erro nenhum.
+//
+// Há duas saídas, e aqui estão as duas porque não dá para saber qual o
+// aparelho aceita sem mandar:
+//
+//   bizNoStanza  - manda o <biz> na mão, por `customNodes`, que é a saída de
+//                  escape que a própria biblioteca expõe.
+//   fluxoNoTopo  - põe um `nativeFlowMessage` VAZIO no nível principal, para a
+//                  biblioteca achar e montar o nó sozinha. Tem a vantagem de
+//                  ela também ajustar `type` e `mediatype` do stanza, que o
+//                  comentário dela diz ser exigido quando o <biz> vai junto
+//                  (senão o servidor recusa com SMAX_INVALID 479).
+export const NO_DE_FLUXO_NATIVO = Object.freeze({
+  tag: 'biz',
+  attrs: {},
+  content: [{
+    tag: 'interactive',
+    attrs: { type: 'native_flow', v: '1' },
+    content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' }, content: undefined }]
+  }]
+})
 
 // AS OUTRAS DUAS FORMAS DE OFERECER AS MESMAS OPÇÕES.
 //
@@ -208,6 +242,12 @@ export function montarMenuDeEscolha (itens, { texto = null, rodape = null, titul
 
 export function montarCarrossel (cards, { texto = null, rodape = null, estilo = 'completo' } = {}) {
   const interactiveMessage = { carouselMessage: { cards } }
+  // O `nativeFlowMessage` VAZIO no topo existe só para a biblioteca enxergar
+  // "isto é native flow" e anexar o nó <biz> sozinha — os botões de verdade
+  // continuam dentro de cada card.
+  if (estilo === 'fluxoNoTopo') {
+    interactiveMessage.nativeFlowMessage = { buttons: [], messageParamsJson: '' }
+  }
   if (estilo !== 'simples') {
     interactiveMessage.carouselMessage.messageVersion = 1
     if (texto) {
@@ -221,4 +261,9 @@ export function montarCarrossel (cards, { texto = null, rodape = null, estilo = 
   return estilo === 'completo'
     ? { viewOnceMessageV2: { message: { interactiveMessage } } }
     : { interactiveMessage }
+}
+
+// As opções de ENVIO daquela forma — hoje só o nó do stanza, quando é o caso.
+export function opcoesDoCarrossel (estilo) {
+  return estilo === 'bizNoStanza' ? { customNodes: [NO_DE_FLUXO_NATIVO] } : undefined
 }

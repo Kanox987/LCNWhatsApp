@@ -221,6 +221,8 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     ['completo', 'Completo — texto dentro e embrulho viewOnce (a forma do takeshi-bot)'],
     ['simples', 'Simples — só os cards, texto em mensagem separada (a forma do /dow)'],
     ['semEmbrulho', 'Sem embrulho — texto dentro, sem o viewOnce'],
+    ['bizNoStanza', 'Cards com botão + nó native_flow mandado na mão (customNodes)'],
+    ['fluxoNoTopo', 'Cards com botão + fluxo nativo vazio no topo (a biblioteca monta o nó)'],
     ['botoes', 'Botões — cards sem botão, e até 3 botões na mensagem seguinte'],
     ['menu', 'Menu — cards sem botão, e uma lista de escolha na mensagem seguinte'],
     ['diagnóstico', 'Diagnóstico — manda todas, numeradas, para descobrir qual aparece']
@@ -304,7 +306,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
       field('Quantos cards', limiteDeCards, 'Até 10, que é o teto do WhatsApp. Vazio manda todos os que vierem.'),
       field('Quando não vier nada', vazioDoCarrossel, 'A frase de "não achei". Lista vazia é resposta normal de busca, não erro.')
     ]),
-    field('Forma da mensagem', estiloDoCarrossel, 'Versões diferentes do WhatsApp desenham formas diferentes — e quando não desenham, NÃO há erro nenhum: o envio é confirmado e a conversa fica vazia. Botão DENTRO do card não é desenhado pelo WhatsApp comum; "Botões" e "Menu" tiram o botão de dentro do card e põem na mensagem seguinte. "Diagnóstico" manda todas numeradas de uma vez, para descobrir qual o aparelho desenha.'),
+    field('Forma da mensagem', estiloDoCarrossel, 'Versões diferentes do WhatsApp desenham formas diferentes — e quando não desenham, NÃO há erro nenhum: o envio é confirmado e a conversa fica vazia. Botão dentro do card exige que a mensagem se anuncie como "native flow" no stanza, e a biblioteca só faz isso sozinha quando o fluxo está no nível principal: é o que as formas "nó na mão" e "fluxo no topo" resolvem, cada uma de um jeito. "Botões" e "Menu" tiram o botão de dentro do card. "Diagnóstico" manda todas numeradas de uma vez, para descobrir qual o aparelho desenha.'),
     field('Campo do erro', erroDoCarrossel, 'Opcional: de onde o serviço traz a frase de recusa.')
   ])
 

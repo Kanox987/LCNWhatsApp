@@ -2,7 +2,7 @@ import * as enviadas from '../enviadas.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
   ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
-  montarCarrossel, montarMenuDeEscolha, podeVirarCarrossel
+  montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel
 } from './carrossel.js'
 
 const TIMEOUT_ENVIO_MS = 15000
@@ -531,7 +531,9 @@ async function executarChamadaDeConexao (client, comando, deps) {
           // Sem citar a mensagem que acionou: é como o `sendCarousel` do
           // takeshi-bot manda, e citação em mensagem interativa é mais uma
           // chance de o aplicativo descartar tudo calado.
-          () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto, estilo })),
+          //
+          // As opções levam o nó <biz> quando a forma pede — ver carrossel.js.
+          () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto, estilo }), opcoesDoCarrossel(estilo)),
           TIMEOUT_ENVIO_MS * 4,
           `timeout ao enviar o carrossel do comando ${comando.id}`
         )

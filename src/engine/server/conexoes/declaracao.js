@@ -405,7 +405,9 @@ function tipoDeEnvioValidado (tipo, onde) {
   )
 }
 
-const ESTILOS = Object.freeze(['completo', 'simples', 'semEmbrulho', 'botoes', 'menu', 'diagnóstico'])
+const ESTILOS = Object.freeze([
+  'completo', 'simples', 'semEmbrulho', 'bizNoStanza', 'fluxoNoTopo', 'botoes', 'menu', 'diagnóstico'
+])
 
 function estiloDeCarrossel (valor, onde) {
   if (valor === undefined || valor === null || valor === '') return 'completo'

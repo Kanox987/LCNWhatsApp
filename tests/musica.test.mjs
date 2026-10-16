@@ -397,12 +397,14 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
 // nenhum: o envio é confirmado e a conversa fica vazia. Sem a forma
 // declarada, a única saída seria eu editar arquivo a cada palpite.
 {
+  const opcoesVistas = []
   const porEstilo = async (estilo) => {
     const enviados = []
+    opcoesVistas.length = 0
     const client = {
       getCredentials: () => ({ meJid: '5511900000002@s.whatsapp.net' }),
       message: {
-        send: async (jid, c) => { enviados.push(c); return { ok: true, id: 'X' } },
+        send: async (jid, c, o) => { enviados.push(c); opcoesVistas.push(o); return { ok: true, id: 'X' } },
         upload: async (buffer, opcoes) => ({ url: 'u', directPath: '/u', mediaKey: 'k', fileSha256: 's', fileEncSha256: 'e', fileLength: buffer.length, mediaKeyTimestamp: 1, mimetype: opcoes.mimetype })
       }
     }
@@ -428,6 +430,7 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     }], deps.clienteEngine, deps)
     return enviados
   }
+  const porEstiloEOpcoes = async (estilo) => ({ enviados: await porEstilo(estilo), opcoes: [...opcoesVistas] })
 
   const completo = await porEstilo('completo')
   check('"completo" embrulha em viewOnce', !!completo[0]?.viewOnceMessageV2)
@@ -462,11 +465,33 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('com o comando de cada opção na linha dela',
     JSON.parse(lista.buttonParamsJson).sections[0].rows[0].id === '/musica x')
 
+  // O NÓ QUE DIZ "ISTO É NATIVE FLOW".
+  //
+  // Conferido na zapo-js instalada: `resolveButtonAddonKindFrom` olha o
+  // `nativeFlowMessage` do NÍVEL PRINCIPAL e não percorre os cards. Com os
+  // botões só dentro deles, o nó <biz> não é anexado ao stanza e o aplicativo
+  // recebe um carrossel que não se anuncia como interativo.
+  const comBiz = await porEstiloEOpcoes('bizNoStanza')
+  check('"bizNoStanza" manda o nó <biz> nas opções de envio',
+    comBiz.opcoes[0]?.customNodes?.[0]?.tag === 'biz', JSON.stringify(comBiz.opcoes[0]))
+  check('e o nó é o native_flow "mixed", como o que a biblioteca monta sozinha',
+    comBiz.opcoes[0].customNodes[0].content[0].content[0].attrs.name === 'mixed')
+
+  const noTopo = await porEstiloEOpcoes('fluxoNoTopo')
+  const interativa = noTopo.enviados[0]?.interactiveMessage
+  check('"fluxoNoTopo" põe um nativeFlowMessage vazio no nível principal',
+    Array.isArray(interativa?.nativeFlowMessage?.buttons) && interativa.nativeFlowMessage.buttons.length === 0,
+    JSON.stringify(interativa?.nativeFlowMessage))
+  check('e os botões de verdade continuam dentro dos cards',
+    interativa.carouselMessage.cards[0].nativeFlowMessage.buttons.length === 1)
+  check('sem mandar nó nenhum na mão — quem monta é a biblioteca',
+    noTopo.opcoes[0] === undefined, JSON.stringify(noTopo.opcoes[0]))
+
   const diagnostico = await porEstilo('diagnóstico')
   const formas = diagnostico.filter((c) => c.viewOnceMessageV2 || c.interactiveMessage).length
-  // Três de carrossel + duas de escolha, e as de escolha mandam dois envios
+  // Cinco de carrossel + duas de escolha, e as de escolha mandam dois envios
   // cada (os cards e a escolha).
-  check('"diagnóstico" manda todas as formas de uma vez', formas === 7, String(formas))
+  check('"diagnóstico" manda todas as formas de uma vez', formas === 9, String(formas))
   check('e cada uma diz o nome dela, para a pessoa poder apontar qual apareceu',
     ['[completo]', '[simples]', '[botoes]', '[menu]'].every((n) => JSON.stringify(diagnostico).includes(n)))
 }
