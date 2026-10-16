@@ -1,4 +1,4 @@
-template tocar-musica v1
+template tocar-musica v2
   nome: Tocar música
   descrição: Escreva o comando com o nome da música e o bot baixa o áudio do YouTube e manda na conversa, com a capa e o nome da faixa. Prefere a versão do YouTube Music quando ela existe, que é a que vem sem palco, sem anúncio e com o nome certo da faixa. Para colar um link em vez de digitar o nome, use o comando de baixar mídia.
   categoria: utilitarios

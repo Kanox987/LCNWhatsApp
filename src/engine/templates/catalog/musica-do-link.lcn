@@ -1,4 +1,4 @@
-template musica-do-link v1
+template musica-do-link v2
   nome: Baixar a música de um link
   descrição: Mande o comando com um link do YouTube e o bot baixa aquela música exata — o áudio e a capa, com o nome da faixa e o artista. É o comando que o botão "Baixar esta" do comando de busca aciona: ali a pessoa escolheu uma capa entre várias, e o link garante que vem a que ela escolheu, não outra parecida.
   categoria: utilitarios
