@@ -71,6 +71,7 @@ export function criarRoteadorWeb (aplicacao) {
   // --- automações (Módulo 1) ---
   roteador.get('/api/v1/meta/automation-editor', () => automacoes().obterMeta())
   roteador.get('/api/v1/automations', () => automacoes().listar())
+  roteador.get('/api/v1/automations/conflicts', () => automacoes().conflitos())
   roteador.post('/api/v1/automations', ({ body }) => automacoes().criar(body))
   roteador.get('/api/v1/automations/:id', ({ params }) => automacoes().obter(params.id))
   roteador.delete('/api/v1/automations/:id', ({ params }) => automacoes().remover(params.id))

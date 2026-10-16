@@ -1,6 +1,7 @@
 import { ErroHttp, resposta } from '../transport.js'
 import { validarAutomacao } from '../validate.js'
 import { criarServicoAutomacoes } from '../automationsService.js'
+import { conflitosDeComando } from '../conflitos.js'
 
 export function registrarRotasAutomations (roteador, db) {
   const servico = criarServicoAutomacoes(db)
@@ -14,6 +15,10 @@ export function registrarRotasAutomations (roteador, db) {
   // da listagem normal — são conteúdo do próprio motor, não algo que o
   // usuário criou ou deveria editar pelo wizard genérico.
   roteador.get('/automations', () => db.prepare('SELECT * FROM automations WHERE native = 0 ORDER BY id').all().map(exporAutomation))
+
+  // Comandos respondidos por mais de uma automação ligada. Ver conflitos.js
+  // para por que isto avisa em vez de bloquear.
+  roteador.get('/automations/conflitos', () => conflitosDeComando(db))
   roteador.post('/automations', ({ body }) => resposta(201, criar(body)))
   roteador.get('/automations/:id', ({ params }) => {
     const row = obterAutomation.get(params.id)

@@ -79,6 +79,7 @@ export const api = {
     logs: (id, lines) => request(withQuery(`/instances/${segment(id)}/logs`, lines ? { lines } : undefined))
   },
   automations: {
+    conflicts: () => request('/automations/conflicts'),
     meta: () => request('/meta/automation-editor'),
     list: () => request('/automations'),
     create: (document) => request('/automations', { method: 'POST', body: document }),

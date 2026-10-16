@@ -81,11 +81,12 @@ async function painelReconfiguracao (automation, { refresh }) {
 }
 
 async function renderList ({ navigate, refresh }) {
-  const [automations, atualizacoes] = await Promise.all([
+  const [automations, atualizacoes, conflitos] = await Promise.all([
     api.automations.list(),
     // Um comando instalado numa versão antiga do template continua
     // funcionando: a lista não pode quebrar por causa de um aviso.
-    api.templates.updates().catch(() => [])
+    api.templates.updates().catch(() => []),
+    api.automations.conflicts().catch(() => [])
   ])
   setPageHeader({
     eyebrow: 'Motor de regras',
@@ -97,6 +98,17 @@ async function renderList ({ navigate, refresh }) {
     return emptyState('Nenhuma automação ainda', 'O assistente conduz do comando até a resposta sem exigir edição de JSON.', button('Criar primeira automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }))
   }
   const pendentePorId = new Map((atualizacoes || []).map((a) => [a.automationId, a]))
+  // DOIS COMANDOS COM A MESMA PALAVRA: os dois respondem, e quem digita recebe
+  // duas respostas sem saber de onde vieram. Nada no sistema impedia, e nada
+  // avisava. Aqui avisa — e não bloqueia, porque a mesma palavra em conversas
+  // diferentes é legítima.
+  const conflitoPorId = new Map()
+  for (const conflito of conflitos || []) {
+    for (const envolvida of conflito.automacoes || []) {
+      const outras = conflito.automacoes.filter((o) => o.automationId !== envolvida.automationId)
+      conflitoPorId.set(envolvida.automationId, { comando: conflito.comando, outras })
+    }
+  }
   return el('div', { className: 'stack' }, automations.map((automation) => {
     const name = automation.draft?.document?.name || automation.id
     const pendente = pendentePorId.get(automation.id)
@@ -175,6 +187,18 @@ async function renderList ({ navigate, refresh }) {
     // os modos novos, o /frase sem os temas. O aviso é aqui, onde a pessoa já
     // está; adotar continua sendo um clique dela, porque regerar o documento
     // descarta edição feita à mão.
+    const conflito = conflitoPorId.get(automation.id)
+    const avisoDeConflito = conflito
+      ? el('div', { className: 'notice notice-warning compact' }, [
+          el('strong', { text: `"${conflito.comando}" é respondido por mais de uma automação` }),
+          el('p', {
+            text: `Também responde: ${conflito.outras.map((o) => `${o.nome} (${o.automationId})`).join(', ')}. ` +
+              'As duas respondem a mesma palavra, e quem digita recebe as duas respostas. ' +
+              'Troque o comando de uma delas em "Configurar", ou desligue a que não serve mais.'
+          })
+        ])
+      : null
+
     const avisoDeVersao = pendente
       ? el('div', { className: 'notice notice-info compact' }, [
           el('strong', { text: `Versão nova deste comando: v${pendente.de} → v${pendente.para}` }),
@@ -191,6 +215,7 @@ async function renderList ({ navigate, refresh }) {
         el('div', {}, [el('p', { className: 'mono overline', text: automation.id }), el('h2', { text: name })]),
         statusAutomation(automation)
       ]),
+      avisoDeConflito,
       avisoDeVersao,
       el('div', { className: 'list-card-meta' }, [
         el('span', { text: automation.activeRevisionId ? `Revisão ativa #${automation.draft?.revision || '—'}` : 'Ainda não publicada' }),

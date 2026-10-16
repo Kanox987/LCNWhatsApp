@@ -91,6 +91,7 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       remover: (kind, id, key) => requisitar('DELETE', `${caminho(`/entities/${encodeURIComponent(kind)}`, id)}/attributes/${encodeURIComponent(key)}`)
     },
     automacoes: {
+      conflitos: () => requisitar('GET', '/automations/conflitos'),
       obterMeta: () => requisitar('GET', '/meta/automation-editor?schemaVersion=1'),
       listar: () => requisitar('GET', '/automations'),
       criar: (documento) => requisitar('POST', '/automations', documento),

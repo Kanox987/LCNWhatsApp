@@ -1,6 +1,6 @@
 template fundo-cor v1
   nome: Pintar o fundo de uma cor
-  descrição: Responda uma foto com o comando e o bot troca o fundo por uma cor só — fundo de estúdio, foto de documento, figurinha com fundo chapado. Escrevendo a cor junto do comando ("/fundo azul", "/fundo #ff0000") ela vale para aquela foto; sozinho, vale a cor configurada.
+  descrição: Responda uma foto com o comando e o bot troca o fundo por uma cor só — fundo de estúdio, foto de documento, figurinha com fundo chapado. Escrevendo a cor junto do comando ("/pintarfundo azul", "/pintarfundo #ff0000") ela vale para aquela foto; sozinho, vale a cor configurada.
   categoria: utilitarios
 
 automação
@@ -39,9 +39,9 @@ automação
       erro: "{{params.errorText}}"
 
 configurável
-  command: texto = "/fundo"
+  command: texto = "/pintarfundo"
     rótulo: Comando
-    ajuda: A palavra que a pessoa digita respondendo uma foto. A cor vem depois — "/fundo branco", "/fundo #0b1e4d".
+    ajuda: A palavra que a pessoa digita respondendo uma foto. A cor vem depois — "/pintarfundo branco", "/pintarfundo #0b1e4d". Não use "/fundo": é o comando que o template de remover fundo já instala, e dois comandos com a mesma palavra respondem os dois.
   conexao: texto = "imagem"
     rótulo: Serviço que troca o fundo
     ajuda: O identificador da conexão, como está na aba Conexões.
