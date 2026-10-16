@@ -281,6 +281,9 @@ function validarResposta (resposta, onde) {
       // Uma LISTA tenta em ordem e fica com a primeira que responder, que é
       // como se declara "o jpeg se der, senão o que vier".
       imagem: imagensDoCard(resposta.imagem, onde),
+      // O título fica no CABEÇALHO do card, acima da imagem; o corpo, abaixo
+      // dela. Separar os dois é o que evita o nome aparecer duas vezes.
+      titulo: typeof resposta.titulo === 'string' && resposta.titulo.trim() ? resposta.titulo : null,
       corpo: exigirTexto(resposta.corpo, `${onde} — o texto de cada card`),
       rodape: typeof resposta.rodape === 'string' ? resposta.rodape : null,
       cabecalho: typeof resposta.cabecalho === 'string' ? resposta.cabecalho : null,

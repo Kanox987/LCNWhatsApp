@@ -447,6 +447,7 @@ export function criarExecutorDeConexao ({
         const valores = { ...item, n: cards.length + 1 }
         cards.push({
           midia: { buffer: achada.buffer, mime: achada.mime, tipo: 'image', nome: `card-${i + 1}.jpg` },
+          titulo: forma.titulo ? escrever(forma.titulo, valores) : null,
           corpo: escrever(forma.corpo, valores),
           rodape: forma.rodape ? escrever(forma.rodape, valores) : null,
           botao: forma.botao

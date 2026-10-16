@@ -386,7 +386,8 @@ export const CONEXOES_PRONTAS = Object.freeze([
             // fora e vai sem ela. É a segunda tentativa, para o dia em que o
             // serviço não conseguir buscar a capa.
             imagem: ['capa', 'capa_youtube'],
-            corpo: '🎵 *{{titulo}}*\n👤 {{autor}}',
+            titulo: '🎵 {{titulo}}',
+            corpo: '👤 {{autor}}',
             rodape: '⏱️ {{duracao_texto}}  ·  👁️ {{visualizacoes}} visualizações',
             cabecalho: '🔎 Achei isto para "{{busca}}":',
             // O botão manda um COMANDO: o id dele é "/play <link daquele

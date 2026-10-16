@@ -146,8 +146,11 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('um card por resultado', r.cards.length === 2, String(r.cards?.length))
   check('o cabeçalho diz o que foi buscado', r.cabecalho === '🔎 Achei isto para "evidencias":', r.cabecalho)
   check('cada card traz a capa de verdade, em bytes', r.cards[0].midia.buffer.toString() === 'capa-a')
-  check('o corpo do card tem o nome e o autor',
-    r.cards[0].corpo.includes('Evidências') && r.cards[0].corpo.includes('Chitãozinho'), r.cards[0].corpo)
+  // O nome no TÍTULO (cabeçalho do card, acima da imagem) e o autor no corpo:
+  // é a divisão que o bot de referência em zapo-js usa, e evita o nome
+  // aparecer duas vezes no mesmo card.
+  check('o título do card é o nome da música', r.cards[0].titulo.includes('Evidências'), r.cards[0].titulo)
+  check('e o corpo traz o autor', r.cards[0].corpo.includes('Chitãozinho'), r.cards[0].corpo)
   check('o rodapé tem a duração', r.cards[0].rodape.includes('4:59'), r.cards[0].rodape)
   // O BOTÃO É O PULO DO GATO: o id dele é o comando que a pessoa teria
   // digitado, com o link DAQUELE card. Sem isso, "baixar o terceiro" exigiria
@@ -341,8 +344,8 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     }
   }
   const cards = [
-    { midia: { buffer: Buffer.from('capa-a'), mime: 'image/jpeg', tipo: 'image', nome: 'a.jpg' }, corpo: '🎵 Evidências', rodape: '4:59', botao: { texto: '⬇️ Baixar esta', comando: '/musica https://y/a' } },
-    { midia: { buffer: Buffer.from('capa-b'), mime: 'image/jpeg', tipo: 'image', nome: 'b.jpg' }, corpo: '🎵 Ao Vivo', rodape: '4:23', botao: { texto: '⬇️ Baixar esta', comando: '/musica https://y/b' } }
+    { midia: { buffer: Buffer.from('capa-a'), mime: 'image/jpeg', tipo: 'image', nome: 'a.jpg' }, titulo: '🎵 Evidências', corpo: '👤 Chitãozinho', rodape: '4:59', botao: { texto: '⬇️ Baixar esta', comando: '/musica https://y/a' } },
+    { midia: { buffer: Buffer.from('capa-b'), mime: 'image/jpeg', tipo: 'image', nome: 'b.jpg' }, titulo: '🎵 Ao Vivo', corpo: '👤 Bruno', rodape: '4:23', botao: { texto: '⬇️ Baixar esta', comando: '/musica https://y/b' } }
   ]
   const deps = {
     mediaRefCache: { resolver: () => null },
@@ -361,19 +364,24 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   }], deps.clienteEngine, deps)
 
   check('as duas capas sobem antes', subidos.length === 2 && subidos[0].opcoes.type === 'image')
-  // DUAS mensagens: o texto que abre e o carrossel. Juntos — o texto num
-  // `body` ao lado do `carouselMessage` — o servidor aceita e NADA aparece na
-  // conversa. Aconteceu em produção.
-  check('o texto da busca abre, em mensagem própria',
-    enviados[0].c?.type === 'text' && enviados[0].c.text === '🔎 Achei isto para "evidencias":', JSON.stringify(enviados[0]?.c))
-  const msg = enviados[1].c
-  const carrossel = msg?.interactiveMessage?.carouselMessage
-  check('e o carrossel vem logo depois', !!carrossel, JSON.stringify(Object.keys(msg || {})))
-  check('sem body junto, que é o que o fazia sumir', msg.interactiveMessage.body === undefined)
+  // UMA mensagem, na forma que outro bot em zapo-js manda em produção: texto
+  // dentro, header junto do body, e tudo embrulhado em viewOnce.
+  check('sai uma mensagem só', enviados.length === 1, String(enviados.length))
+  const embrulho = enviados[0].c
+  check('embrulhada em viewOnce, que é o caminho usual do carrossel', !!embrulho?.viewOnceMessageV2)
+  const interativa = embrulho.viewOnceMessageV2.message.interactiveMessage
+  const carrossel = interativa?.carouselMessage
+  check('com o carrossel dentro', !!carrossel, JSON.stringify(Object.keys(interativa || {})))
+  check('o texto da busca vai no corpo', interativa.body?.text === '🔎 Achei isto para "evidencias":')
+  // O `body` sozinho foi a primeira tentativa, e a mensagem não apareceu. O
+  // que faltava era o header ao lado dele.
+  check('e o corpo vem acompanhado de header, que era o que faltava',
+    interativa.header?.hasMediaAttachment === false, JSON.stringify(interativa.header))
   check('com um card por resultado', carrossel.cards.length === 2)
   check('e a versão de mensagem que o bot de referência manda', carrossel.messageVersion === 1)
+  check('o título do card fica no cabeçalho dele', carrossel.cards[0].header?.title === '🎵 Evidências', carrossel.cards[0].header?.title)
   check('cada card tem a imagem no cabeçalho', carrossel.cards[0].header?.hasMediaAttachment === true && !!carrossel.cards[0].header?.imageMessage)
-  check('e o texto no corpo do card', carrossel.cards[0].body?.text === '🎵 Evidências')
+  check('e o autor no corpo do card', carrossel.cards[0].body?.text === '👤 Chitãozinho')
   const botao = carrossel.cards[0].nativeFlowMessage?.buttons?.[0]
   check('e um botão de resposta rápida', botao?.name === 'quick_reply', JSON.stringify(botao))
   const params = JSON.parse(botao.buttonParamsJson)
@@ -389,7 +397,9 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     getCredentials: () => ({ meJid: '5511900000002@s.whatsapp.net' }),
     message: {
       send: async (jid, c) => {
-        if (c?.interactiveMessage) throw new Error('mensagem interativa recusada')
+        // O aplicativo que recusa interativo recusa também a embrulhada em
+        // viewOnce — é o mesmo tipo de mensagem por dentro.
+        if (c?.interactiveMessage || c?.viewOnceMessageV2) throw new Error('mensagem interativa recusada')
         enviados.push({ jid, c })
         return { ok: true, id: 'X' }
       },
@@ -405,7 +415,7 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     criarExecutorDeConexao: () => ({
       executar: async () => ({
         forma: 'carrossel',
-        cards: [{ midia: { buffer: Buffer.from('c'), mime: 'image/jpeg', tipo: 'image' }, corpo: 'Evidências', rodape: '4:59', botao: { texto: 'x', comando: '/musica https://y/a' } }],
+        cards: [{ midia: { buffer: Buffer.from('c'), mime: 'image/jpeg', tipo: 'image' }, titulo: 'Evidências', corpo: '👤 Chitãozinho', rodape: '4:59', botao: { texto: 'x', comando: '/musica https://y/a' } }],
         cabecalho: '🔎 Achei isto:'
       })
     })
@@ -419,8 +429,9 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   // O texto de abertura já saiu antes; recusado o carrossel, o que falta é a
   // lista escrita — e ela vai.
   check('aplicativo que recusa o interativo ainda recebe a lista',
-    enviados.map((e) => e.c.type).join(',') === 'text,text', JSON.stringify(enviados.map((e) => e.c.type)))
-  check('com o resultado dentro', /Evidências/.test(enviados[1].c.text), enviados[1]?.c?.text)
+    enviados.length === 1 && enviados[0].c.type === 'text', JSON.stringify(enviados.map((e) => e.c.type)))
+  check('com o texto de abertura e o resultado dentro',
+    /Achei isto/.test(enviados[0].c.text) && /Evidências/.test(enviados[0].c.text), enviados[0]?.c?.text)
 }
 
 // --- o vídeo que não é do YouTube Music ----------------------------------

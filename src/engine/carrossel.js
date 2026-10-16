@@ -75,11 +75,14 @@ function montarBotao (botao) {
   }]
 }
 
-export function montarCard (midia, upload, { legenda, rodape, botao } = {}) {
+export function montarCard (midia, upload, { titulo, legenda, rodape, botao } = {}) {
   const campos = midiaDoUpload(midia, upload)
   return {
     header: {
       hasMediaAttachment: true,
+      // O título fica no CABEÇALHO do card, acima da imagem, e é onde o bot de
+      // referência em zapo-js põe o nome de cada item.
+      ...(titulo ? { title: titulo } : {}),
       ...(ehVideo(midia) ? { videoMessage: campos } : { imageMessage: campos })
     },
     // `body` é o texto do card, e é onde a legenda fatiada entra.
@@ -97,22 +100,27 @@ export function montarCard (midia, upload, { legenda, rodape, botao } = {}) {
   }
 }
 
-// SEM `body` AO LADO DO CARROSSEL, de propósito.
+// O CARROSSEL, na forma que outro bot em zapo-js manda em produção.
 //
-// A primeira versão punha o texto da busca num `body` da mensagem interativa, e
-// o resultado foi o pior possível: o servidor aceitou, o comando foi marcado
-// como enviado, e NADA apareceu na conversa. As duas formas que funcionam em
-// produção — a daqui, com os cards de foto, e a do bot de referência — não têm
-// `body` junto de `carouselMessage`.
+// A primeira versão com botão foi aceita pelo servidor e NÃO apareceu na
+// conversa — o modo de falhar que não deixa rastro. A forma daqui agora é a do
+// takeshi-bot (guiireal/takeshi-bot, ramo 9-beta, `src/services/
+// interactiveMessages.js`), que usa a MESMA biblioteca:
 //
-// O texto que abre a busca vai numa mensagem de texto antes, onde ele chega
-// sempre.
+//   - `messageVersion: 1` no carrossel;
+//   - o texto de abertura em `body`, SEMPRE acompanhado de um `header` com
+//     `hasMediaAttachment: false` — era o header que faltava, não o body;
+//   - e o pacote inteiro embrulhado em `viewOnceMessageV2`. O exemplo deles diz
+//     em letras: "viewOnce: true é o caminho usual no carrossel".
 //
-// `messageVersion: 1` também vem do bot de referência, na variante com botão.
-export function montarCarrossel (cards) {
-  return {
-    interactiveMessage: {
-      carouselMessage: { cards, messageVersion: 1 }
-    }
+// O embrulho é OPCIONAL aqui porque o carrossel de fotos do /dow funciona sem
+// ele há semanas, e não se troca o que está provado por simetria.
+export function montarCarrossel (cards, { texto = null, rodape = null, viewOnce = false } = {}) {
+  const interactiveMessage = { carouselMessage: { cards, messageVersion: 1 } }
+  if (texto) {
+    interactiveMessage.body = { text: texto }
+    interactiveMessage.header = { hasMediaAttachment: false }
   }
+  if (rodape) interactiveMessage.footer = { text: rodape }
+  return viewOnce ? { viewOnceMessageV2: { message: { interactiveMessage } } } : { interactiveMessage }
 }

@@ -482,21 +482,14 @@ async function executarChamadaDeConexao (client, comando, deps) {
     const cards = []
     for (const card of resultado.cards || []) {
       const upload = await client.message.upload(card.midia.buffer, { type: 'image', mimetype: card.midia.mime })
-      cards.push(montarCard(card.midia, upload, { legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
+      cards.push(montarCard(card.midia, upload, { titulo: card.titulo, legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
     }
     const abertura = caption || resultado.cabecalho
     try {
-      // O texto ANTES, em mensagem própria: ele diz o que foi buscado, e junto
-      // do carrossel ele some — ver `montarCarrossel`.
-      if (abertura) {
-        await comTimeout(
-          () => enviarERegistrar(client, chatId, { type: 'text', text: abertura }, opcoesDeCitacao(replyTo)),
-          TIMEOUT_ENVIO_MS,
-          `timeout ao abrir o carrossel do comando ${comando.id}`
-        )
-      }
       await comTimeout(
-        () => enviarERegistrar(client, chatId, montarCarrossel(cards)),
+        // Texto dentro, com header, e embrulhado em viewOnce: é a forma que o
+        // takeshi-bot manda em zapo-js e a que renderiza com botão.
+        () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto: abertura, viewOnce: true }), opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS * 4,
         `timeout ao enviar o carrossel do comando ${comando.id}`
       )
@@ -506,9 +499,12 @@ async function executarChamadaDeConexao (client, comando, deps) {
       // texto não é tratamento de erro, é parte do desenho: o conteúdo sempre
       // chega de algum jeito, e aqui ele chega como a lista escrita.
       console.warn(`[engine] Carrossel com botão recusado (${mensagemDoErro(erro)}) — mandando como texto.`)
-      const linhas = (resultado.cards || []).map((c, i) => `*${i + 1}.* ${c.corpo}${c.rodape ? `\n_${c.rodape}_` : ''}`)
+      const linhas = (resultado.cards || []).map((c, i) => `*${i + 1}.* ${c.titulo || ''}\n${c.corpo}${c.rodape ? `\n_${c.rodape}_` : ''}`)
       await comTimeout(
-        () => enviarERegistrar(client, chatId, { type: 'text', text: linhas.join('\n') }, opcoesDeCitacao(replyTo)),
+        () => enviarERegistrar(client, chatId, {
+          type: 'text',
+          text: [abertura, ...linhas].filter(Boolean).join('\n')
+        }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
         `timeout ao mandar a lista do comando ${comando.id}`
       )
