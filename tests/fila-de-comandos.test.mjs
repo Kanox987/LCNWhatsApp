@@ -150,6 +150,76 @@ const adiar = (ms) => new Promise((r) => setTimeout(r, ms))
   check('e o comando longo termina normalmente', ordem.includes('envio:pronto'), ordem.join(' · '))
 }
 
+// --- a espera na fila não conta para o relógio do envio ------------------
+//
+// "Por que as músicas que estou pedindo não estão sendo entregues?" A API
+// entregou todas — o `/jobs` mostrava `pronto` —, e o comando terminava em
+// `outcome_unknown` do nosso lado.
+//
+// Uma das causas: quem envia envolve o envio num relógio de 15 s, e com a fila
+// no meio o tempo PARADO NA FILA entrava nessa conta. Numa rajada, a mensagem
+// era dada como perdida sem o socket ter sido nem tocado. Trocar lentidão por
+// mensagem perdida é pior que a lentidão.
+{
+  const { comTimeout, semContarAEspera } = await import('../src/engine/gatewayExecutor.js')
+  const fila = criarFila({ limite: 1 })
+
+  // Ocupa a única vaga por 80 ms.
+  const ocupando = fila.executar(() => adiar(80))
+
+  // O relógio é de 40 ms e a tarefa só começa depois dos 80 ms de espera. Com
+  // a espera contando, isto estouraria; com o relógio rearmado na hora em que
+  // a vez chega, passa.
+  let resultado = null
+  let erro = null
+  try {
+    resultado = await comTimeout(
+      () => semContarAEspera((sinal) => fila.executar(async () => {
+        sinal()
+        await adiar(5)
+        return 'enviado'
+      })),
+      40,
+      'estourou'
+    )
+  } catch (e) { erro = e }
+  await ocupando
+
+  check('o tempo parado na fila não estoura o relógio do envio', resultado === 'enviado', erro?.message)
+
+  // E o relógio continua valendo para o que demora DE VERDADE depois de
+  // começar: a proteção não pode virar espera infinita.
+  let estourou = null
+  try {
+    await comTimeout(
+      () => semContarAEspera((sinal) => fila.executar(async () => {
+        sinal()
+        await adiar(200)
+        return 'tarde demais'
+      })),
+      40,
+      'estourou de verdade'
+    )
+  } catch (e) { estourou = e }
+  check('mas o envio lento DEPOIS de começar ainda estoura', estourou?.code === 'LCN_TIMEOUT', estourou?.message)
+}
+
+// --- esperar para sempre é pior que esperar demais -----------------------
+//
+// O relógio de quem chamou fica PAUSADO enquanto a tarefa espera vez. Um item
+// esquecido na fila deixaria a resposta pendurada para sempre — então a espera
+// tem teto, e estourá-lo é um erro como outro qualquer.
+{
+  const fila = criarFila({ limite: 1, esperaMaximaMs: 30 })
+  const segurando = fila.executar(() => adiar(120))
+  let erro = null
+  try { await fila.executar(async () => 'nunca chego') } catch (e) { erro = e }
+  check('quem espera demais recebe erro em vez de ficar pendurado', erro?.code === 'LCN_TIMEOUT', erro?.message)
+  check('e o erro diz quanto esperou', /esperou \d+s na fila/.test(erro?.message || ''), erro?.message)
+  await segurando
+  check('a fila continua funcionando depois disso', (await fila.executar(async () => 'ok')) === 'ok')
+}
+
 if (falhas) {
   console.error(`\n${falhas} verificação(ões) falharam`)
   process.exit(1)

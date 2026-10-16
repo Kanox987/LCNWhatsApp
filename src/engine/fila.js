@@ -35,7 +35,12 @@
 // 3,8 GB de RAM com IA do lado desce.
 export const LIMITE_PADRAO = 2
 
-export function criarFila ({ limite = LIMITE_PADRAO, aoMudar = null } = {}) {
+// TETO DA ESPERA. Enquanto uma tarefa espera vez, o relógio de quem chamou
+// fica pausado — então a espera precisa acabar de algum jeito. Três minutos é
+// muito mais do que qualquer rajada honesta leva, e ainda assim é finito.
+export const ESPERA_MAXIMA_MS = 180000
+
+export function criarFila ({ limite = LIMITE_PADRAO, aoMudar = null, esperaMaximaMs = ESPERA_MAXIMA_MS } = {}) {
   const teto = Number.isFinite(limite) && limite >= 1 ? Math.floor(limite) : LIMITE_PADRAO
   const esperando = []
   let emCurso = 0
@@ -44,7 +49,9 @@ export function criarFila ({ limite = LIMITE_PADRAO, aoMudar = null } = {}) {
 
   function seguir () {
     if (emCurso >= teto || !esperando.length) return
-    const { tarefa, resolver, rejeitar } = esperando.shift()
+    const item = esperando.shift()
+    clearTimeout(item.relogio)
+    const { tarefa, resolver, rejeitar } = item
     emCurso++
     avisar()
     Promise.resolve()
@@ -62,7 +69,20 @@ export function criarFila ({ limite = LIMITE_PADRAO, aoMudar = null } = {}) {
     // podendo esperar o fim e tratar o erro como se não houvesse fila.
     executar (tarefa) {
       return new Promise((resolver, rejeitar) => {
-        esperando.push({ tarefa, resolver, rejeitar })
+        const item = { tarefa, resolver, rejeitar }
+        // Esperar para sempre é o único jeito de esta fila virar um bug pior
+        // que o que ela resolve: quem chamou tem o relógio pausado enquanto
+        // espera, e um item esquecido aqui deixaria a resposta pendurada.
+        item.relogio = setTimeout(() => {
+          const posicao = esperando.indexOf(item)
+          if (posicao === -1) return
+          esperando.splice(posicao, 1)
+          const erro = new Error(`esperou ${Math.round(esperaMaximaMs / 1000)}s na fila de envio e desisti`)
+          erro.code = 'LCN_TIMEOUT'
+          rejeitar(erro)
+        }, esperaMaximaMs)
+        item.relogio.unref?.()
+        esperando.push(item)
         // Avisa DEPOIS de tentar seguir: quando há vaga, a tarefa sai da fila
         // na mesma volta e ninguém esperou nada. Avisar antes faria o caminho
         // feliz anunciar uma espera que não existiu.

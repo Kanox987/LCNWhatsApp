@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks'
 import * as enviadas from '../enviadas.js'
 import { criarFila } from './fila.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
@@ -40,17 +41,55 @@ function erroIncerto (mensagem) {
   return erro
 }
 
-function comTimeout (operacao, timeoutMs, mensagem) {
+// O RELÓGIO DE QUEM ESPERA, e o lugar onde ele pode ser rearmado.
+//
+// `comTimeout` existe para dizer "esta mídia tem 15 s para sair". Com a fila
+// do socket no meio, o tempo PARADO NA FILA entrava nessa conta — numa rajada,
+// a mensagem era dada como perdida sem o socket ter sido nem tocado, e o
+// comando terminava em "não sei se foi". Trocar lentidão por mensagem perdida
+// é pior do que a lentidão.
+//
+// O contexto assíncrono carrega o rearme até lá dentro, e a fila o aciona no
+// instante em que a vez chega. Sem isso, cada um dos 28 pontos de envio teria
+// que repassar o rearme na mão.
+const relogioDoEnvio = new AsyncLocalStorage()
+
+export function comTimeout (operacao, timeoutMs, mensagem) {
   let timer
-  const timeout = new Promise((resolve, reject) => {
+  let rejeitar = null
+  const armar = () => {
+    clearTimeout(timer)
     timer = setTimeout(() => {
       const erro = new Error(mensagem)
       erro.code = 'LCN_TIMEOUT'
-      reject(erro)
+      rejeitar?.(erro)
     }, timeoutMs)
+  }
+  // PAUSAR é limpar o relógio enquanto a tarefa espera vez na fila. Rearmar,
+  // quando a vez chega, faz os 15 s valerem para o envio de verdade.
+  //
+  // Pausado para sempre seria espera infinita — e essa porta está fechada do
+  // outro lado: a fila tem teto de espera própria e recusa o que passa dele.
+  const pausar = () => clearTimeout(timer)
+  const timeout = new Promise((resolve, reject) => {
+    rejeitar = reject
+    armar()
   })
-  return Promise.race([Promise.resolve().then(operacao), timeout])
-    .finally(() => clearTimeout(timer))
+  return Promise.race([
+    relogioDoEnvio.run({ armar, pausar }, () => Promise.resolve().then(operacao)),
+    timeout
+  ]).finally(() => clearTimeout(timer))
+}
+
+// Roda a tarefa dando a ela um jeito de dizer "agora eu COMECEI de verdade" —
+// e quem estiver cronometrando por fora rearma o relógio nesse instante.
+export function semContarAEspera (tarefa) {
+  const relogio = relogioDoEnvio.getStore()
+  // O relógio para ANTES de entrar na fila e volta a contar quando a tarefa
+  // diz que começou. Sem a pausa, ele dispararia no meio da espera — que é
+  // exatamente o que fazia a música sumir numa rajada.
+  relogio?.pausar?.()
+  return tarefa(() => relogio?.armar?.())
 }
 
 // Único placeholder suportado (não é um motor de template genérico): o
@@ -135,8 +174,22 @@ function socket () {
   return filaDoSocket
 }
 
+// A ESPERA NA FILA NÃO CONTA PARA O RELÓGIO DO ENVIO.
+//
+// Quem chama envolve o envio num `comTimeout` — "15 s para mandar esta
+// mídia". Com a fila no meio, o tempo parado na fila entrava nessa conta: numa
+// rajada, a mensagem era dada como perdida por timeout sem o socket ter sido
+// nem tocado, e o comando terminava em "não sei se foi". Era trocar lentidão
+// por mensagem perdida, que é pior.
+//
+// Então o relógio de quem chamou é PAUSADO enquanto a tarefa espera vez: o
+// `comTimeout` recebe uma função que só começa a contar quando a fila libera.
+// Ver `pausarRelogioAte` logo abaixo.
 async function enviarERegistrar (client, destino, conteudo, opcoes) {
-  const resultado = await socket().executar(() => client.message.send(destino, conteudo, opcoes))
+  const resultado = await semContarAEspera((sinal) => socket().executar(() => {
+    sinal()
+    return client.message.send(destino, conteudo, opcoes)
+  }))
   enviadas.registrar(resultado?.id)
   return resultado
 }
@@ -144,7 +197,10 @@ async function enviarERegistrar (client, destino, conteudo, opcoes) {
 // Subir mídia é a parte CARA: cada foto do carrossel é um upload, e cinco
 // buscas ao mesmo tempo eram vinte e cinco subindo juntas pela mesma conexão.
 async function subirMidia (client, buffer, opcoes) {
-  return socket().executar(() => client.message.upload(buffer, opcoes))
+  return semContarAEspera((sinal) => socket().executar(() => {
+    sinal()
+    return client.message.upload(buffer, opcoes)
+  }))
 }
 
 function opcoesDeCitacao (replyTo) {
