@@ -230,7 +230,15 @@ function referenciaDaPropria (evento) {
   const propria = evento?.providerRef
   if (!propria?.id) return null
   return {
-    remoteJid: propria.remoteJid || evento.chat?.id,
+    // A CONVERSA MANDA, não o `remoteJid` da chave.
+    //
+    // Medido no sistema do dono: a mensagem do toque no botão chega com
+    // `remoteJid: "122415745073189@lid"` e `remoteJidAlt:
+    // "628977791132@s.whatsapp.net"`. A resposta sai para a conversa — a
+    // segunda forma —, e citar a primeira é citar uma mensagem de OUTRO
+    // endereço: o WhatsApp não acha, e descarta a citação sem dizer nada.
+    // Foi o "agora não marcou mensagem nenhuma".
+    remoteJid: evento.chat?.id || propria.remoteJid,
     id: propria.id,
     fromMe: propria.fromMe === true,
     ...(propria.participant ? { participant: propria.participant } : {})
@@ -250,7 +258,9 @@ function referenciaDoLink (evento) {
   const propria = evento?.providerRef
   if (!propria?.id) return null
   return {
-    remoteJid: propria.remoteJid || evento.chat?.id,
+    // Mesma razão de `referenciaDaPropria`: a citação vive na CONVERSA para
+    // onde a resposta vai, e o `remoteJid` da chave pode ser a forma @lid.
+    remoteJid: evento.chat?.id || propria.remoteJid,
     id: propria.id,
     fromMe: propria.fromMe === true,
     ...(propria.participant ? { participant: propria.participant } : {})

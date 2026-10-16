@@ -673,6 +673,73 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     r.descricao === '🎵 Uma música\n⏱️ 1:05', JSON.stringify(r.descricao))
 }
 
+// --- a citação vive na conversa para onde a resposta vai -----------------
+//
+// Medido no sistema do dono: a mensagem do toque no botão chega com
+//
+//   providerRef: { remoteJid: "122415745073189@lid",
+//                  remoteJidAlt: "628977791132@s.whatsapp.net" }
+//
+// e a resposta sai para a CONVERSA, que é a segunda forma. Citar a primeira é
+// citar uma mensagem de outro endereço: o WhatsApp não acha e descarta a
+// citação sem dizer nada. Foi o "agora não marcou mensagem nenhuma".
+{
+  const { abrirBanco } = await import('../src/engine/server/db.js')
+  const { criarApi } = await import('../src/engine/server/api.js')
+  const { criarServicoAutomacoes } = await import('../src/engine/server/automationsService.js')
+  const { avaliarEvento } = await import('../src/engine/server/evaluator.js')
+
+  const db = abrirBanco(':memory:')
+  criarApi(db)
+  const agora = new Date().toISOString()
+  db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p', 'Pool', agora, agora)
+  const documento = {
+    schemaVersion: 1,
+    enabled: true,
+    name: 'Música por link',
+    scope: { include: [{ kind: 'everywhere' }], exclude: [] },
+    inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
+    responder: { strategy: 'weighted_rendezvous', poolId: 'p' },
+    flow: {
+      nodes: [
+        { id: 'g', type: 'trigger.command', config: { command: '/musica', match: 'exact_or_args', allowFrom: 'any' } },
+        {
+          id: 'c',
+          type: 'action.connection.call',
+          config: { connectionRef: 'midia', function: 'musica', inputs: { url: '{{message.args}}' }, quoteFrom: 'mensagem' }
+        }
+      ],
+      edges: [{ from: 'g', to: 'c', on: 'matched' }]
+    }
+  }
+  criarServicoAutomacoes(db).criarEPublicar({ document: { ...documento, id: 'musica' } })
+  db.prepare("UPDATE automations SET deployment_mode = 'live' WHERE id = 'musica'").run()
+
+  const r = avaliarEvento(db, {
+    provider: 'zapo',
+    accountId: 'conta',
+    eventId: 'conta:c:s:toque',
+    occurredAt: agora,
+    replay: false,
+    chat: { id: '628977791132@s.whatsapp.net', kind: 'direct' },
+    sender: { id: '628977791132@s.whatsapp.net', authoredBySelf: false, authoredByBot: false },
+    message: {
+      kind: 'text',
+      text: '/musica https://y/abc',
+      // O toque responde o carrossel: é por isso que não dá para usar a citada.
+      quotedRef: { provider: 'zapo', id: 'CARROSSEL' }
+    },
+    // A chave vem na forma @lid; a conversa, na forma de telefone.
+    providerRef: { provider: 'zapo', remoteJid: '122415745073189@lid', id: 'TOQUE', fromMe: false }
+  })
+  const cmd = (r.results || []).flatMap((x) => x.commands || [])[0]
+  check('a resposta marca a mensagem do toque, não o carrossel',
+    cmd?.payload?.replyTo?.id === 'TOQUE', JSON.stringify(cmd?.payload?.replyTo))
+  check('e a citação aponta para a CONVERSA, não para o @lid da chave',
+    cmd?.payload?.replyTo?.remoteJid === '628977791132@s.whatsapp.net', cmd?.payload?.replyTo?.remoteJid)
+  db.close()
+}
+
 // --- os comandos no catálogo ---------------------------------------------
 {
   const catalogo = carregarCatalogo()
