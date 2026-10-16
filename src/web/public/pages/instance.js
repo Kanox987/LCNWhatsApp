@@ -128,13 +128,15 @@ function optimizationCard (instanceId, optimization) {
   const download = el('input', { type: 'text', value: formatBandwidth(optimization.bandwidthLimit?.downloadBytesPerSecond), placeholder: '500 KB/s' })
   const upload = el('input', { type: 'text', value: formatBandwidth(optimization.bandwidthLimit?.uploadBytesPerSecond), placeholder: 'sem limite' })
   const quarantine = el('input', { type: 'number', min: '1', step: '1', value: optimization.quarantineThreshold })
+  const simultaneos = el('input', { type: 'number', min: '1', step: '1', value: optimization.comandosSimultaneos ?? 2 })
   const formMessage = el('div')
   const submit = button('Salvar otimização', { variant: 'primary', type: 'submit' })
   const form = el('form', { className: 'stack-lg' }, [
     el('div', { className: 'form-grid' }, [
       field('Limite de download', download, 'Velocidade máxima recebida por esta instância. Exemplos: 500 KB/s, 2 MB/s ou sem limite.'),
       field('Limite de upload', upload, 'Velocidade máxima enviada por esta instância. Use as mesmas unidades ou escreva sem limite.'),
-      field('Limiar de quarentena', quarantine, 'Quantas falhas de conexão seguidas até a instância parar de tentar reconectar sozinha.')
+      field('Limiar de quarentena', quarantine, 'Quantas falhas de conexão seguidas até a instância parar de tentar reconectar sozinha.'),
+      field('Comandos ao mesmo tempo', simultaneos, 'Quantos comandos este número executa em paralelo. O que eles disputam é a conexão com o WhatsApp, que é uma só: sem limite, uma rajada de buscas sobe dezenas de fotos de uma vez e os envios começam a estourar o tempo. 2 é o padrão; máquina folgada aguenta mais.')
     ]),
     el('div', { className: 'readonly-box' }, [
       el('div', {}, [el('span', { text: 'Memória' }), el('strong', { text: optimization.resources?.memory || 'não definida' })]),
@@ -150,18 +152,23 @@ function optimizationCard (instanceId, optimization) {
     try {
       const threshold = Number(quarantine.value)
       if (!Number.isInteger(threshold) || threshold < 1) throw new Error('O limiar de quarentena deve ser um número inteiro a partir de 1.')
+      const paralelos = Number(simultaneos.value)
+      // Zero trancaria a fila inteira e o bot ficaria mudo sem nada no log.
+      if (!Number.isInteger(paralelos) || paralelos < 1) throw new Error('Comandos ao mesmo tempo deve ser um número inteiro a partir de 1.')
       const body = {
         bandwidthLimit: {
           downloadBytesPerSecond: parseBandwidth(download.value),
           uploadBytesPerSecond: parseBandwidth(upload.value)
         },
-        quarantineThreshold: threshold
+        quarantineThreshold: threshold,
+        comandosSimultaneos: paralelos
       }
       setBusy(submit, true, 'Salvando…')
       const saved = await api.instances.updateOptimization(instanceId, body)
       download.value = formatBandwidth(saved.bandwidthLimit.downloadBytesPerSecond)
       upload.value = formatBandwidth(saved.bandwidthLimit.uploadBytesPerSecond)
       quarantine.value = saved.quarantineThreshold
+      simultaneos.value = saved.comandosSimultaneos
       notify('Controles de otimização atualizados.')
     } catch (error) {
       formMessage.replaceChildren(errorState(error))

@@ -68,6 +68,9 @@ function unidadeDa (instancia) {
 }
 
 const BANDWIDTH_PADRAO = { downloadBytesPerSecond: 0, uploadBytesPerSecond: 0 }
+// Dois comandos ao mesmo tempo. O recurso disputado é a conexão com o
+// WhatsApp; ver engine/fila.js para por que não é um.
+const COMANDOS_SIMULTANEOS_PADRAO = 2
 const QUARENTENA_PADRAO = 15
 const FORMATO_ID = /^wa-\d{6,}$/
 
@@ -530,6 +533,10 @@ export function criarInstanceService ({
     const config = lerJson(caminhoConfig(instancia)) || {}
     return {
       bandwidthLimit: { ...BANDWIDTH_PADRAO, ...(config.hardware?.bandwidthLimit || {}) },
+      // QUANTOS COMANDOS AO MESMO TEMPO. O recurso disputado é a conexão com o
+      // WhatsApp, que é uma só: sem limite, uma rajada de buscas sobe dezenas
+      // de capas de uma vez e o socket estoura o tempo. Ver engine/fila.js.
+      comandosSimultaneos: config.hardware?.comandosSimultaneos ?? COMANDOS_SIMULTANEOS_PADRAO,
       quarantineThreshold: config.confiabilidade?.falhasConsecutivasParaQuarentena ?? QUARENTENA_PADRAO,
       resources: instancia.resources ?? { memory: null, cpus: null }
     }
@@ -556,6 +563,14 @@ export function criarInstanceService ({
       }
       saida.quarantineThreshold = patch.quarantineThreshold
     }
+    if (patch.comandosSimultaneos !== undefined) {
+      // Zero trancaria a fila inteira; sem teto porque máquina folgada é caso
+      // real — padrão sensato sim, teto no código não.
+      if (!Number.isInteger(patch.comandosSimultaneos) || patch.comandosSimultaneos < 1) {
+        throw new Error('comandosSimultaneos deve ser um inteiro >= 1.')
+      }
+      saida.comandosSimultaneos = patch.comandosSimultaneos
+    }
     return saida
   }
 
@@ -571,6 +586,9 @@ export function criarInstanceService ({
         ...config.hardware.bandwidthLimit,
         ...Object.fromEntries(Object.entries(mudancas.bandwidthLimit).filter(([, v]) => v !== undefined))
       }
+    }
+    if (mudancas.comandosSimultaneos !== undefined) {
+      config.hardware.comandosSimultaneos = mudancas.comandosSimultaneos
     }
     if (mudancas.quarantineThreshold !== undefined) {
       config.confiabilidade = { ...config.confiabilidade, falhasConsecutivasParaQuarentena: mudancas.quarantineThreshold }
