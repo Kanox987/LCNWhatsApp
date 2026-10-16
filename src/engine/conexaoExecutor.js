@@ -468,9 +468,14 @@ export function criarExecutorDeConexao ({
     // A ordem declarada, quando existe: a capa antes da música, por exemplo.
     // O que não está na lista vai para o fim, na ordem em que veio.
     if (funcao.resposta.ordemDosTipos) {
+      // A declaração fala a língua de quem declara ("foto", "áudio"); a mídia
+      // já está traduzida para a do WhatsApp. A tradução acontece aqui, na
+      // hora de usar — guardá-la traduzida fazia a conexão não poder ser
+      // gravada de novo.
+      const ordem = funcao.resposta.ordemDosTipos.map((t) => TIPOS_DE_ENVIO[t] || t)
       const posicao = (m) => {
-        const i = funcao.resposta.ordemDosTipos.indexOf(m.tipo)
-        return i === -1 ? funcao.resposta.ordemDosTipos.length : i
+        const i = ordem.indexOf(m.tipo)
+        return i === -1 ? ordem.length : i
       }
       buscados.midias = buscados.midias
         .map((m, i) => ({ m, i }))

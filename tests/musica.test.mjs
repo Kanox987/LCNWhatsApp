@@ -55,7 +55,10 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('musica pede modo musica por padrão', musica.entradas.find((e) => e.nome === 'modo').padrao === 'musica')
   // A capa antes do áudio: o serviço entrega na ordem do disco (01 áudio, 02
   // capa) e a conversa quer o contrário.
-  check('a capa sai antes do áudio', JSON.stringify(musica.resposta.ordemDosTipos) === '["image","audio"]',
+  // Guardado COMO SE DECLARA, não como o WhatsApp chama: validar de novo tem
+  // que dar o mesmo resultado, e guardar o traduzido fazia a gravação seguinte
+  // da conexão ser recusada com "tipo desconhecido: image".
+  check('a capa sai antes do áudio', JSON.stringify(musica.resposta.ordemDosTipos) === '["foto","áudio"]',
     JSON.stringify(musica.resposta.ordemDosTipos))
   check('e a legenda traz faixa, artista e duração',
     /faixa/.test(musica.resposta.modeloDaDescricao) && /artista/.test(musica.resposta.modeloDaDescricao) &&
@@ -80,6 +83,28 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     /^\/\w+ \{\{url\}\}$/.test(buscarFn.resposta.botao.comando), buscarFn.resposta.botao?.comando)
   check('no máximo dez cards, que é o teto do WhatsApp', buscarFn.resposta.limite <= 10, String(buscarFn.resposta.limite))
   check('buscar lê o erro do campo do FastAPI', buscarFn.resposta.campoDoErro === 'detail')
+}
+
+// --- validar duas vezes tem que dar o mesmo resultado ---------------------
+//
+// Aconteceu em produção: a ordem de envio era guardada TRADUZIDA ("image"), e
+// a gravação seguinte da conexão — qualquer uma, por qualquer motivo — era
+// recusada com "tipo desconhecido: image". A tela ficava sem saída para uma
+// conexão que o próprio sistema tinha escrito.
+{
+  const umaVez = validarConfiguracao(MIDIA.config)
+  const duasVezes = validarConfiguracao(umaVez)
+  check('validar a declaração de novo não muda nada',
+    JSON.stringify(umaVez) === JSON.stringify(duasVezes))
+  // E a forma traduzida, que ficou gravada antes da correção, ainda entra.
+  const comTraduzido = validarConfiguracao({
+    ...MIDIA.config,
+    funcoes: MIDIA.config.funcoes.map((f) => f.nome !== 'musica'
+      ? f
+      : { ...f, resposta: { ...f.resposta, ordemDosTipos: ['image', 'audio'] } })
+  })
+  check('o que já estava gravado traduzido volta ao nome de declaração',
+    JSON.stringify(comTraduzido.funcoes.find((f) => f.nome === 'musica').resposta.ordemDosTipos) === '["foto","áudio"]')
 }
 
 // --- a forma "lista", validada --------------------------------------------

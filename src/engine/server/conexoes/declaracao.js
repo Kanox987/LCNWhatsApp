@@ -365,17 +365,30 @@ function validarResposta (resposta, onde) {
     // o contrário: a capa com a legenda e, logo abaixo, a música. Quem decide
     // isso é quem monta a entrega, não quem gravou os arquivos.
     ordemDosTipos: Array.isArray(resposta.ordemDosTipos) && resposta.ordemDosTipos.length
-      ? resposta.ordemDosTipos.map((tipo) => {
-          if (!Object.hasOwn(TIPOS_DE_ENVIO, tipo)) {
-            throw new ErroDeDeclaracao(
-              `${onde}: tipo desconhecido na ordem de envio: "${tipo}". Use: ${Object.keys(TIPOS_DE_ENVIO).join(', ')}.`
-            )
-          }
-          return TIPOS_DE_ENVIO[tipo]
-        })
+      ? resposta.ordemDosTipos.map((tipo) => tipoDeEnvioValidado(tipo, onde))
       : null,
     campoDoErro: resposta.campoDoErro ? String(resposta.campoDoErro) : null
   }
+}
+
+// O tipo de envio escrito COMO SE DECLARA, e não como o WhatsApp o chama.
+//
+// A tradução para `image`/`audio` acontece na hora de usar, nunca aqui. Guardar
+// o traduzido quebrava a regra que vale para toda esta validação: validar duas
+// vezes tem que dar o mesmo resultado. Guardado "image", a próxima gravação da
+// conexão — qualquer uma, por qualquer motivo — era recusada com "tipo
+// desconhecido: image", e a tela ficava sem saída. Aconteceu em produção.
+//
+// A forma já traduzida é ACEITA na entrada, e volta para o nome de declaração:
+// é o que estava gravado antes desta correção, e recusar agora trancaria quem
+// já tem a conexão salva.
+function tipoDeEnvioValidado (tipo, onde) {
+  if (Object.hasOwn(TIPOS_DE_ENVIO, tipo)) return tipo
+  const deVolta = Object.keys(TIPOS_DE_ENVIO).find((nome) => TIPOS_DE_ENVIO[nome] === tipo)
+  if (deVolta) return deVolta
+  throw new ErroDeDeclaracao(
+    `${onde}: tipo desconhecido na ordem de envio: "${tipo}". Use: ${Object.keys(TIPOS_DE_ENVIO).join(', ')}.`
+  )
 }
 
 // Os candidatos a imagem de um card, sempre como lista — um nome de campo ou
