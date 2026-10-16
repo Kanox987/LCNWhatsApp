@@ -21,6 +21,7 @@ export function criarRoteadorWeb (aplicacao) {
   const execucoes = () => aplicacao.motor.execucoes
   const entidades = () => aplicacao.motor.entidades
   const meta = () => aplicacao.motor.meta
+  const retencao = () => aplicacao.motor.retencao
   const templates = () => aplicacao.motor.templates
 
   // Saúde do BFF em si + do motor por trás — nunca lança 500 só porque o
@@ -180,6 +181,11 @@ export function criarRoteadorWeb (aplicacao) {
   // --- execuções (Módulo 2, histórico/erros pro painel) ---
   roteador.get('/api/v1/executions', ({ query }) => execucoes().listar(queryObjeto(query)))
   roteador.get('/api/v1/executions/:runId', ({ params }) => execucoes().obter(params.runId))
+
+  // --- retenção: por quanto tempo o histórico de execução fica guardado ---
+  roteador.get('/api/v1/retention', () => retencao().obter())
+  roteador.put('/api/v1/retention', ({ body }) => retencao().salvar(body?.horas))
+  roteador.post('/api/v1/retention/sweep', ({ body }) => retencao().varrer(body))
 
   // --- variáveis (Parte C, Módulo 1) ---
   roteador.get('/api/v1/meta/variables', () => meta().obterVariaveis())

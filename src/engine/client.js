@@ -69,6 +69,11 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
     meta: {
       obterVariaveis: () => requisitar('GET', '/meta/variables')
     },
+    retencao: {
+      obter: () => requisitar('GET', '/retencao'),
+      salvar: (horas) => requisitar('PUT', '/retencao', { horas }),
+      varrer: (corpo) => requisitar('POST', '/retencao/varrer', corpo || {})
+    },
     donos: {
       listar: () => requisitar('GET', '/owners'),
       adicionar: (contactId) => requisitar('POST', '/owners', { contactId }),
@@ -148,6 +153,7 @@ export const saude = clientePadrao.saude
 export const eventos = clientePadrao.eventos
 export const execucoes = clientePadrao.execucoes
 export const meta = clientePadrao.meta
+export const retencao = clientePadrao.retencao
 export const entidades = clientePadrao.entidades
 export const automacoes = clientePadrao.automacoes
 export const templates = clientePadrao.templates

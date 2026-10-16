@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { abrirBanco } from './db.js'
 import { fecharPendentesAntigos } from './evaluator.js'
+import { iniciarVarredura } from './retencao.js'
 import { criarApi } from './api.js'
 import { iniciarTransport } from './transport.js'
 import { ARQ_DB, ARQ_PID_ENGINE, PASTA_RUN, SOCKET_PATH } from '../paths.js'
@@ -27,6 +28,14 @@ async function main () {
   // Deixá-lo assim é o motor mentindo que algo ainda está acontecendo.
   const fechados = fecharPendentesAntigos(db)
   if (fechados) console.log(`[engine] ${fechados} comando(s) pendente(s) antigo(s) foram fechados`)
+  // A retenção varre na subida e de hora em hora. Na subida porque é quando o
+  // motor acabou de atualizar e pode estar vindo de dias parado; depois, para
+  // o banco não crescer sem ninguém pedir nada.
+  //
+  // DEPOIS de fechar os pendentes antigos, de propósito: a varredura não
+  // encosta em comando pendente, e fechar primeiro é o que deixa o comando de
+  // ontem caber na passada de hoje.
+  const varredura = iniciarVarredura(db)
   let transport
   try {
     transport = await iniciarTransport(criarApi(db), { socketPath: SOCKET_PATH })
@@ -42,6 +51,7 @@ async function main () {
     if (encerrando) return
     encerrando = true
     try {
+      varredura.parar()
       await transport.fechar()
       db.close()
       removerPidProprio()

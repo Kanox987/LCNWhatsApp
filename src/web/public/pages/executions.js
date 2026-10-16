@@ -1,5 +1,5 @@
 import { api } from '../api.js'
-import { badge, button, el, emptyState, errorState, field, formatDate, loading, setBusy, setPageHeader } from '../ui.js'
+import { badge, button, el, emptyState, errorState, field, formatDate, loading, notify, setBusy, setPageHeader } from '../ui.js'
 
 const STATUS = {
   matched_shadow: ['Correspondência em sombra', 'info'],
@@ -60,6 +60,91 @@ function detailPanel (run, close) {
   ])
 }
 
+function milhar (n) {
+  return Number(n || 0).toLocaleString('pt-BR')
+}
+
+function formatarBytes (n) {
+  const mb = Number(n || 0) / 1024 / 1024
+  return `${mb.toFixed(1).replace('.', ',')} MB`
+}
+
+// POR QUANTO TEMPO O HISTÓRICO FICA, configurável aqui.
+//
+// O dono pediu em uma frase — "msg com mais de 72h vai de F" — e o motivo
+// estava na tela: o banco passou de 450 mil execuções, quase todas "não
+// casou", e ninguém abre a Execuções para ver anteontem. Fica nesta aba porque
+// é o histórico DESTA tela que a janela apaga; configuração que mora longe do
+// que ela afeta é configuração que ninguém encontra.
+//
+// Pelo painel, e não por arquivo, pelo mesmo motivo de sempre: quem aluga o
+// sistema não tem terminal.
+function painelDeRetencao (estado, recarregar) {
+  const horas = el('input', { type: 'number', min: '0', step: '1', value: String(estado.horas) })
+  const compactar = el('input', { type: 'checkbox' })
+  const resumo = el('p', { className: 'muted' })
+  const salvar = button('Salvar a janela', { variant: 'primary' })
+  const limpar = button('Limpar agora')
+
+  function mostrar (dados) {
+    const total = dados.total || {}
+    const vencidos = dados.vencidos || {}
+    resumo.textContent = dados.horas
+      ? `Guardado agora: ${milhar(total.execucoes)} execuções, ${milhar(total.eventos)} mensagens e ` +
+        `${milhar(total.comandos)} comandos. Fora da janela: ${milhar(vencidos.execucoes)} execuções, ` +
+        `${milhar(vencidos.eventos)} mensagens e ${milhar(vencidos.comandos)} comandos.`
+      : `Nada é apagado: ${milhar(total.execucoes)} execuções, ${milhar(total.eventos)} mensagens e ` +
+        `${milhar(total.comandos)} comandos guardados para sempre.`
+  }
+  mostrar(estado)
+
+  salvar.addEventListener('click', async () => {
+    setBusy(salvar, true, 'Salvando…')
+    try {
+      const salvo = await api.retention.save(Number(horas.value))
+      mostrar(salvo)
+      notify(salvo.horas ? `Histórico guardado por ${salvo.horas}h.` : 'Histórico guardado para sempre.')
+    } catch (error) {
+      notify(error.message, 'danger')
+    } finally {
+      setBusy(salvar, false)
+    }
+  })
+
+  limpar.addEventListener('click', async () => {
+    setBusy(limpar, true, 'Limpando…')
+    try {
+      const feito = await api.retention.sweep({ compactar: compactar.checked })
+      mostrar(feito)
+      const quanto = feito.apagado || {}
+      notify(
+        `Apagados ${milhar(quanto.execucoes)} execuções, ${milhar(quanto.eventos)} mensagens e ` +
+        `${milhar(quanto.comandos)} comandos` +
+        (feito.disco ? `, e o banco devolveu ${formatarBytes(feito.disco.liberado)}.` : '.')
+      )
+      await recarregar()
+    } catch (error) {
+      notify(error.message, 'danger')
+    } finally {
+      setBusy(limpar, false)
+    }
+  })
+
+  return el('details', { className: 'card' }, [
+    el('summary', { text: estado.horas ? `Histórico guardado por ${estado.horas}h` : 'Histórico guardado para sempre' }),
+    el('div', { className: 'stack' }, [
+      field('Janela, em horas', horas, 'O que for mais velho que isso é apagado — execuções, mensagens recebidas e comandos já resolvidos. 0 guarda para sempre. A varredura roda ao subir o motor e de hora em hora.'),
+      resumo,
+      el('label', { className: 'switch-row' }, [compactar, el('span', {}, [
+        el('strong', { text: 'Devolver o disco também' }),
+        el('small', { text: 'Reescreve o banco para ele encolher de verdade. Vale depois de uma limpeza grande; nas seguintes não tem o que devolver.' })
+      ])]),
+      el('div', { className: 'filter-bar' }, [salvar, limpar]),
+      el('p', { className: 'muted', text: 'Comando ainda pendente nunca é apagado: é dele que uma cadeia de chamadas depende para retomar. A mensagem recebida também sai, e com ela a trava que impede o mesmo evento de ser executado duas vezes — vale dentro da janela.' })
+    ])
+  ])
+}
+
 export async function renderExecutions ({ refresh }) {
   setPageHeader({
     eyebrow: 'Observabilidade',
@@ -67,8 +152,11 @@ export async function renderExecutions ({ refresh }) {
     description: 'Investigue correspondências, respostas enviadas e falhas registradas pelo motor.',
     actions: [button('Atualizar', { onClick: refresh })]
   })
-  const [automations, initial] = await Promise.all([
+  const [automations, retention, initial] = await Promise.all([
     api.automations.list(),
+    // Falhar a tela inteira porque a retenção não respondeu seria trocar o
+    // instrumento pelo acessório: sem ela, a Execuções continua servindo.
+    api.retention.get().catch(() => null),
     // A primeira carga precisa bater com o filtro que o select mostra. Pedir
     // tudo aqui e dizer "O que aconteceu" na tela seria a tela descrevendo
     // errado o que está mostrando.
@@ -195,6 +283,9 @@ export async function renderExecutions ({ refresh }) {
     }
   })
   renderList()
+  // `append(null)` escreveria a palavra "null" na tela — o DOM converte para
+  // texto em vez de ignorar, diferente do `el()` daqui.
+  if (retention) root.append(painelDeRetencao(retention, refresh))
   root.append(form, el('div', { className: 'execution-layout' }, [el('div', {}, [list, loadMore]), detail]))
   return root
 }

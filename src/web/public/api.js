@@ -117,6 +117,11 @@ export const api = {
     list: (filters) => request(withQuery('/executions', filters)),
     get: (runId) => request(`/executions/${segment(runId)}`)
   },
+  retention: {
+    get: () => request('/retention'),
+    save: (horas) => request('/retention', { method: 'PUT', body: { horas } }),
+    sweep: (body) => request('/retention/sweep', { method: 'POST', body: body || {} })
+  },
   connections: {
     list: () => request('/connections'),
     prontas: () => request('/connections-prontas'),

@@ -440,6 +440,17 @@ h1, h2, h3, h4 {
 .readonly-box > p { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.79rem; color: var(--text-muted); }
 
 /* --- faixa de resumo --- */
+ /* Cartão que abre e fecha: o <summary> nativo vem com marcador e sem
+   espaçamento, e dentro de um .card ele encostava na borda. */
+details.card > summary {
+  cursor: pointer; font-weight: 550; font-size: 0.9rem; color: var(--text);
+  list-style: none;
+}
+details.card > summary::-webkit-details-marker { display: none; }
+details.card > summary::before { content: '▸ '; color: var(--text-muted); }
+details.card[open] > summary::before { content: '▾ '; }
+details.card[open] > summary { margin-bottom: 12px; }
+
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
