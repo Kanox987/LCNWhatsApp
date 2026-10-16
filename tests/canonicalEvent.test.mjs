@@ -54,6 +54,7 @@ checkBool('eventId muda se o providerMessageId mudar', calcularEventId(args) !==
 check('resposta de botão clássico é texto', classificarMensagem({ buttonsResponseMessage: { selectedButtonId: '/play x' } }), 'text')
 check('linha de lista escolhida é texto', classificarMensagem({ listResponseMessage: { title: 'x' } }), 'text')
 check('botão de fluxo nativo é texto', classificarMensagem({ interactiveResponseMessage: { body: { text: 'x' } } }), 'text')
+check('botão de modelo é texto', classificarMensagem({ templateButtonReplyMessage: { selectedId: '/musica x' } }), 'text')
 
 const eventoBotao = construirEventoDeMensagem({
   key: { remoteJid: '5511999@s.whatsapp.net', id: 'BTN1', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },

@@ -25,7 +25,7 @@ import { resolverAccountId } from './engine/instanceIdentity.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel } from './engine/zapoAdapter.js'
 import { tipoPodeCasar } from './engine/canonicalEvent.js'
 import { fecharOrfaos } from './engine/orfaos.js'
-import { emitirEventoDebug } from './engine/eventSink.js'
+import { emitirDesconhecidoDebug, emitirEventoDebug } from './engine/eventSink.js'
 import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
@@ -384,6 +384,9 @@ export async function iniciar () {
       try {
         const eventoCanonico = construirEventoDeMensagem(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
         emitirEventoDebug(eventoCanonico, cfg, log)
+        // Mensagem que o sistema não soube ler diz, no log, QUE FORMA tinha.
+        // Sem isso, "o botão não faz nada" morre em `kind: unknown`.
+        if (eventoCanonico?.message?.kind === 'unknown') emitirDesconhecidoDebug(event, cfg, log)
         encaminharEventoAoMotor(client, clienteEngine, eventoCanonico, cfg, log)
       } catch (e) {
         if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)

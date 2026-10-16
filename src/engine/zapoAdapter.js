@@ -69,6 +69,8 @@ function textoDeResposta (msg) {
   if (botao) return botao.selectedButtonId || botao.selectedDisplayText || undefined
   const lista = msg?.listResponseMessage
   if (lista) return lista.singleSelectReply?.selectedRowId || lista.title || undefined
+  const modelo = msg?.templateButtonReplyMessage
+  if (modelo) return modelo.selectedId || modelo.selectedDisplayText || undefined
   const interativa = msg?.interactiveResponseMessage
   if (interativa) {
     // `paramsJson` é escrito pelo cliente do WhatsApp a partir do botão que o

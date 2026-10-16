@@ -81,7 +81,14 @@ export function classificarMensagem (message, { marcadaComoViewOnce = false } = 
 // WhatsApp mudou de formato duas vezes e as três continuam chegando: botão
 // clássico, linha de lista e botão de fluxo nativo (o do carrossel).
 export function ehRespostaDeBotao (msg) {
-  return Boolean(msg?.buttonsResponseMessage || msg?.listResponseMessage || msg?.interactiveResponseMessage)
+  return Boolean(
+    msg?.buttonsResponseMessage ||
+    msg?.listResponseMessage ||
+    msg?.interactiveResponseMessage ||
+    // A quarta forma: botão de MODELO. É a que alguns clientes mandam no lugar
+    // do fluxo nativo, e cair em `unknown` significa o bot ignorar o toque.
+    msg?.templateButtonReplyMessage
+  )
 }
 
 export function validarFormaCanonica (evt) {
