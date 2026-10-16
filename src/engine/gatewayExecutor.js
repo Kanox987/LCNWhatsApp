@@ -475,6 +475,40 @@ async function executarChamadaDeConexao (client, comando, deps) {
     }
   }
 
+  // CARDS COM BOTÃO: uma mensagem só, com a capa, o texto e o botão de cada
+  // resultado. Cada imagem é enviada ao servidor do WhatsApp antes, como no
+  // carrossel de mídia — a diferença é que aqui o card leva botão.
+  if (resultado.forma === 'carrossel') {
+    const cards = []
+    for (const card of resultado.cards || []) {
+      const upload = await client.message.upload(card.midia.buffer, { type: 'image', mimetype: card.midia.mime })
+      cards.push(montarCard(card.midia, upload, { legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
+    }
+    try {
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, montarCarrossel(cards, caption || resultado.cabecalho), opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS * 4,
+        `timeout ao enviar o carrossel do comando ${comando.id}`
+      )
+      console.log(`[engine] carrossel ${comando.id}: uma mensagem com ${cards.length} card(s) e botão`)
+    } catch (erro) {
+      // Mensagem interativa depende do aplicativo de quem recebe. Cair para
+      // texto não é tratamento de erro, é parte do desenho: o conteúdo sempre
+      // chega de algum jeito, e aqui ele chega como a lista escrita.
+      console.warn(`[engine] Carrossel com botão recusado (${mensagemDoErro(erro)}) — mandando como texto.`)
+      const linhas = (resultado.cards || []).map((c, i) => `*${i + 1}.* ${c.corpo}${c.rodape ? `\n_${c.rodape}_` : ''}`)
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, {
+          type: 'text',
+          text: [caption || resultado.cabecalho, ...linhas].filter(Boolean).join('\n')
+        }, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao mandar a lista do comando ${comando.id}`
+      )
+    }
+    return
+  }
+
   // Resposta de texto vai como texto. É o caso de uma IA, de uma consulta de
   // preço, de qualquer coisa que responda em palavras.
   if (resultado.forma === 'texto') {

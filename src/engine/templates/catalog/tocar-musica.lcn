@@ -43,7 +43,7 @@ configurável
     ajuda: Enviado na hora. Buscar e baixar leva alguns segundos — sem aviso, parece que o comando não funcionou.
   caption: texto = ""
     rótulo: Legenda
-    ajuda: Deixe vazio para usar o nome da faixa que o serviço trouxer. A legenda vai na capa, porque áudio no WhatsApp não tem legenda.
+    ajuda: Deixe vazio para usar o que o serviço traz da faixa — nome, artista e duração, com emojis de música. A legenda vai na capa, porque áudio no WhatsApp não tem legenda.
   semNomeText: texto = "Escreva o nome da música depois do comando. Exemplo: /play evidências chitãozinho"
     rótulo: Se não vier nome
     ajuda: Resposta quando o comando é usado sozinho.
@@ -58,9 +58,9 @@ avisa exige
   Precisa da conexão de download cadastrada na aba Conexões, com endereço e credencial. Ela já vem pronta como "midia" — confira ali se a chave está resolvida.
 
 avisa nota
-  O serviço devolve DOIS arquivos: o áudio e a capa. Vão um depois do outro, e a legenda fica na capa — o WhatsApp não aceita legenda em áudio.
+  O serviço devolve DOIS arquivos: a capa e o áudio. A capa sai primeiro, com o nome da música, o artista e a duração; a música vem logo abaixo. A legenda fica na capa porque o WhatsApp não aceita legenda em áudio.
 
 avisa nota
-  Buscar pelo nome é ambíguo por natureza. Quando vier a versão errada, o comando de busca mostra as opções com o link de cada uma.
+  Buscar pelo nome é ambíguo por natureza. Quando vier a versão errada, o comando de busca mostra as opções em cards com a capa de cada uma, e o botão de cada card baixa aquela.
 
 # nós: gatilho-comando, veio-nome, baixar-a-musica, pedir-o-nome

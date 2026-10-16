@@ -53,7 +53,25 @@ function midiaDoUpload (midia, upload) {
   }
 }
 
-export function montarCard (midia, upload, { legenda, rodape } = {}) {
+// O BOTÃO DE UM CARD.
+//
+// `quick_reply` é o botão que MANDA UMA MENSAGEM de volta — é o que faz o
+// "baixar este" funcionar sem guardar estado nenhum entre as duas mensagens: o
+// `id` carrega o comando inteiro, com o argumento que aponta para aquele card,
+// e chega ao bot como se a pessoa tivesse digitado. Ver `textoDeResposta` no
+// adaptador, que lê o id de volta.
+//
+// `display_text` é o que a pessoa lê; `id` é o que o bot recebe. Os dois
+// viajam no mesmo JSON porque é assim que o nativeFlow os transporta.
+function montarBotao (botao) {
+  if (!botao?.texto || !botao?.comando) return []
+  return [{
+    name: 'quick_reply',
+    buttonParamsJson: JSON.stringify({ display_text: botao.texto, id: botao.comando })
+  }]
+}
+
+export function montarCard (midia, upload, { legenda, rodape, botao } = {}) {
   const campos = midiaDoUpload(midia, upload)
   return {
     header: {
@@ -66,13 +84,17 @@ export function montarCard (midia, upload, { legenda, rodape } = {}) {
     // Card sem `nativeFlowMessage` não é aceito: o carrossel é uma mensagem
     // interativa, e card sem a parte interativa fica incompleto. Lista de
     // botões vazia é o que o bot de referência manda quando não há botão.
-    nativeFlowMessage: { buttons: [] }
+    nativeFlowMessage: { buttons: montarBotao(botao) }
   }
 }
 
-export function montarCarrossel (cards) {
+export function montarCarrossel (cards, cabecalho = null) {
   return {
     interactiveMessage: {
+      // O texto acima dos cards. Numa busca é ele que diz o que foi buscado —
+      // sem isso o carrossel chega sem assunto, e dez minutos depois ninguém
+      // lembra qual pergunta gerou aqueles cards.
+      ...(cabecalho ? { body: { text: cabecalho } } : {}),
       carouselMessage: { cards }
     }
   }

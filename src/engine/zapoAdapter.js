@@ -58,6 +58,31 @@ function resolverChatId (key, kind) {
 // `undefined` e recusava antes de qualquer outra checagem — sem erro, sem
 // registro, sem nada que ajudasse a entender. O código legado
 // antigo já lia `node.caption`; só o motor não lia.
+// O que a pessoa DISSE ao tocar num botão.
+//
+// O id vem primeiro, e o rótulo é a queda. O rótulo é escrito para ser lido
+// ("⬇️ Baixar"); o id é o que o bot escreveu ao montar o botão, e é lá que
+// cabe o comando inteiro, com argumento ("/play https://..."). Sem isso, o
+// botão só conseguiria disparar comando sem argumento nenhum.
+function textoDeResposta (msg) {
+  const botao = msg?.buttonsResponseMessage
+  if (botao) return botao.selectedButtonId || botao.selectedDisplayText || undefined
+  const lista = msg?.listResponseMessage
+  if (lista) return lista.singleSelectReply?.selectedRowId || lista.title || undefined
+  const interativa = msg?.interactiveResponseMessage
+  if (interativa) {
+    // `paramsJson` é escrito pelo cliente do WhatsApp a partir do botão que o
+    // bot mandou. Ilegível, cai no texto do corpo — nunca lança.
+    try {
+      const params = JSON.parse(interativa.nativeFlowResponseMessage?.paramsJson || '{}')
+      const id = params?.id ?? params?.button_id ?? params?.selected_id
+      if (typeof id === 'string' && id.trim()) return id.trim()
+    } catch {}
+    if (typeof interativa.body?.text === 'string' && interativa.body.text) return interativa.body.text
+  }
+  return undefined
+}
+
 function extrairTexto (msg) {
   if (!msg) return undefined
   if (typeof msg.extendedTextMessage?.text === 'string') return msg.extendedTextMessage.text
@@ -67,7 +92,7 @@ function extrairTexto (msg) {
     const legenda = msg[campo]?.caption
     if (typeof legenda === 'string' && legenda) return legenda
   }
-  return undefined
+  return textoDeResposta(msg)
 }
 
 // mediaRef só existe pra mensagem com mídia de verdade — o node cru

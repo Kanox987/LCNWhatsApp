@@ -1,0 +1,63 @@
+template musica-do-link v1
+  nome: Baixar a música de um link
+  descrição: Mande o comando com um link do YouTube e o bot baixa aquela música exata — o áudio e a capa, com o nome da faixa e o artista. É o comando que o botão "Baixar esta" do comando de busca aciona: ali a pessoa escolheu uma capa entre várias, e o link garante que vem a que ela escolheu, não outra parecida.
+  categoria: utilitarios
+
+automação
+  nome: Baixar a música de um link
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Baixa a música de um link do YouTube
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args != ""
+    chama {{params.conexao}}.musica
+      com
+        url: "{{message.args}}"
+        audio_ext: {{params.formato}}
+      avisa: "{{params.ackText}}"
+      legenda: "{{params.caption}}"
+      entrega: separado
+      erro: "{{params.errorText}}"
+  senão
+    responde "{{params.semLinkText}}"
+
+configurável
+  command: texto = "/musica"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita antes do link. É TAMBÉM o que o botão "Baixar esta" manda no comando de busca — trocando aqui, troque também no botão, na aba Conexões (função "buscar" do serviço de download).
+  conexao: texto = "midia"
+    rótulo: Serviço que baixa
+    ajuda: O identificador da conexão, na aba Conexões.
+  formato: opção (m4a, mp3, opus, wav, flac) = "m4a"
+    rótulo: Formato do áudio
+    ajuda: m4a é o que o YouTube já entrega e sai sem recodificar, então é o mais rápido e o de melhor qualidade.
+  allowFrom: opção (any, external) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. Para o botão do carrossel funcionar quando VOCÊ aperta, precisa ser any.
+  ackText: texto = "🎵 Baixando…"
+    rótulo: Aviso ao começar
+    ajuda: Enviado na hora. Baixar leva alguns segundos.
+  caption: texto = ""
+    rótulo: Legenda
+    ajuda: Deixe vazio para usar o nome da faixa, o artista e a duração que o serviço trouxer. A legenda vai na capa, porque áudio no WhatsApp não tem legenda.
+  semLinkText: texto = "Manda o link da música depois do comando — ou use o comando de busca e aperte o botão da que você quer."
+    rótulo: Se não vier link
+    ajuda: Resposta quando o comando é usado sozinho.
+  errorText: texto = "Não consegui baixar essa música: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Precisa da conexão de download cadastrada na aba Conexões, com endereço e credencial — a mesma do /dow e do comando de tocar música.
+
+avisa nota
+  A capa sai primeiro, com o nome da música, o artista e a duração; o áudio vem logo abaixo. O WhatsApp não aceita legenda em áudio, e é por isso que ela vai na capa.
+
+# nós: gatilho-comando, veio-link, baixar-a-musica, pedir-o-link

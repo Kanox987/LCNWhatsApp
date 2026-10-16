@@ -46,9 +46,20 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     nomes.includes('baixar') && nomes.includes('musica') && nomes.includes('buscar'), nomes.join(', '))
 
   const musica = DECLARACAO.funcoes.find((f) => f.nome === 'musica')
-  check('musica recebe o NOME, não o link', musica.entradas.some((e) => e.nome === 'busca' && e.obrigatoria))
-  check('musica não pede link nenhum', !musica.entradas.some((e) => e.nome === 'url'))
+  // NOME ou LINK, e nenhum dos dois obrigatório: o serviço recusa os dois
+  // juntos, e quem decide qual mandar é o comando — o /play manda o nome, o
+  // botão do carrossel manda o link da música que a pessoa apertou.
+  check('musica aceita o nome', musica.entradas.some((e) => e.nome === 'busca' && e.obrigatoria === false))
+  check('e aceita o link, que é o que o botão do carrossel manda',
+    musica.entradas.some((e) => e.nome === 'url' && e.obrigatoria === false))
   check('musica pede modo musica por padrão', musica.entradas.find((e) => e.nome === 'modo').padrao === 'musica')
+  // A capa antes do áudio: o serviço entrega na ordem do disco (01 áudio, 02
+  // capa) e a conversa quer o contrário.
+  check('a capa sai antes do áudio', JSON.stringify(musica.resposta.ordemDosTipos) === '["image","audio"]',
+    JSON.stringify(musica.resposta.ordemDosTipos))
+  check('e a legenda traz faixa, artista e duração',
+    /faixa/.test(musica.resposta.modeloDaDescricao) && /artista/.test(musica.resposta.modeloDaDescricao) &&
+    /duracao\|tempo/.test(musica.resposta.modeloDaDescricao), musica.resposta.modeloDaDescricao)
   // A legenda de música NÃO é a descrição: lá vem "Provided to YouTube by",
   // produtor, compositor. O nome da faixa está em `titulo`.
   check('musica tira a legenda do título', musica.resposta.campoDaDescricao === 'titulo')
@@ -57,8 +68,17 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('musica espera mais que os 20s padrão', musica.esperaSegundos === 120)
 
   const buscarFn = DECLARACAO.funcoes.find((f) => f.nome === 'buscar')
-  check('buscar responde em lista', buscarFn.resposta.forma === 'lista')
+  check('buscar responde em carrossel', buscarFn.resposta.forma === 'carrossel')
   check('buscar aponta onde está a lista', buscarFn.resposta.campo === 'achados')
+  // A miniatura em JPEG primeiro, a capa do serviço como queda: o endereço da
+  // capa é servido em webp pelo YouTube, e a mensagem de imagem do WhatsApp
+  // espera jpeg.
+  check('a capa do card tenta o jpeg antes',
+    buscarFn.resposta.imagem[0].includes('hqdefault.jpg') && buscarFn.resposta.imagem.includes('capa'),
+    JSON.stringify(buscarFn.resposta.imagem))
+  check('cada card tem botão, e o botão manda um comando com o link daquele',
+    /^\/\w+ \{\{url\}\}$/.test(buscarFn.resposta.botao.comando), buscarFn.resposta.botao?.comando)
+  check('no máximo dez cards, que é o teto do WhatsApp', buscarFn.resposta.limite <= 10, String(buscarFn.resposta.limite))
   check('buscar lê o erro do campo do FastAPI', buscarFn.resposta.campoDoErro === 'detail')
 }
 
@@ -81,26 +101,40 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('lista válida atravessa com limite', ok.resposta.limite === 3)
 }
 
-// --- a busca, de ponta a ponta -------------------------------------------
+// --- a busca, de ponta a ponta: cards com capa e botão --------------------
 {
-  const s = servico([{
-    busca: 'evidencias',
-    achados: [
-      { id: 'a', url: 'https://y/a', titulo: 'Evidências', autor: 'Chitãozinho & Xororó', duracao_texto: '4:59' },
-      { id: 'b', url: 'https://y/b', titulo: 'Evidências (Ao Vivo)', autor: 'Bruno & Marrone', duracao_texto: '4:23' }
-    ]
-  }])
+  const s = servico([
+    {
+      busca: 'evidencias',
+      achados: [
+        { id: 'a', url: 'https://y/a', titulo: 'Evidências', autor: 'Chitãozinho & Xororó', duracao_texto: '4:59', visualizacoes: 3056971, capa: 'https://i.ytimg.com/a.jpg' },
+        { id: 'b', url: 'https://y/b', titulo: 'Evidências (Ao Vivo)', autor: 'Bruno & Marrone', duracao_texto: '4:23', visualizacoes: 52258297, capa: 'https://i.ytimg.com/b.jpg' }
+      ]
+    },
+    { arquivo: 'capa-a' },
+    { arquivo: 'capa-b' }
+  ])
   const r = await criarExecutorDeConexao({ buscar: s.buscar, dormir: semDormir })
     .executar(DECLARACAO, 'buscar', { busca: 'evidencias' })
 
-  check('a busca responde como texto', r.forma === 'texto')
-  const linhas = String(r.dados).split('\n')
-  check('a primeira linha é o cabeçalho com o termo buscado',
-    linhas[0] === '🔎 Achei isto para "evidencias":', linhas[0])
-  check('cada item é numerado', linhas[1].startsWith('*1.*') && linhas[4].startsWith('*2.*'), linhas[1])
-  check('o item traz título, autor e duração', linhas[1].includes('Evidências') && linhas[2].includes('Chitãozinho') && linhas[2].includes('4:59'))
-  check('o item traz o link, que é como pedir a versão certa', linhas[3] === 'https://y/a', linhas[3])
-  check('a busca não vira download', s.chamadas.length === 1 && s.chamadas[0].url.endsWith('/buscar'))
+  check('a busca responde em cards', r.forma === 'carrossel', r.forma)
+  check('um card por resultado', r.cards.length === 2, String(r.cards?.length))
+  check('o cabeçalho diz o que foi buscado', r.cabecalho === '🔎 Achei isto para "evidencias":', r.cabecalho)
+  check('cada card traz a capa de verdade, em bytes', r.cards[0].midia.buffer.toString() === 'capa-a')
+  check('o corpo do card tem o nome e o autor',
+    r.cards[0].corpo.includes('Evidências') && r.cards[0].corpo.includes('Chitãozinho'), r.cards[0].corpo)
+  check('o rodapé tem a duração', r.cards[0].rodape.includes('4:59'), r.cards[0].rodape)
+  // O BOTÃO É O PULO DO GATO: o id dele é o comando que a pessoa teria
+  // digitado, com o link DAQUELE card. Sem isso, "baixar o terceiro" exigiria
+  // guardar estado entre as duas mensagens.
+  check('o botão manda o comando com o link daquele card',
+    r.cards[0].botao.comando === '/musica https://y/a', r.cards[0].botao?.comando)
+  check('e o segundo card aponta para o outro link',
+    r.cards[1].botao.comando === '/musica https://y/b', r.cards[1].botao?.comando)
+  check('o rótulo do botão é o que a pessoa lê', r.cards[0].botao.texto === '⬇️ Baixar esta', r.cards[0].botao?.texto)
+  check('a busca não vira download', s.chamadas[0].url.endsWith('/buscar'))
+  check('e a capa buscada é a miniatura em jpeg, montada com o id do vídeo',
+    s.chamadas[1].url === 'https://i.ytimg.com/vi/a/hqdefault.jpg', s.chamadas[1]?.url)
 }
 
 // --- busca sem resultado, e busca recusada -------------------------------
@@ -146,6 +180,8 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     {
       estado: 'pronto',
       titulo: 'Evidências (Remastered 2020)',
+      duracao: 299,
+      metadados: { faixa: 'Evidências (Remastered 2020)', artista: 'Chitãozinho & Xororó' },
       // A descrição que o YouTube gera sozinho, que é exatamente o que NÃO
       // deve virar legenda.
       descricao: 'Provided to YouTube by Universal Music Group\n\nProducer: Jose Homero',
@@ -161,9 +197,18 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     .executar(DECLARACAO, 'musica', { busca: 'evidencias remastered' })
 
   check('a música volta com os dois arquivos', r.midias.length === 2)
-  check('o áudio vem primeiro', r.midias[0].tipo === 'audio' && r.midias[1].tipo === 'image')
-  check('a legenda é o nome da faixa, não o texto gerado pelo YouTube',
-    r.descricao === 'Evidências (Remastered 2020)', r.descricao)
+  // A CAPA PRIMEIRO. O serviço entrega na ordem do disco — 01 áudio, 02 capa —
+  // e a conversa quer o contrário: a capa com a legenda e a música logo
+  // abaixo. Quem decide a ordem é a declaração, não o nome do arquivo.
+  check('a capa vem primeiro e o áudio depois',
+    r.midias[0].tipo === 'image' && r.midias[1].tipo === 'audio',
+    r.midias.map((m) => m.tipo).join(','))
+  check('a legenda tem o nome da faixa', /Evidências/.test(r.descricao || ''), r.descricao)
+  check('o artista', /Chitãozinho/.test(r.descricao || ''), r.descricao)
+  // 299 segundos não é duração de música para ninguém.
+  check('e a duração em minutos', /4:59/.test(r.descricao || ''), r.descricao)
+  check('o texto que o YouTube gera sozinho NÃO vira legenda',
+    !/Provided to YouTube/.test(r.descricao || ''), r.descricao)
   const corpo = JSON.parse(s.chamadas[0].body)
   check('o pedido leva o nome em "busca"', corpo.busca === 'evidencias remastered')
   check('o pedido leva o modo musica por padrão da declaração', corpo.modo === 'musica')
@@ -252,6 +297,96 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('sem nenhuma mídia que aceite legenda, ela sai como mensagem',
     enviados.map((e) => e.c?.type).join(',') === 'audio,text', enviados.map((e) => e.c?.type).join(','))
   check('e com o texto certo', enviados[1]?.c?.text === 'Só o áudio', String(enviados[1]?.c?.text))
+}
+
+// --- o gateway manda UMA mensagem com os cards e os botões ---------------
+{
+  const enviados = []
+  const subidos = []
+  const client = {
+    getCredentials: () => ({ meJid: '5511900000002@s.whatsapp.net' }),
+    message: {
+      send: async (jid, c) => { enviados.push({ jid, c }); return { ok: true, id: 'X' } },
+      upload: async (buffer, opcoes) => {
+        subidos.push({ buffer, opcoes })
+        return { url: 'https://mmg/u', directPath: '/u', mediaKey: 'k', fileSha256: 's', fileEncSha256: 'e', fileLength: buffer.length, mediaKeyTimestamp: 1, mimetype: opcoes.mimetype }
+      }
+    }
+  }
+  const cards = [
+    { midia: { buffer: Buffer.from('capa-a'), mime: 'image/jpeg', tipo: 'image', nome: 'a.jpg' }, corpo: '🎵 Evidências', rodape: '4:59', botao: { texto: '⬇️ Baixar esta', comando: '/musica https://y/a' } },
+    { midia: { buffer: Buffer.from('capa-b'), mime: 'image/jpeg', tipo: 'image', nome: 'b.jpg' }, corpo: '🎵 Ao Vivo', rodape: '4:23', botao: { texto: '⬇️ Baixar esta', comando: '/musica https://y/b' } }
+  ]
+  const deps = {
+    mediaRefCache: { resolver: () => null },
+    baixarBuffer: async () => Buffer.from('x'),
+    limiteBytes: 999999,
+    resolverJidProprio: () => '5511900000002@s.whatsapp.net',
+    clienteEngine: { conexoes: { resolvida: async () => DECLARACAO }, execucoes: { confirmar: async () => ({ ok: true }) } },
+    criarExecutorDeConexao: () => ({
+      executar: async () => ({ forma: 'carrossel', cards, cabecalho: '🔎 Achei isto para "evidencias":' })
+    })
+  }
+  await executarComandos(client, [{
+    id: 'busca-1',
+    commandType: 'connection.call',
+    payload: { chatId: '5511999@s.whatsapp.net', conexao: 'midia', funcao: 'buscar', entradas: { busca: 'evidencias' } }
+  }], deps.clienteEngine, deps)
+
+  check('as duas capas sobem antes', subidos.length === 2 && subidos[0].opcoes.type === 'image')
+  check('e sai UMA mensagem só', enviados.length === 1, String(enviados.length))
+  const msg = enviados[0].c
+  const carrossel = msg?.interactiveMessage?.carouselMessage
+  check('que é um carrossel', !!carrossel, JSON.stringify(Object.keys(msg || {})))
+  check('com um card por resultado', carrossel.cards.length === 2)
+  check('o cabeçalho vai no corpo da mensagem', msg.interactiveMessage.body?.text === '🔎 Achei isto para "evidencias":')
+  check('cada card tem a imagem no cabeçalho', carrossel.cards[0].header?.hasMediaAttachment === true && !!carrossel.cards[0].header?.imageMessage)
+  check('e o texto no corpo do card', carrossel.cards[0].body?.text === '🎵 Evidências')
+  const botao = carrossel.cards[0].nativeFlowMessage?.buttons?.[0]
+  check('e um botão de resposta rápida', botao?.name === 'quick_reply', JSON.stringify(botao))
+  const params = JSON.parse(botao.buttonParamsJson)
+  check('com o rótulo que a pessoa lê', params.display_text === '⬇️ Baixar esta')
+  check('e o comando daquele card no id', params.id === '/musica https://y/a', params.id)
+  check('o segundo botão aponta para o outro', JSON.parse(carrossel.cards[1].nativeFlowMessage.buttons[0].buttonParamsJson).id === '/musica https://y/b')
+}
+
+// --- carrossel recusado cai para texto, e nada se perde -------------------
+{
+  const enviados = []
+  const client = {
+    getCredentials: () => ({ meJid: '5511900000002@s.whatsapp.net' }),
+    message: {
+      send: async (jid, c) => {
+        if (c?.interactiveMessage) throw new Error('mensagem interativa recusada')
+        enviados.push({ jid, c })
+        return { ok: true, id: 'X' }
+      },
+      upload: async (buffer, opcoes) => ({ url: 'u', directPath: '/u', mediaKey: 'k', fileSha256: 's', fileEncSha256: 'e', fileLength: buffer.length, mediaKeyTimestamp: 1, mimetype: opcoes.mimetype })
+    }
+  }
+  const deps = {
+    mediaRefCache: { resolver: () => null },
+    baixarBuffer: async () => Buffer.from('x'),
+    limiteBytes: 999999,
+    resolverJidProprio: () => '5511900000002@s.whatsapp.net',
+    clienteEngine: { conexoes: { resolvida: async () => DECLARACAO }, execucoes: { confirmar: async () => ({ ok: true }) } },
+    criarExecutorDeConexao: () => ({
+      executar: async () => ({
+        forma: 'carrossel',
+        cards: [{ midia: { buffer: Buffer.from('c'), mime: 'image/jpeg', tipo: 'image' }, corpo: 'Evidências', rodape: '4:59', botao: { texto: 'x', comando: '/musica https://y/a' } }],
+        cabecalho: '🔎 Achei isto:'
+      })
+    })
+  }
+  await executarComandos(client, [{
+    id: 'busca-2',
+    commandType: 'connection.call',
+    payload: { chatId: '5511999@s.whatsapp.net', conexao: 'midia', funcao: 'buscar', entradas: {} }
+  }], deps.clienteEngine, deps)
+
+  check('aplicativo que recusa o interativo ainda recebe a lista', enviados.length === 1 && enviados[0].c.type === 'text')
+  check('com o cabeçalho e o resultado dentro',
+    /Achei isto/.test(enviados[0].c.text) && /Evidências/.test(enviados[0].c.text), enviados[0]?.c?.text)
 }
 
 // --- os comandos no catálogo ---------------------------------------------

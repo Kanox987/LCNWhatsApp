@@ -127,9 +127,22 @@ function montarRequisicao (url, metodo, entradas, cabecalhos, arquivos = []) {
 // linha chega escrita "{{preco}}" e quem declarou vê na hora qual campo errou.
 // Apagar seria esconder o defeito atrás de um texto que parece certo.
 function escrever (modelo, valores) {
-  return String(modelo).replace(/\{\{\s*([\w.]+)\s*\}\}/g, (marcador, caminho) => {
+  return String(modelo).replace(/\{\{\s*([\w.]+)(\|\w+)?\s*\}\}/g, (marcador, caminho, filtro) => {
     const valor = porCaminho(valores, caminho)
     if (valor === undefined || valor === null || valor === '') return marcador
+    // `|tempo` é a única conta desta camada, e existe porque serviço nenhum
+    // devolve "4:59": eles devolvem 299 segundos, e ninguém lê isso como
+    // duração de música.
+    if (filtro === '|tempo') {
+      const segundos = Math.round(Number(valor))
+      if (!Number.isFinite(segundos) || segundos < 0) return marcador
+      const h = Math.floor(segundos / 3600)
+      const m = Math.floor((segundos % 3600) / 60)
+      const s = segundos % 60
+      return h
+        ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+        : `${m}:${String(s).padStart(2, '0')}`
+    }
     return String(valor)
   })
 }
@@ -364,6 +377,73 @@ export function criarExecutorDeConexao ({
       }
     }
 
+    // A LISTA EM CARDS. Cada item vira um card com imagem, texto e um botão.
+    //
+    // As imagens vêm por ENDEREÇO, como na forma `mídia`, e são buscadas com a
+    // mesma credencial quando moram no serviço. A diferença é o que volta: em
+    // vez de arquivos para entregar, cards para montar uma mensagem só.
+    if (funcao.resposta?.forma === 'carrossel') {
+      const forma = funcao.resposta
+      const erroDireto = forma.campoDoErro ? porCaminho(primeira, forma.campoDoErro) : null
+      if (erroDireto) throw new ErroDeConexao(String(erroDireto))
+      const bruta = porCaminho(primeira, forma.campo)
+      const itens = (Array.isArray(bruta) ? bruta : []).filter((i) => i && typeof i === 'object')
+      if (!itens.length) {
+        // Busca sem resultado é resposta normal, não erro: o texto declarado
+        // vai como mensagem simples.
+        return { forma: 'texto', dados: forma.vazio || 'Não achei nada.' }
+      }
+      const usados = forma.limite ? itens.slice(0, forma.limite) : itens
+      const cards = []
+      for (const [i, item] of usados.entries()) {
+        // Os candidatos, em ordem: nome de campo ou endereço montado com os
+        // campos do item. O primeiro que responder vira a capa do card.
+        let achada = null
+        for (const candidato of forma.imagem) {
+          const endereco = candidato.includes('{{')
+            ? escrever(candidato, item)
+            : porCaminho(item, candidato)
+          if (typeof endereco !== 'string' || !endereco || endereco.includes('{{')) continue
+          const url = /^https?:\/\//i.test(endereco) ? endereco : `${declaracao.endereco}${endereco}`
+          // A credencial só acompanha endereço do PRÓPRIO serviço: mandá-la
+          // para outra origem entregaria a chave dele a quem ele apontou.
+          const mesmaOrigem = url.startsWith(declaracao.endereco)
+          let resposta
+          try {
+            resposta = await chamar(url, { method: 'GET', headers: mesmaOrigem ? cabecalhos : {} })
+          } catch {
+            continue
+          }
+          if (!resposta.ok) continue
+          const buffer = Buffer.from(await resposta.arrayBuffer())
+          if (!buffer.length || buffer.length > limiteBytes) continue
+          achada = { buffer, mime: resposta.headers?.get?.('content-type') || 'image/jpeg' }
+          break
+        }
+        if (!achada) continue
+        const valores = { ...item, n: cards.length + 1 }
+        cards.push({
+          midia: { buffer: achada.buffer, mime: achada.mime, tipo: 'image', nome: `card-${i + 1}.jpg` },
+          corpo: escrever(forma.corpo, valores),
+          rodape: forma.rodape ? escrever(forma.rodape, valores) : null,
+          botao: forma.botao
+            ? { texto: escrever(forma.botao.texto, valores), comando: escrever(forma.botao.comando, valores) }
+            : null
+        })
+      }
+      if (!cards.length) {
+        throw new ErroDeConexao(
+          `Nenhum dos ${usados.length} resultados trouxe imagem que desse para buscar.`,
+          { paraPessoa: 'Achei os resultados mas não consegui montar as capas. Tente de novo daqui a pouco.' }
+        )
+      }
+      return {
+        forma: 'carrossel',
+        cards,
+        cabecalho: forma.cabecalho ? escrever(forma.cabecalho, primeira) : null
+      }
+    }
+
     if (funcao.resposta?.forma === 'lista') {
       const erroDireto = funcao.resposta.campoDoErro ? porCaminho(primeira, funcao.resposta.campoDoErro) : null
       if (erroDireto) throw new ErroDeConexao(String(erroDireto))
@@ -384,10 +464,25 @@ export function criarExecutorDeConexao ({
     if (erroDoServico) throw new ErroDeConexao(String(erroDoServico))
 
     const lista = porCaminho(final, funcao.resposta.campoDoResultado)
+    const buscados = await buscarArquivos(lista, { base: declaracao.endereco, cabecalhos })
+    // A ordem declarada, quando existe: a capa antes da música, por exemplo.
+    // O que não está na lista vai para o fim, na ordem em que veio.
+    if (funcao.resposta.ordemDosTipos) {
+      const posicao = (m) => {
+        const i = funcao.resposta.ordemDosTipos.indexOf(m.tipo)
+        return i === -1 ? funcao.resposta.ordemDosTipos.length : i
+      }
+      buscados.midias = buscados.midias
+        .map((m, i) => ({ m, i }))
+        .sort((a, b) => (posicao(a.m) - posicao(b.m)) || (a.i - b.i))
+        .map((x) => x.m)
+    }
     return {
       forma: 'mídia',
-      ...(await buscarArquivos(lista, { base: declaracao.endereco, cabecalhos })),
-      descricao: textoOuNulo(porCaminho(final, funcao.resposta.campoDaDescricao || 'descricao'))
+      ...buscados,
+      descricao: funcao.resposta.modeloDaDescricao
+        ? escrever(funcao.resposta.modeloDaDescricao, final)
+        : textoOuNulo(porCaminho(final, funcao.resposta.campoDaDescricao || 'descricao'))
     }
   }
 

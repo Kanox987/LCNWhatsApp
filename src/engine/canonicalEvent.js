@@ -59,12 +59,31 @@ export function classificarMensagem (message, { marcadaComoViewOnce = false } = 
   // em cima de figurinha: virar imagem, virar gif, e trocar pacote e autor.
   if (msg.stickerMessage) return 'sticker'
   if (msg.extendedTextMessage || typeof msg.conversation === 'string') return 'text'
+  // BOTÃO APERTADO É TEXTO.
+  //
+  // Quem toca um botão está dizendo a mesma coisa que quem digita — e o
+  // sistema não ouvia: a resposta caía em 'unknown' e o gateway descartava
+  // antes do motor ver. Era por isso que a lista do /menu não fazia nada ao
+  // ser tocada, e é o que o carrossel de busca precisa para o botão "baixar"
+  // virar o comando de baixar.
+  //
+  // O TEXTO É O ID DO BOTÃO, não o rótulo: o rótulo é para a pessoa ler
+  // ("⬇️ Baixar"), o id é o que o bot escreveu quando montou o botão
+  // ("/play https://..."). Ver `textoDeResposta` no adaptador.
+  if (ehRespostaDeBotao(msg)) return 'text'
   return 'unknown'
 }
 
 // Checagem de forma só pra teste/fixture — não é o JSON Schema de verdade
 // (isso é o documento de automação, Etapa 2); é só uma rede de segurança
 // pra pegar typo/campo faltando nos testes deste módulo.
+// As três formas de responder tocando em vez de digitar. São três porque o
+// WhatsApp mudou de formato duas vezes e as três continuam chegando: botão
+// clássico, linha de lista e botão de fluxo nativo (o do carrossel).
+export function ehRespostaDeBotao (msg) {
+  return Boolean(msg?.buttonsResponseMessage || msg?.listResponseMessage || msg?.interactiveResponseMessage)
+}
+
 export function validarFormaCanonica (evt) {
   const camposObrigatorios = ['provider', 'accountId', 'eventId', 'occurredAt', 'replay', 'chat', 'sender', 'message', 'providerRef']
   return camposObrigatorios.every((campo) => campo in evt)

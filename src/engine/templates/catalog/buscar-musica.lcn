@@ -1,13 +1,13 @@
 template buscar-musica v1
   nome: Buscar música
-  descrição: Escreva o comando com um nome e o bot lista as primeiras músicas que o YouTube acha, com autor, duração e link — sem baixar nada. Serve para escolher entre homônimos antes de gastar um download: "Evidências" tem a versão do Chitãozinho, a do Bruno & Marrone e uma dúzia de covers.
+  descrição: Escreva o comando com um nome e o bot responde um carrossel: a capa de cada música, o nome, o autor e a duração, e embaixo de cada card um botão que baixa aquela. Serve para escolher entre homônimos sem gastar um download à toa — "Evidências" tem a versão do Chitãozinho, a do Bruno & Marrone e uma dúzia de covers.
   categoria: utilitarios
 
 automação
   nome: Buscar música
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Mostra opções de música para baixar
+  menu: {{params.command}} — Mostra as músicas em cards, com botão para baixar
   pool: {{params.poolId}}
   acessa: texto
   casa: exato ou com argumentos
@@ -32,7 +32,7 @@ configurável
     ajuda: O identificador da conexão, na aba Conexões. É a mesma conexão que baixa.
   quantos: número = 5
     rótulo: Quantos resultados
-    ajuda: De 1 a 20. Cinco cabe na tela do celular sem rolar; vinte é o teto do serviço.
+    ajuda: De 1 a 20, mas o carrossel mostra no máximo o que estiver configurado na conexão (cinco, de fábrica) — dez é o teto do WhatsApp.
   allowFrom: opção (external, any) = "external"
     rótulo: Quem pode acionar
     ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
@@ -53,6 +53,9 @@ avisa exige
   Precisa da conexão de download cadastrada na aba Conexões, com endereço e credencial. É a mesma conexão "midia" do download.
 
 avisa nota
-  A lista sai com o link de cada música. Para baixar a que você escolheu, mande o link para o comando de baixar mídia — ou repita a busca no comando de tocar, com mais palavras.
+  O botão de cada card manda o comando de baixar música por link, com o link daquele vídeo. É isso que garante que vem a música do card que você apertou, e não outra parecida.
+
+avisa nota
+  Carrossel é mensagem interativa e depende do aplicativo de quem recebe. Se ele for recusado, a mesma lista chega como texto — o conteúdo nunca se perde.
 
 # nós: gatilho-comando, veio-nome, buscar-as-opcoes, pedir-o-nome

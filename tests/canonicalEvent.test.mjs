@@ -45,6 +45,44 @@ const args = { accountId: 'acc-1', chatId: '123@g.us', senderId: '456@s.whatsapp
 check('eventId é determinístico (mesma entrada, mesmo id)', calcularEventId(args), calcularEventId({ ...args }))
 checkBool('eventId muda se o providerMessageId mudar', calcularEventId(args) !== calcularEventId({ ...args, providerMessageId: 'OUTRO' }))
 
+// --- botão apertado é texto, e o texto é o ID do botão ---
+//
+// Quem toca um botão está dizendo a mesma coisa que quem digita, e o sistema
+// não ouvia: a resposta caía em 'unknown' e o gateway descartava antes do
+// motor ver. É o que faz o botão "⬇️ Baixar esta" do carrossel de busca virar
+// o comando de baixar aquela música.
+check('resposta de botão clássico é texto', classificarMensagem({ buttonsResponseMessage: { selectedButtonId: '/play x' } }), 'text')
+check('linha de lista escolhida é texto', classificarMensagem({ listResponseMessage: { title: 'x' } }), 'text')
+check('botão de fluxo nativo é texto', classificarMensagem({ interactiveResponseMessage: { body: { text: 'x' } } }), 'text')
+
+const eventoBotao = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'BTN1', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: {
+    interactiveResponseMessage: {
+      // O rótulo é o que a pessoa leu; o id é o que o bot escreveu.
+      body: { text: '⬇️ Baixar esta' },
+      nativeFlowResponseMessage: {
+        name: 'quick_reply',
+        paramsJson: JSON.stringify({ display_text: '⬇️ Baixar esta', id: '/musica https://y/abc' })
+      }
+    }
+  },
+  timestampSeconds: 1893456000,
+  pushName: 'Fulano'
+}, { accountId: 'acc-1', recebidoEmMs: 1893456000123 })
+check('botão do carrossel: vira mensagem de texto', eventoBotao.message.kind, 'text')
+// O ID, e não o rótulo: é no id que cabe o comando inteiro, com o link daquele
+// card. Com o rótulo, o botão só conseguiria disparar comando sem argumento.
+check('botão do carrossel: o texto é o comando do id', eventoBotao.message.text, '/musica https://y/abc')
+
+const eventoLista = construirEventoDeMensagem({
+  key: { remoteJid: '5511999@s.whatsapp.net', id: 'LST1', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },
+  message: { listResponseMessage: { title: '/fig', singleSelectReply: { selectedRowId: '/fig' } } },
+  timestampSeconds: 1893456000,
+  pushName: 'Fulano'
+}, { accountId: 'acc-1', recebidoEmMs: 1893456000123 })
+check('linha do menu escolhida vira o comando dela', eventoLista.message.text, '/fig')
+
 // --- construirEventoDeMensagem: DM texto ---
 const eventoTexto = construirEventoDeMensagem({
   key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSG1', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false },

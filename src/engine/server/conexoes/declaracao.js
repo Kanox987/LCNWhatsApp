@@ -61,6 +61,14 @@ export const FORMAS_DE_RESPOSTA = Object.freeze({
   // mostra título, autor e duração; uma busca de produto mostraria preço. Fixar
   // os campos aqui faria a forma servir a uma API só.
   lista: 'lista',
+  // A MESMA LISTA, EM CARDS QUE A PESSOA DESLIZA — e com um botão em cada um.
+  //
+  // É a busca de música como o dono a quer: a capa do vídeo, o nome, o autor e
+  // a duração em cada card, e embaixo um botão que baixa AQUELA. O botão manda
+  // um comando: o id dele é o texto que o bot receberia se a pessoa tivesse
+  // digitado, então "baixar o terceiro" não precisa de estado nenhum guardado
+  // entre as duas mensagens.
+  carrossel: 'carrossel',
   // O serviço devolve O ARQUIVO na própria resposta, em base64 dentro do JSON.
   //
   // É a forma de quem converte em segundos — figurinha, troca de formato,
@@ -255,6 +263,43 @@ function validarResposta (resposta, onde) {
     }
   }
 
+  if (forma === FORMAS_DE_RESPOSTA.carrossel) {
+    const botao = resposta.botao && typeof resposta.botao === 'object' ? resposta.botao : null
+    return {
+      forma,
+      campo: exigirTexto(resposta.campo, `${onde} — o campo que traz a lista`),
+      // DE ONDE SAI A IMAGEM DO CARD. Sem ela não há card: o carrossel do
+      // WhatsApp exige mídia no cabeçalho de cada um.
+      //
+      // Aceita o nome de um campo do item ("capa") OU um endereço montado com
+      // os campos dele ("https://.../{{id}}/hqdefault.jpg"). A segunda forma
+      // existe por um motivo medido: a capa que o YouTube devolve na busca é
+      // servida como webp — ele ignora o cabeçalho `Accept` —, e a mensagem de
+      // imagem do WhatsApp espera jpeg. O endereço simples da miniatura, sem
+      // os parâmetros de corte, vem em jpeg.
+      //
+      // Uma LISTA tenta em ordem e fica com a primeira que responder, que é
+      // como se declara "o jpeg se der, senão o que vier".
+      imagem: imagensDoCard(resposta.imagem, onde),
+      corpo: exigirTexto(resposta.corpo, `${onde} — o texto de cada card`),
+      rodape: typeof resposta.rodape === 'string' ? resposta.rodape : null,
+      cabecalho: typeof resposta.cabecalho === 'string' ? resposta.cabecalho : null,
+      botao: botao
+        ? {
+            texto: exigirTexto(botao.texto, `${onde} — o rótulo do botão do card`),
+            // O que o botão MANDA, e é um comando do próprio bot. Aceita os
+            // campos do item, que é como ele aponta para AQUELE resultado.
+            comando: exigirTexto(botao.comando, `${onde} — o comando que o botão manda`)
+          }
+        : null,
+      // O WhatsApp não mostra carrossel de mais de dez cards. Declarar o teto
+      // aqui evita montar uma mensagem que o aplicativo recusa inteira.
+      limite: limiteDeLista(resposta.limite, onde),
+      vazio: typeof resposta.vazio === 'string' && resposta.vazio.trim() ? resposta.vazio.trim() : null,
+      campoDoErro: resposta.campoDoErro ? String(resposta.campoDoErro) : null
+    }
+  }
+
   if (forma === FORMAS_DE_RESPOSTA.lista) {
     return {
       forma,
@@ -303,8 +348,47 @@ function validarResposta (resposta, onde) {
     // de credenciais de produção, e o que a pessoa quer ver é o título. Quem
     // sabe qual campo serve é quem declarou a função.
     campoDaDescricao: resposta.campoDaDescricao ? String(resposta.campoDaDescricao) : 'descricao',
+    // A LEGENDA ESCRITA, quando um campo só não basta.
+    //
+    // "🎵 Evidências\n👤 Chitãozinho & Xororó\n⏱️ 4:59" não está em campo
+    // nenhum da resposta: são três, mais o texto entre eles. Com o modelo,
+    // quem declara a função escreve a legenda com os campos que aquele serviço
+    // devolve — e `|tempo` transforma segundos em 4:59, que é a única conta
+    // que esta camada faz.
+    modeloDaDescricao: typeof resposta.modeloDaDescricao === 'string' && resposta.modeloDaDescricao.trim()
+      ? resposta.modeloDaDescricao
+      : null,
+    // EM QUE ORDEM OS ARQUIVOS SAEM, por tipo de envio.
+    //
+    // O serviço de música entrega o áudio primeiro e a capa depois, de
+    // propósito (os nomes levam 01 e 02). Para o comando de tocar, o dono quer
+    // o contrário: a capa com a legenda e, logo abaixo, a música. Quem decide
+    // isso é quem monta a entrega, não quem gravou os arquivos.
+    ordemDosTipos: Array.isArray(resposta.ordemDosTipos) && resposta.ordemDosTipos.length
+      ? resposta.ordemDosTipos.map((tipo) => {
+          if (!Object.hasOwn(TIPOS_DE_ENVIO, tipo)) {
+            throw new ErroDeDeclaracao(
+              `${onde}: tipo desconhecido na ordem de envio: "${tipo}". Use: ${Object.keys(TIPOS_DE_ENVIO).join(', ')}.`
+            )
+          }
+          return TIPOS_DE_ENVIO[tipo]
+        })
+      : null,
     campoDoErro: resposta.campoDoErro ? String(resposta.campoDoErro) : null
   }
+}
+
+// Os candidatos a imagem de um card, sempre como lista — um nome de campo ou
+// um endereço montado com os campos do item, tentados em ordem.
+function imagensDoCard (valor, onde) {
+  const bruto = Array.isArray(valor) ? valor : [valor]
+  const limpos = bruto
+    .filter((v) => typeof v === 'string' && v.trim())
+    .map((v) => v.trim())
+  if (!limpos.length) {
+    throw new ErroDeDeclaracao(`${onde} — diga de onde sai a imagem de cada card (um campo do item, ou um endereço com {{campos}}).`)
+  }
+  return limpos
 }
 
 // Quantos itens da lista chegam à conversa.

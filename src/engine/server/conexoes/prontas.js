@@ -32,6 +32,14 @@ const TRABALHO_DE_MUSICA = Object.freeze({
   campoDoEstado: 'estado',
   estadosEmAndamento: ['na_fila', 'baixando'],
   campoDoResultado: 'midias',
+  // A CAPA PRIMEIRO, com a legenda; a música logo abaixo. O serviço entrega na
+  // ordem do disco (01 áudio, 02 capa) e aqui a ordem é a da conversa.
+  ordemDosTipos: ['foto', 'áudio'],
+  // A legenda da capa, escrita com o que o serviço devolve sobre a faixa.
+  // `|tempo` transforma os 299 segundos em 4:59.
+  modeloDaDescricao: '🎵 *{{metadados.faixa}}*\n👤 {{metadados.artista}}\n⏱️ {{duracao|tempo}}\n\n🎶🎧🎼',
+  // Queda, quando o serviço não souber faixa e artista (vídeo que não é do
+  // YouTube Music): o título do vídeo ainda diz o que chegou.
   campoDaDescricao: 'titulo',
   campoDoErro: 'erro'
 })
@@ -333,7 +341,12 @@ export const CONEXOES_PRONTAS = Object.freeze([
           // meio do caminho.
           esperaSegundos: 120,
           entradas: [
-            { nome: 'busca', tipo: 'texto', obrigatoria: true },
+            // O NOME ou o LINK, e o serviço recusa os dois juntos. O nome é
+            // o caso comum ("/play evidências"); o link é o que o botão do
+            // carrossel de busca manda, apontando para a música exata que a
+            // pessoa escolheu entre as capas.
+            { nome: 'busca', tipo: 'texto', obrigatoria: false },
+            { nome: 'url', tipo: 'texto', obrigatoria: false },
             // Declarado com padrão, e não fixo no código: é `musica` que faz o
             // serviço trazer áudio + capa + faixa num trabalho só.
             { nome: 'modo', tipo: 'opção', opcoes: ['musica', 'audio'], obrigatoria: false, padrao: 'musica' },
@@ -355,12 +368,35 @@ export const CONEXOES_PRONTAS = Object.freeze([
             { nome: 'quantos', tipo: 'número', obrigatoria: false, padrao: 5 }
           ],
           resposta: {
-            forma: FORMAS_DE_RESPOSTA.lista,
+            forma: FORMAS_DE_RESPOSTA.carrossel,
             campo: 'achados',
-            // O link entra na linha de propósito: é com ele que a pessoa pede
-            // a versão certa pelo /dow quando não é a primeira da lista.
-            linha: '*{{n}}.* {{titulo}}\n_{{autor}} · {{duracao_texto}}_\n{{url}}',
+            // A miniatura em JPEG, e só depois a que o serviço indicou.
+            //
+            // Medido: a `capa` da busca vem de um endereço que o YouTube serve
+            // em WEBP — e ele ignora o `Accept` —, enquanto a mensagem de
+            // imagem do WhatsApp espera jpeg. O endereço simples da miniatura,
+            // montado com o id do vídeo, responde jpeg. A `capa` fica como
+            // segunda tentativa, para o dia em que o primeiro não responder.
+            imagem: ['https://i.ytimg.com/vi/{{id}}/hqdefault.jpg', 'capa'],
+            corpo: '🎵 *{{titulo}}*\n👤 {{autor}}',
+            rodape: '⏱️ {{duracao_texto}}  ·  👁️ {{visualizacoes}} visualizações',
             cabecalho: '🔎 Achei isto para "{{busca}}":',
+            // O botão manda um COMANDO: o id dele é "/play <link daquele
+            // vídeo>", que é exatamente o que a pessoa teria digitado. Por isso
+            // escolher entre as capas não precisa de nada guardado entre as
+            // duas mensagens — a segunda chega inteira, sozinha.
+            // O COMANDO QUE O BOTÃO MANDA é o de baixar música POR LINK, e
+            // não o de buscar por nome: a busca por nome escolheria de novo
+            // entre os resultados, e podia vir outra — o botão tem que trazer
+            // exatamente a música daquele card.
+            //
+            // Trocar a palavra do comando no painel pede trocar aqui também.
+            // É o preço de o botão ser um comando de verdade, e é visível dos
+            // dois lados.
+            botao: { texto: '⬇️ Baixar esta', comando: '/musica {{url}}' },
+            // Dez é o teto do carrossel do WhatsApp; cinco cabe na tela sem
+            // deslizar até o fim.
+            limite: 5,
             vazio: 'Não achei nada com esse nome no YouTube.',
             // O que o serviço recusa vem em `detail`, que é onde o FastAPI
             // escreve a frase — "Termo longo demais (máximo 200)" diz à pessoa
