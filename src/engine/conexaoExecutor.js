@@ -156,6 +156,41 @@ function escrever (modelo, valores) {
   })
 }
 
+// CARDS DO MESMO TAMANHO.
+//
+// O card cresce com o texto, e nome de música tem comprimento qualquer: um de
+// uma linha ao lado de um de três deixa o carrossel torto. Os menores ganham
+// linhas vazias até empatar com o maior.
+//
+// A conta é uma ESTIMATIVA, e não tem como ser outra coisa: quem decide onde a
+// linha quebra é o aplicativo de quem recebe, com a fonte e a largura de tela
+// dele. 28 caracteres por linha é a largura típica do card; errar por uma
+// linha deixa o carrossel levemente torto, que é muito melhor que o que havia
+// antes.
+const LARGURA_DO_CARD = 28
+// Teto para o caso patológico: um título gigante não pode empurrar os outros
+// cards para dez linhas de nada.
+const MAXIMO_DE_LINHAS_VAZIAS = 6
+// Espaço de largura zero: linha "vazia" que o WhatsApp não come ao aparar o
+// texto. Linha com espaço comum ele apara.
+const LINHA_VAZIA = '\u200b'
+
+function linhasOcupadas (texto) {
+  if (!texto) return 0
+  return String(texto).split('\n')
+    .reduce((total, linha) => total + Math.max(1, Math.ceil(linha.length / LARGURA_DO_CARD)), 0)
+}
+
+function igualarAlturaDosCards (cards) {
+  if (cards.length < 2) return
+  const altura = (c) => linhasOcupadas(c.titulo) + linhasOcupadas(c.corpo)
+  const maior = Math.max(...cards.map(altura))
+  for (const card of cards) {
+    const faltam = Math.min(maior - altura(card), MAXIMO_DE_LINHAS_VAZIAS)
+    if (faltam > 0) card.corpo = `${card.corpo}${`\n${LINHA_VAZIA}`.repeat(faltam)}`
+  }
+}
+
 // A lista, virada mensagem.
 //
 // Numerada porque é para escolher: "manda o 2" só funciona se o 2 estiver
@@ -455,6 +490,7 @@ export function criarExecutorDeConexao ({
             : null
         })
       }
+      if (forma.igualarAltura) igualarAlturaDosCards(cards)
       if (!cards.length) {
         throw new ErroDeConexao(
           `Nenhum dos ${usados.length} resultados trouxe imagem que desse para buscar.`,

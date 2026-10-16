@@ -167,6 +167,42 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     s.chamadas[1].url === 'http://127.0.0.1:8765/capa/a', s.chamadas[1]?.url)
 }
 
+// --- cards do mesmo tamanho ----------------------------------------------
+//
+// O card cresce com o texto, e nome de música tem comprimento qualquer: um de
+// uma linha ao lado de um de três deixa o carrossel torto. O pedido do dono:
+// linhas vazias nos menores, alinhando com o maior.
+{
+  const s = servico([
+    {
+      busca: 'x',
+      achados: [
+        { id: 'a', url: 'https://y/a', capa: '/capa/a', autor: 'Fulano', titulo: 'Nome curto' },
+        {
+          id: 'b',
+          url: 'https://y/b',
+          capa: '/capa/b',
+          autor: 'Beltrano',
+          titulo: 'Um nome de música bem comprido que ocupa uma porção de linhas no card'
+        }
+      ]
+    },
+    { arquivo: 'capa-a' },
+    { arquivo: 'capa-b' }
+  ])
+  const r = await criarExecutorDeConexao({ buscar: s.buscar, dormir: semDormir })
+    .executar(DECLARACAO, 'buscar', { busca: 'x' })
+
+  const linhas = (c) => `${c.titulo}\n${c.corpo}`.split('\n').length
+  check('o card menor ganha linhas para empatar com o maior',
+    linhas(r.cards[0]) > 2, String(linhas(r.cards[0])))
+  check('e o maior não ganha nenhuma', !r.cards[1].corpo.includes('\u200b'), JSON.stringify(r.cards[1].corpo))
+  // Espaço de largura zero, e não espaço comum: o WhatsApp apara linha com
+  // espaço comum, e a linha somia justamente onde ela devia aparecer.
+  check('a linha vazia é invisível, não um espaço qualquer', r.cards[0].corpo.includes('\u200b'))
+  check('o texto de verdade continua lá', r.cards[0].corpo.startsWith('👤 Fulano'), r.cards[0].corpo)
+}
+
 // --- busca sem resultado, e busca recusada -------------------------------
 {
   const s = servico([{ busca: 'asdfghjkl', achados: [] }])

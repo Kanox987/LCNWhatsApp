@@ -217,6 +217,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
   const textoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.texto || '', placeholder: '⬇️ Baixar esta' })
   const comandoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.comando || '', placeholder: '/musica {{url}}' })
   const limiteDeCards = el('input', { type: 'number', min: '1', max: '10', step: '1', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.limite ?? '') : '' })
+  const igualarAltura = el('input', { type: 'checkbox', checked: funcao?.resposta?.igualarAltura !== false })
   const estiloDoCarrossel = el('select', {}, [
     ['completo', 'Completo — texto dentro e embrulho viewOnce (a forma do takeshi-bot)'],
     ['simples', 'Simples — só os cards, texto em mensagem separada (a forma do /dow)'],
@@ -306,6 +307,10 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
       field('Quantos cards', limiteDeCards, 'Até 10, que é o teto do WhatsApp. Vazio manda todos os que vierem.'),
       field('Quando não vier nada', vazioDoCarrossel, 'A frase de "não achei". Lista vazia é resposta normal de busca, não erro.')
     ]),
+    el('label', { className: 'switch-row' }, [igualarAltura, el('span', {}, [
+      el('strong', { text: 'Cards do mesmo tamanho' }),
+      el('small', { text: 'O card cresce com o texto, e nome comprido deixa um card maior que o outro. Com isto ligado, os menores ganham linhas vazias até empatar com o maior.' })
+    ])]),
     field('Forma da mensagem', estiloDoCarrossel, 'Versões diferentes do WhatsApp desenham formas diferentes — e quando não desenham, NÃO há erro nenhum: o envio é confirmado e a conversa fica vazia. Botão dentro do card exige que a mensagem se anuncie como "native flow" no stanza, e a biblioteca só faz isso sozinha quando o fluxo está no nível principal: é o que as formas "nó na mão" e "fluxo no topo" resolvem, cada uma de um jeito. "Botões" e "Menu" tiram o botão de dentro do card. "Diagnóstico" manda todas numeradas de uma vez, para descobrir qual o aparelho desenha.'),
     field('Campo do erro', erroDoCarrossel, 'Opcional: de onde o serviço traz a frase de recusa.')
   ])
@@ -414,6 +419,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
         limite: Number.isFinite(limite) && limite > 0 ? Math.round(limite) : null,
         vazio: vazioDoCarrossel.value.trim() || null,
         estilo: estiloDoCarrossel.value,
+        igualarAltura: igualarAltura.checked,
         campoDoErro: erroDoCarrossel.value.trim() || null
       }
     } else if (forma.value === 'lista') {

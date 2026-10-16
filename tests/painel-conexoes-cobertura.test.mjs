@@ -63,7 +63,7 @@ for (const tipo of Object.keys(TIPOS_DE_ENVIO)) {
 }
 
 // Campos que o motor passou a aceitar e que a tela precisa saber escrever.
-for (const campo of ['esperaSegundos', 'modeloDaDescricao', 'ordemDosTipos', 'campoDaDescricao', 'estilo']) {
+for (const campo of ['esperaSegundos', 'modeloDaDescricao', 'ordemDosTipos', 'campoDaDescricao', 'estilo', 'igualarAltura']) {
   check(`a tela sabe escrever "${campo}"`, tela.includes(campo))
 }
 // O botão do card: rótulo e comando são o que fazem o carrossel ser mais que

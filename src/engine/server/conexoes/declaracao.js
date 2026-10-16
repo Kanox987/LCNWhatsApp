@@ -295,6 +295,15 @@ function validarResposta (resposta, onde) {
             comando: exigirTexto(botao.comando, `${onde} — o comando que o botão manda`)
           }
         : null,
+      // CARDS DO MESMO TAMANHO.
+      //
+      // O card cresce com o texto, e nome de música tem comprimento qualquer:
+      // um card de uma linha ao lado de um de três deixa o carrossel torto. O
+      // dono pediu linhas vazias nos menores para alinhar com o maior.
+      //
+      // Declarado, e ligado por padrão: é estética do carrossel, e quem achar
+      // feio desliga sem precisar de mim.
+      igualarAltura: resposta.igualarAltura !== false && resposta.igualarAltura !== 'nao',
       // A FORMA DA MENSAGEM, porque uma só não serve a todo aparelho.
       //
       // Mensagem interativa é aceita pelo servidor e desenhada (ou não) pelo
