@@ -1,6 +1,9 @@
 import * as enviadas from '../enviadas.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
-import { ESTILOS_DE_CARROSSEL, montarCard, montarCarrossel, podeVirarCarrossel } from './carrossel.js'
+import {
+  ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
+  montarCarrossel, montarMenuDeEscolha, podeVirarCarrossel
+} from './carrossel.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -488,10 +491,34 @@ async function executarChamadaDeConexao (client, comando, deps) {
     // A FORMA vem da declaração. "diagnóstico" manda as três, numeradas: uma
     // tentativa só responde qual delas o aplicativo de quem recebe desenha —
     // porque quando ele não desenha, não há erro em lugar nenhum para ler.
-    const estilos = resultado.estilo === 'diagnóstico' ? ESTILOS_DE_CARROSSEL : [resultado.estilo || 'completo']
+    // No diagnóstico entram as formas de carrossel E as de escolha: o teste do
+    // dono mostrou que carrossel com botão não é desenhado em forma nenhuma,
+    // então a pergunta passou a ser "e o botão FORA do card, aparece?".
+    const estilos = resultado.estilo === 'diagnóstico'
+      ? [...ESTILOS_DE_CARROSSEL, ...FORMAS_DE_ESCOLHA]
+      : [resultado.estilo || 'completo']
     try {
       for (const estilo of estilos) {
         const texto = estilos.length > 1 ? `[${estilo}] ${abertura || ''}`.trim() : abertura
+        // BOTÃO FORA DO CARD. O carrossel vai sem botão — que é a forma
+        // desenhada aqui há semanas — e a escolha vem na mensagem seguinte.
+        if (FORMAS_DE_ESCOLHA.includes(estilo)) {
+          await comTimeout(
+            () => enviarERegistrar(client, chatId, montarCarrossel(cards.map((c) => ({ ...c, nativeFlowMessage: { buttons: [] } })), { estilo: 'simples' })),
+            TIMEOUT_ENVIO_MS * 4,
+            `timeout ao enviar os cards do comando ${comando.id}`
+          )
+          const escolha = estilo === 'botoes'
+            ? montarBotoesDeEscolha(resultado.cards, { texto })
+            : montarMenuDeEscolha(resultado.cards, { texto })
+          await comTimeout(
+            () => enviarERegistrar(client, chatId, escolha),
+            TIMEOUT_ENVIO_MS,
+            `timeout ao enviar a escolha do comando ${comando.id}`
+          )
+          console.log(`[engine] escolha ${comando.id}: forma "${estilo}", ${resultado.cards.length} opção(ões)`)
+          continue
+        }
         // Na forma "simples" o texto não cabe dentro da mensagem: vai antes.
         if (estilo === 'simples' && texto) {
           await comTimeout(

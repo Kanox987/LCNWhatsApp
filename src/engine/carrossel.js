@@ -141,6 +141,71 @@ export function montarCard (midia, upload, { titulo, legenda, rodape, botao } = 
 //   semEmbrulho - o completo sem o viewOnce.
 export const ESTILOS_DE_CARROSSEL = Object.freeze(['completo', 'simples', 'semEmbrulho'])
 
+// AS OUTRAS DUAS FORMAS DE OFERECER AS MESMAS OPÇÕES.
+//
+// O teste do dono respondeu o que três deploys não responderam: carrossel COM
+// BOTÃO não é desenhado pelo WhatsApp dele em forma nenhuma — e o carrossel de
+// fotos do /dow, que tem a lista de botões VAZIA, é desenhado há semanas. O
+// botão dentro do card é o que o aplicativo recusa.
+//
+// (E o exemplo do takeshi-bot, que eu tinha citado como prova, manda cards SEM
+// botão. O código deles suporta; o exemplo não usa. Eu nunca tive a prova que
+// disse ter.)
+//
+// Então o botão sai de dentro do card e vira mensagem própria, nas duas formas
+// que o WhatsApp comum conhece há mais tempo:
+//
+//   botoes - até três botões de resposta rápida, lado a lado.
+//   menu   - uma lista de escolha, que abre com o nome e a descrição de cada
+//            item. É a MESMA forma do /menu interativo daqui.
+//
+// Nos dois, o que o toque manda é o `id`: o comando inteiro, com o argumento
+// daquele item. Ver `textoDeResposta` no adaptador.
+export const FORMAS_DE_ESCOLHA = Object.freeze(['botoes', 'menu'])
+
+// Três é o teto dos botões de resposta rápida no WhatsApp comum. Mandar mais
+// faz o aplicativo descartar a mensagem inteira — o mesmo silêncio de sempre.
+const MAXIMO_DE_BOTOES = 3
+
+export function montarBotoesDeEscolha (itens, { texto = null, rodape = null } = {}) {
+  const botoes = itens.slice(0, MAXIMO_DE_BOTOES).filter((i) => i.botao?.texto && i.botao?.comando).map((i) => ({
+    name: 'quick_reply',
+    buttonParamsJson: JSON.stringify({ display_text: i.botao.texto, id: i.botao.comando })
+  }))
+  return {
+    viewOnceMessageV2: {
+      message: {
+        interactiveMessage: {
+          body: { text: texto || ' ' },
+          ...(rodape ? { footer: { text: rodape } } : {}),
+          nativeFlowMessage: { buttons: botoes, messageParamsJson: '' }
+        }
+      }
+    }
+  }
+}
+
+export function montarMenuDeEscolha (itens, { texto = null, rodape = null, titulo = 'Escolha' } = {}) {
+  const linhas = itens.slice(0, 10).filter((i) => i.botao?.comando).map((i, n) => ({
+    title: (i.titulo || `Opção ${n + 1}`).slice(0, 24),
+    description: [i.corpo, i.rodape].filter(Boolean).join(' · ').slice(0, 72),
+    id: i.botao.comando
+  }))
+  return {
+    interactiveMessage: {
+      body: { text: texto || ' ' },
+      ...(rodape ? { footer: { text: rodape } } : {}),
+      nativeFlowMessage: {
+        buttons: [{
+          name: 'single_select',
+          buttonParamsJson: JSON.stringify({ title: titulo, sections: [{ title: titulo, rows: linhas }] })
+        }],
+        messageParamsJson: ''
+      }
+    }
+  }
+}
+
 export function montarCarrossel (cards, { texto = null, rodape = null, estilo = 'completo' } = {}) {
   const interactiveMessage = { carouselMessage: { cards } }
   if (estilo !== 'simples') {

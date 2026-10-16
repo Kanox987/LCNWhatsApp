@@ -221,7 +221,9 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     ['completo', 'Completo — texto dentro e embrulho viewOnce (a forma do takeshi-bot)'],
     ['simples', 'Simples — só os cards, texto em mensagem separada (a forma do /dow)'],
     ['semEmbrulho', 'Sem embrulho — texto dentro, sem o viewOnce'],
-    ['diagnóstico', 'Diagnóstico — manda as três, numeradas, para descobrir qual aparece']
+    ['botoes', 'Botões — cards sem botão, e até 3 botões na mensagem seguinte'],
+    ['menu', 'Menu — cards sem botão, e uma lista de escolha na mensagem seguinte'],
+    ['diagnóstico', 'Diagnóstico — manda todas, numeradas, para descobrir qual aparece']
   ].map(([v, rotulo]) => el('option', { value: v, selected: (funcao?.resposta?.estilo || 'completo') === v, text: rotulo })))
   const vazioDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.vazio || '') : '', placeholder: 'Não achei nada.' })
   const erroDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.campoDoErro || '') : '', placeholder: 'detail' })
@@ -302,7 +304,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
       field('Quantos cards', limiteDeCards, 'Até 10, que é o teto do WhatsApp. Vazio manda todos os que vierem.'),
       field('Quando não vier nada', vazioDoCarrossel, 'A frase de "não achei". Lista vazia é resposta normal de busca, não erro.')
     ]),
-    field('Forma da mensagem', estiloDoCarrossel, 'Versões diferentes do WhatsApp desenham formas diferentes — e quando não desenham, NÃO há erro nenhum: o envio é confirmado e a conversa fica vazia. Se o carrossel não aparecer, troque aqui e mande o comando de novo. "Diagnóstico" manda as três numeradas de uma vez.'),
+    field('Forma da mensagem', estiloDoCarrossel, 'Versões diferentes do WhatsApp desenham formas diferentes — e quando não desenham, NÃO há erro nenhum: o envio é confirmado e a conversa fica vazia. Botão DENTRO do card não é desenhado pelo WhatsApp comum; "Botões" e "Menu" tiram o botão de dentro do card e põem na mensagem seguinte. "Diagnóstico" manda todas numeradas de uma vez, para descobrir qual o aparelho desenha.'),
     field('Campo do erro', erroDoCarrossel, 'Opcional: de onde o serviço traz a frase de recusa.')
   ])
 

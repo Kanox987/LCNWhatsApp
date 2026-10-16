@@ -445,11 +445,30 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   check('"semEmbrulho" tem o texto dentro e nenhum viewOnce',
     !semEmbrulho[0]?.viewOnceMessageV2 && semEmbrulho[0]?.interactiveMessage?.body?.text?.includes('Achei'))
 
+  // BOTÃO FORA DO CARD: o carrossel vai sem botão (forma desenhada aqui há
+  // semanas) e a escolha vem na mensagem seguinte.
+  const botoes = await porEstilo('botoes')
+  check('"botoes" manda os cards e depois os botões', botoes.length === 2, String(botoes.length))
+  const flow = botoes[1]?.viewOnceMessageV2?.message?.interactiveMessage?.nativeFlowMessage
+  check('os botões são de resposta rápida', flow?.buttons?.[0]?.name === 'quick_reply', JSON.stringify(flow?.buttons?.[0]))
+  check('e o id do botão é o comando daquela opção',
+    JSON.parse(flow.buttons[0].buttonParamsJson).id === '/musica x')
+  check('os cards vão SEM botão, que é o que o aplicativo recusa',
+    (botoes[0]?.interactiveMessage?.carouselMessage?.cards || []).every((c) => (c.nativeFlowMessage?.buttons || []).length === 0))
+
+  const menu = await porEstilo('menu')
+  const lista = menu[1]?.interactiveMessage?.nativeFlowMessage?.buttons?.[0]
+  check('"menu" manda uma lista de escolha', lista?.name === 'single_select', JSON.stringify(lista))
+  check('com o comando de cada opção na linha dela',
+    JSON.parse(lista.buttonParamsJson).sections[0].rows[0].id === '/musica x')
+
   const diagnostico = await porEstilo('diagnóstico')
   const formas = diagnostico.filter((c) => c.viewOnceMessageV2 || c.interactiveMessage).length
-  check('"diagnóstico" manda as três formas de uma vez', formas === 3, String(formas))
+  // Três de carrossel + duas de escolha, e as de escolha mandam dois envios
+  // cada (os cards e a escolha).
+  check('"diagnóstico" manda todas as formas de uma vez', formas === 7, String(formas))
   check('e cada uma diz o nome dela, para a pessoa poder apontar qual apareceu',
-    JSON.stringify(diagnostico).includes('[completo]') && JSON.stringify(diagnostico).includes('[simples]'))
+    ['[completo]', '[simples]', '[botoes]', '[menu]'].every((n) => JSON.stringify(diagnostico).includes(n)))
 }
 
 // --- carrossel recusado cai para texto, e nada se perde -------------------
