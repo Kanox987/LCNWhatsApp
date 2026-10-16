@@ -1,0 +1,85 @@
+template desfocar-fundo v1
+  nome: Desfocar o fundo (efeito retrato)
+  descrição: Responda uma foto com o comando e o bot devolve ela com o fundo borrado e o centro nítido — o efeito retrato do celular, feito depois. A IA separa a pessoa (ou o bicho, ou o objeto) do fundo, e só o fundo é borrado. Escrevendo um número junto do comando, de 1 a 10, você escolhe o quanto ele borra.
+  categoria: utilitarios
+
+automação
+  nome: Desfocar o fundo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Desfoca o fundo da foto e deixa o centro nítido
+  pool: {{params.poolId}}
+  acessa: texto, foto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  se evento message.args != ""
+    chama {{params.conexao}}.fundo
+      com
+        arquivo: a mídia
+        acao: "desfocar"
+        forca: "{{message.args}}"
+        suavizar_bordas: {{params.suavizarBordas}}
+        formato: {{params.formato}}
+      avisa: "{{params.ackText}}"
+      legenda: "{{params.caption}}"
+      erro: "{{params.errorText}}"
+  senão
+    chama {{params.conexao}}.fundo
+      com
+        arquivo: a mídia
+        acao: "desfocar"
+        forca: {{params.forca}}
+        suavizar_bordas: {{params.suavizarBordas}}
+        formato: {{params.formato}}
+      avisa: "{{params.ackText}}"
+      legenda: "{{params.caption}}"
+      erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/desfocar"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita respondendo uma foto, ou mandando a foto com o comando na legenda. Um número depois dele escolhe a força — "/desfocar 8".
+  conexao: texto = "imagem"
+    rótulo: Serviço que desfoca
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  forca: número = 5
+    rótulo: Força do desfoque (padrão)
+    ajuda: De 1 a 10. Vale quando a pessoa não escreve número nenhum. 5 é o meio; 8 ou mais deixa o fundo quase irreconhecível.
+  suavizarBordas: número = 3
+    rótulo: Suavizar a beirada
+    ajuda: De 0 a 10. Esfuma a borda do recorte para a pessoa não ficar com cara de figura colada. 3 é o padrão do serviço.
+  formato: opção (jpg, png, webp) = "jpg"
+    rótulo: Formato da saída
+    ajuda: jpg é o que costuma caber no envio. Como o fundo não fica transparente, png aqui só aumenta o peso.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  ackText: texto = "📷 Separando você do fundo…"
+    rótulo: Aviso ao começar
+    ajuda: Enviado na hora. A IA de recorte leva alguns segundos — sem aviso, parece que o comando não funcionou.
+  caption: texto = ""
+    rótulo: Legenda
+    ajuda: Deixe vazio para mandar a foto sem legenda.
+  semMidiaText: texto = "Responde uma foto com este comando, ou manda a foto com o comando na legenda."
+    rótulo: Aviso quando não vier foto
+    ajuda: Resposta quando o comando é usado sem nada por perto.
+  errorText: texto = "Não consegui desfocar o fundo: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo — número fora de 1 a 10, arquivo que não é foto, serviço fora do ar.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões, com a função "fundo". Se a conexão foi cadastrada antes desta função existir, a aba Conexões oferece trazê-la.
+
+avisa nota
+  Só foto. Vídeo e figurinha não passam pela IA de recorte.
+
+avisa nota
+  O fundo é borrado SEM o centro e depois os dois são juntados — por isso a pessoa não fica com um halo em volta dela mesma.
+
+# nós: gatilho-comando, veio-forca, desfocar-com-a-forca, desfocar-com-o-padrao

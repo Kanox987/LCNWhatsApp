@@ -98,6 +98,12 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
       { nome: 'melhorar', tipo: 'opção', opcoes: ['sim', 'nao'], obrigatoria: false },
       { nome: 'duracao_max', tipo: 'número', obrigatoria: false },
       { nome: 'inicio', tipo: 'número', obrigatoria: false },
+      // `animada: nao` é o que faz um vídeo virar figurinha PARADA, do quadro
+      // escolhido. Sem declarar, o comando de figurinha de vídeo não tinha
+      // como pedir isso.
+      { nome: 'animada', tipo: 'opção', opcoes: ['auto', 'sim', 'nao'], obrigatoria: false },
+      { nome: 'fps', tipo: 'número', obrigatoria: false },
+      { nome: 'ajustar', tipo: 'opção', opcoes: ['sim', 'nao'], obrigatoria: false },
       { nome: 'qualidade', tipo: 'número', obrigatoria: false },
       { nome: 'limite_bytes', tipo: 'número', obrigatoria: false },
       { nome: 'emojis', tipo: 'texto', obrigatoria: false },
@@ -110,14 +116,38 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
   },
   {
     nome: 'figurinha_de_frase',
-    descricao: 'Transforma uma frase em figurinha. Não recebe arquivo. Com fundo ou letra "arco-iris" a figurinha sai animada.',
+    descricao: 'Transforma uma frase em figurinha. Não recebe arquivo. Letreiro que desliza, letras que acendem uma a uma, temas de cor prontos; com fundo ou letra "arco-iris" a frase sai animada.',
     metodo: 'POST',
     caminho: '/figurinha/texto',
+    // O letreiro arco-íris chegava a 28 s e estourava os 20 s padrão; o próprio
+    // serviço subiu o prazo das frases de 30 para 60 s. Declarar 120 dá folga
+    // para o caso ruim sem segurar o pedido para sempre.
+    esperaSegundos: 120,
     entradas: [
       { nome: 'texto', tipo: 'texto', obrigatoria: true },
       { nome: 'fundo', tipo: 'texto', obrigatoria: false },
       { nome: 'letra', tipo: 'texto', obrigatoria: false },
-      { nome: 'efeito', tipo: 'opção', opcoes: ['piscar', 'suave', 'nenhum'], obrigatoria: false },
+      // A cor de DESTAQUE. No "letra-a-letra" é a cor da letra que acabou de
+      // acender; nos outros efeitos, as palavras alternam entre as duas.
+      { nome: 'letra2', tipo: 'texto', obrigatoria: false },
+      {
+        nome: 'efeito',
+        tipo: 'opção',
+        opcoes: ['piscar', 'suave', 'deslizar', 'letra-a-letra', 'nenhum'],
+        obrigatoria: false
+      },
+      // Combinação pronta de fundo, letra e destaque. Só preenche o que não foi
+      // mandado — `tema: neon` com `letra: branco` usa o fundo do neon e a
+      // letra escolhida.
+      {
+        nome: 'tema',
+        tipo: 'opção',
+        opcoes: ['classico', 'papel', 'neon', 'alerta', 'noite', 'doce', 'festa'],
+        obrigatoria: false
+      },
+      { nome: 'alinhamento', tipo: 'opção', opcoes: ['centro', 'esquerda', 'direita'], obrigatoria: false },
+      { nome: 'quadros', tipo: 'número', obrigatoria: false },
+      { nome: 'velocidade_ms', tipo: 'número', obrigatoria: false },
       { nome: 'contorno', tipo: 'texto', obrigatoria: false },
       { nome: 'fonte', tipo: 'opção', opcoes: ['padrao', 'serifa', 'mono', 'liberation', 'liberation-serifa', 'fina'], obrigatoria: false },
       { nome: 'maiusculas', tipo: 'opção', opcoes: ['sim', 'nao'], obrigatoria: false },
@@ -170,6 +200,42 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
     resposta: arquivoDeVolta(null)
   },
   {
+    // O FUNDO, com as quatro ações numa função só.
+    //
+    // A IA separa o centro (pessoa, bicho, objeto) do fundo, e `acao` decide o
+    // que fazer com o que sobrou: tirar, borrar, trocar por outra foto ou
+    // pintar de uma cor. `remover_fundo` continua existindo logo abaixo porque
+    // é a função que os comandos instalados chamam — apagá-la quebraria o
+    // /remover-fundo de quem já tem o sistema.
+    nome: 'fundo',
+    descricao: 'Mexe no fundo de uma foto: tira (transparente), desfoca deixando o centro nítido (efeito retrato), pinta de uma cor, ou troca por outra foto.',
+    metodo: 'POST',
+    caminho: '/fundo',
+    // Medido no serviço: 6 a 9 s numa foto de 1000x667, mais a espera por vaga
+    // de IA quando outro pedido está usando o modelo.
+    esperaSegundos: 180,
+    entradas: [
+      { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
+      { nome: 'acao', tipo: 'opção', opcoes: ['remover', 'desfocar', 'trocar', 'cor'], obrigatoria: false, padrao: 'desfocar' },
+      { nome: 'modelo', tipo: 'opção', opcoes: ['isnet-general-use', 'silueta', 'u2netp'], obrigatoria: false },
+      // O quanto o fundo borra, de 1 a 10. É o botão do efeito retrato.
+      { nome: 'forca', tipo: 'número', obrigatoria: false },
+      // Esfuma a beirada do centro, para não ficar com cara de recorte colado.
+      { nome: 'suavizar_bordas', tipo: 'número', obrigatoria: false },
+      // Na troca: borra a foto nova, e puxa luz e cor do centro para as dela.
+      { nome: 'desfocar_fundo', tipo: 'número', obrigatoria: false },
+      { nome: 'harmonizar', tipo: 'opção', opcoes: ['sim', 'nao'], obrigatoria: false },
+      { nome: 'formato', tipo: 'opção', opcoes: ['png', 'webp', 'jpg'], obrigatoria: false },
+      // Em `cor`, a cor do fundo; em `remover`, a cor que entra no lugar da
+      // transparência.
+      { nome: 'fundo', tipo: 'texto', obrigatoria: false },
+      { nome: 'recortar', tipo: 'opção', opcoes: ['sim', 'nao'], obrigatoria: false },
+      { nome: 'refinar_bordas', tipo: 'opção', opcoes: ['sim', 'nao'], obrigatoria: false },
+      RESPOSTA_JSON
+    ],
+    resposta: arquivoDeVolta('foto')
+  },
+  {
     nome: 'remover_fundo',
     descricao: 'Recorta o objeto principal de uma foto e deixa o fundo transparente, ou troca o fundo por uma cor.',
     metodo: 'POST',
@@ -189,7 +255,7 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
   },
   {
     nome: 'melhorar',
-    descricao: 'Melhora uma foto. "4k" decide sozinho como chegar perto de 4K (IA, Lanczos, ou só ajuste quando já é grande). "ia" força o modelo em 2x ou 4x. "leve" só ajusta contraste e nitidez, na hora.',
+    descricao: 'Melhora uma foto, até 4K. Duas escolhas independentes: o TRATAMENTO ("auto" decide, "classico" sem IA, "ia" só o modelo, "ambos" os dois) e ATÉ ONDE a foto cresce ("4k", "original", "2x", "4x").',
     metodo: 'POST',
     caminho: '/melhorar',
     // A mais demorada do serviço: o modo 4k vai de ~2 s a ~2 min conforme o
@@ -198,7 +264,16 @@ const FUNCOES_DE_IMAGEM = Object.freeze([
     esperaSegundos: 600,
     entradas: [
       { nome: 'arquivo', tipo: 'mídia', obrigatoria: true },
-      { nome: 'modo', tipo: 'opção', opcoes: ['4k', 'ia', 'leve'], obrigatoria: false },
+      // Os nomes NOVOS e os ANTIGOS na mesma lista, de propósito: o serviço
+      // continua aceitando os dois (`4k` é `auto`, `leve` é `classico`), e tirar
+      // os antigos daqui faria o comando já instalado — que manda `modo: 4k` —
+      // ser recusado na publicação da próxima vez que alguém o abrisse.
+      { nome: 'modo', tipo: 'opção', opcoes: ['auto', 'classico', 'ia', 'ambos', '4k', 'leve'], obrigatoria: false },
+      // ATÉ ONDE a foto cresce, que antes vinha junto do modo. `original`
+      // mantém o tamanho e só melhora; `2x`/`4x` é escala fixa.
+      { nome: 'alvo', tipo: 'opção', opcoes: ['4k', 'original', '2x', '4x'], obrigatoria: false },
+      // O quanto o tratamento clássico aparece, de 0 a 2.
+      { nome: 'intensidade', tipo: 'número', obrigatoria: false },
       { nome: 'escala', tipo: 'número', obrigatoria: false },
       { nome: 'formato', tipo: 'opção', opcoes: ['png', 'jpg', 'webp'], obrigatoria: false },
       { nome: 'qualidade', tipo: 'número', obrigatoria: false },

@@ -1,0 +1,82 @@
+template fundo-cor v1
+  nome: Pintar o fundo de uma cor
+  descrição: Responda uma foto com o comando e o bot troca o fundo por uma cor só — fundo de estúdio, foto de documento, figurinha com fundo chapado. Escrevendo a cor junto do comando ("/fundo azul", "/fundo #ff0000") ela vale para aquela foto; sozinho, vale a cor configurada.
+  categoria: utilitarios
+
+automação
+  nome: Pintar o fundo de uma cor
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Troca o fundo da foto por uma cor
+  pool: {{params.poolId}}
+  acessa: texto, foto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  se evento message.args != ""
+    chama {{params.conexao}}.fundo
+      com
+        arquivo: a mídia
+        acao: "cor"
+        fundo: "{{message.args}}"
+        suavizar_bordas: {{params.suavizarBordas}}
+        formato: {{params.formato}}
+      avisa: "{{params.ackText}}"
+      legenda: "{{params.caption}}"
+      erro: "{{params.errorText}}"
+  senão
+    chama {{params.conexao}}.fundo
+      com
+        arquivo: a mídia
+        acao: "cor"
+        fundo: {{params.cor}}
+        suavizar_bordas: {{params.suavizarBordas}}
+        formato: {{params.formato}}
+      avisa: "{{params.ackText}}"
+      legenda: "{{params.caption}}"
+      erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/fundo"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita respondendo uma foto. A cor vem depois — "/fundo branco", "/fundo #0b1e4d".
+  conexao: texto = "imagem"
+    rótulo: Serviço que troca o fundo
+    ajuda: O identificador da conexão, como está na aba Conexões.
+  cor: texto = "branco"
+    rótulo: Cor do fundo (padrão)
+    ajuda: Vale quando a pessoa não escreve cor nenhuma. Aceita nome (preto, branco, vermelho, verde, azul, amarelo, laranja, rosa, roxo, cinza, ciano) ou #RRGGBB.
+  suavizarBordas: número = 3
+    rótulo: Suavizar a beirada
+    ajuda: De 0 a 10. Esfuma a borda do recorte para não ficar com cara de figura colada.
+  formato: opção (jpg, png, webp) = "jpg"
+    rótulo: Formato da saída
+    ajuda: jpg basta, já que o fundo é uma cor cheia.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda.
+  ackText: texto = "🎨 Trocando o fundo…"
+    rótulo: Aviso ao começar
+    ajuda: Enviado na hora. A IA de recorte leva alguns segundos.
+  caption: texto = ""
+    rótulo: Legenda
+    ajuda: Deixe vazio para mandar a foto sem legenda.
+  semMidiaText: texto = "Responde uma foto com este comando, ou manda a foto com o comando na legenda."
+    rótulo: Aviso quando não vier foto
+    ajuda: Resposta quando o comando é usado sem nada por perto.
+  errorText: texto = "Não consegui trocar o fundo: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Escreva {{erro}} onde quiser que apareça o motivo — cor que o serviço não entende, arquivo que não é foto.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões, com a função "fundo". Se a conexão foi cadastrada antes desta função existir, a aba Conexões oferece trazê-la.
+
+avisa nota
+  Só foto. Para fundo TRANSPARENTE em vez de uma cor, use o comando de remover o fundo.
+
+# nós: gatilho-comando, veio-cor, pintar-com-a-cor, pintar-com-o-padrao

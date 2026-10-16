@@ -32,8 +32,54 @@ check('com autenticação bearer, que é o que o serviço pede', pronta.config.a
 
 const config = validarConfiguracao(pronta.config)
 const porNome = new Map(config.funcoes.map((f) => [f.nome, f]))
-for (const nome of ['figurinha', 'figurinha_de_frase', 'converter', 'remover_fundo', 'melhorar']) {
+for (const nome of ['figurinha', 'figurinha_de_frase', 'converter', 'fundo', 'remover_fundo', 'melhorar']) {
   check(`a função "${nome}" está declarada`, porNome.has(nome))
+}
+
+// --- o que o serviço de imagem ganhou depois, e a declaração acompanhou ----
+{
+  const fundo = porNome.get('fundo')
+  const acao = fundo.entradas.find((e) => e.nome === 'acao')
+  check('fundo declara as quatro ações',
+    ['remover', 'desfocar', 'trocar', 'cor'].every((a) => acao.opcoes.includes(a)), acao.opcoes.join(', '))
+  check('e nasce no desfocar, que é o efeito retrato', acao.padrao === 'desfocar')
+  check('fundo recebe o arquivo da mensagem', fundo.entradas.some((e) => e.tipo === 'mídia' && e.nome === 'arquivo'))
+  check('fundo tem força, suavização e harmonização',
+    ['forca', 'suavizar_bordas', 'harmonizar', 'desfocar_fundo'].every((n) => fundo.entradas.some((e) => e.nome === n)))
+  // A IA de recorte leva de 6 a 9 s, mais a espera por vaga. Com os 20 s
+  // padrão, duas fotos ao mesmo tempo matariam a segunda.
+  check('fundo declara espera folgada', fundo.esperaSegundos === 180, String(fundo.esperaSegundos))
+  // `remover_fundo` CONTINUA, porque é a função que o comando instalado chama.
+  check('e o remover_fundo antigo continua declarado', porNome.has('remover_fundo'))
+
+  const melhorar = porNome.get('melhorar')
+  const modo = melhorar.entradas.find((e) => e.nome === 'modo')
+  check('melhorar declara os tratamentos novos',
+    ['auto', 'classico', 'ia', 'ambos'].every((m) => modo.opcoes.includes(m)), modo.opcoes.join(', '))
+  // Os nomes antigos ficam: o serviço ainda os aceita, e tirá-los daqui faria
+  // o comando já instalado (modo: 4k) ser recusado na próxima publicação.
+  check('e mantém os nomes antigos, que o comando instalado usa',
+    modo.opcoes.includes('4k') && modo.opcoes.includes('leve'), modo.opcoes.join(', '))
+  const alvo = melhorar.entradas.find((e) => e.nome === 'alvo')
+  check('melhorar separa "até onde crescer" do tratamento',
+    alvo && ['4k', 'original', '2x', '4x'].every((a) => alvo.opcoes.includes(a)))
+  check('e tem intensidade do clássico', melhorar.entradas.some((e) => e.nome === 'intensidade'))
+
+  const frase = porNome.get('figurinha_de_frase')
+  const efeito = frase.entradas.find((e) => e.nome === 'efeito')
+  check('a frase declara o letreiro e o letra-a-letra',
+    efeito.opcoes.includes('deslizar') && efeito.opcoes.includes('letra-a-letra'), efeito.opcoes.join(', '))
+  const tema = frase.entradas.find((e) => e.nome === 'tema')
+  check('a frase declara os sete temas prontos', tema && tema.opcoes.length === 7, String(tema?.opcoes?.length))
+  check('e a cor de destaque, de que o letra-a-letra depende',
+    frase.entradas.some((e) => e.nome === 'letra2'))
+  // O letreiro arco-íris chegava a 28 s; o serviço subiu o prazo das frases
+  // para 60 s, e os 20 s padrão daqui abortariam a chamada no meio.
+  check('a frase declara espera própria', frase.esperaSegundos === 120, String(frase.esperaSegundos))
+
+  const fig = porNome.get('figurinha')
+  check('a figurinha pode pedir "não animada", para tirar um quadro do vídeo',
+    fig.entradas.some((e) => e.nome === 'animada'))
 }
 
 {
@@ -121,7 +167,38 @@ for (const nome of ['figurinha', 'figurinha_de_frase', 'converter', 'remover_fun
   // O número cresce quando um comando novo entra, e é de propósito: se um dia
   // ele CAIR, é porque um comando parou de apontar para a conexão de imagem —
   // e isso não deve passar despercebido.
-  check('todos os comandos do serviço de imagem foram conferidos', conferidos === 10, String(conferidos))
+  check('todos os comandos do serviço de imagem foram conferidos', conferidos === 16, String(conferidos))
+}
+
+// --- os comandos novos existem e pedem a ação certa ----------------------
+{
+  const catalogo = carregarCatalogo()
+  const chamadasDe = (id) => (catalogo.get(id)?.documentTemplate?.flow?.nodes || [])
+    .filter((n) => n.type === 'action.connection.call')
+
+  const desfocar = chamadasDe('desfocar-fundo')
+  check('existe o comando de desfocar o fundo', desfocar.length === 2, String(desfocar.length))
+  check('e ele pede a ação desfocar nos dois ramos',
+    desfocar.every((n) => n.config.function === 'fundo' && n.config.inputs.acao === 'desfocar'))
+  // Um ramo usa o número que a pessoa escreveu, o outro o configurado. Sem os
+  // dois, "{{message.args}}" vazio iria como texto para a API e voltaria 422.
+  check('um ramo usa a força escrita e o outro a configurada',
+    desfocar.some((n) => n.config.inputs.forca === '{{message.args}}') &&
+    desfocar.some((n) => n.config.inputs.forca !== '{{message.args}}'))
+
+  const cor = chamadasDe('fundo-cor')
+  check('existe o comando de pintar o fundo', cor.length === 2, String(cor.length))
+  check('e ele pede a ação cor', cor.every((n) => n.config.inputs.acao === 'cor'))
+  check('mandando a cor no campo "fundo"', cor.every((n) => !!n.config.inputs.fundo))
+
+  const letreiro = chamadasDe('letreiro')
+  check('existe o comando de letreiro', letreiro.length === 1)
+  check('e ele pede o efeito deslizar', letreiro[0].config.inputs.efeito === 'deslizar')
+  check('sem mandar arquivo, porque a frase não tem arquivo', !letreiro[0].config.mediaInput)
+
+  const soletrar = chamadasDe('soletrar')
+  check('existe o comando de acender letra por letra', soletrar.length === 1)
+  check('e ele pede o efeito letra-a-letra', soletrar[0].config.inputs.efeito === 'letra-a-letra')
 }
 
 // =========================================================================

@@ -134,6 +134,46 @@ function bancoComHistorico () {
   db.close()
 }
 
+// --- devolver o disco de um banco EM ARQUIVO, com diário ------------------
+//
+// O caso que a primeira limpeza de verdade revelou: o banco encolheu e a pasta
+// não, porque o diário (WAL) de 266 MB ficou lá. Em banco de memória isso não
+// aparece — por isso este caso usa arquivo.
+{
+  const fs = await import('fs')
+  const os = await import('os')
+  const path = await import('path')
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-retencao-'))
+  const arquivo = path.join(pasta, 'engine.sqlite')
+  const db = abrirBanco(arquivo)
+  db.prepare(`INSERT INTO automations (id, schema_version, enabled, deployment_mode, created_at, updated_at)
+    VALUES ('aut', 1, 1, 'live', ?, ?)`).run(horasAtras(200), horasAtras(200))
+  const revisao = Number(db.prepare(`INSERT INTO automation_revisions
+    (automation_id, revision, status, doc_json, created_at) VALUES ('aut', 1, 'active', '{}', ?)`)
+    .run(horasAtras(200)).lastInsertRowid)
+  const grande = 'x'.repeat(2000)
+  for (let i = 0; i < 400; i++) {
+    db.prepare(`INSERT INTO inbound_events
+      (id, account_id, chat_id, chat_kind, sender_id, message_kind, message_text, replay, raw_json, received_at)
+      VALUES (?, 'conta', 'chat', 'direct', 'alguem', 'text', ?, 0, ?, ?)`)
+      .run(`e${i}`, grande, JSON.stringify({ lixo: grande }), horasAtras(100))
+    db.prepare(`INSERT INTO automation_runs
+      (event_id, automation_id, automation_revision_id, deployment_mode, status, detail_json, created_at)
+      VALUES (?, 'aut', ?, 'live', 'no_match', ?, ?)`).run(`e${i}`, revisao, JSON.stringify({ lixo: grande }), horasAtras(100))
+  }
+  varrer(db, { agora: AGORA })
+  const disco = compactar(db)
+  const noDisco = fs.statSync(arquivo).size + (fs.existsSync(`${arquivo}-wal`) ? fs.statSync(`${arquivo}-wal`).size : 0)
+  check('compactar conta o banco MAIS o diário', disco.depois === noDisco, `${disco.depois} vs ${noDisco}`)
+  check('e devolve espaço de verdade', disco.liberado > 0, String(disco.liberado))
+  // O diário é o que sobrava: sem o truncamento, ele ficava com o tamanho de
+  // tudo o que foi apagado.
+  const wal = fs.existsSync(`${arquivo}-wal`) ? fs.statSync(`${arquivo}-wal`).size : 0
+  check('o diário é devolvido ao sistema, não só reaproveitado', wal < 100 * 1024, `${wal} bytes`)
+  db.close()
+  fs.rmSync(pasta, { recursive: true, force: true })
+}
+
 // --- as rotas do motor ---
 {
   const { db } = bancoComHistorico()

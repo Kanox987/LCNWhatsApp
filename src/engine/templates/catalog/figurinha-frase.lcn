@@ -1,6 +1,6 @@
-template figurinha-frase v1
+template figurinha-frase v2
   nome: Figurinha de frase
-  descrição: Escreva "/frase bom dia" e o bot devolve a frase como figurinha. A letra fica do maior tamanho que couber, com quebra de linha automática, e emoji sai colorido. Com fundo ou letra "arco-iris" a figurinha sai animada. Não precisa de mídia nenhuma.
+  descrição: Escreva "/frase bom dia" e o bot devolve a frase como figurinha. A letra fica do maior tamanho que couber, quebrando linha só entre palavras, e emoji sai colorido. Dá para escolher um tema de cor pronto, uma cor de destaque para as palavras alternarem, e o efeito — inclusive letreiro deslizando e letras acendendo uma a uma. Com fundo ou letra "arco-iris" a figurinha sai animada. Não precisa de mídia nenhuma.
   categoria: utilitarios
 
 automação
@@ -16,9 +16,12 @@ automação
   chama {{params.conexao}}.figurinha_de_frase
     com
       texto: "{{message.args}}"
+      tema: {{params.tema}}
       fundo: {{params.fundo}}
       letra: {{params.letra}}
+      letra2: {{params.destaque}}
       efeito: {{params.efeito}}
+      alinhamento: {{params.alinhamento}}
       pacote: {{params.pacote}}
       autor: {{params.autor}}
     sem dados: "{{params.semTextoText}}"
@@ -37,9 +40,18 @@ configurável
   letra: texto = "branco"
     rótulo: Cor da letra
     ajuda: As mesmas cores do fundo, inclusive arco-iris. Evite letra e fundo da mesma cor.
-  efeito: opção (piscar, suave, nenhum) = "piscar"
-    rótulo: Movimento do arco-íris
-    ajuda: piscar troca a cor em degraus; suave desliza; nenhum deixa parada. Só tem efeito quando há arco-iris no fundo ou na letra.
+  efeito: opção (piscar, suave, deslizar, letra-a-letra, nenhum) = "piscar"
+    rótulo: Efeito
+    ajuda: piscar troca a cor em degraus e suave desliza o degradê — os dois só fazem algo com arco-iris no fundo ou na letra. deslizar é o letreiro, que anda sempre. letra-a-letra acende as letras uma a uma e sempre anima. nenhum deixa parada.
+  tema: texto = ""
+    rótulo: Tema de cor
+    ajuda: Deixe vazio para usar as cores escolhidas abaixo. Preenchido com classico, papel, neon, alerta, noite, doce ou festa, ele preenche só o que você NÃO mandou — tema com cor de letra escrita usa o fundo do tema e a sua letra.
+  destaque: texto = ""
+    rótulo: Cor de destaque
+    ajuda: No efeito letra-a-letra é a cor da letra que acabou de acender. Nos outros efeitos, as palavras alternam entre a cor da letra e esta. Vazio não alterna nada.
+  alinhamento: opção (centro, esquerda, direita) = "centro"
+    rótulo: Alinhamento
+    ajuda: Vale para frase de mais de uma linha.
   pacote: texto = "LCN Frases"
     rótulo: Nome do pacote
     ajuda: Aparece quando alguém abre a figurinha no WhatsApp.
@@ -64,5 +76,8 @@ avisa exige
 
 avisa nota
   Este é o único comando de figurinha que não precisa de mídia: a entrada é o que a pessoa escreveu depois do comando.
+
+avisa nota
+  A quebra de linha acontece só entre palavras. Se uma palavra não cabe, a letra diminui — partir palavra ficou para o caso extremo de uma palavra que não cabe nem com a letra mínima.
 
 # nós: gatilho-comando, converter

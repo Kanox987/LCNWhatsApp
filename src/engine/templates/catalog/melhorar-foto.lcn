@@ -1,6 +1,6 @@
-template melhorar-foto v2
+template melhorar-foto v3
   nome: Melhorar a foto
-  descrição: Responda uma foto com o comando e o bot devolve ela maior e mais nítida, mirando 4K. O serviço decide sozinho como chegar lá: IA quando a foto é pequena, redimensionamento fino quando ela já é grande, e só ajuste de contraste e nitidez quando ela já é 4K. Roda na própria máquina.
+  descrição: Responda uma foto com o comando e o bot devolve ela maior e mais nítida, mirando 4K. São duas escolhas independentes: o TRATAMENTO (automático, clássico sem IA, só IA, ou os dois) e ATÉ ONDE a foto cresce (4K, tamanho original, 2x ou 4x). No automático a IA entra quando a foto precisa crescer o bastante, e o clássico — níveis, luz, contraste local, cor e nitidez — cuida do resto. Roda na própria máquina.
   categoria: utilitarios
 
 automação
@@ -19,6 +19,8 @@ automação
     com
       arquivo: a mídia
       modo: {{params.modo}}
+      alvo: {{params.alvo}}
+      intensidade: {{params.intensidade}}
       formato: {{params.formato}}
       qualidade: {{params.qualidade}}
     avisa: "{{params.ackText}}"
@@ -32,9 +34,15 @@ configurável
   conexao: texto = "imagem"
     rótulo: Serviço que melhora
     ajuda: O identificador da conexão, como está na aba Conexões.
-  modo: opção (4k, ia, leve) = "4k"
-    rótulo: Como melhorar
-    ajuda: 4k é o automático e o recomendado — o serviço olha o tamanho da foto e escolhe entre IA, redimensionamento fino ou só ajuste, mirando 3840x2160. ia força o modelo e só aceita foto de até 2,1 megapixels (1920x1080); acima disso ele recusa. leve só ajusta contraste e nitidez, na hora.
+  modo: opção (auto, classico, ia, ambos) = "auto"
+    rótulo: Tratamento
+    ajuda: auto é o recomendado — usa IA quando a foto precisa crescer 2x ou mais, e o clássico no resto. classico é sem IA: níveis, luz (clareia foto escura), contraste local, cor e nitidez, em segundos. ia é só o modelo: reconstrói detalhe e tira ruído e blocos de compressão, sem mexer em cor e luz. ambos é a IA e o clássico por cima, o resultado mais vistoso.
+  alvo: opção (4k, original, 2x, 4x) = "4k"
+    rótulo: Até onde crescer
+    ajuda: 4k sobe a foto até caber em 3840x2160, e foto que já é 4K fica do mesmo tamanho e só é melhorada. original mantém o tamanho. 2x e 4x são escala fixa, com saída de até 36 megapixels.
+  intensidade: número = 1
+    rótulo: Intensidade do clássico
+    ajuda: De 0 a 2, vale para classico e ambos. 0,5 é discreto; 2 é forte. Não tem efeito no modo ia.
   formato: opção (jpg, png, webp) = "jpg"
     rótulo: Formato da saída
     ajuda: jpg é o que costuma caber no envio. Uma foto 4K em png passa fácil de 10 MB e vira documento em vez de foto.
@@ -64,7 +72,10 @@ avisa exige
   Exige o serviço de imagem configurado na aba Conexões.
 
 avisa nota
-  No modo automático (4k) não há limite de tamanho de entrada: foto que já é grande não é expandida, só ajustada. O limite de 2,1 megapixels vale apenas quando se força o modo ia.
+  Não existe limite de tamanho de entrada. Quando a foto cresce pouco ou já é 4K, o serviço a reduz antes da IA e devolve a saída no tamanho final — a IA redesenha a foto inteira em vez de recusar o trabalho.
+
+avisa nota
+  O clássico não tira blocos de compressão de um JPEG muito apertado (ele só não os piora). Para isso, use ia ou ambos.
 
 avisa nota
   Um pedido de IA por vez; os outros esperam na fila. Com a fila cheia, a resposta é para tentar de novo em instantes.

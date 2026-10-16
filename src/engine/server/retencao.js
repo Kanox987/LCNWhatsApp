@@ -31,6 +31,7 @@
 // novidade e executaria de novo. Na prática o gateway não reenvia evento de
 // três dias; o at-most-once continua valendo dentro da janela, e é isso que a
 // janela significa.
+import fs from 'fs'
 import { ID_GLOBAL } from './attributeScopes.js'
 
 export const CHAVE_RETENCAO = '__retencao__'
@@ -155,10 +156,26 @@ export function varrer (db, { agora = Date.now(), horas = null } = {}) {
 // mais nada para devolver — rodar de hora em hora seria pagar o preço todo dia
 // por nada.
 export function compactar (db) {
-  const antes = db.pragma('page_count', { simple: true }) * db.pragma('page_size', { simple: true })
+  const antes = tamanhoEmDisco(db)
   db.exec('VACUUM')
-  const depois = db.pragma('page_count', { simple: true }) * db.pragma('page_size', { simple: true })
+  // O DIÁRIO TAMBÉM OCUPA, e foi o que apareceu na primeira limpeza de
+  // verdade: o banco caiu de 381 MB para 53 MB e a PASTA continuou com 320 MB,
+  // porque apagar 427 mil linhas em modo WAL escreveu um diário de 266 MB que
+  // o SQLite reaproveita em vez de devolver. Sem este truncamento, a tela
+  // diria "liberei 344 MB" e o disco da máquina não mudaria.
+  try { db.pragma('wal_checkpoint(TRUNCATE)') } catch {}
+  const depois = tamanhoEmDisco(db)
   return { antes, depois, liberado: Math.max(0, antes - depois) }
+}
+
+// O banco MAIS o diário. Contar páginas não serve: `page_count` é do banco, e
+// era justamente o diário que estava sobrando.
+function tamanhoEmDisco (db) {
+  const bytesDe = (caminho) => { try { return fs.statSync(caminho).size } catch { return 0 } }
+  if (!db.name || db.name === ':memory:') {
+    return db.pragma('page_count', { simple: true }) * db.pragma('page_size', { simple: true })
+  }
+  return bytesDe(db.name) + bytesDe(`${db.name}-wal`)
 }
 
 // O relógio da varredura.
