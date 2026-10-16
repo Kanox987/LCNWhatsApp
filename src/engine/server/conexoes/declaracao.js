@@ -295,6 +295,16 @@ function validarResposta (resposta, onde) {
             comando: exigirTexto(botao.comando, `${onde} — o comando que o botão manda`)
           }
         : null,
+      // O QUE NEM DEVE APARECER NA ESCOLHA.
+      //
+      // O pedido do dono: "músicas com mais de 15 min nem devem entrar na
+      // escolha". Uma busca de música traz live de duas horas, álbum inteiro e
+      // vídeo-aula no meio do que se procurava, e cada um desses ocupa um card
+      // que podia ser de uma música de verdade.
+      //
+      // Declarado como campo + teto porque é do SERVIÇO que vem o número: aqui
+      // é `duracao` em segundos; noutro serviço seria preço, tamanho, nota.
+      descartar: descarteValidado(resposta.descartar, onde),
       // CARDS DO MESMO TAMANHO.
       //
       // O card cresce com o texto, e nome de música tem comprimento qualquer:
@@ -412,6 +422,25 @@ function tipoDeEnvioValidado (tipo, onde) {
   throw new ErroDeDeclaracao(
     `${onde}: tipo desconhecido na ordem de envio: "${tipo}". Use: ${Object.keys(TIPOS_DE_ENVIO).join(', ')}.`
   )
+}
+
+// Um descarte: o campo do item, e o teto (e/ou o piso) que ele não pode passar.
+// Item sem aquele campo FICA — o filtro corta o que sabidamente não serve,
+// não o que não deu para medir.
+function descarteValidado (bruto, onde) {
+  if (!bruto || typeof bruto !== 'object') return null
+  const campo = typeof bruto.campo === 'string' && bruto.campo.trim() ? bruto.campo.trim() : null
+  if (!campo) return null
+  const numeroOuNulo = (valor, qual) => {
+    if (valor === undefined || valor === null || valor === '') return null
+    const n = Number(valor)
+    if (!Number.isFinite(n)) throw new ErroDeDeclaracao(`${onde}: o ${qual} do descarte precisa ser número — veio "${valor}".`)
+    return n
+  }
+  const acima = numeroOuNulo(bruto.acima, 'teto')
+  const abaixo = numeroOuNulo(bruto.abaixo, 'piso')
+  if (acima === null && abaixo === null) return null
+  return { campo, acima, abaixo }
 }
 
 const ESTILOS = Object.freeze([

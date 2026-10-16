@@ -156,6 +156,19 @@ function escrever (modelo, valores) {
   })
 }
 
+// O QUE NEM DEVE APARECER NA ESCOLHA.
+//
+// Item SEM o campo fica: o filtro corta o que sabidamente não serve, não o que
+// não deu para medir. Serviço que esquece de mandar a duração de um item não
+// pode fazer esse item sumir da busca sem ninguém entender por quê.
+function passaNoDescarte (item, regra) {
+  const valor = Number(porCaminho(item, regra.campo))
+  if (!Number.isFinite(valor)) return true
+  if (regra.acima !== null && valor > regra.acima) return false
+  if (regra.abaixo !== null && valor < regra.abaixo) return false
+  return true
+}
+
 // CARDS DO MESMO TAMANHO.
 //
 // O card cresce com o texto, e nome de música tem comprimento qualquer: um de
@@ -451,7 +464,13 @@ export function criarExecutorDeConexao ({
         // vai como mensagem simples.
         return { forma: 'texto', dados: forma.vazio || 'Não achei nada.' }
       }
-      const usados = forma.limite ? itens.slice(0, forma.limite) : itens
+      // O descarte vem ANTES do limite: cortar depois faria uma live de duas
+      // horas ocupar uma das cinco vagas e sair, deixando quatro.
+      const servem = forma.descartar ? itens.filter((i) => passaNoDescarte(i, forma.descartar)) : itens
+      if (!servem.length) {
+        return { forma: 'texto', dados: forma.vazio || 'Não achei nada.' }
+      }
+      const usados = forma.limite ? servem.slice(0, forma.limite) : servem
       const cards = []
       for (const [i, item] of usados.entries()) {
         // Os candidatos, em ordem: nome de campo ou endereço montado com os

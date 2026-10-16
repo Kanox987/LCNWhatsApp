@@ -403,6 +403,11 @@ export const CONEXOES_PRONTAS = Object.freeze([
             // É o preço de o botão ser um comando de verdade, e é visível dos
             // dois lados.
             botao: { texto: '⬇️ Baixar esta', comando: '/musica {{url}}' },
+            // Live de duas horas, álbum inteiro e vídeo-aula não são o que
+            // alguém procura quando busca uma música — e cada um desses ocupa
+            // um card que podia ser de uma música de verdade. 900 segundos são
+            // os 15 minutos que o dono pediu.
+            descartar: { campo: 'duracao', acima: 900 },
             // Dez é o teto do carrossel do WhatsApp; cinco cabe na tela sem
             // deslizar até o fim.
             limite: 5,

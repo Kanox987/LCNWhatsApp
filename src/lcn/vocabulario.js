@@ -104,6 +104,10 @@ export const ACOES = Object.freeze([
       { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { carrossel: 'carrossel', album: 'álbum', separate: 'separado' } },
       { chave: 'ackText', rotulo: 'avisa', tipo: 'texto' },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
+      // QUAL mensagem a resposta marca. O padrão é a citada, que é o certo
+      // para o download de link; "quem pediu" é o certo quando o pedido se
+      // basta — o nome da música digitado, ou o toque no botão do carrossel.
+      { chave: 'quoteFrom', rotulo: 'cita', tipo: 'palavra', palavras: { citada: 'a citada', mensagem: 'quem pediu' } },
       { chave: 'notFoundText', rotulo: 'sem dados', tipo: 'texto' },
       { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
     ]

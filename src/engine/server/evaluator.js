@@ -221,6 +221,22 @@ function montarCitacao (evento) {
 // Com "/dow" respondendo alguém, o link está na mensagem citada — é ela que
 // interessa, não o comando. Sem citação (download automático), o link está na
 // própria mensagem que chegou. Devolve só endereçamento, nunca conteúdo.
+// A MENSAGEM DE QUEM PEDIU, sem olhar o que ela responde.
+//
+// Existe porque a resposta de botão CARREGA um `quotedRef` — ela responde o
+// carrossel —, e marcar o carrossel deixa a música pendurada no card em vez do
+// pedido. Quem tocou o botão está esperando no pedido dele.
+function referenciaDaPropria (evento) {
+  const propria = evento?.providerRef
+  if (!propria?.id) return null
+  return {
+    remoteJid: propria.remoteJid || evento.chat?.id,
+    id: propria.id,
+    fromMe: propria.fromMe === true,
+    ...(propria.participant ? { participant: propria.participant } : {})
+  }
+}
+
 function referenciaDoLink (evento) {
   const citada = evento?.message?.quotedRef
   if (citada?.id) {
@@ -623,7 +639,10 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           // Agora quem não escolhe não manda nada, e o padrão existe só onde a
           // entrega acontece.
           ...(no.config?.delivery ? { entrega: no.config.delivery } : {}),
-          replyTo: referenciaDoLink(evento),
+          // Qual mensagem a resposta marca: a citada (padrão, certo para o
+          // download de link) ou a de quem pediu (certo quando o pedido se
+          // basta — nome digitado, botão tocado).
+          replyTo: no.config?.quoteFrom === 'mensagem' ? referenciaDaPropria(evento) : referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
           ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
           ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
@@ -748,7 +767,10 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           ...(temSucessor ? { encadeado: true, retomarDe: no.id } : {}),
           // Quem não escolheu não manda nada: o padrão vive só na entrega.
           ...(no.config?.delivery ? { entrega: no.config.delivery } : {}),
-          replyTo: referenciaDoLink(evento),
+          // Qual mensagem a resposta marca: a citada (padrão, certo para o
+          // download de link) ou a de quem pediu (certo quando o pedido se
+          // basta — nome digitado, botão tocado).
+          replyTo: no.config?.quoteFrom === 'mensagem' ? referenciaDaPropria(evento) : referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
           ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
           ...(no.config?.errorText ? { errorText: no.config.errorText } : {})

@@ -167,6 +167,39 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     s.chamadas[1].url === 'http://127.0.0.1:8765/capa/a', s.chamadas[1]?.url)
 }
 
+// --- o que nem deve entrar na escolha ------------------------------------
+//
+// Pedido do dono: "músicas com mais de 15 min nem devem entrar na escolha".
+// Uma busca de música traz live de duas horas e álbum inteiro no meio, e cada
+// um desses ocupa um card que podia ser de uma música de verdade.
+{
+  const s = servico([
+    {
+      busca: 'x',
+      achados: [
+        { id: 'a', url: 'https://y/a', capa: '/capa/a', titulo: 'Música normal', autor: 'A', duracao: 240 },
+        { id: 'b', url: 'https://y/b', capa: '/capa/b', titulo: 'Live de duas horas', autor: 'B', duracao: 7200 },
+        { id: 'c', url: 'https://y/c', capa: '/capa/c', titulo: 'No limite', autor: 'C', duracao: 900 },
+        { id: 'd', url: 'https://y/d', capa: '/capa/d', titulo: 'Sem duração informada', autor: 'D' }
+      ]
+    },
+    { arquivo: 'capa-a' }, { arquivo: 'capa-c' }, { arquivo: 'capa-d' }
+  ])
+  const r = await criarExecutorDeConexao({ buscar: s.buscar, dormir: semDormir })
+    .executar(DECLARACAO, 'buscar', { busca: 'x' })
+
+  const titulos = r.cards.map((c) => c.titulo).join(' | ')
+  check('a live de duas horas não vira card', !/Live de duas horas/.test(titulos), titulos)
+  check('a música normal fica', /Música normal/.test(titulos))
+  check('o que está exatamente no limite fica', /No limite/.test(titulos), titulos)
+  // Item sem o campo FICA: o filtro corta o que sabidamente não serve, não o
+  // que não deu para medir.
+  check('o que não informou duração fica', /Sem duração informada/.test(titulos), titulos)
+  // E o descarte vem ANTES do limite: cortar depois faria a live ocupar uma
+  // das vagas e sair, deixando a busca com menos cards do que cabia.
+  check('a capa da descartada nem é buscada', s.chamadas.length === 4, String(s.chamadas.length))
+}
+
 // --- cards do mesmo tamanho ----------------------------------------------
 //
 // O card cresce com o texto, e nome de música tem comprimento qualquer: um de
@@ -661,6 +694,18 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   const chamadaBusca = busca.documentTemplate.flow.nodes.find((n) => n.type === 'action.connection.call')
   check('o buscar chama a função de busca', chamadaBusca.config.function === 'buscar')
   check('o buscar nasce como /buscar', busca.parameters.find((p) => p.key === 'command').default === '/buscar')
+
+  // A RESPOSTA MARCA QUEM PEDIU. A mensagem do toque no botão carrega um
+  // `quotedRef` apontando para o carrossel; sem isto, a música sairia
+  // pendurada no card em vez do pedido de quem a pediu.
+  check('o /play marca a mensagem de quem pediu', chamada.config.quoteFrom === 'mensagem', chamada.config.quoteFrom)
+  const porLink = catalogo.get('musica-do-link').documentTemplate.flow.nodes
+    .find((n) => n.type === 'action.connection.call')
+  check('e o comando do botão também', porLink.config.quoteFrom === 'mensagem', porLink.config.quoteFrom)
+  // O download de link NÃO muda: lá o assunto é a mensagem que trouxe o link.
+  const dow = catalogo.get('baixar-midia').documentTemplate.flow.nodes
+    .find((n) => n.type === 'action.connection.call' || n.type === 'action.media.download')
+  check('o download de link continua marcando a citada', !dow.config.quoteFrom, String(dow.config.quoteFrom))
 }
 
 if (falhas) {

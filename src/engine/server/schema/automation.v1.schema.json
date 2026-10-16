@@ -1143,6 +1143,11 @@
               "minLength": 1,
               "description": "A SEGUNDA entrada de arquivo, para a função que recebe duas fotos — trocar o fundo recebe a foto da pessoa e a foto que vira o fundo. A mensagem de um comando carrega duas mídias: a que ela responde e a que vem anexada. Só existe junto de mediaInput, e nunca aponta para a mesma entrada."
             },
+            "quoteFrom": {
+              "enum": ["citada", "mensagem"],
+              "default": "citada",
+              "description": "QUAL mensagem a resposta marca. \"citada\" marca a mensagem respondida quando existe uma — é o certo para o download de link, onde o assunto é a mensagem que trouxe o link. \"mensagem\" marca a de quem PEDIU, e é o certo quando o pedido é autossuficiente: quem digitou o nome da música, ou tocou o botão do carrossel, está esperando a resposta no pedido dele, não no card."
+            },
             "mediaFrom2": {
               "enum": ["mensagem", "citada"],
               "description": "De onde vem o SEGUNDO arquivo. Precisa ser diferente da origem do primeiro — com as duas iguais, os dois campos receberiam a mesma foto."

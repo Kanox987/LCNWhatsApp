@@ -21,6 +21,7 @@ automação
       avisa: "{{params.ackText}}"
       legenda: "{{params.caption}}"
       entrega: separado
+      cita: quem pediu
       erro: "{{params.errorText}}"
   senão
     responde "{{params.semNomeText}}"

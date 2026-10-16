@@ -217,6 +217,9 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
   const textoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.texto || '', placeholder: '⬇️ Baixar esta' })
   const comandoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.comando || '', placeholder: '/musica {{url}}' })
   const limiteDeCards = el('input', { type: 'number', min: '1', max: '10', step: '1', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.limite ?? '') : '' })
+  const descarteCampo = el('input', { type: 'text', value: funcao?.resposta?.descartar?.campo || '', placeholder: 'duracao' })
+  const descarteAcima = el('input', { type: 'number', step: '1', value: funcao?.resposta?.descartar?.acima ?? '' })
+  const descarteAbaixo = el('input', { type: 'number', step: '1', value: funcao?.resposta?.descartar?.abaixo ?? '' })
   const igualarAltura = el('input', { type: 'checkbox', checked: funcao?.resposta?.igualarAltura !== false })
   const estiloDoCarrossel = el('select', {}, [
     ['completo', 'Completo — texto dentro e embrulho viewOnce (a forma do takeshi-bot)'],
@@ -307,6 +310,12 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
       field('Quantos cards', limiteDeCards, 'Até 10, que é o teto do WhatsApp. Vazio manda todos os que vierem.'),
       field('Quando não vier nada', vazioDoCarrossel, 'A frase de "não achei". Lista vazia é resposta normal de busca, não erro.')
     ]),
+    el('div', { className: 'form-grid' }, [
+      field('Descartar pelo campo', descarteCampo, 'Opcional: o campo numérico do item que decide se ele entra. Na busca de música é "duracao", em segundos.'),
+      field('Descartar acima de', descarteAcima, 'Item com valor MAIOR que este nem vira card. 900 corta o que passa de 15 minutos — live, álbum inteiro, vídeo-aula.'),
+      field('Descartar abaixo de', descarteAbaixo, 'Opcional, o outro lado: item com valor menor que este também sai.')
+    ]),
+    el('p', { className: 'muted compact', text: 'Item que não traz esse campo FICA: o descarte corta o que sabidamente não serve, não o que não deu para medir.' }),
     el('label', { className: 'switch-row' }, [igualarAltura, el('span', {}, [
       el('strong', { text: 'Cards do mesmo tamanho' }),
       el('small', { text: 'O card cresce com o texto, e nome comprido deixa um card maior que o outro. Com isto ligado, os menores ganham linhas vazias até empatar com o maior.' })
@@ -420,6 +429,13 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
         vazio: vazioDoCarrossel.value.trim() || null,
         estilo: estiloDoCarrossel.value,
         igualarAltura: igualarAltura.checked,
+        descartar: descarteCampo.value.trim()
+          ? {
+              campo: descarteCampo.value.trim(),
+              acima: descarteAcima.value === '' ? null : Number(descarteAcima.value),
+              abaixo: descarteAbaixo.value === '' ? null : Number(descarteAbaixo.value)
+            }
+          : null,
         campoDoErro: erroDoCarrossel.value.trim() || null
       }
     } else if (forma.value === 'lista') {

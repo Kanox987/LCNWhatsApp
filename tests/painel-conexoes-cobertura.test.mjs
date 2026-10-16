@@ -22,7 +22,10 @@ import { FORMAS_DE_RESPOSTA, TIPOS_DE_ENTRADA, TIPOS_DE_ENVIO } from '../src/eng
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
 
-const tela = fs.readFileSync(new URL('../src/web/public/pages/connections.js', import.meta.url), 'utf8')
+const tela = fs.readFileSync(new URL('../src/web/public/pages/connections.js', import.meta.url), 'utf8') +
+  // O `quoteFrom` é campo do COMANDO, não da conexão: a explicação dele vive
+  // no catálogo de ações da tela de automações.
+  fs.readFileSync(new URL('../src/web/public/logic/acoes.js', import.meta.url), 'utf8')
 
 // A lista de formas da tela, lida do próprio arquivo: ele é um módulo de
 // navegador (usa `document`), então importar aqui exigiria um DOM inteiro para
@@ -63,7 +66,7 @@ for (const tipo of Object.keys(TIPOS_DE_ENVIO)) {
 }
 
 // Campos que o motor passou a aceitar e que a tela precisa saber escrever.
-for (const campo of ['esperaSegundos', 'modeloDaDescricao', 'ordemDosTipos', 'campoDaDescricao', 'estilo', 'igualarAltura']) {
+for (const campo of ['esperaSegundos', 'modeloDaDescricao', 'ordemDosTipos', 'campoDaDescricao', 'estilo', 'igualarAltura', 'descartar', 'quoteFrom']) {
   check(`a tela sabe escrever "${campo}"`, tela.includes(campo))
 }
 // O botão do card: rótulo e comando são o que fazem o carrossel ser mais que
