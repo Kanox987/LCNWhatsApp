@@ -487,9 +487,10 @@ async function executarChamadaDeConexao (client, comando, deps) {
     const abertura = caption || resultado.cabecalho
     try {
       await comTimeout(
-        // Texto dentro, com header, e embrulhado em viewOnce: é a forma que o
-        // takeshi-bot manda em zapo-js e a que renderiza com botão.
-        () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto: abertura, viewOnce: true }), opcoesDeCitacao(replyTo)),
+        // Texto dentro, com header, embrulhado em viewOnce e SEM citar a
+        // mensagem que acionou: é a forma que o takeshi-bot manda em zapo-js —
+        // lá o carrossel sai sem `quoted` por padrão.
+        () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto: abertura, viewOnce: true })),
         TIMEOUT_ENVIO_MS * 4,
         `timeout ao enviar o carrossel do comando ${comando.id}`
       )

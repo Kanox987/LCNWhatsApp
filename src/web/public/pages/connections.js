@@ -29,6 +29,7 @@ const FORMAS = [
   ['mídia', 'Mídia — a resposta aponta os arquivos para buscar'],
   ['arquivo', 'Arquivo — o arquivo vem na própria resposta, em base64'],
   ['lista', 'Lista — a resposta traz várias opções para escolher'],
+  ['carrossel', 'Carrossel — as opções em cards com foto, e um botão em cada'],
   ['trabalho', 'Trabalho — o serviço devolve um identificador e a gente acompanha']
 ]
 // Como o arquivo que volta é ENVIADO. Vazio deduz do tipo do arquivo, que é o
@@ -172,6 +173,12 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
   const campoDoResultado = el('input', { type: 'text', value: funcao?.resposta?.campoDoResultado || '', placeholder: 'midias' })
   const campoDoErro = el('input', { type: 'text', value: funcao?.resposta?.campoDoErro || '', placeholder: 'erro' })  // do acompanhamento de trabalho
   const campoDaDescricao = el('input', { type: 'text', value: funcao?.resposta?.campoDaDescricao || '', placeholder: 'descricao' })
+  const modeloDaDescricao = el('input', { type: 'text', value: funcao?.resposta?.modeloDaDescricao || '', placeholder: '🎵 {{metadados.faixa ?? titulo}}' })
+  const ordemDosTipos = el('input', {
+    type: 'text',
+    value: (funcao?.resposta?.ordemDosTipos || []).join(', '),
+    placeholder: 'foto, áudio'
+  })
   // Um input por bloco, e não um compartilhado: `field()` ANEXA o nó, e o
   // mesmo nó em dois blocos desapareceria do primeiro.
   const campoSimples = el('input', { type: 'text', value: funcao?.resposta?.campo || '', placeholder: 'resposta' })
@@ -190,6 +197,28 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
   // quem trocasse o serviço de melhoria de foto por outro não tinha como dizer
   // que ele demora dois minutos, e a chamada morria aos vinte segundos.
   const espera = el('input', { type: 'number', min: '1', max: '900', step: '1', value: funcao?.esperaSegundos ?? '' })
+
+  // O CARROSSEL, declarável pela tela.
+  //
+  // Sem isto, a forma existia no motor e só EU conseguia criar uma: quem
+  // ligasse outra API ficaria sem os cards com botão. É o pedido que o dono
+  // repete — "quero a api conectada pelo painel, de uma forma que outras
+  // pessoas poderiam colocar sem mexer no sistema de código".
+  const campoDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.campo || '') : '', placeholder: 'achados' })
+  const imagensDoCard = el('input', {
+    type: 'text',
+    value: Array.isArray(funcao?.resposta?.imagem) ? funcao.resposta.imagem.join(' | ') : (funcao?.resposta?.imagem || ''),
+    placeholder: 'capa | https://.../{{id}}/capa.jpg'
+  })
+  const tituloDoCard = el('input', { type: 'text', value: funcao?.resposta?.titulo || '', placeholder: '🎵 {{titulo}}' })
+  const corpoDoCard = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.corpo || '') : '', placeholder: '👤 {{autor}}' })
+  const rodapeDoCard = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.rodape || '') : '', placeholder: '⏱️ {{duracao_texto}}' })
+  const aberturaDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.cabecalho || '') : '', placeholder: '🔎 Achei isto para "{{busca}}":' })
+  const textoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.texto || '', placeholder: '⬇️ Baixar esta' })
+  const comandoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.comando || '', placeholder: '/musica {{url}}' })
+  const limiteDeCards = el('input', { type: 'number', min: '1', max: '10', step: '1', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.limite ?? '') : '' })
+  const vazioDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.vazio || '') : '', placeholder: 'Não achei nada.' })
+  const erroDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.campoDoErro || '') : '', placeholder: 'detail' })
 
   const blocoSimples = el('div', { className: 'form-grid' }, [
     field('Campo da resposta', campoSimples, 'Opcional: de qual campo tirar o resultado.'),
@@ -213,7 +242,9 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
       field('Campo do resultado', campoDoResultado),
       field('Campo do erro', campoDoErro, 'Opcional.')
     ]),
-    field('Campo da legenda', campoDaDescricao, 'Opcional: de onde sai o texto que acompanha o que foi entregue. Vazio usa "descricao".')
+    field('Campo da legenda', campoDaDescricao, 'Opcional: de onde sai o texto que acompanha o que foi entregue. Vazio usa "descricao".'),
+    field('Legenda escrita', modeloDaDescricao, 'Opcional e ganha do campo acima: escreva a legenda com os campos da resposta — "🎵 {{metadados.faixa ?? titulo}}". {{a ?? b}} usa o primeiro que tiver valor, e |tempo vira 299 em 4:59. Linha sem nenhum valor some.'),
+    field('Ordem de envio', ordemDosTipos, 'Opcional: em que ordem os arquivos saem, por tipo, separados por vírgula — "foto, áudio" manda a capa antes da música. O que não estiver na lista vai no fim.')
   ])
   const blocoArquivo = el('div', { className: 'stack' }, [
     el('p', { className: 'muted compact', text: 'O serviço converte em segundos e devolve o arquivo na resposta, em base64. É a forma das funções de figurinha e de conversão.' }),
@@ -243,7 +274,33 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     ])
   ])
 
+  const blocoCarrossel = el('div', { className: 'stack' }, [
+    el('p', { className: 'muted compact', text: 'Uma mensagem só, com um card por resultado: foto em cima, texto embaixo e um botão que manda um comando do próprio bot. Em cada campo, {{nome}} vale os campos do item da lista.' }),
+    el('div', { className: 'form-grid' }, [
+      field('Campo da lista', campoDoCarrossel, 'Onde vem a lista na resposta do serviço.'),
+      field('De onde sai a foto do card', imagensDoCard, 'Um campo do item ("capa") ou um endereço montado com os campos dele. Separe alternativas por | — a primeira que responder é a usada.')
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Título do card', tituloDoCard, 'Fica acima da foto. Opcional.'),
+      field('Texto do card', corpoDoCard, 'Fica abaixo da foto.')
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Rodapé do card', rodapeDoCard, 'Opcional.'),
+      field('Texto que abre a mensagem', aberturaDoCarrossel, 'Opcional: aceita os campos da resposta inteira, como {{busca}}.')
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Rótulo do botão', textoDoBotao, 'O que a pessoa lê no botão. Vazio = card sem botão.'),
+      field('Comando que o botão manda', comandoDoBotao, 'O bot recebe isto como se a pessoa tivesse digitado — inclusive o argumento daquele card, por exemplo "/musica {{url}}".')
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Quantos cards', limiteDeCards, 'Até 10, que é o teto do WhatsApp. Vazio manda todos os que vierem.'),
+      field('Quando não vier nada', vazioDoCarrossel, 'A frase de "não achei". Lista vazia é resposta normal de busca, não erro.')
+    ]),
+    field('Campo do erro', erroDoCarrossel, 'Opcional: de onde o serviço traz a frase de recusa.')
+  ])
+
   const sincronizarForma = () => {
+    blocoCarrossel.hidden = forma.value !== 'carrossel'
     blocoTrabalho.hidden = forma.value !== 'trabalho'
     blocoArquivo.hidden = forma.value !== 'arquivo'
     blocoLista.hidden = forma.value !== 'lista'
@@ -289,6 +346,7 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     blocoSimples,
     blocoArquivo,
     blocoLista,
+    blocoCarrossel,
     blocoTrabalho,
     el('div', { className: 'button-row' }, [button('Remover função', { variant: 'danger-quiet', onClick: () => aoRemover(cartao) })])
   ])
@@ -313,6 +371,8 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
         estadosEmAndamento: estadosEmAndamento.value.split(',').map((e) => e.trim()).filter(Boolean),
         campoDoResultado: campoDoResultado.value.trim(),
         campoDaDescricao: campoDaDescricao.value.trim() || null,
+        modeloDaDescricao: modeloDaDescricao.value.trim() || null,
+        ordemDosTipos: ordemDosTipos.value.split(',').map((t) => t.trim()).filter(Boolean),
         campoDoErro: campoDoErro.value.trim() || null
       }
     } else if (forma.value === 'arquivo') {
@@ -322,6 +382,27 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
         campoDoMime: campoDoMime.value.trim() || null,
         tipo: tipoDeEnvio.value || null,
         campoDoErro: erroDoArquivo.value.trim() || null
+      }
+    } else if (forma.value === 'carrossel') {
+      const limite = Number(limiteDeCards.value)
+      const rotulo = textoDoBotao.value.trim()
+      const comando = comandoDoBotao.value.trim()
+      saida.resposta = {
+        forma: 'carrossel',
+        campo: campoDoCarrossel.value.trim(),
+        // Alternativas separadas por barra: é a forma mais curta de escrever
+        // "esta e, se não responder, aquela".
+        imagem: imagensDoCard.value.split('|').map((p) => p.trim()).filter(Boolean),
+        titulo: tituloDoCard.value.trim() || null,
+        corpo: corpoDoCard.value.trim(),
+        rodape: rodapeDoCard.value.trim() || null,
+        cabecalho: aberturaDoCarrossel.value.trim() || null,
+        // Os dois ou nenhum: botão com rótulo e sem comando não faz nada ao
+        // ser tocado, e é pior que não ter botão.
+        botao: rotulo && comando ? { texto: rotulo, comando } : null,
+        limite: Number.isFinite(limite) && limite > 0 ? Math.round(limite) : null,
+        vazio: vazioDoCarrossel.value.trim() || null,
+        campoDoErro: erroDoCarrossel.value.trim() || null
       }
     } else if (forma.value === 'lista') {
       const limite = Number(limiteDaLista.value)

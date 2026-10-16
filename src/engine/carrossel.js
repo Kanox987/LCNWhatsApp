@@ -96,7 +96,14 @@ export function montarCard (midia, upload, { titulo, legenda, rodape, botao } = 
     // funciona aqui: o campo existe no proto e os clientes esperam encontrá-lo
     // — e mensagem interativa que o servidor aceita e o aplicativo não desenha
     // é o modo de falhar mais caro que existe, porque não deixa rastro.
-    nativeFlowMessage: { buttons: montarBotao(botao), messageParamsJson: '' }
+    // SEM `messageParamsJson` no card.
+    //
+    // O takeshi-bot, que manda carrossel com botão em produção pela mesma
+    // biblioteca, põe esse campo na mensagem de botões SOLTA e NÃO no card. É
+    // a última diferença que sobrou entre a forma dele e a minha, e campo a
+    // mais numa mensagem interativa é motivo conhecido de o aplicativo
+    // descartar tudo calado.
+    nativeFlowMessage: { buttons: montarBotao(botao) }
   }
 }
 
