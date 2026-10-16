@@ -109,6 +109,7 @@ export const api = {
     create: (body) => request('/pools', { method: 'POST', body })
   },
   templates: {
+    updates: () => request('/templates/updates'),
     list: () => request('/templates'),
     get: (id) => request(`/templates/${segment(id)}`),
     install: (id, body) => request(`/templates/${segment(id)}/install`, { method: 'POST', body })

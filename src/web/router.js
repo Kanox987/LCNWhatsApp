@@ -195,6 +195,7 @@ export function criarRoteadorWeb (aplicacao) {
 
   // --- catálogo de comandos/templates (Parte C, Módulo 4) ---
   roteador.get('/api/v1/templates', () => templates().listar())
+  roteador.get('/api/v1/templates/updates', () => templates().atualizacoes())
   roteador.get('/api/v1/templates/:id', ({ params }) => templates().obter(params.id))
   roteador.post('/api/v1/templates/:id/install', ({ params, body }) => templates().instalar(params.id, body))
 

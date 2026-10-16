@@ -7,7 +7,7 @@ import { criarServicoAutomacoes } from '../automationsService.js'
 import { carregarCatalogo, resolverOrdemInstalacao } from '../../templates/catalog.js'
 import { renderizarTemplate, renderizarVariaveisDeclaradas } from '../../templates/render.js'
 import { declararDoTemplate } from '../declaredVariables.js'
-import { analisarReconfiguracao, aplicarValores } from '../../../reconfiguracao.js'
+import { analisarReconfiguracao, aplicarValores, sanearValores } from '../../../reconfiguracao.js'
 
 function exporTemplateResumo (template) {
   return {
@@ -106,6 +106,49 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
   })
 
   roteador.get('/templates', () => [...catalogo.values()].map(exporTemplateResumo))
+
+  // COMANDOS INSTALADOS NUMA VERSÃO ANTIGA DO TEMPLATE.
+  //
+  // O caminho de adotar a versão nova já existia — é o formulário de
+  // reconfigurar, que detecta a troca de versão e avisa o que muda ao salvar.
+  // O que faltava era SABER. Ninguém abre o formulário de um comando que está
+  // funcionando, então melhoria nenhuma chegava a quem já tinha instalado: o
+  // /melhorar ficou sem os modos novos, o /frase sem os temas, e nada na tela
+  // dizia isso.
+  //
+  // Aqui só se INFORMA. Adotar continua sendo um ato de quem opera: regerar o
+  // documento descarta edição feita à mão, e isso não pode acontecer sozinho.
+  roteador.get('/templates/atualizacoes', () => {
+    const linhas = db.prepare(`SELECT p.*, a.id AS existe FROM automation_template_provenance p
+      JOIN automations a ON a.id = p.automation_id`).all()
+    const pendentes = []
+    for (const linha of linhas) {
+      const template = catalogo.get(linha.template_id)
+      if (!template) continue
+      const daInstalacao = linha.template_version ?? null
+      const doCatalogo = template.templateVersion ?? null
+      if (daInstalacao === null || doCatalogo === null || daInstalacao >= doCatalogo) continue
+      pendentes.push({
+        automationId: linha.automation_id,
+        templateId: linha.template_id,
+        nome: template.name,
+        de: daInstalacao,
+        para: doCatalogo,
+        // CAMPOS SEM VALOR GUARDADO nesta instalação.
+        //
+        // Depois de uma versão nova, são em geral os campos que ela trouxe — e
+        // é a resposta mais próxima de "por que eu atualizaria?" que dá para
+        // dar sem um changelog que não existe. Mas o nome é esse, e não
+        // "novidades", porque a instalação guarda só o que quem instalou
+        // informou: um campo deixado no padrão aparece aqui sem ser novidade
+        // nenhuma, e prometer o contrário seria a tela mentindo.
+        semValorGuardado: (template.parameters || [])
+          .filter((d) => !Object.hasOwn(servicoAutomacoes.jsonOuNull(linha.parameters_json) || {}, d.key))
+          .map((d) => d.label || d.key)
+      })
+    }
+    return pendentes
+  })
   roteador.get('/templates/:id', ({ params }) => {
     const template = catalogo.get(params.id)
     if (!template) throw new ErroHttp(404, `Template não encontrado: ${params.id}.`)
@@ -156,15 +199,21 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
       // acusa a pessoa de ter editado à mão o que ela nunca tocou.
       versaoInstalada: proveniencia.template_version ?? null
     })
+    const saneados = sanearValores({ template, valores }).valores
     return {
       ...analise,
       templateId: template.templateId,
       templateVersion: template.templateVersion,
       // Cada campo já vem com o valor ATUAL, não com o padrão do template:
       // quem abre o formulário quer ver como está, não como nasceria.
+      //
+      // SANEADO: o valor guardado numa versão antiga pode não existir mais na
+      // lista desta (o /melhorar guardava `modo: 4k`, e a versão nova separou
+      // tratamento de tamanho). Mostrar o valor morto deixaria o campo vazio na
+      // tela e o formulário recusaria ao salvar; o aviso já diz o que mudou.
       parameters: (template.parameters || []).map((definicao) => ({
         ...definicao,
-        value: Object.hasOwn(valores, definicao.key) ? valores[definicao.key] : definicao.default
+        value: Object.hasOwn(saneados, definicao.key) ? saneados[definicao.key] : definicao.default
       }))
     }
   })

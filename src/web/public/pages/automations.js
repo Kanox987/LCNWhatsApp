@@ -81,7 +81,12 @@ async function painelReconfiguracao (automation, { refresh }) {
 }
 
 async function renderList ({ navigate, refresh }) {
-  const automations = await api.automations.list()
+  const [automations, atualizacoes] = await Promise.all([
+    api.automations.list(),
+    // Um comando instalado numa versão antiga do template continua
+    // funcionando: a lista não pode quebrar por causa de um aviso.
+    api.templates.updates().catch(() => [])
+  ])
   setPageHeader({
     eyebrow: 'Motor de regras',
     title: 'Automações',
@@ -91,8 +96,10 @@ async function renderList ({ navigate, refresh }) {
   if (!automations.length) {
     return emptyState('Nenhuma automação ainda', 'O assistente conduz do comando até a resposta sem exigir edição de JSON.', button('Criar primeira automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }))
   }
+  const pendentePorId = new Map((atualizacoes || []).map((a) => [a.automationId, a]))
   return el('div', { className: 'stack' }, automations.map((automation) => {
     const name = automation.draft?.document?.name || automation.id
+    const pendente = pendentePorId.get(automation.id)
     const actions = el('div', { className: 'button-row table-actions' })
     const toggle = button(automation.enabled ? 'Desligar' : 'Ligar', {
       disabled: !automation.activeRevisionId && !automation.enabled,
@@ -161,11 +168,30 @@ async function renderList ({ navigate, refresh }) {
       }
     }))
 
+    // VERSÃO NOVA DO TEMPLATE DISPONÍVEL.
+    //
+    // Ninguém abre o formulário de um comando que está funcionando, então
+    // melhoria nenhuma chegava a quem já tinha instalado: o /melhorar ficou sem
+    // os modos novos, o /frase sem os temas. O aviso é aqui, onde a pessoa já
+    // está; adotar continua sendo um clique dela, porque regerar o documento
+    // descarta edição feita à mão.
+    const avisoDeVersao = pendente
+      ? el('div', { className: 'notice notice-info compact' }, [
+          el('strong', { text: `Versão nova deste comando: v${pendente.de} → v${pendente.para}` }),
+          el('p', {
+            text: pendente.semValorGuardado?.length
+              ? `Campos sem valor guardado neste comando — depois de uma versão nova, costumam ser os que ela trouxe: ${pendente.semValorGuardado.join(', ')}. Abra "Configurar" para adotar; a tela diz antes o que muda.`
+              : 'Abra "Configurar" para adotar — a tela diz antes o que muda.'
+          })
+        ])
+      : null
+
     return el('article', { className: 'list-card' }, [
       el('div', { className: 'list-card-main' }, [
         el('div', {}, [el('p', { className: 'mono overline', text: automation.id }), el('h2', { text: name })]),
         statusAutomation(automation)
       ]),
+      avisoDeVersao,
       el('div', { className: 'list-card-meta' }, [
         el('span', { text: automation.activeRevisionId ? `Revisão ativa #${automation.draft?.revision || '—'}` : 'Ainda não publicada' }),
         el('span', { text: `Atualizada em ${formatDate(automation.updatedAt)}` })

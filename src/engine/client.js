@@ -114,6 +114,7 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       reconfigurar: (id, parameters) => requisitar('PUT', `${caminho('/automations', id)}/reconfigure`, { parameters })
     },
     templates: {
+      atualizacoes: () => requisitar('GET', '/templates/atualizacoes'),
       listar: () => requisitar('GET', '/templates'),
       obter: (id) => requisitar('GET', caminho('/templates', id)),
       instalar: (id, dados) => requisitar('POST', `${caminho('/templates', id)}/install`, dados)

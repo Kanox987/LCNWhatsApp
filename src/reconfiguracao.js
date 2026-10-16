@@ -52,6 +52,49 @@ function ondeDiverge (atual, doTemplate) {
   return fora
 }
 
+// O VALOR GUARDADO QUE A VERSÃO NOVA NÃO CONHECE MAIS.
+//
+// Uma escolha pode sair da lista quando o template muda: o /melhorar guardava
+// `modo: "4k"`, e a versão nova separou o tratamento (auto, classico, ia,
+// ambos) de até onde a foto cresce (4k, original, 2x, 4x). Com o valor velho,
+// reconstruir a partir do template LANÇA — e o formulário fechava dizendo
+// "não consegui reconstruir", que é um beco sem saída: o comando fica preso na
+// versão antiga, e quem aluga o sistema não tem terminal para sair dele.
+//
+// Então o valor que não existe mais vira o PADRÃO da versão nova, e isso é
+// DITO. Trocar calado seria pior que o beco.
+export function sanearValores ({ template, valores }) {
+  const definicoes = Array.isArray(template?.parameters) ? template.parameters : []
+  const porChave = new Map(definicoes.map((d) => [d.key, d]))
+  const limpos = {}
+  const ajustes = []
+
+  for (const [chave, valor] of Object.entries(valores || {})) {
+    const definicao = porChave.get(chave)
+    // Parâmetro que a versão nova não tem mais: some, e quem lê fica sabendo.
+    if (!definicao) {
+      ajustes.push({ chave, de: valor, para: null, motivo: 'não existe mais nesta versão' })
+      continue
+    }
+    if (definicao.type === 'enum') {
+      const opcoes = Array.isArray(definicao.options) ? definicao.options : []
+      if (!opcoes.includes(String(valor))) {
+        ajustes.push({ chave, de: valor, para: definicao.default ?? null, motivo: `não está mais entre as escolhas (${opcoes.join(', ')})` })
+        if (definicao.default !== undefined) limpos[chave] = definicao.default
+        continue
+      }
+    }
+    limpos[chave] = valor
+  }
+  return { valores: limpos, ajustes }
+}
+
+function frasesDeAjuste (ajustes) {
+  return ajustes.map((a) => a.para === null
+    ? `"${a.chave}" (${a.motivo})`
+    : `"${a.chave}": ${a.de} vira ${a.para} (${a.motivo})`)
+}
+
 // Pode reconfigurar pelo formulário?
 //
 // `renderizar` é injetado para este módulo não depender do motor — e para o
@@ -64,9 +107,10 @@ export function analisarReconfiguracao ({ documento, template, valores, renderiz
     return { podeReconfigurar: false, motivo: 'Este template não declara nada configurável.' }
   }
 
+  const saneado = sanearValores({ template, valores })
   let doTemplate
   try {
-    doTemplate = renderizar(template, valores || {})
+    doTemplate = renderizar(template, saneado.valores)
   } catch (erro) {
     // Template mudou e os valores guardados já não bastam (parâmetro novo
     // obrigatório, por exemplo). Dizer isso é melhor que mostrar um formulário
@@ -99,10 +143,14 @@ export function analisarReconfiguracao ({ documento, template, valores, renderiz
       divergencias,
       versaoInstalada,
       versaoDoCatalogo,
+      ajustes: saneado.ajustes,
       aviso: `Este comando foi instalado na versão ${versaoInstalada} do template e o catálogo já está na ${versaoDoCatalogo}. ` +
         (divergencias.length
           ? `Salvar aqui adota a versão nova, e com ela o que mudou: ${divergencias.join(', ')}. Se você também editou algo à mão depois de instalar, essa edição se perde — confira pelo texto antes de salvar.`
-          : 'Salvar aqui adota a versão nova. O que a automação faz hoje continua igual ao template, então nada seu se perde.')
+          : 'Salvar aqui adota a versão nova. O que a automação faz hoje continua igual ao template, então nada seu se perde.') +
+        (saneado.ajustes.length
+          ? ` Uma coisa muda sozinha, porque a versão nova não conhece mais o valor guardado: ${frasesDeAjuste(saneado.ajustes).join('; ')}.`
+          : '')
     }
   }
   if (divergencias.length) {
@@ -120,6 +168,10 @@ export function analisarReconfiguracao ({ documento, template, valores, renderiz
 // escopo do template zeraria a lista de destinos — e lista vazia nunca casa
 // com ninguém, então a automação viraria inerte sem ninguém entender por quê.
 export function aplicarValores ({ documento, template, valores, renderizar }) {
+  // Aqui NÃO se saneia. O que chega é o que a pessoa acabou de escolher no
+  // formulário, e um valor fora da lista precisa ser recusado — é a diferença
+  // entre resgatar o que ficou guardado numa versão antiga (o saneamento, na
+  // análise) e aceitar calado uma escolha errada de agora.
   const novo = renderizar(template, valores || {})
   for (const campo of FORA_DO_TEMPLATE) {
     if (documento?.[campo] !== undefined) novo[campo] = documento[campo]
