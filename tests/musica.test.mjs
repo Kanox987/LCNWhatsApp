@@ -70,11 +70,11 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   const buscarFn = DECLARACAO.funcoes.find((f) => f.nome === 'buscar')
   check('buscar responde em carrossel', buscarFn.resposta.forma === 'carrossel')
   check('buscar aponta onde está a lista', buscarFn.resposta.campo === 'achados')
-  // A miniatura em JPEG primeiro, a capa do serviço como queda: o endereço da
-  // capa é servido em webp pelo YouTube, e a mensagem de imagem do WhatsApp
-  // espera jpeg.
-  check('a capa do card tenta o jpeg antes',
-    buscarFn.resposta.imagem[0].includes('hqdefault.jpg') && buscarFn.resposta.imagem.includes('capa'),
+  // A capa pelo próprio serviço primeiro (ele a devolve em jpeg), e o endereço
+  // do YouTube como queda — aquele vem em webp, e a mensagem de imagem do
+  // WhatsApp espera jpeg.
+  check('a capa do card vem do serviço, com o endereço de fora como queda',
+    buscarFn.resposta.imagem[0] === 'capa' && buscarFn.resposta.imagem[1] === 'capa_youtube',
     JSON.stringify(buscarFn.resposta.imagem))
   check('cada card tem botão, e o botão manda um comando com o link daquele',
     /^\/\w+ \{\{url\}\}$/.test(buscarFn.resposta.botao.comando), buscarFn.resposta.botao?.comando)
@@ -107,8 +107,8 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     {
       busca: 'evidencias',
       achados: [
-        { id: 'a', url: 'https://y/a', titulo: 'Evidências', autor: 'Chitãozinho & Xororó', duracao_texto: '4:59', visualizacoes: 3056971, capa: 'https://i.ytimg.com/a.jpg' },
-        { id: 'b', url: 'https://y/b', titulo: 'Evidências (Ao Vivo)', autor: 'Bruno & Marrone', duracao_texto: '4:23', visualizacoes: 52258297, capa: 'https://i.ytimg.com/b.jpg' }
+        { id: 'a', url: 'https://y/a', titulo: 'Evidências', autor: 'Chitãozinho & Xororó', duracao_texto: '4:59', visualizacoes: 3056971, capa: '/capa/a', capa_youtube: 'https://i.ytimg.com/a.webp' },
+        { id: 'b', url: 'https://y/b', titulo: 'Evidências (Ao Vivo)', autor: 'Bruno & Marrone', duracao_texto: '4:23', visualizacoes: 52258297, capa: '/capa/b', capa_youtube: 'https://i.ytimg.com/b.webp' }
       ]
     },
     { arquivo: 'capa-a' },
@@ -133,8 +133,10 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     r.cards[1].botao.comando === '/musica https://y/b', r.cards[1].botao?.comando)
   check('o rótulo do botão é o que a pessoa lê', r.cards[0].botao.texto === '⬇️ Baixar esta', r.cards[0].botao?.texto)
   check('a busca não vira download', s.chamadas[0].url.endsWith('/buscar'))
-  check('e a capa buscada é a miniatura em jpeg, montada com o id do vídeo',
-    s.chamadas[1].url === 'https://i.ytimg.com/vi/a/hqdefault.jpg', s.chamadas[1]?.url)
+  // Caminho relativo: a capa é buscada no PRÓPRIO serviço, e com a credencial
+  // dele — é arquivo do serviço como qualquer outro.
+  check('a capa é buscada no próprio serviço',
+    s.chamadas[1].url === 'http://127.0.0.1:8765/capa/a', s.chamadas[1]?.url)
 }
 
 // --- busca sem resultado, e busca recusada -------------------------------

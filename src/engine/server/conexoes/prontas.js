@@ -370,14 +370,18 @@ export const CONEXOES_PRONTAS = Object.freeze([
           resposta: {
             forma: FORMAS_DE_RESPOSTA.carrossel,
             campo: 'achados',
-            // A miniatura em JPEG, e só depois a que o serviço indicou.
+            // A CAPA PELO PRÓPRIO SERVIÇO, e o endereço do YouTube como queda.
             //
-            // Medido: a `capa` da busca vem de um endereço que o YouTube serve
-            // em WEBP — e ele ignora o `Accept` —, enquanto a mensagem de
-            // imagem do WhatsApp espera jpeg. O endereço simples da miniatura,
-            // montado com o id do vídeo, responde jpeg. A `capa` fica como
-            // segunda tentativa, para o dia em que o primeiro não responder.
-            imagem: ['https://i.ytimg.com/vi/{{id}}/hqdefault.jpg', 'capa'],
+            // `capa` é um caminho do serviço (`/capa/<id>`) e volta em JPEG —
+            // o dono passou a servi-la assim depois de medirmos que o endereço
+            // direto do YouTube responde WEBP (ele ignora o `Accept`) e que a
+            // mensagem de imagem do WhatsApp espera jpeg.
+            //
+            // Caminho relativo leva a credencial da conexão junto, como
+            // qualquer outro arquivo do serviço; `capa_youtube` é endereço de
+            // fora e vai sem ela. É a segunda tentativa, para o dia em que o
+            // serviço não conseguir buscar a capa.
+            imagem: ['capa', 'capa_youtube'],
             corpo: '🎵 *{{titulo}}*\n👤 {{autor}}',
             rodape: '⏱️ {{duracao_texto}}  ·  👁️ {{visualizacoes}} visualizações',
             cabecalho: '🔎 Achei isto para "{{busca}}":',
