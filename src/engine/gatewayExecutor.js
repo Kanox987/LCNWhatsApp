@@ -484,9 +484,19 @@ async function executarChamadaDeConexao (client, comando, deps) {
       const upload = await client.message.upload(card.midia.buffer, { type: 'image', mimetype: card.midia.mime })
       cards.push(montarCard(card.midia, upload, { legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
     }
+    const abertura = caption || resultado.cabecalho
     try {
+      // O texto ANTES, em mensagem própria: ele diz o que foi buscado, e junto
+      // do carrossel ele some — ver `montarCarrossel`.
+      if (abertura) {
+        await comTimeout(
+          () => enviarERegistrar(client, chatId, { type: 'text', text: abertura }, opcoesDeCitacao(replyTo)),
+          TIMEOUT_ENVIO_MS,
+          `timeout ao abrir o carrossel do comando ${comando.id}`
+        )
+      }
       await comTimeout(
-        () => enviarERegistrar(client, chatId, montarCarrossel(cards, caption || resultado.cabecalho), opcoesDeCitacao(replyTo)),
+        () => enviarERegistrar(client, chatId, montarCarrossel(cards)),
         TIMEOUT_ENVIO_MS * 4,
         `timeout ao enviar o carrossel do comando ${comando.id}`
       )
@@ -498,10 +508,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
       console.warn(`[engine] Carrossel com botão recusado (${mensagemDoErro(erro)}) — mandando como texto.`)
       const linhas = (resultado.cards || []).map((c, i) => `*${i + 1}.* ${c.corpo}${c.rodape ? `\n_${c.rodape}_` : ''}`)
       await comTimeout(
-        () => enviarERegistrar(client, chatId, {
-          type: 'text',
-          text: [caption || resultado.cabecalho, ...linhas].filter(Boolean).join('\n')
-        }, opcoesDeCitacao(replyTo)),
+        () => enviarERegistrar(client, chatId, { type: 'text', text: linhas.join('\n') }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
         `timeout ao mandar a lista do comando ${comando.id}`
       )

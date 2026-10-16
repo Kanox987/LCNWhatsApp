@@ -65,9 +65,13 @@ function midiaDoUpload (midia, upload) {
 // viajam no mesmo JSON porque é assim que o nativeFlow os transporta.
 function montarBotao (botao) {
   if (!botao?.texto || !botao?.comando) return []
+  // `disabled: false` está no bot de referência e vai junto: mensagem
+  // interativa que o servidor aceita e o aplicativo não desenha não deixa
+  // rastro nenhum, então aqui a forma é copiada inteira em vez de reduzida ao
+  // que parece bastar.
   return [{
     name: 'quick_reply',
-    buttonParamsJson: JSON.stringify({ display_text: botao.texto, id: botao.comando })
+    buttonParamsJson: JSON.stringify({ display_text: botao.texto, id: botao.comando, disabled: false })
   }]
 }
 
@@ -84,18 +88,31 @@ export function montarCard (midia, upload, { legenda, rodape, botao } = {}) {
     // Card sem `nativeFlowMessage` não é aceito: o carrossel é uma mensagem
     // interativa, e card sem a parte interativa fica incompleto. Lista de
     // botões vazia é o que o bot de referência manda quando não há botão.
-    nativeFlowMessage: { buttons: montarBotao(botao) }
+    //
+    // `messageParamsJson` vazio acompanha, como no menu com botões que já
+    // funciona aqui: o campo existe no proto e os clientes esperam encontrá-lo
+    // — e mensagem interativa que o servidor aceita e o aplicativo não desenha
+    // é o modo de falhar mais caro que existe, porque não deixa rastro.
+    nativeFlowMessage: { buttons: montarBotao(botao), messageParamsJson: '' }
   }
 }
 
-export function montarCarrossel (cards, cabecalho = null) {
+// SEM `body` AO LADO DO CARROSSEL, de propósito.
+//
+// A primeira versão punha o texto da busca num `body` da mensagem interativa, e
+// o resultado foi o pior possível: o servidor aceitou, o comando foi marcado
+// como enviado, e NADA apareceu na conversa. As duas formas que funcionam em
+// produção — a daqui, com os cards de foto, e a do bot de referência — não têm
+// `body` junto de `carouselMessage`.
+//
+// O texto que abre a busca vai numa mensagem de texto antes, onde ele chega
+// sempre.
+//
+// `messageVersion: 1` também vem do bot de referência, na variante com botão.
+export function montarCarrossel (cards) {
   return {
     interactiveMessage: {
-      // O texto acima dos cards. Numa busca é ele que diz o que foi buscado —
-      // sem isso o carrossel chega sem assunto, e dez minutos depois ninguém
-      // lembra qual pergunta gerou aqueles cards.
-      ...(cabecalho ? { body: { text: cabecalho } } : {}),
-      carouselMessage: { cards }
+      carouselMessage: { cards, messageVersion: 1 }
     }
   }
 }

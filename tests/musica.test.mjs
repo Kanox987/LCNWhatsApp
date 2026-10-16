@@ -361,12 +361,17 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
   }], deps.clienteEngine, deps)
 
   check('as duas capas sobem antes', subidos.length === 2 && subidos[0].opcoes.type === 'image')
-  check('e sai UMA mensagem só', enviados.length === 1, String(enviados.length))
-  const msg = enviados[0].c
+  // DUAS mensagens: o texto que abre e o carrossel. Juntos — o texto num
+  // `body` ao lado do `carouselMessage` — o servidor aceita e NADA aparece na
+  // conversa. Aconteceu em produção.
+  check('o texto da busca abre, em mensagem própria',
+    enviados[0].c?.type === 'text' && enviados[0].c.text === '🔎 Achei isto para "evidencias":', JSON.stringify(enviados[0]?.c))
+  const msg = enviados[1].c
   const carrossel = msg?.interactiveMessage?.carouselMessage
-  check('que é um carrossel', !!carrossel, JSON.stringify(Object.keys(msg || {})))
+  check('e o carrossel vem logo depois', !!carrossel, JSON.stringify(Object.keys(msg || {})))
+  check('sem body junto, que é o que o fazia sumir', msg.interactiveMessage.body === undefined)
   check('com um card por resultado', carrossel.cards.length === 2)
-  check('o cabeçalho vai no corpo da mensagem', msg.interactiveMessage.body?.text === '🔎 Achei isto para "evidencias":')
+  check('e a versão de mensagem que o bot de referência manda', carrossel.messageVersion === 1)
   check('cada card tem a imagem no cabeçalho', carrossel.cards[0].header?.hasMediaAttachment === true && !!carrossel.cards[0].header?.imageMessage)
   check('e o texto no corpo do card', carrossel.cards[0].body?.text === '🎵 Evidências')
   const botao = carrossel.cards[0].nativeFlowMessage?.buttons?.[0]
@@ -411,9 +416,75 @@ const DECLARACAO = { id: 'midia', chave: 'CHAVE', ...validarConfiguracao(MIDIA.c
     payload: { chatId: '5511999@s.whatsapp.net', conexao: 'midia', funcao: 'buscar', entradas: {} }
   }], deps.clienteEngine, deps)
 
-  check('aplicativo que recusa o interativo ainda recebe a lista', enviados.length === 1 && enviados[0].c.type === 'text')
-  check('com o cabeçalho e o resultado dentro',
-    /Achei isto/.test(enviados[0].c.text) && /Evidências/.test(enviados[0].c.text), enviados[0]?.c?.text)
+  // O texto de abertura já saiu antes; recusado o carrossel, o que falta é a
+  // lista escrita — e ela vai.
+  check('aplicativo que recusa o interativo ainda recebe a lista',
+    enviados.map((e) => e.c.type).join(',') === 'text,text', JSON.stringify(enviados.map((e) => e.c.type)))
+  check('com o resultado dentro', /Evidências/.test(enviados[1].c.text), enviados[1]?.c?.text)
+}
+
+// --- o vídeo que não é do YouTube Music ----------------------------------
+//
+// Aconteceu em produção, com "coração de pedra": faixa e artista vêm nulos
+// quando o vídeo não é do YouTube Music, e a legenda chegou à conversa com
+// "{{metadados.faixa}}" e "{{metadados.artista}}" escritos. Marcador literal é
+// o sinal de erro CERTO para quem escreve um comando, e o errado para quem
+// está ouvindo música.
+{
+  const s = servico([
+    { job: 'j2' },
+    {
+      estado: 'pronto',
+      titulo: 'Coração de Pedra (clipe oficial)',
+      duracao: 212,
+      // Sem faixa e sem artista: é o que o serviço devolve, e não é erro dele.
+      metadados: { autor: 'Canal do Fulano', duracao: 212 },
+      midias: [
+        { url: '/media/1', tipo: 'audio', mime: 'audio/mp4', nome: '01 c.m4a' },
+        { url: '/media/2', tipo: 'imagem', mime: 'image/jpeg', nome: '02 c.jpg' }
+      ]
+    },
+    { arquivo: 'audio' },
+    { arquivo: 'capa' }
+  ])
+  const r = await criarExecutorDeConexao({ buscar: s.buscar, dormir: semDormir })
+    .executar(DECLARACAO, 'musica', { busca: 'coração de pedra' })
+
+  check('sem faixa, a legenda usa o título do vídeo',
+    /Coração de Pedra/.test(r.descricao || ''), r.descricao)
+  check('sem artista, usa o canal', /Canal do Fulano/.test(r.descricao || ''), r.descricao)
+  check('a duração continua escrita em minutos', /3:32/.test(r.descricao || ''), r.descricao)
+  check('e NENHUM marcador cru chega à conversa', !/\{\{/.test(r.descricao || ''), r.descricao)
+}
+
+// --- quando nem a alternativa existe, a linha some -----------------------
+{
+  const declaracaoTorta = {
+    ...DECLARACAO,
+    funcoes: [validarFuncao({
+      nome: 'musica',
+      caminho: '/download',
+      entradas: [{ nome: 'busca', tipo: 'texto', obrigatoria: false }],
+      resposta: {
+        forma: 'trabalho',
+        campoDoTrabalho: 'job',
+        caminhoDeAcompanhamento: '/jobs/{job}',
+        campoDoEstado: 'estado',
+        estadosEmAndamento: ['baixando'],
+        campoDoResultado: 'midias',
+        modeloDaDescricao: '🎵 {{titulo}}\n👤 {{nao_existe}}\n⏱️ {{duracao|tempo}}'
+      }
+    })]
+  }
+  const s = servico([
+    { job: 'j3' },
+    { estado: 'pronto', titulo: 'Uma música', duracao: 65, midias: [{ url: '/m/1', tipo: 'audio', mime: 'audio/mp4' }] },
+    { arquivo: 'audio' }
+  ])
+  const r = await criarExecutorDeConexao({ buscar: s.buscar, dormir: semDormir })
+    .executar(declaracaoTorta, 'musica', {})
+  check('a linha sem valor nenhum desaparece da legenda',
+    r.descricao === '🎵 Uma música\n⏱️ 1:05', JSON.stringify(r.descricao))
 }
 
 // --- os comandos no catálogo ---------------------------------------------

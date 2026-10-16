@@ -127,9 +127,18 @@ function montarRequisicao (url, metodo, entradas, cabecalhos, arquivos = []) {
 // linha chega escrita "{{preco}}" e quem declarou vê na hora qual campo errou.
 // Apagar seria esconder o defeito atrás de um texto que parece certo.
 function escrever (modelo, valores) {
-  return String(modelo).replace(/\{\{\s*([\w.]+)(\|\w+)?\s*\}\}/g, (marcador, caminho, filtro) => {
-    const valor = porCaminho(valores, caminho)
-    if (valor === undefined || valor === null || valor === '') return marcador
+  // `{{a ?? b}}`: o primeiro que tiver valor. Existe porque serviço devolve
+  // campo vazio o tempo todo e isso NÃO é erro — a busca de música só sabe
+  // faixa e artista quando o vídeo é do YouTube Music; nos outros, o que ela
+  // tem é título e canal, e a legenda tem que dizer a mesma coisa com o que
+  // existe. Sem isto, a conversa recebia "{{metadados.faixa}}" escrito.
+  return String(modelo).replace(/\{\{\s*([\w.]+(?:\s*\?\?\s*[\w.]+)*)\s*(\|\w+)?\s*\}\}/g, (marcador, caminhos, filtro) => {
+    let valor
+    for (const caminho of String(caminhos).split('??').map((c) => c.trim())) {
+      const achado = porCaminho(valores, caminho)
+      if (achado !== undefined && achado !== null && achado !== '') { valor = achado; break }
+    }
+    if (valor === undefined) return marcador
     // `|tempo` é a única conta desta camada, e existe porque serviço nenhum
     // devolve "4:59": eles devolvem 299 segundos, e ninguém lê isso como
     // duração de música.
@@ -162,6 +171,20 @@ function montarLista (corpo, forma) {
   const linhas = usados.map((item, i) => escrever(forma.linha, { ...(item && typeof item === 'object' ? item : { valor: item }), n: i + 1 }))
   const cabecalho = forma.cabecalho ? escrever(forma.cabecalho, corpo) : null
   return [cabecalho, ...linhas].filter(Boolean).join('\n')
+}
+
+// A LINHA QUE NÃO TEM VALOR SOME — e só na legenda.
+//
+// Em todo o resto desta base, marcador que não resolve fica LITERAL: é o sinal
+// de erro, e quem escreveu o comando vê na hora qual campo errou. A legenda é o
+// contrário: quem lê é quem usou o comando, não quem o escreveu, e
+// "⏱️ {{duracao}}" no meio de uma música não diz nada a essa pessoa.
+//
+// Então aqui a linha inteira sai, e o que tem valor continua chegando. Com
+// `??` na declaração, o normal é nem chegar neste ponto.
+function semLinhasOcas (texto) {
+  const linhas = String(texto).split('\n').filter((linha) => !/\{\{[^}]*\}\}/.test(linha))
+  return textoOuNulo(linhas.join('\n').replace(/\n{3,}/g, '\n\n').trim())
 }
 
 function textoOuNulo (valor) {
@@ -486,7 +509,7 @@ export function criarExecutorDeConexao ({
       forma: 'mídia',
       ...buscados,
       descricao: funcao.resposta.modeloDaDescricao
-        ? escrever(funcao.resposta.modeloDaDescricao, final)
+        ? semLinhasOcas(escrever(funcao.resposta.modeloDaDescricao, final))
         : textoOuNulo(porCaminho(final, funcao.resposta.campoDaDescricao || 'descricao'))
     }
   }

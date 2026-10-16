@@ -37,7 +37,11 @@ const TRABALHO_DE_MUSICA = Object.freeze({
   ordemDosTipos: ['foto', 'áudio'],
   // A legenda da capa, escrita com o que o serviço devolve sobre a faixa.
   // `|tempo` transforma os 299 segundos em 4:59.
-  modeloDaDescricao: '🎵 *{{metadados.faixa}}*\n👤 {{metadados.artista}}\n⏱️ {{duracao|tempo}}\n\n🎶🎧🎼',
+  // `??` é "o primeiro que tiver valor": faixa e artista só existem quando o
+  // vídeo é do YouTube Music; nos outros, o que o serviço tem é o título do
+  // vídeo e o canal. Sem as alternativas, a conversa recebia
+  // "{{metadados.faixa}}" escrito — aconteceu, com "coração de pedra".
+  modeloDaDescricao: '🎵 *{{metadados.faixa ?? titulo}}*\n👤 {{metadados.artista ?? metadados.autor}}\n⏱️ {{duracao ?? metadados.duracao|tempo}}\n\n🎶🎧🎼',
   // Queda, quando o serviço não souber faixa e artista (vídeo que não é do
   // YouTube Music): o título do vídeo ainda diz o que chegou.
   campoDaDescricao: 'titulo',
