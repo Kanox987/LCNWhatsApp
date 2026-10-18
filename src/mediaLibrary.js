@@ -48,7 +48,16 @@ export const TIPOS_ACEITOS = Object.freeze({
   'audio/ogg': { kind: 'audio', ext: '.ogg' },
   'audio/mp4': { kind: 'audio', ext: '.m4a' },
   'application/pdf': { kind: 'document', ext: '.pdf' },
-  'text/plain': { kind: 'text', ext: '.txt' }
+  'text/plain': { kind: 'text', ext: '.txt' },
+  // HTML entra como DOCUMENTO, e não como texto — a diferença não é detalhe.
+  //
+  // `kind: 'text'` manda o CONTEÚDO como mensagem na conversa (ver
+  // gatewayExecutor: text vira `{type:'text'}`, o resto vira anexo). Com
+  // `text`, mandar uma página despejaria as tags na conversa. O que se quer é
+  // o ARQUIVO: quem recebe salva, abre no navegador, e o que ele faz dali em
+  // diante — inclusive falar com alguma API — é com quem escreveu a página,
+  // não com o bot.
+  'text/html': { kind: 'document', ext: '.html' }
 })
 
 export const LIMITE_POR_ARQUIVO_BYTES = 32 * 1024 * 1024
