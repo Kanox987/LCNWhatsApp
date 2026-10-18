@@ -49,23 +49,49 @@ function pidDe (arquivo) {
   }
 }
 
-export function iniciar (nome, arqPid, { spawnFn = spawn, raiz = RAIZ } = {}) {
+// Só dígitos, com DDI, e nada mais: este valor vira argumento de processo, e
+// a lista fechada é o que impede qualquer outra coisa de entrar junto.
+export function numeroParaParear (bruto) {
+  const limpo = String(bruto ?? '').replace(/\D+/g, '')
+  if (limpo.length < 10 || limpo.length > 15) return null
+  return limpo
+}
+
+export function iniciar (nome, arqPid, { spawnFn = spawn, raiz = RAIZ, pairNumber = null } = {}) {
   const pid = pidDe(arqPid)
   if (pid && vivo(pid)) return { ok: false, out: `O número "${nome}" já está rodando (pid ${pid}).` }
 
   const entrada = path.join(raiz, 'index.js')
   if (!fs.existsSync(entrada)) return { ok: false, out: 'Não encontrei o index.js na raiz do projeto.' }
 
-  const filho = spawnFn(process.execPath, [entrada], {
+  // PAREAMENTO POR CÓDIGO, sem terminal.
+  //
+  // O bot já sabia fazer isto — `LCN_PAIR_NUMBER=55… node index.js --code` —,
+  // e só o terminal sabia pedir. A própria tela admitia a lacuna: "a geração
+  // de um novo código por telefone ainda depende do fluxo de terminal". Quem
+  // aluga o sistema não tem terminal nenhum, então a lacuna era a porta de
+  // entrada inteira fechada para ele.
+  const numero = pairNumber ? numeroParaParear(pairNumber) : null
+  if (pairNumber && !numero) {
+    return { ok: false, out: 'Número inválido para pareamento: use só dígitos, com DDI (ex.: 5522999999999).' }
+  }
+  const argumentos = numero ? [entrada, '--code'] : [entrada]
+
+  const filho = spawnFn(process.execPath, argumentos, {
     detached: true,
     stdio: 'ignore',
     cwd: raiz,
     // É esta variável que dá a ele a própria sessão, o próprio estado e a
     // própria pasta de mídia (ver src/paths.js).
-    env: { ...process.env, LCN_INSTANCIA: nome }
+    env: { ...process.env, LCN_INSTANCIA: nome, ...(numero ? { LCN_PAIR_NUMBER: numero } : {}) }
   })
   filho.unref()
-  return { ok: true, out: `Número "${nome}" iniciado (pid ${filho.pid}).` }
+  return {
+    ok: true,
+    out: numero
+      ? `Número "${nome}" iniciado para parear por código (pid ${filho.pid}). O código aparece aqui em instantes.`
+      : `Número "${nome}" iniciado (pid ${filho.pid}).`
+  }
 }
 
 export function parar (nome, arqPid) {

@@ -77,7 +77,50 @@ function lifecycleCard (instance, refresh, navigate) {
   ])
 }
 
-function pairingCard (pairing) {
+// PEDIR O CÓDIGO DE PAREAMENTO, sem terminal.
+//
+// O bot já sabia fazer isto desde sempre — `LCN_PAIR_NUMBER=55… node index.js
+// --code` —, e só o terminal sabia pedir. Esta tela admitia a lacuna em letras
+// ("ainda depende do fluxo de terminal"), e para quem aluga o sistema ela era
+// a porta de entrada inteira fechada: sem terminal, sem conectar número.
+//
+// O pareamento acontece na ABERTURA da sessão, então pedir o código é ligar o
+// processo em modo código. Com ele já rodando, a tela diz para parar antes —
+// em vez de fingir que um processo em pé aceita o pedido.
+function cartaoDeCodigo (instanceId, pairing, refresh) {
+  const telefone = el('input', { type: 'tel', placeholder: '5522999999999', value: '' })
+  const pedir = button('Pedir código', { variant: 'primary' })
+  const recado = el('div')
+  pedir.addEventListener('click', async () => {
+    const numero = telefone.value.replace(/\D+/g, '')
+    if (numero.length < 10) {
+      recado.replaceChildren(errorState({ message: 'Escreva o número com DDI e DDD, só dígitos. Exemplo: 5522999999999.' }))
+      return
+    }
+    setBusy(pedir, true, 'Pedindo…')
+    try {
+      await api.instances.action(instanceId, 'start', { pairNumber: numero })
+      notify('Pedido enviado. O código aparece aqui em instantes.')
+      recado.replaceChildren()
+      await refresh()
+    } catch (error) {
+      recado.replaceChildren(errorState(error))
+    } finally {
+      setBusy(pedir, false)
+    }
+  })
+  return el('div', { className: 'pairing-block stack' }, [
+    el('div', { className: 'field' }, [
+      el('span', { className: 'field-label', text: 'Conectar por código de 8 dígitos' }),
+      el('p', { className: 'field-help', text: 'No celular: WhatsApp > Dispositivos conectados > Conectar dispositivo > Conectar com número de telefone. Escreva aqui o número DESTE aparelho, com DDI e DDD.' })
+    ]),
+    telefone,
+    recado,
+    el('div', { className: 'button-row' }, [pedir])
+  ])
+}
+
+function pairingCard (pairing, instanceId, refresh) {
   const content = el('div', { className: 'stack' })
   if (pairing.connected === true) {
     content.append(el('div', { className: 'notice notice-success' }, [
@@ -87,8 +130,9 @@ function pairingCard (pairing) {
   } else if (!pairing.qr && !pairing.pairingCode) {
     content.append(el('div', { className: 'notice notice-warning' }, [
       el('strong', { text: 'Aguardando dados de pareamento.' }),
-      el('p', { text: 'Inicie a instância para que ela gere um QR. A geração de um novo código por telefone ainda depende do fluxo de terminal.' })
+      el('p', { text: 'Inicie a instância para ela gerar um QR, ou peça um código de pareamento para um telefone aqui embaixo.' })
     ]))
+    content.append(cartaoDeCodigo(instanceId, pairing, refresh))
   } else {
     if (pairing.pairingCode) {
       content.append(el('div', { className: 'pairing-block' }, [
@@ -284,7 +328,7 @@ export async function renderInstance ({ params, navigate, refresh }) {
       el('div', {}, [el('span', { text: 'Serviço' }), el('strong', { text: instance.unitStatus || '—' })]),
       el('div', {}, [el('span', { text: 'Criada em' }), el('strong', { text: formatDate(instance.createdAt) })])
     ]),
-    el('div', { className: 'two-columns' }, [lifecycleCard(instance, refresh, navigate), pairingCard(pairing)]),
+    el('div', { className: 'two-columns' }, [lifecycleCard(instance, refresh, navigate), pairingCard(pairing, instance.instanceId, refresh)]),
     optimizationCard(id, optimization),
     usageCard(usageResult.usage, usageResult.error),
     logsCard(id)

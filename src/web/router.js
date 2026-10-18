@@ -58,7 +58,9 @@ export function criarRoteadorWeb (aplicacao) {
   // Remover apaga dados E sessão: o número não volta sozinho. O motor recusa
   // enquanto o processo estiver vivo — ver instanceService.remover.
   roteador.delete('/api/v1/instances/:id', ({ params }) => aplicacao.instancias.remover(params.id))
-  roteador.post('/api/v1/instances/:id/start', ({ params }) => aplicacao.instancias.iniciar(params.id))
+  // `pairNumber` no corpo pede o código de pareamento daquele telefone — é o
+  // que fecha a última porta que só o terminal abria.
+  roteador.post('/api/v1/instances/:id/start', ({ params, body }) => aplicacao.instancias.iniciar(params.id, { pairNumber: body?.pairNumber }))
   roteador.post('/api/v1/instances/:id/stop', ({ params }) => aplicacao.instancias.parar(params.id))
   roteador.post('/api/v1/instances/:id/restart', ({ params }) => aplicacao.instancias.reiniciar(params.id))
   roteador.get('/api/v1/instances/:id/pairing', ({ params }) => aplicacao.instancias.pareamento(params.id))

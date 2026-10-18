@@ -379,7 +379,7 @@ export function criarInstanceService ({
     return { instanceId: ID_BARE, action: acao, ok: true }
   }
 
-  function executarAcaoCicloDeVida (id, acao) {
+  function executarAcaoCicloDeVida (id, acao, opcoes = {}) {
     if (id === ID_BARE) return executarAcaoCicloDeVidaBare(acao)
     const instancia = exigir(id)
 
@@ -391,7 +391,10 @@ export function criarInstanceService ({
     // pasta.
     if (instancia.nomeSimples) {
       const resultado = acao === 'start'
-        ? processoDaInstancia.iniciar(instancia.nomeSimples, instancia.arqPid)
+        // `pairNumber` liga o modo de pareamento por CÓDIGO: o processo sobe
+        // com `--code` e pede o código para aquele telefone. Era a última
+        // coisa que só o terminal fazia.
+        ? processoDaInstancia.iniciar(instancia.nomeSimples, instancia.arqPid, { pairNumber: opcoes.pairNumber || null })
         : (acao === 'stop'
             ? processoDaInstancia.parar(instancia.nomeSimples, instancia.arqPid)
             : processoDaInstancia.reiniciar(instancia.nomeSimples, instancia.arqPid))
@@ -480,15 +483,16 @@ export function criarInstanceService ({
     return { instanceId: id, removed: true, nome: instancia.nomeSimples }
   }
 
-  const iniciar = (id) => executarAcaoCicloDeVida(id, 'start')
+  const iniciar = (id, opcoes) => executarAcaoCicloDeVida(id, 'start', opcoes || {})
   const parar = (id) => executarAcaoCicloDeVida(id, 'stop')
   const reiniciar = (id) => executarAcaoCicloDeVida(id, 'restart')
 
-  // Pareamento: só LEITURA do que connection.js já persiste em state.json
-  // (definirQR/definirCodigoPareamento) — disparar um pareamento novo por
-  // API ainda não é suportado (hoje --code pede o telefone via stdin
-  // interativo; ver nota no plano, isso fica pra quando alguém desenhar
-  // como um processo já rodando aceita esse pedido sem terminal). O QR cru
+  // Pareamento: LEITURA do que connection.js já persiste em state.json
+  // (definirQR/definirCodigoPareamento). Pedir um código NOVO também é
+  // possível desde que o pedido venha com o telefone — ele sobe o processo em
+  // modo `--code`, que é o que o terminal fazia. Com o processo JÁ rodando, a
+  // ordem continua sendo parar e ligar de novo pedindo o código: o pareamento
+  // acontece na abertura da sessão, não no meio dela. O QR cru
   // (`estado.qr`) é convertido pra uma imagem PNG (data URL) aqui mesmo —
   // antes o painel só mostrava o texto cru pra copiar, não dava pra
   // escanear de verdade com a câmera do celular (pedido explícito do
