@@ -210,10 +210,22 @@ function opcoesDeCitacao (replyTo) {
   return { quote }
 }
 
+// Os metadados que o comando declarou, somados à citação.
+//
+// Menção e selo de encaminhada viajam no CONTEXTO da mensagem, ao lado do
+// texto — não dentro dele. Quem monta o contexto é o zapo-js, a partir destas
+// chaves; aqui só se repassa o que o motor resolveu, já em forma de JID.
+function opcoesDeEnvio (payload) {
+  const opcoes = opcoesDeCitacao(payload?.replyTo) || {}
+  if (Array.isArray(payload?.mentions) && payload.mentions.length) opcoes.mentions = payload.mentions
+  if (payload?.forward === true) opcoes.forward = true
+  return Object.keys(opcoes).length ? opcoes : undefined
+}
+
 async function executarResposta (client, comando) {
   const texto = resolverTextoComLatencia(comando.payload.text, comando.payload.receivedAtMs)
   await comTimeout(
-    () => enviarERegistrar(client, comando.payload.chatId, { type: 'text', text: texto }, opcoesDeCitacao(comando.payload.replyTo)),
+    () => enviarERegistrar(client, comando.payload.chatId, { type: 'text', text: texto }, opcoesDeEnvio(comando.payload)),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar o comando ${comando.id}`
   )

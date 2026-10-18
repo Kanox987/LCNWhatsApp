@@ -180,6 +180,30 @@ function resolverDestinoConfigurado (bruto, contexto) {
   return digitos.length >= 8 ? `${digitos}@s.whatsapp.net` : null
 }
 
+// QUEM A MENSAGEM MARCA, a partir do que o comando escreveu.
+//
+// Aceita vários, separados por vírgula, e cada um nas mesmas três formas que
+// `resolverDestinoConfigurado` aceita — JID inteiro, só os dígitos, ou um
+// marcador como `{{sender.id}}`, que é o caso comum.
+//
+// O que NÃO entra: marcador que não resolveu. Um `{{...}}` intacto significa
+// variável nunca gravada, e mandá-lo como destinatário de menção marcaria
+// ninguém ou, pior, alguém errado. Entrada torta sai da lista em silêncio —
+// marcar é decoração da mensagem, e perder a marcação é melhor do que não
+// mandar a mensagem.
+export function mencoesDeclaradas (bruto, contexto) {
+  if (typeof bruto !== 'string' || !bruto) return []
+  const vistos = new Set()
+  for (const parte of interpolar(bruto, contexto).split(',')) {
+    const limpo = parte.trim()
+    if (!limpo || limpo.includes('{{')) continue
+    if (/@(s\.whatsapp\.net|g\.us|lid)$/.test(limpo)) { vistos.add(limpo); continue }
+    const digitos = limpo.replace(/\D/g, '')
+    if (digitos.length >= 8) vistos.add(`${digitos}@s.whatsapp.net`)
+  }
+  return [...vistos]
+}
+
 // Só os dígitos de um JID: 5511999999999@s.whatsapp.net -> 5511999999999.
 // É o que um link wa.me/<numero> precisa, e o que uma pessoa reconhece como
 // "o número" — o JID inteiro não serve para nenhum dos dois.
@@ -564,7 +588,62 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       if (typeof no.config.text === 'string' && no.config.text.includes('{{latencyMs}}') && typeof evento.receivedAtMs === 'number') {
         payload.receivedAtMs = evento.receivedAtMs
       }
+      // A MENÇÃO VIVE NO CONTEXTO DA MENSAGEM, não no texto.
+      //
+      // Escrever "@5511999999999" no meio do texto manda dígitos: parece uma
+      // menção, não notifica ninguém e não pinta nome nenhum. O que faz o
+      // WhatsApp entender é a lista de marcados que viaja ao lado do texto —
+      // por isso é campo, e por isso o texto continua sendo texto.
+      const marcados = mencoesDeclaradas(no.config.mentions, contexto)
+      if (marcados.length) payload.mentions = marcados
+      if (no.config.forward === true) payload.forward = true
       comandos.push({ commandType: 'whatsapp.reply', payload })
+      return 'success'
+    }
+
+    // MOSTRAR OS METADADOS da mensagem — o que de fato chegou.
+    //
+    // Por que isto existe: quem escreve um comando com botão, citação ou
+    // carrossel está montando contra uma caixa fechada. Eu mesmo só descobri
+    // que faltava a quarta forma de resposta de botão depois de o toque não
+    // fazer nada e eu ir olhar o banco. Quem aluga o sistema não tem banco nem
+    // terminal — para essa pessoa, não havia como olhar.
+    //
+    // O QUE ELE MOSTRA é exatamente o que o comando consegue LER: o mesmo
+    // objeto que o interpolador recebe. Não é um despejo do nó cru do
+    // WhatsApp, e isso não é limitação, são duas razões:
+    //   1. O nó cru carrega `mediaKey` e `directPath`. Mandá-lo para a
+    //      conversa publicaria a capacidade de baixar a mídia de alguém — é o
+    //      que o invariante 4 impede, e ele vale aqui também.
+    //   2. Mostrar campo que o comando não consegue escrever ensinaria errado:
+    //      a pessoa veria um caminho e escreveria um marcador que fica literal.
+    // Então o que aparece aqui é o contrato, não o protocolo.
+    case 'action.whatsapp.metadata': {
+      const partes = []
+      const escrever = (titulo, valor) => {
+        if (valor === undefined || valor === null) return
+        if (typeof valor === 'object' && !Object.keys(valor).length) return
+        partes.push(`*${titulo}*\n${typeof valor === 'object' ? JSON.stringify(valor, null, 2) : valor}`)
+      }
+      // A própria mensagem primeiro: é dela que o comando saiu.
+      escrever('esta mensagem', { id: evento.providerRef?.id, de: evento.sender?.id, conversa: evento.chat?.id })
+      escrever('message', contexto.message)
+      escrever('quoted', contexto.quoted)
+      escrever('media', contexto.media)
+      escrever('target', contexto.target)
+      const texto = partes.length
+        ? partes.join('\n\n')
+        : 'Esta mensagem não trouxe metadado nenhum além dela mesma.'
+      comandos.push({
+        commandType: 'whatsapp.reply',
+        payload: {
+          chatId: evento.chat.id,
+          // Bloco de código: metadado é JSON, e JSON sem fonte monoespaçada
+          // vira uma parede ilegível no celular.
+          text: `\`\`\`\n${texto}\n\`\`\``,
+          ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
+        }
+      })
       return 'success'
     }
 

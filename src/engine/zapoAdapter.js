@@ -85,6 +85,70 @@ function textoDeResposta (msg) {
   return undefined
 }
 
+// O TOQUE NUM BOTÃO, por inteiro — e não só o id.
+//
+// `textoDeResposta` tira dali o id e descarta o resto, porque para ACIONAR um
+// comando o id basta: ele é o texto que o bot escreveu quando montou o botão.
+// Mas quem está escrevendo um comando com botões precisa ver o que chegou de
+// verdade — qual das quatro formas veio, que rótulo a pessoa leu, que posição
+// ela tocou e, no carrossel, qual card. Sem isso, montar um botão é tentativa
+// e erro contra uma caixa fechada, que foi exatamente como eu descobri que
+// faltava a quarta forma (`templateButtonReplyMessage`) quando o botão do
+// carrossel não fazia nada.
+//
+// Tudo aqui é endereçamento e rótulo: nenhuma chave de mídia, nenhum segredo.
+// Por isso pode atravessar para o motor, ao contrário do nó cru.
+function construirRespostaDeBotao (msg) {
+  if (!msg) return undefined
+  const limpar = (alvo) => {
+    const saida = {}
+    for (const [chave, valor] of Object.entries(alvo)) {
+      // Campo ausente não vira string vazia nem null: ausente fica ausente, e
+      // o marcador aparece literal na resposta — que é o sinal de erro desta
+      // base, e não um buraco silencioso no meio do texto.
+      if (valor !== undefined && valor !== null && valor !== '') saida[chave] = valor
+    }
+    return Object.keys(saida).length ? saida : undefined
+  }
+
+  const classico = msg.buttonsResponseMessage
+  if (classico) {
+    return limpar({ forma: 'botão', id: classico.selectedButtonId, texto: classico.selectedDisplayText })
+  }
+  const lista = msg.listResponseMessage
+  if (lista) {
+    return limpar({
+      forma: 'lista',
+      id: lista.singleSelectReply?.selectedRowId,
+      texto: lista.title,
+      descricao: lista.description
+    })
+  }
+  const modelo = msg.templateButtonReplyMessage
+  if (modelo) {
+    return limpar({
+      forma: 'modelo',
+      id: modelo.selectedId,
+      texto: modelo.selectedDisplayText,
+      // A posição do botão e, no carrossel, qual card foi tocado. É o que
+      // permite "o terceiro card" ser uma informação, e não um palpite.
+      indice: modelo.selectedIndex,
+      card: modelo.selectedCarouselCardIndex
+    })
+  }
+  const interativa = msg.interactiveResponseMessage
+  if (interativa) {
+    let id
+    try {
+      const params = JSON.parse(interativa.nativeFlowResponseMessage?.paramsJson || '{}')
+      const achado = params?.id ?? params?.button_id ?? params?.selected_id
+      if (typeof achado === 'string' && achado.trim()) id = achado.trim()
+    } catch { /* paramsJson ilegível: o id fica ausente, o resto continua */ }
+    return limpar({ forma: 'fluxo', id, texto: interativa.body?.text })
+  }
+  return undefined
+}
+
 function extrairTexto (msg) {
   if (!msg) return undefined
   if (typeof msg.extendedTextMessage?.text === 'string') return msg.extendedTextMessage.text
@@ -344,6 +408,11 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
   }
   const quotedRef = construirQuotedRef(msg)
   if (quotedRef) mensagem.quotedRef = quotedRef
+  // O toque no botão, por inteiro. Fica em campo próprio porque o TEXTO da
+  // mensagem já é o id do botão (é o que a aciona), e misturar os dois
+  // esconderia a diferença entre o que a pessoa leu e o que o bot recebeu.
+  const respostaDeBotao = construirRespostaDeBotao(msg)
+  if (respostaDeBotao) mensagem.buttonReply = respostaDeBotao
   const mencoes = construirMencoes(msg)
   if (mencoes) mensagem.mentions = mencoes
   const quotedMediaRef = construirQuotedMediaRef(msg)

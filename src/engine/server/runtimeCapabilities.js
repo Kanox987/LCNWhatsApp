@@ -26,7 +26,13 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.connection.call',
   // Guardar no acervo a mídia que chegou pelo WhatsApp. O par de
   // `action.whatsapp.sendFile`, que só sabia tirar de lá.
-  'action.acervo.save'
+  'action.acervo.save',
+  // Mostrar os metadados da mensagem. Ele não tem executor próprio no gateway:
+  // o motor o transforma numa resposta de texto comum, pelo mesmo caminho de
+  // `whatsapp.reply`. Entra nesta lista mesmo assim, porque é esta lista que
+  // diz o que uma automação pode DECLARAR — um tipo de nó fora dela é recusado
+  // na publicação, e seria recusado depois de alguém escrever o comando.
+  'action.whatsapp.metadata'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([

@@ -1,0 +1,35 @@
+template metadados v1
+  nome: Ver os metadados de uma mensagem
+  descrição: Responde com o que de fato chegou na mensagem: o id dela, quem mandou, em que conversa, o que ela responde, e — quando foi um toque em botão — qual botão, que rótulo a pessoa leu, que posição e qual card do carrossel. Serve para montar comando com botão, citação ou carrossel sem ficar no escuro.
+  categoria: utilitarios
+
+automação
+  nome: Ver os metadados de uma mensagem
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra os dados da mensagem respondida
+  pool: {{params.poolId}}
+  acessa: texto, foto, vídeo, áudio, documento, figurinha
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  mostra metadados
+
+configurável
+  command: texto = "/meta"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Respondendo uma mensagem com ele, os dados que aparecem são os daquela mensagem.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens, do número onde o bot roda. É o padrão aqui porque este comando serve para VOCÊ inspecionar o que chega enquanto monta outro comando.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando.
+
+avisa nota
+  Mostra o que o COMANDO consegue ler — o mesmo objeto que {{message.…}} enxerga —, e não o pacote cru do WhatsApp. O pacote cru carrega a chave de download da mídia, e publicá-lo numa conversa entregaria a quem estivesse lendo a capacidade de baixar a mídia de outra pessoa. O que aparece aqui é o que dá para escrever num comando, que é justamente o que se quer saber.
+
+avisa nota
+  Para ver os dados de um toque em BOTÃO, toque no botão em vez de digitar o comando: o toque chega como se fosse uma mensagem, e aí "{{message.buttonReply}}" traz qual botão, o rótulo lido, a posição e o card.
+
+# nós: gatilho-comando, mostrar-metadados
