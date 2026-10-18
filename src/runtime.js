@@ -163,13 +163,40 @@ export function statusServico () {
 // essa flag. Fora dele, `node --bot` é uma flag que o Node não conhece, então
 // iniciar pelo painel simplesmente falhava. Com o empacotamento removido, o
 // caminho honesto é executar o index.js diretamente.
-export function iniciarBot () {
+// `pairNumber` liga o pareamento por CÓDIGO, do mesmo jeito que o número
+// descoberto já fazia: `--code` mais `LCN_PAIR_NUMBER`.
+//
+// Ele faltava AQUI, e essa falta era a metade silenciosa do recurso: o painel
+// mostrava o campo de telefone no cartão do número principal, o pedido chegava
+// ao serviço e o número era descartado antes de virar argumento — a instância
+// `bare` sai do ciclo de vida antes de alguém olhar as opções. O processo subia
+// em modo QR, e o log mostrava mil e quinhentos QR seguidos sem ninguém ter
+// pedido QR nenhum.
+//
+// O número chega aqui JÁ CONFERIDO (só dígitos, com DDI): quem confere é a
+// camada de cima, que é onde mora `numeroParaParear`. Esta função não inventa
+// validação própria — duas validações do mesmo campo divergem.
+export function iniciarBot ({ pairNumber = null } = {}) {
   if (statusServico() === 'rodando') return { ok: false, out: 'Bot já está rodando.' }
   const entrada = path.join(RAIZ, 'index.js')
   if (!fs.existsSync(entrada)) return { ok: false, out: 'Não encontrei o index.js na raiz do projeto.' }
-  const filho = spawn(process.execPath, [entrada], { detached: true, stdio: 'ignore', cwd: RAIZ })
+  const argumentos = pairNumber ? [entrada, '--code'] : [entrada]
+  const filho = spawn(process.execPath, argumentos, {
+    detached: true,
+    stdio: 'ignore',
+    cwd: RAIZ,
+    // Sem pareamento o ambiente é HERDADO como sempre foi. Passar um `env`
+    // montado também no caminho normal mudaria o que o bot recebe por causa de
+    // um recurso que ele nem está usando.
+    ...(pairNumber ? { env: { ...process.env, LCN_PAIR_NUMBER: pairNumber } } : {})
+  })
   filho.unref()
-  return { ok: true, out: `Bot iniciado (pid ${filho.pid}).` }
+  return {
+    ok: true,
+    out: pairNumber
+      ? `Bot iniciado para parear por código (pid ${filho.pid}). O código aparece aqui em instantes.`
+      : `Bot iniciado (pid ${filho.pid}).`
+  }
 }
 
 // Encerra o bot pelo pid gravado em data/bot.pid. Só funciona quando esse

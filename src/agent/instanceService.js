@@ -371,7 +371,15 @@ export function criarInstanceService ({
   // o painel não é o mesmo binário do bot. Hoje ele executa `index.js`
   // explicitamente, destacado, então ligar pelo painel é bem-definido. É o
   // que permite conectar um número sem abrir terminal.
-  function executarAcaoCicloDeVidaBare (acao) {
+  function executarAcaoCicloDeVidaBare (acao, opcoes = {}) {
+    if (acao === 'start' && opcoes.pairNumber) {
+      const resultado = pedirCodigo(instanciaBareVirtual(), opcoes.pairNumber, {
+        statusAtual: () => { try { return bareStatusServico() } catch { return 'indisponivel' } },
+        parar: barePararBot,
+        iniciar: (numero) => bareIniciarBot({ pairNumber: numero })
+      })
+      return { instanceId: ID_BARE, action: acao, ok: true, detail: resultado.out }
+    }
     const resultado = acao === 'start'
       ? bareIniciarBot()
       : (acao === 'stop' ? barePararBot() : bareReiniciarBot())
@@ -379,8 +387,38 @@ export function criarInstanceService ({
     return { instanceId: ID_BARE, action: acao, ok: true }
   }
 
+  // PEDIR O CÓDIGO DE UM NÚMERO QUE JÁ ESTÁ DE PÉ.
+  //
+  // Um bot esperando conexão fica em laço de QR para sempre — foi o que
+  // aconteceu aqui: quinze horas, mil e quinhentos QR. Nesse estado, "pedir
+  // código" só pode significar uma coisa: trocar aquela tentativa por esta.
+  // Recusar com "já está rodando" seria tecnicamente verdade e inútil, porque
+  // é exatamente a situação em que a pessoa clica no botão.
+  //
+  // O que NÃO se faz é derrubar um número CONECTADO. A sessão dele está viva e
+  // reiniciar em modo de código a perderia — por causa de um clique que a
+  // pessoa deu achando que ia conectar outra coisa.
+  function pedirCodigo (instancia, telefone, acoes) {
+    const numero = processoDaInstancia.numeroParaParear(telefone)
+    if (!numero) {
+      throw new Error('Número inválido para pareamento: use só dígitos, com DDI (ex.: 5522999999999).')
+    }
+    if (estadoDa(instancia)?.conectado === true) {
+      throw new Error(
+        'Este número já está conectado. Desconecte antes de parear outro — pedir o código agora derrubaria a sessão que está no ar.'
+      )
+    }
+    if (acoes.statusAtual() === 'rodando') {
+      const parado = acoes.parar()
+      if (!parado.ok) throw new Error(parado.out)
+    }
+    const resultado = acoes.iniciar(numero)
+    if (!resultado.ok) throw new Error(resultado.out)
+    return resultado
+  }
+
   function executarAcaoCicloDeVida (id, acao, opcoes = {}) {
-    if (id === ID_BARE) return executarAcaoCicloDeVidaBare(acao)
+    if (id === ID_BARE) return executarAcaoCicloDeVidaBare(acao, opcoes)
     const instancia = exigir(id)
 
     // NÚMERO DESCOBERTO NÃO TEM UNIDADE DE SERVIÇO, e mandar a ação para o
@@ -390,11 +428,18 @@ export function criarInstanceService ({
     // comando: `node index.js` destacado, parado pelo pid-file da própria
     // pasta.
     if (instancia.nomeSimples) {
+      // Mesmo caso do número principal: um bot em laço de QR precisa ser
+      // trocado pelo modo de código, não receber "já está rodando".
+      if (acao === 'start' && opcoes.pairNumber) {
+        const resultado = pedirCodigo(instancia, opcoes.pairNumber, {
+          statusAtual: () => statusUnit(instancia),
+          parar: () => processoDaInstancia.parar(instancia.nomeSimples, instancia.arqPid),
+          iniciar: (numero) => processoDaInstancia.iniciar(instancia.nomeSimples, instancia.arqPid, { pairNumber: numero })
+        })
+        return { instanceId: id, action: acao, ok: true, detail: resultado.out }
+      }
       const resultado = acao === 'start'
-        // `pairNumber` liga o modo de pareamento por CÓDIGO: o processo sobe
-        // com `--code` e pede o código para aquele telefone. Era a última
-        // coisa que só o terminal fazia.
-        ? processoDaInstancia.iniciar(instancia.nomeSimples, instancia.arqPid, { pairNumber: opcoes.pairNumber || null })
+        ? processoDaInstancia.iniciar(instancia.nomeSimples, instancia.arqPid)
         : (acao === 'stop'
             ? processoDaInstancia.parar(instancia.nomeSimples, instancia.arqPid)
             : processoDaInstancia.reiniciar(instancia.nomeSimples, instancia.arqPid))

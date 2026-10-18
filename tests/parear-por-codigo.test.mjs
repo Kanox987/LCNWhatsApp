@@ -8,6 +8,8 @@
 // Para quem aluga o sistema, isso não era um incômodo: era a porta de entrada
 // inteira fechada. Sem terminal, sem conectar número nenhum.
 import { iniciar, numeroParaParear } from '../src/agent/processoDaInstancia.js'
+import { criarInstanceService } from '../src/agent/instanceService.js'
+import { iniciarBot } from '../src/runtime.js'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -67,6 +69,83 @@ check('vazio é recusado', numeroParaParear('') === null)
 }
 
 fs.rmSync(raiz, { recursive: true, force: true })
+// --- O NÚMERO PRINCIPAL ("bare") -----------------------------------------
+//
+// Este caminho tinha o defeito que mandou o recurso para produção pela metade:
+// `executarAcaoCicloDeVida` devolvia o bare ANTES de olhar as opções, e o
+// telefone era descartado sem um aviso sequer. O painel mostrava o campo, o
+// pedido ia, e o processo subia em modo QR. O log do servidor mostrou o
+// resultado: mil e quinhentos QR em quinze horas, nenhum deles pedido.
+//
+// Os casos acima cobriam só o número DESCOBERTO. Era o buraco exato, e é por
+// isso que estes casos existem.
+check('iniciarBot do runtime aceita o telefone', /pairNumber/.test(iniciarBot.toString()))
+check('e monta --code quando ele vem', /--code/.test(iniciarBot.toString()))
+check('e passa LCN_PAIR_NUMBER no ambiente', /LCN_PAIR_NUMBER/.test(iniciarBot.toString()))
+
+// O serviço inteiro, com o runtime do bare injetado.
+function servicoBare ({ conectado = false, status = 'parado' } = {}) {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-bare-'))
+  const arqEstado = path.join(pasta, 'state.json')
+  fs.writeFileSync(arqEstado, JSON.stringify({ conectado, numero: conectado ? '5511888887777' : null }))
+  const feitos = []
+  const servico = criarInstanceService({
+    bareArqEstado: arqEstado,
+    bareStatusServico: () => status,
+    bareIniciarBot: (opcoes = {}) => { feitos.push({ acao: 'iniciar', ...opcoes }); return { ok: true, out: 'subiu' } },
+    barePararBot: () => { feitos.push({ acao: 'parar' }); return { ok: true, out: 'parou' } },
+    bareReiniciarBot: () => { feitos.push({ acao: 'reiniciar' }); return { ok: true, out: 'reiniciou' } }
+  })
+  return { servico, feitos }
+}
+
+// O número principal PARADO, pedindo código.
+{
+  const { servico, feitos } = servicoBare({ status: 'parado' })
+  servico.iniciar('bare', { pairNumber: '+55 22 99999-9999' })
+  check('bare parado: o telefone CHEGA ao runtime', feitos[0]?.pairNumber === '5522999999999', JSON.stringify(feitos))
+  check('bare parado: não para nada antes', feitos.length === 1, feitos.map((f) => f.acao).join('>'))
+}
+
+// O caso REAL do servidor: o bot já estava de pé, em laço de QR há horas.
+// "Pedir código" aqui só pode significar trocar aquela tentativa por esta —
+// recusar com "já está rodando" é verdade e é inútil, porque é exatamente a
+// situação em que a pessoa clica no botão.
+{
+  const { servico, feitos } = servicoBare({ status: 'rodando', conectado: false })
+  servico.iniciar('bare', { pairNumber: '5522999999999' })
+  check('bare rodando sem conexão: para e sobe em modo código', feitos.map((f) => f.acao).join('>') === 'parar>iniciar', feitos.map((f) => f.acao).join('>'))
+  check('e o telefone chega na subida', feitos[1]?.pairNumber === '5522999999999')
+}
+
+// O QUE NÃO SE FAZ: derrubar um número CONECTADO. A sessão dele está viva, e
+// reiniciar em modo de código a perderia por causa de um clique.
+{
+  const { servico, feitos } = servicoBare({ status: 'rodando', conectado: true })
+  let recusa = null
+  try { servico.iniciar('bare', { pairNumber: '5522999999999' }) } catch (e) { recusa = e.message }
+  check('bare CONECTADO: recusa em vez de derrubar a sessão', recusa !== null, recusa || 'não recusou')
+  check('e diz por quê', /conectado/i.test(recusa || '') && /sess/i.test(recusa || ''), recusa)
+  check('e NADA foi executado', feitos.length === 0, feitos.map((f) => f.acao).join('>'))
+}
+
+// Telefone torto não chega a mexer no processo.
+{
+  const { servico, feitos } = servicoBare({ status: 'rodando' })
+  let recusa = null
+  try { servico.iniciar('bare', { pairNumber: 'abc' }) } catch (e) { recusa = e.message }
+  check('bare: telefone inválido é recusado', /Número inválido/.test(recusa || ''), recusa)
+  check('e não para o que estava rodando', feitos.length === 0, feitos.map((f) => f.acao).join('>'))
+}
+
+// Ligar o bare SEM telefone continua exatamente como era.
+{
+  const { servico, feitos } = servicoBare({ status: 'parado' })
+  servico.iniciar('bare')
+  check('bare sem telefone: liga normal', feitos.length === 1 && feitos[0].acao === 'iniciar')
+  check('e sem número de pareamento', feitos[0].pairNumber === undefined)
+}
+
 if (falhas) {
   console.error(`\n${falhas} verificação(ões) falharam`)
   process.exit(1)
