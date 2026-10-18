@@ -78,6 +78,14 @@ export const api = {
     usage: (id) => request(`/instances/${segment(id)}/usage`),
     logs: (id, lines) => request(withQuery(`/instances/${segment(id)}/logs`, lines ? { lines } : undefined))
   },
+  // A linguagem explicada, e a conferência do texto sem gravar nada. Ficam
+  // juntas porque é delas que o editor vive: uma diz o que existe, a outra diz
+  // se o que está escrito está de pé.
+  linguagem: {
+    referencia: () => request('/meta/linguagem'),
+    funcoesDeConexao: () => request('/meta/funcoes-de-conexao'),
+    validar: (texto) => request('/lcn/validar', { method: 'POST', body: { texto } })
+  },
   automations: {
     conflicts: () => request('/automations/conflicts'),
     meta: () => request('/meta/automation-editor'),

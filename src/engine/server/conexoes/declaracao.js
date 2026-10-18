@@ -238,7 +238,23 @@ function validarEntrada (entrada, ondeEstou) {
   return { nome, tipo, obrigatoria: entrada.obrigatoria !== false, padrao: entrada.padrao }
 }
 
+// A frase que o catálogo de funções mostra é DERIVADA da declaração (ver
+// `emPortugues.js`), e é assim que ela continua verdadeira depois de alguém
+// trocar a forma pelo painel. Este campo é para o que a derivação não tem como
+// saber — uma particularidade do serviço, um aviso. Ele entra ANTES da frase
+// derivada, nunca no lugar dela: guardado no lugar dela, bastava trocar
+// `carrossel` por `lista` para o painel passar a mentir.
+//
+// Vale em QUALQUER forma, então mora aqui e não dentro de um ramo.
 function validarResposta (resposta, onde) {
+  const resumo = typeof resposta?.resumoDaResposta === 'string' && resposta.resumoDaResposta.trim()
+    ? resposta.resumoDaResposta.trim()
+    : null
+  const validada = validarRespostaPorForma(resposta, onde)
+  return resumo ? { ...validada, resumoDaResposta: resumo } : validada
+}
+
+function validarRespostaPorForma (resposta, onde) {
   const forma = resposta?.forma
   if (!Object.values(FORMAS_DE_RESPOSTA).includes(forma)) {
     throw new ErroDeDeclaracao(

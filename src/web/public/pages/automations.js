@@ -1,6 +1,8 @@
 import { api } from '../api.js'
 import { badge, button, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
 import { criarControleParametro, rotuloTipo, valorParametro } from '../logic/parametros.js'
+import { editorLcn } from './editor-lcn.js'
+import { referenciaLcn } from './referencia-lcn.js'
 
 function statusAutomation (automation) {
   if (!automation.activeRevisionId) return badge('Somente rascunho', 'neutral')
@@ -274,40 +276,29 @@ async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
   }
 
   let etag = lido.etag
-  const area = el('textarea', {
-    className: 'lcn-editor',
-    rows: String(Math.max(14, lido.texto.split('\n').length + 2)),
-    spellcheck: 'false',
-    autocapitalize: 'off',
-    autocomplete: 'off'
-  }, lido.texto)
-
-  const aviso = el('div', {})
-  const limparAviso = () => { aviso.textContent = '' }
-  area.addEventListener('input', limparAviso)
-
   const salvar = button('Salvar rascunho', {
     variant: 'primary',
     onClick: async () => {
-      limparAviso()
+      editor.limparAviso()
       setBusy(salvar, true)
       try {
-        const resultado = await api.automations.salvarLcn(atual.id, area.value, etag)
+        const resultado = await api.automations.salvarLcn(atual.id, editor.area.value, etag)
         etag = resultado?.draft?.etag ?? etag
         notify('Rascunho salvo.')
         // Recarrega do servidor: o texto que volta é o que o documento virou de
         // verdade. Se a linguagem normalizou algo, quem editou precisa VER —
         // achar que salvou uma coisa e ter salvo outra é o pior resultado.
         const novo = await api.automations.lerLcn(atual.id)
-        area.value = novo.texto
+        editor.area.value = novo.texto
+        editor.area.dispatchEvent(new Event('input'))
         etag = novo.etag
       } catch (erro) {
         const linha = erro.details?.linha
-        aviso.replaceChildren(el('div', { className: 'notice notice-danger' }, [
-          el('strong', { text: linha ? `Erro na linha ${linha}` : 'Não consegui salvar' }),
-          el('p', { text: erro.message })
-        ]))
-        if (linha) marcarLinha(area, linha)
+        editor.mostrarErro(linha ? 'Não consegui salvar' : 'Não consegui salvar', erro.message, linha)
+        // O salto do cursor fica SÓ aqui: na falha de salvar a pessoa parou de
+        // escrever e está olhando o resultado. Ao vivo, mexer no cursor a cada
+        // conferência tiraria o texto de baixo da mão dela.
+        if (linha) editor.marcarLinha(linha)
       } finally {
         setBusy(salvar, false)
       }
@@ -316,7 +307,7 @@ async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
 
   const publicar = button('Publicar', {
     onClick: async () => {
-      limparAviso()
+      editor.limparAviso()
       setBusy(publicar, true)
       try {
         const atualizado = await api.automations.get(atual.id)
@@ -324,15 +315,14 @@ async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
         notify('Publicada.')
         refresh?.()
       } catch (erro) {
-        aviso.replaceChildren(el('div', { className: 'notice notice-danger' }, [
-          el('strong', { text: 'Não consegui publicar' }),
-          el('p', { text: erro.message })
-        ]))
+        editor.mostrarErro('Não consegui publicar', erro.message, null)
       } finally {
         setBusy(publicar, false)
       }
     }
   })
+
+  const editor = editorLcn({ texto: lido.texto, botoes: [salvar, publicar] })
 
   return el('div', { className: 'stack' }, [
     el('div', { className: 'notice notice-info' }, [
@@ -340,20 +330,13 @@ async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
       el('p', { text: motivo }),
       el('p', { text: 'O texto vira exatamente o mesmo documento que o motor executa. Salvar cria um rascunho; publicar é que coloca no ar.' })
     ]),
-    el('section', { className: 'card' }, [area]),
-    aviso,
-    el('div', { className: 'wizard-footer' }, [salvar, publicar])
+    // A referência fica AO LADO, e o editor e ela nascem juntos. Antes a ajuda
+    // existia só na tela de criar — quem editava não tinha onde olhar.
+    el('div', { className: 'lcn-oficina' }, [
+      editor.elemento,
+      referenciaLcn({ inserir: editor.inserir })
+    ])
   ])
-}
-
-// Leva o cursor para a linha do erro. Dizer "linha 7" e deixar a pessoa contar
-// linhas num texto de quarenta é metade do trabalho.
-function marcarLinha (area, linha) {
-  const linhas = area.value.split('\n')
-  const inicio = linhas.slice(0, Math.max(0, linha - 1)).reduce((n, l) => n + l.length + 1, 0)
-  const fim = inicio + (linhas[linha - 1]?.length ?? 0)
-  area.focus()
-  try { area.setSelectionRange(inicio, fim) } catch { /* navegador antigo */ }
 }
 
 // Rótulo humano vindo do catálogo, que já é a fonte única desses nomes.
@@ -396,24 +379,14 @@ async function renderCriador ({ navigate, refresh }) {
   // era entregar o reservado de bandeja — a mesma família do __owner__ que o
   // motor passou a recusar, só na direção oposta.
   const oferecidos = pools.filter((p) => !String(p.id).startsWith('__'))
-  const area = el('textarea', {
-    className: 'lcn-editor',
-    rows: '18',
-    spellcheck: 'false',
-    autocapitalize: 'off',
-    autocomplete: 'off'
-  }, ESQUELETO(oferecidos[0]?.id || 'pool-local'))
-
-  const aviso = el('div', {})
-  area.addEventListener('input', () => { aviso.textContent = '' })
 
   const criar = button('Criar automação', {
     variant: 'primary',
     onClick: async () => {
-      aviso.replaceChildren()
+      editor.limparAviso()
       setBusy(criar, true, 'Criando…')
       try {
-        const criada = await api.automations.criarLcn(area.value)
+        const criada = await api.automations.criarLcn(editor.area.value)
         notify(`Automação ${criada.id} criada.`)
         await refresh()
         // Vai direto para a edição: recém-criada, ela ainda é rascunho, e o
@@ -423,16 +396,21 @@ async function renderCriador ({ navigate, refresh }) {
         // A linha do erro é o que transforma "não compilou" em algo que a
         // pessoa conserta sozinha.
         const linha = erro?.details?.linha
-        if (linha) marcarLinha(area, linha)
-        aviso.replaceChildren(el('div', { className: 'notice notice-danger' }, [
-          el('strong', { text: linha ? `Erro na linha ${linha}` : 'Não consegui criar.' }),
-          el('p', { text: erro.message })
-        ]))
+        editor.mostrarErro('Não consegui criar', erro.message, linha)
+        if (linha) editor.marcarLinha(linha)
         setBusy(criar, false)
       }
     }
   })
 
+  const editor = editorLcn({
+    texto: ESQUELETO(oferecidos[0]?.id || 'pool-local'),
+    botoes: [criar]
+  })
+
+  // O cartão do essencial continua, e agora embaixo da oficina: ele dá o
+  // caminho das pedras na primeira vez, e a referência ao lado é onde se olha
+  // da segunda em diante.
   const ajuda = el('section', { className: 'card' }, [
     el('h2', { text: 'O essencial' }),
     el('ul', { className: 'human-summary' }, [
@@ -447,7 +425,10 @@ async function renderCriador ({ navigate, refresh }) {
   ])
 
   return el('section', { className: 'stack-lg' }, [
-    el('section', { className: 'card stack' }, [area, aviso, el('div', { className: 'button-row' }, [criar])]),
+    el('div', { className: 'lcn-oficina' }, [
+      editor.elemento,
+      referenciaLcn({ inserir: editor.inserir })
+    ]),
     ajuda
   ])
 }

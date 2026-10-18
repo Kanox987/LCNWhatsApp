@@ -78,7 +78,11 @@ export const ACOES = Object.freeze([
     familia: 'resposta',
     resumo: 'Manda uma mensagem de texto na mesma conversa. Aceita variáveis.',
     exemplo: '"{{now.greeting}}, {{sender.name}}! Você é admin? {{sender.isAdmin}}"',
-    campos: [{ chave: 'text', rotulo: 'Texto', ajuda: 'Aceita qualquer variável do sistema. Uma variável que não existe aparece do jeito que está, de propósito — é o sinal de que algo está errado.' }]
+    campos: [
+      { chave: 'text', rotulo: 'Texto', ajuda: 'Aceita qualquer variável do sistema. Uma variável que não existe aparece do jeito que está, de propósito — é o sinal de que algo está errado.' },
+      { chave: 'mentions', rotulo: 'Marcar quem', ajuda: 'A menção de verdade — a que notifica a pessoa e pinta o nome. Ela viaja AO LADO do texto, não dentro dele: escrever "@5511999999999" no texto manda só dígitos, que parecem uma menção e não são. Aceita vários separados por vírgula, e aceita variável: {{sender.id}} marca quem mandou a mensagem.' },
+      { chave: 'forward', rotulo: 'Sai como encaminhada', ajuda: 'Põe o selo de "encaminhada" na mensagem. É decoração de contexto; não muda o conteúdo nem quem aparece como autor.' }
+    ]
   },
   {
     tipo: 'action.whatsapp.sendFile',
@@ -217,6 +221,18 @@ export const ACOES = Object.freeze([
       { chave: 'key', rotulo: 'Nome do contador', ajuda: 'Como você vai lê-lo depois em {{var....}}.' },
       { chave: 'by', rotulo: 'Quanto somar', ajuda: 'Número inteiro. Negativo subtrai.' }
     ]
+  },
+  {
+    tipo: 'action.whatsapp.metadata',
+    rotulo: 'Mostrar os metadados da mensagem',
+    familia: 'resposta',
+    resumo: 'Responde com o que de fato chegou: o id da mensagem, quem mandou, o que ela responde, e — quando foi um toque em botão — qual botão, que rótulo a pessoa leu, que posição e qual card do carrossel.',
+    exemplo: 'Responder uma mensagem com "/meta" e receber de volta os dados dela.',
+    ressalva: {
+      level: 'note',
+      text: 'Mostra o que o COMANDO consegue ler, que é o mesmo objeto que {{message.…}} enxerga — não o pacote cru do WhatsApp. O pacote cru carrega a chave de download da mídia, e publicá-lo numa conversa entregaria a quem estivesse lendo a capacidade de baixar a mídia de outra pessoa.'
+    },
+    campos: []
   },
   {
     tipo: 'action.whatsapp.delete',

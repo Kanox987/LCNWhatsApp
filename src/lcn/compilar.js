@@ -6,7 +6,8 @@
 // o mesmo portão do JSON escrito à mão. É isto que deixa a linguagem existir
 // sem reabrir a decisão de não executar código de usuário.
 import {
-  ACOES, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, ORIGENS,
+  ACOES, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
+  MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, ORIGENS,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
@@ -32,6 +33,17 @@ const VALOR_POR_PALAVRA = inverter(TIPOS_DE_VALOR)
 // recusaria todo template parametrizado; deixar passar qualquer coisa
 // esconderia erro de digitação. Marcador passa, o resto é conferido.
 const ehMarcador = (texto) => /^\{\{[^{}]+\}\}$/.test(String(texto).trim())
+
+// Os campos e as linhas soltas que valem para a classe declarada, para a
+// mensagem de erro poder dizer o que existe. `vale` é 'comando', 'vigia' ou
+// 'ambos'; sem classe declarada ainda, oferece tudo.
+function camposQueValem (tipoDoGatilho) {
+  const classe = CLASSES[tipoDoGatilho] || null
+  const serve = (item) => !classe || item.vale === 'ambos' || item.vale === classe
+  const campos = CAMPOS_DO_CABECALHO.filter(serve).map((c) => `${c.chave}:`)
+  const marcas = MARCAS_DO_CABECALHO.filter(serve).map((m) => m.chave)
+  return `Conheço: ${campos.join(', ')} — e as linhas soltas: ${marcas.join(', ')}.`
+}
 
 function traduzir (mapa, valor, oQue, linha) {
   const limpo = String(valor).trim()
@@ -398,7 +410,11 @@ export function compilar (texto) {
       else if (chave === 'motor') template.minEngineVersion = Number(valor)
       else if (chave === 'depende de') template.dependsOn.push(valor)
       else if (chave === 'exige') template.requiredCapabilities.push(valor)
-      else throw new ErroDeSintaxe(`template não tem campo "${chave}"`, l.n)
+      else {
+        throw new ErroDeSintaxe(
+          `template não tem campo "${chave}". Conheço: ${CAMPOS_DO_TEMPLATE.map((c) => `${c.chave}:`).join(', ')}.`, l.n
+        )
+      }
     }
     linhas.splice(0, base)
   }
@@ -594,7 +610,13 @@ export function compilar (texto) {
       case 'palavras':
         gatilhoConfig.keywords = valor.split(',').map((p) => descitar(p, l.n))
         break
-      default: throw new ErroDeSintaxe(`não conheço o campo "${chave}"`, l.n)
+      // Recusar sem dizer o que existe manda a pessoa procurar a palavra certa
+      // num catálogo que ela não tem — era o caso enquanto a linguagem não
+      // tinha documentação nenhuma. A lista sai da tabela, filtrada pela classe
+      // que esta automação declarou: num vigia não adianta oferecer "casa".
+      default: throw new ErroDeSintaxe(
+        `não conheço o campo "${chave}". ${camposQueValem(tipoDoGatilho)}`, l.n
+      )
     }
   }
 

@@ -42,6 +42,21 @@
   --info: #2c5f83;
   --info-bg: #e9f0f5;
 
+  /* Realce da linguagem .lcn. Um papel por cor, e nenhuma delas berra: é
+     texto que se lê por minutos seguidos, e cor saturada em código cansa
+     antes de ajudar. Vêm do mesmo verde da marca onde dá, para o editor não
+     parecer colado de outro painel. */
+  --realce-bloco: #0a5e44;
+  --realce-acao: #1f4f8f;
+  --realce-estrutura: #7a3d9e;
+  --realce-campo: #434550;
+  --realce-valor: #8d5f07;
+  --realce-arquivo: #0e7a58;
+  --realce-texto: #146b47;
+  --realce-marcador: #a1512b;
+  --realce-numero: #8d5f07;
+  --realce-operador: #b8362c;
+
   --radius-lg: 14px;
   --radius: 11px;
   --radius-sm: 8px;
@@ -88,6 +103,20 @@
     --success-bg: #12271f;
     --info: #7fb2d8;
     --info-bg: #16222c;
+
+    /* No escuro as mesmas cores claras ficariam ilegíveis sobre #15171b, e
+       inverter sem olhar deixaria o roxo e o vermelho brigando com o fundo.
+       Cada uma foi clareada até passar no contraste do seu papel. */
+    --realce-bloco: #5bd3a9;
+    --realce-acao: #86b4ec;
+    --realce-estrutura: #c79be0;
+    --realce-campo: #b4b7c0;
+    --realce-valor: #ddab4b;
+    --realce-arquivo: #35bf8f;
+    --realce-texto: #4ecb97;
+    --realce-marcador: #e0a179;
+    --realce-numero: #ddab4b;
+    --realce-operador: #f08279;
 
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -1287,3 +1316,162 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
   resize: vertical;
 }
 .lcn-editor:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+/* =========================================================================
+   Oficina da linguagem: editor com número de linha, realce e referência.
+   ========================================================================= */
+
+/* O editor e a referência lado a lado. Em tela estreita a referência desce,
+   porque uma coluna de 300px ao lado de um código de 28 colunas não serve a
+   nenhum dos dois. */
+.lcn-oficina {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1080px) {
+  .lcn-oficina { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A CAIXA: três coisas no mesmo lugar.
+   A barra de números na primeira coluna; o realce e o campo de texto na
+   SEGUNDA, os dois na mesma célula do grid, um exatamente sobre o outro.
+   O campo fica em cima com o texto transparente, e o que se lê é o realce
+   embaixo — é isso que permite colorir sem reimplementar um editor. */
+.lcn-caixa {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.lcn-caixa:focus-within { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+/* As três regras de alinhamento. Qualquer diferença entre o realce e o campo
+   aparece como cor fora do texto, então fonte, tamanho, entrelinha, recuo e
+   quebra são escritos UMA vez e herdados pelos dois. */
+.lcn-numeros,
+.lcn-caixa .lcn-realce,
+.lcn-caixa .lcn-editor {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  padding: 12px 14px;
+  margin: 0;
+  border: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.lcn-numeros {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  padding-right: 10px;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-right: 1px solid var(--border);
+  user-select: none;
+  /* A barra acompanha a rolagem vertical do campo por JavaScript; o excesso
+     não pode aparecer como segunda barra de rolagem. */
+  overflow: hidden;
+}
+.lcn-num { display: block; }
+/* A linha do erro, marcada e permanente — não é um piscar. */
+.lcn-num-erro {
+  color: var(--danger);
+  font-weight: 700;
+  background: var(--danger-bg);
+  border-radius: 3px;
+}
+
+.lcn-caixa .lcn-realce {
+  grid-column: 2;
+  grid-row: 1;
+  overflow: hidden;
+  color: var(--text);
+  background: transparent;
+  pointer-events: none;
+}
+
+.lcn-caixa .lcn-editor {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  background: transparent;
+  border-radius: 0;
+  resize: vertical;
+  overflow-x: auto;
+  /* O TEXTO É TRANSPARENTE e o que se lê é o realce embaixo. O cursor e a
+     seleção continuam visíveis, e continuam sendo os do navegador: nada de
+     cursor desenhado à mão, que é onde um editor caseiro começa a errar. */
+  color: transparent;
+  caret-color: var(--text);
+}
+.lcn-caixa .lcn-editor:focus { outline: none; }
+.lcn-caixa .lcn-editor::selection { background: var(--ring-color); }
+
+/* As cores. Uma por papel, e nenhuma delas berra: é texto que se lê por
+   minutos seguidos. */
+.lcn-bloco { color: var(--realce-bloco); font-weight: 700; }
+.lcn-acao { color: var(--realce-acao); font-weight: 600; }
+.lcn-estrutura { color: var(--realce-estrutura); font-weight: 600; }
+.lcn-marca { color: var(--realce-estrutura); }
+.lcn-campo { color: var(--realce-campo); }
+.lcn-valor { color: var(--realce-valor); }
+.lcn-arquivo { color: var(--realce-arquivo); font-style: italic; }
+.lcn-texto { color: var(--realce-texto); }
+.lcn-marcador { color: var(--realce-marcador); }
+.lcn-numero { color: var(--realce-numero); }
+.lcn-operador { color: var(--realce-operador); }
+.lcn-comentario { color: var(--text-muted); font-style: italic; }
+
+/* O estado da conferência, embaixo do campo. */
+.lcn-estado {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.lcn-ok { color: var(--success); }
+.lcn-erro { color: var(--danger); }
+
+/* --- a referência ao lado --------------------------------------------- */
+.lcn-ref { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.lcn-ref-grupo > summary,
+.lcn-ref-item > summary { cursor: pointer; }
+.lcn-ref-grupo { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
+.lcn-ref-grupo > summary { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; }
+.lcn-ref-conta { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lcn-ref-item { padding: 4px 0 4px 10px; border-left: 2px solid var(--border); margin: 4px 0; }
+.lcn-ref-item > summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.lcn-ref-item code { font-family: var(--font-mono); font-size: 12px; color: var(--realce-campo); }
+.lcn-ref-detalhe,
+.lcn-ref-marcas { color: var(--text-muted); font-size: 12px; }
+.lcn-ref-corpo { padding: 6px 0 4px; }
+.lcn-ref-corpo p { margin: 4px 0; font-size: 13px; color: var(--text-soft); }
+.lcn-ref-devolve { color: var(--text) !important; }
+.lcn-ref-exemplo { font-style: italic; }
+.lcn-ref-palavras { font-size: 12px; }
+.lcn-ref-campos { margin: 4px 0 4px 14px; padding: 0; font-size: 13px; }
+.lcn-ref-campos li { margin-bottom: 6px; }
+.lcn-ref-trecho {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+}

@@ -5,9 +5,20 @@
 // de propósito explícito rota por rota (nunca um proxy cru de path pro
 // motor) pra manter controlado o que o navegador pode alcançar.
 import { criarRoteador, ErroHttp, resposta } from '../engine/server/transport.js'
+import { descreverEntradas, descreverResposta, quantosArquivos } from '../engine/server/conexoes/emPortugues.js'
 import { compilar, ErroDeSintaxe } from '../lcn/compilar.js'
 import { descompilar } from '../lcn/descompilar.js'
+import { exemploDeChamada, montarReferencia } from '../lcn/referencia.js'
+import * as glossario from './public/logic/acoes.js'
 import { respostaBinaria } from './binario.js'
+
+// A referência da linguagem é a MESMA para todo mundo e não depende de nada
+// gravado, então é montada uma vez na carga do módulo. O glossário entra aqui,
+// e é aqui que ele pode entrar: ele vive em `public/` porque o navegador
+// precisa dele (o painel é servido estático, e nada fora de `public` chega ao
+// navegador), e `src/lcn` não pode importar de `src/web` sem a linguagem
+// passar a depender do painel. O BFF é o único lugar com os dois lados à mão.
+const REFERENCIA_DA_LINGUAGEM = montarReferencia({ prosa: glossario })
 
 function queryObjeto (query) {
   return Object.fromEntries(query.entries())
@@ -115,6 +126,102 @@ export function criarRoteadorWeb (aplicacao) {
       // Documento que a linguagem ainda não sabe escrever não pode virar 500:
       // a tela precisa conseguir dizer POR QUE não dá para editar.
       throw new ErroHttp(422, `Esta automação ainda não vira texto: ${erro.message}`)
+    }
+  })
+
+  // --- a linguagem explicada ----------------------------------------------
+  //
+  // A referência fica no BFF, e não no motor, por um motivo prático: ela tem de
+  // abrir COM O MOTOR CAÍDO. É justamente quando algo está quebrado que alguém
+  // vai ler o que a linguagem aceita. Esta rota não toca em banco, em socket
+  // nem em disco.
+  roteador.get('/api/v1/meta/linguagem', () => REFERENCIA_DA_LINGUAGEM)
+
+  // O CATÁLOGO DAS FUNÇÕES DE CONEXÃO.
+  //
+  // É o pedido do dono: "quem for fazer não precisa entender como funciona por
+  // baixo do pano, só saber que tal função cria um carrossel com botões".
+  // `chama <conexão>.<função>` é a única ação de campos abertos da linguagem, e
+  // até aqui se escrevia às cegas.
+  //
+  // Nenhum dado novo: `listar()` já devolve a config inteira sem o segredo, e
+  // a frase é derivada dela. O exemplo sai da tabela da ação `chama`, então o
+  // trecho que o painel oferece não tem como divergir do que o compilador lê.
+  roteador.get('/api/v1/meta/funcoes-de-conexao', async () => {
+    const montar = (conexao, funcoes, instalada) => {
+      const config = conexao?.config || {}
+      return funcoes.map((funcao) => {
+        const entradas = descreverEntradas(funcao)
+        return {
+          conexao: conexao.id,
+          instalada,
+          titulo: conexao.titulo || config.titulo || conexao.id,
+          funcao: funcao.nome,
+          descricao: funcao.descricao || null,
+          devolve: descreverResposta(funcao.resposta),
+          forma: funcao.resposta?.forma || null,
+          arquivos: quantosArquivos(funcao),
+          esperaSegundos: funcao.esperaSegundos ?? null,
+          entradas,
+          exemplo: exemploDeChamada({ conexao: conexao.id, funcao: { nome: funcao.nome, entradas } })
+        }
+      })
+    }
+    // As prontas entram marcadas como NÃO instaladas, em vez de ficarem de
+    // fora: saber que a função existe é metade do caminho para alguém decidir
+    // configurar a conexão. Esconder até lá seria esconder o que o sistema sabe
+    // fazer de quem está justamente tentando descobrir isso.
+    //
+    // E a conta é por FUNÇÃO, não por conexão: a pronta de mídia ganhou
+    // `musica` e `buscar` depois, e quem já tinha a conexão ficou só com
+    // `baixar`. Marcar a conexão inteira como instalada ofereceria duas
+    // funções que aquela instalação não tem — `funcoesQueFaltam` é a lista que
+    // a própria rota de prontas já calcula para esse caso.
+    const instaladas = await conexoes().listar()
+    const prontas = await conexoes().prontas()
+    // Numa pronta já cadastrada, as que valem listar são só as que faltam —
+    // as outras já saíram na volta das instaladas.
+    const queFaltam = (c) => {
+      const todas = c.config?.funcoes || []
+      if (!c.jaCadastrada) return todas
+      const faltando = new Set(c.funcoesQueFaltam || [])
+      return todas.filter((f) => faltando.has(f.nome))
+    }
+    return [
+      ...(instaladas || []).flatMap((c) => montar(c, c.config?.funcoes || [], true)),
+      ...(prontas || []).flatMap((c) => montar(c, queFaltam(c), false))
+    ]
+  })
+
+  // CONFERIR O TEXTO SEM GRAVAR NADA.
+  //
+  // Até aqui "compilar" e "salvar" eram a mesma ação: a pessoa só descobria o
+  // erro ao clicar em salvar, um erro por vez. Esta rota separa as duas coisas
+  // e não escreve em lugar nenhum — é o que permite conferir enquanto se
+  // escreve, sem criar rascunho a cada tecla.
+  roteador.post('/api/v1/lcn/validar', ({ body }) => {
+    const texto = String(body?.texto ?? '')
+    let compilado
+    try {
+      compilado = compilar(texto)
+    } catch (erro) {
+      if (!(erro instanceof ErroDeSintaxe)) throw erro
+      // 200, e não 422: aqui o erro de escrita é o RESULTADO esperado da
+      // conferência, não falha do pedido. Devolver 422 faria o painel tratar
+      // "ainda estou escrevendo" como pedido quebrado.
+      return { ok: false, erro: { mensagem: erro.message, linha: erro.linha ?? null } }
+    }
+    const documento = compilado.template ? compilado.documentTemplate : compilado
+    const gatilho = documento?.flow?.nodes?.[0]
+    return {
+      ok: true,
+      tipo: compilado.template ? 'template' : 'automação',
+      resumo: {
+        nome: documento?.name || compilado.template?.name || null,
+        gatilho: gatilho?.type || null,
+        comando: gatilho?.config?.command || null,
+        acoes: Math.max((documento?.flow?.nodes?.length || 1) - 1, 0)
+      }
     }
   })
 

@@ -20,7 +20,23 @@ export const ACOES = Object.freeze([
   {
     palavra: 'responde',
     tipo: 'action.whatsapp.reply',
-    campos: [{ chave: 'text', inline: true, tipo: 'texto' }]
+    campos: [
+      { chave: 'text', inline: true, tipo: 'texto' },
+      // METADADOS DA MENSAGEM QUE SAI.
+      //
+      // `marca` é a menção: o @ que faz o WhatsApp notificar alguém e pintar o
+      // nome. Sem ela, escrever "@5511999999999" no texto manda um número
+      // cru — parece uma menção e não é, não notifica ninguém, e quem recebe
+      // só vê dígitos. A menção de verdade mora no contexto da mensagem, não
+      // no texto, e é por isso que ela precisa ser um campo.
+      //
+      // Aceita vários, separados por vírgula, e aceita marcador: o caso comum
+      // é "marca: {{sender.id}}" para responder avisando a pessoa.
+      { chave: 'mentions', rotulo: 'marca', tipo: 'texto' },
+      // Faz a mensagem sair com o selo de encaminhada. É decoração de
+      // contexto, e o WhatsApp a trata como tal.
+      { chave: 'forward', rotulo: 'encaminhada', tipo: 'booleano' }
+    ]
   },
   {
     palavra: 'responde rico',
@@ -140,6 +156,14 @@ export const ACOES = Object.freeze([
       { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' },
       { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
     ]
+  },
+  // Mostrar o que de fato chegou na mensagem: id, quem mandou, o que ela
+  // responde, e o toque no botão por inteiro. Não tem campo nenhum — o que ele
+  // mostra é o evento, e o evento não se configura.
+  {
+    palavra: 'mostra metadados',
+    tipo: 'action.whatsapp.metadata',
+    campos: []
   },
   {
     palavra: 'apaga mensagem',
@@ -333,3 +357,163 @@ export const TIPOS_DE_VALOR = Object.freeze({
   number: 'número',
   boolean: 'sim/não'
 })
+
+// --- o CABEÇALHO da automação --------------------------------------------
+//
+// Por que esta tabela existe: as ações sempre tiveram tabela (ACOES, acima),
+// mas o cabeçalho era um `switch (chave)` escrito à mão em compilar.js, e os
+// blocos de template outro laço de `if`. Ou seja: a abertura e o fechamento do
+// arquivo — justo as duas partes fixas, as que uma pessoa escreve PRIMEIRO e
+// POR ÚLTIMO — eram as únicas sem tabela. Sem elas não há como listar os
+// campos num painel, colorir a palavra no editor, nem gerar referência: cada
+// uma dessas três coisas viraria uma cópia do vocabulário, e cópia do
+// vocabulário é exatamente o que o cabeçalho deste arquivo conta que já deu
+// errado uma vez.
+//
+// ESTA TABELA SÓ DECLARA. O `switch` continua sendo quem lê, porque cada caso
+// tem conferência própria e mensagem de erro escrita para aquele caso — trocar
+// isso por despacho genérico pioraria o erro e arriscaria a ida e volta sobre
+// os 42 templates do catálogo. Um teste cruza as duas listas nos dois sentidos,
+// então elas não têm como divergir em silêncio.
+//
+// `doc` é a chave do DOCUMENTO, e serve para juntar com a prosa que já existe
+// no glossário do painel. Onde há `doc` não se escreve `ajuda` aqui: a
+// explicação mora num lugar só. `ajuda` aparece apenas nos campos que nunca
+// tiveram descrição em lugar nenhum.
+export const CAMPOS_DO_CABECALHO = Object.freeze([
+  {
+    chave: 'tipo',
+    vale: 'ambos',
+    obrigatorio: true,
+    palavras: CLASSES,
+    ajuda: 'O que a automação É, e é a primeira coisa a escrever: um comando acorda quando alguém digita; um vigia fica ligado olhando a conversa.'
+  },
+  {
+    chave: 'dispara com',
+    vale: 'ambos',
+    obrigatorio: 'comando',
+    doc: 'command',
+    ajuda: 'Num comando, a palavra digitada. Num vigia, a frase "qualquer mensagem" — o que ele observa se diz nas linhas seguintes.'
+  },
+  { chave: 'casa', vale: 'comando', palavras: CASAMENTOS, doc: 'match' },
+  { chave: 'quem', vale: 'ambos', palavras: ORIGENS, doc: 'allowFrom' },
+  { chave: 'argumentos', vale: 'comando', doc: 'args' },
+  { chave: 'palavras', vale: 'vigia', doc: 'keywords' },
+  { chave: 'quando for', vale: 'vigia', palavras: TIPOS_DE_MENSAGEM, doc: 'messageKinds' },
+  {
+    chave: 'acessa',
+    vale: 'ambos',
+    palavras: TIPOS_DE_MENSAGEM,
+    ajuda: 'Os tipos de mensagem que a automação chega a VER. É exigência, não preferência: o motor não avalia a automação para tipo que não esteja aqui, então quem declara só texto nunca vê a mensagem de voz — e falha calado.'
+  },
+  {
+    chave: 'precisa de um link',
+    vale: 'ambos',
+    palavras: ONDE_PROCURAR,
+    ajuda: 'Diz que a automação só roda se houver um link, e onde procurar. A ordem escrita é a ordem da procura. O motor resolve antes do fluxo começar, então a ação só escreve "o link".'
+  },
+  {
+    chave: 'precisa de uma mídia',
+    vale: 'ambos',
+    palavras: ONDE_PROCURAR,
+    ajuda: 'O mesmo para foto, vídeo, áudio ou documento: "na mensagem ou na citada" aceita as duas formas — mandar junto com o comando, ou responder um arquivo já enviado.'
+  },
+  {
+    chave: 'sem ele',
+    vale: 'ambos',
+    depende: 'precisa de um link',
+    ajuda: 'O que responder quando o link não aparece. Fica aqui, junto do que ele guarda, e não perdido entre os textos da ação.'
+  },
+  {
+    chave: 'sem ela',
+    vale: 'ambos',
+    depende: 'precisa de uma mídia',
+    ajuda: 'O que responder quando não vem mídia nenhuma. Sem isto o comando fica mudo, e quem mandou acha que o bot quebrou.'
+  },
+  { chave: 'id', vale: 'ambos', ajuda: 'O identificador da automação. É por ele que ela passa a existir, e ele não muda depois.' },
+  { chave: 'revisão', vale: 'ambos', ajuda: 'A revisão, quando o texto vem de uma automação que já existe. Escrevendo do zero, não se põe.' },
+  { chave: 'nome', vale: 'ambos', ajuda: 'O nome que aparece no painel. Para quem lê a lista de comandos daqui a um mês.' },
+  {
+    chave: 'menu',
+    vale: 'ambos',
+    ajuda: 'A linha que este comando ocupa no menu, no formato "rótulo — descrição". Sem esta linha, o comando funciona mas não aparece no menu.'
+  },
+  { chave: 'onde', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas".' },
+  { chave: 'menos', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
+  { chave: 'pool', vale: 'ambos', ajuda: 'Qual conjunto de números responde. Crie um na aba Automações antes, se ainda não tiver.' },
+  { chave: 'histórico', vale: 'ambos', ajuda: 'Se a automação enxerga mensagem antiga ou só a que está chegando agora.' }
+])
+
+// As linhas SOLTAS do cabeçalho: sem dois-pontos e sem valor, porque a
+// presença da linha já é a resposta. "só dono" não tem como ser "só dono: não"
+// — essa linha seria uma maneira comprida de não escrever nada.
+export const MARCAS_DO_CABECALHO = Object.freeze([
+  { chave: 'só dono', vale: 'ambos', doc: 'requireOwner' },
+  { chave: 'com link', vale: 'vigia', doc: 'containsLink' },
+  { chave: 'só link de mídia', vale: 'vigia', doc: 'mediaLinkOnly' },
+  { chave: 'também em comandos', vale: 'vigia', doc: 'alsoOnCommands' },
+  { chave: 'desligada', vale: 'ambos', ajuda: 'Nasce desligada: fica gravada e não responde até alguém ligar no painel.' }
+])
+
+// --- o cabeçalho do TEMPLATE ---------------------------------------------
+//
+// A primeira linha, `template <id> v<n>`, é o que separa um arquivo
+// instalável de uma automação já publicada. A versão é load-bearing: é por ela
+// que o painel sabe oferecer "este comando tem versão nova".
+export const CAMPOS_DO_TEMPLATE = Object.freeze([
+  { chave: 'nome', ajuda: 'O nome que aparece no catálogo.' },
+  { chave: 'descrição', ajuda: 'O que o comando faz, para quem está escolhendo se instala. Vale escrever a frase inteira.' },
+  { chave: 'categoria', ajuda: 'Onde ele aparece agrupado no catálogo.' },
+  { chave: 'motor', ajuda: 'A versão mínima do motor. Só importa se o comando usa algo recém-criado.' },
+  { chave: 'depende de', repetivel: true, ajuda: 'Outro template que precisa estar instalado antes. A instalação resolve a ordem sozinha.' },
+  { chave: 'exige', repetivel: true, ajuda: 'Uma capacidade que a instalação precisa ter. Serve para o painel avisar ANTES, em vez de o comando falhar depois.' }
+])
+
+// --- os blocos do fim do arquivo -----------------------------------------
+//
+// `configurável` é o que torna um comando reaproveitável: quem escreve declara
+// o formulário, e quem instala preenche pelo painel sem abrir arquivo nenhum.
+export const BLOCOS_DE_TEMPLATE = Object.freeze([
+  {
+    bloco: 'configurável',
+    forma: 'chave: tipo [(opções)] [= padrão]',
+    palavras: TIPOS_DE_CONFIG,
+    ajuda: 'Cada linha é um campo do formulário de instalação. O valor preenchido entra no comando onde estiver escrito {{params.chave}}.',
+    filhos: [
+      { chave: 'rótulo', ajuda: 'O nome do campo na tela. Sem ele, quem instala lê a chave crua.' },
+      { chave: 'ajuda', ajuda: 'A frase embaixo do campo. É onde se explica a escolha, não o tipo.' },
+      { chave: 'várias linhas', ajuda: 'Para o campo de texto que nasce com uma linha e ainda assim precisa aceitar várias.' }
+    ]
+  },
+  {
+    bloco: 'declara',
+    forma: '<escopo> <chave>: <tipo de valor>',
+    palavras: TIPOS_DE_VALOR,
+    ajuda: 'As variáveis e contadores que o comando guarda — por conversa, por pessoa, por grupo. As linhas indentadas embaixo são a descrição.'
+  },
+  {
+    bloco: 'avisa',
+    forma: 'avisa <nível>',
+    palavras: NIVEIS_DE_AVISO,
+    ajuda: 'O recado que o painel mostra na hora de instalar: "exige" é o que precisa estar configurado antes, "nota" é o detalhe que evita uma surpresa.'
+  }
+])
+
+// --- as palavras de dentro da condição -----------------------------------
+//
+// `se var member avisos >= 3` e `se evento message.args != ""`: as duas
+// palavras que dizem DE ONDE sai o valor comparado. Ficam aqui, e não só
+// dentro do `lerOperando`, pelo mesmo motivo de todas as outras — o editor
+// precisa saber que são palavras da linguagem para acendê-las, e lista de
+// palavras escrita na tela é a cópia que envelhece.
+export const PALAVRAS_DE_OPERANDO = Object.freeze({
+  variable: 'var',
+  event: 'evento'
+})
+
+// Os escopos de uma variável declarada, do mais estreito ao mais largo. O
+// compilador não os valida (quem valida é o schema do template), mas o editor
+// e a referência precisam saber que existem.
+export const ESCOPOS_DE_VALOR = Object.freeze([
+  'chat', 'sender', 'member', 'target', 'targetMember', 'category', 'global'
+])
