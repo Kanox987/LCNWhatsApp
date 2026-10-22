@@ -438,6 +438,11 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     vale: 'ambos',
     ajuda: 'A linha que este comando ocupa no menu, no formato "rótulo — descrição". Sem esta linha, o comando funciona mas não aparece no menu.'
   },
+  {
+    chave: 'família',
+    vale: 'ambos',
+    ajuda: 'A que grupo de comandos este pertence — "download", "figurinha", "compra e venda". É texto livre: serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, em vez de comando por comando.'
+  },
   { chave: 'onde', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas".' },
   { chave: 'menos', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
   { chave: 'pool', vale: 'ambos', ajuda: 'Qual conjunto de números responde. Crie um na aba Automações antes, se ainda não tiver.' },

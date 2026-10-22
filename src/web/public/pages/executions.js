@@ -5,6 +5,10 @@ const STATUS = {
   matched_shadow: ['Correspondência em sombra', 'info'],
   matched_live: ['Executada ao vivo', 'success'],
   no_match: ['Sem correspondência', 'neutral'],
+  // O comando CASOU e não rodou: a família (ou ele mesmo) está desligada
+  // naquela conversa. É diferente de "não casou" e de "erro", e misturar com
+  // qualquer um dos dois esconderia a única explicação que a pessoa procura.
+  desligado: ['Desligado nesta conversa', 'warning'],
   error: ['Erro', 'danger'],
   pending: ['Pendente', 'warning'],
   sent: ['Enviado', 'success'],
@@ -182,6 +186,7 @@ export async function renderExecutions ({ refresh }) {
     el('option', { value: 'matched_shadow', text: 'Correspondência em sombra' }),
     el('option', { value: 'matched_live', text: 'Executada ao vivo' }),
     el('option', { value: 'no_match', text: 'Sem correspondência' }),
+    el('option', { value: 'desligado', text: 'Desligado nesta conversa' }),
     el('option', { value: 'error', text: 'Erro' })
   ])
   const commandStatus = el('select', {}, [

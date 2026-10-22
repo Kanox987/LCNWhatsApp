@@ -80,6 +80,131 @@ function attributeRow (kind, id, attribute, onChanged) {
   ])
 }
 
+// O QUE O BOT FAZ NESTA CONVERSA — os interruptores de família.
+//
+// O pedido do dono: "o menu config deveria escolher quais comandos ou famílias
+// de comandos são ativos em cada grupo". Isto mora aqui, e não numa tela nova,
+// porque a conversa JÁ está escolhida nesta página e o que se grava é um
+// atributo dela — o mesmo lugar onde `grupo_ativo` e `auto_download` vivem.
+// Uma tela separada repetiria a busca por contato e grupo inteira.
+//
+// A MARCA GUARDADA É A DO DESLIGADO. Guardar o ligado seria mais fácil de ler
+// e teria um defeito grave: todo comando novo nasceria inerte em toda conversa
+// até alguém ir ligar, uma por uma.
+//
+// E isto NÃO é o `grupo_ativo`: aquele diz se o bot existe no grupo; estes
+// dizem o que ele faz onde já existe. São perguntas diferentes e continuam
+// separadas.
+const CHAVE_FAMILIAS = 'familias_desligadas'
+const CHAVE_COMANDOS = 'comandos_desligados'
+
+function painelDeFamilias (kind, entity) {
+  const area = el('div', { className: 'stack-sm' }, [el('p', { className: 'muted compact', text: 'Carregando comandos…' })])
+
+  const lerLista = (atributos, chave) => {
+    const bruto = atributos.find((a) => a.key === chave)?.value
+    if (Array.isArray(bruto)) return bruto.map((v) => String(v).trim().toLowerCase()).filter(Boolean)
+    if (typeof bruto === 'string') return bruto.split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)
+    return []
+  }
+
+  const montar = async () => {
+    let familias, semFamilia, atributos
+    try {
+      const [catalogo, lista] = await Promise.all([
+        api.automations.families(),
+        api.entities.list(kind, entity.id)
+      ])
+      familias = catalogo?.familias || []
+      semFamilia = catalogo?.semFamilia || []
+      atributos = lista || []
+    } catch (erro) {
+      area.replaceChildren(el('p', { className: 'muted compact', text: `Não consegui carregar: ${erro.message}` }))
+      return
+    }
+
+    const desligadas = lerLista(atributos, CHAVE_FAMILIAS)
+    const desligados = lerLista(atributos, CHAVE_COMANDOS)
+
+    const gravar = async (chave, valores, controle) => {
+      setBusy(controle, true, 'Salvando…')
+      try {
+        await api.entities.set(kind, entity.id, chave, valores)
+        notify('Pronto.')
+        await montar()
+      } catch (erro) {
+        notify(erro.message, 'danger')
+        setBusy(controle, false)
+      }
+    }
+
+    const linhaDeFamilia = ({ familia, comandos }) => {
+      const ligada = !desligadas.includes(familia.trim().toLowerCase())
+      const alternar = el('input', { type: 'checkbox', checked: ligada })
+      alternar.addEventListener('change', () => {
+        const chave = familia.trim().toLowerCase()
+        const novas = alternar.checked
+          ? desligadas.filter((f) => f !== chave)
+          : [...new Set([...desligadas, chave])]
+        gravar(CHAVE_FAMILIAS, novas, alternar)
+      })
+      return el('div', { className: 'row-between compact' }, [
+        el('div', {}, [
+          el('strong', { text: familia }),
+          el('p', { className: 'muted compact', text: comandos.map((c) => c.comando || c.nome).join(' · ') })
+        ]),
+        el('label', { className: 'switch' }, [alternar, el('span', { text: ligada ? 'ligada' : 'desligada' })])
+      ])
+    }
+
+    const linhaDeComando = (item) => {
+      const ligado = !desligados.includes(String(item.automationId).toLowerCase())
+      const alternar = el('input', { type: 'checkbox', checked: ligado })
+      alternar.addEventListener('change', () => {
+        const chave = String(item.automationId).toLowerCase()
+        const novos = alternar.checked
+          ? desligados.filter((c) => c !== chave)
+          : [...new Set([...desligados, chave])]
+        gravar(CHAVE_COMANDOS, novos, alternar)
+      })
+      return el('div', { className: 'row-between compact' }, [
+        el('div', {}, [
+          el('strong', { text: item.nome }),
+          el('p', { className: 'muted compact', text: item.comando || item.automationId })
+        ]),
+        el('label', { className: 'switch' }, [alternar, el('span', { text: ligado ? 'ligado' : 'desligado' })])
+      ])
+    }
+
+    area.replaceChildren(
+      familias.length
+        ? el('div', { className: 'stack-sm' }, familias.map(linhaDeFamilia))
+        : el('p', { className: 'muted compact', text: 'Nenhum comando publicado declara família ainda. A família vem da categoria do template na instalação, e dá para trocar escrevendo "família:" no texto do comando.' }),
+      semFamilia.length
+        ? el('details', {}, [
+          el('summary', { text: `Comandos sem família (${semFamilia.length})` }),
+          el('div', { className: 'stack-sm' }, semFamilia.map(linhaDeComando))
+        ])
+        : null
+    )
+  }
+
+  montar()
+
+  return el('section', { className: 'panel stack' }, [
+    el('div', { className: 'panel-heading' }, [
+      el('div', {}, [
+        el('h2', { text: 'O que o bot faz aqui' }),
+        el('p', { text: 'Desligue uma família inteira ou um comando só, nesta conversa. O menu desta conversa passa a não listar o que estiver desligado.' })
+      ])
+    ]),
+    el('p', { className: 'field-help', text: kind === 'group'
+      ? 'Em grupo, comando desligado fica MUDO — não responde nada. É diferente de "ativar o bot neste grupo", que decide se ele existe aqui.'
+      : 'No privado, comando desligado responde dizendo que está desligado, em vez de ficar mudo — assim ninguém fica achando que o bot quebrou.' }),
+    area
+  ])
+}
+
 function entityPanel (kind, entity) {
   const attributesArea = el('div', { className: 'stack' })
   const newKeyInput = el('input', { type: 'text', placeholder: 'ex: vip' })
@@ -163,7 +288,15 @@ export async function renderEntities ({ navigate }) {
       if (!result.items.length) return resultsArea.replaceChildren(el('p', { className: 'muted', text: 'Nenhum resultado encontrado.' }))
       resultsArea.replaceChildren(...result.items.map((item) => button(`${item.label} · ${item.id}`, {
         variant: 'result',
-        onClick: () => { panelArea.replaceChildren(entityPanel(kindSelect.value, item)) }
+        onClick: () => {
+          // Os dois painéis da conversa: o que o bot FAZ aqui, e as variáveis
+          // dela. O primeiro vem antes porque é a pergunta mais frequente —
+          // "por que o bot não responde neste grupo?".
+          panelArea.replaceChildren(
+            painelDeFamilias(kindSelect.value, item),
+            entityPanel(kindSelect.value, item)
+          )
+        }
       })))
     } catch (error) {
       resultsArea.replaceChildren(error instanceof ApiError ? errorState(error) : el('p', { className: 'muted', text: 'Não foi possível buscar agora.' }))

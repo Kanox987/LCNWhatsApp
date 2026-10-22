@@ -88,6 +88,7 @@ export const api = {
   },
   automations: {
     conflicts: () => request('/automations/conflicts'),
+    families: () => request('/automations/families'),
     meta: () => request('/meta/automation-editor'),
     list: () => request('/automations'),
     create: (document) => request('/automations', { method: 'POST', body: document }),
@@ -115,7 +116,32 @@ export const api = {
   },
   pools: {
     list: () => request('/pools'),
-    create: (body) => request('/pools', { method: 'POST', body })
+    create: (body) => request('/pools', { method: 'POST', body }),
+    // O CRUD inteiro já estava mapeado no BFF e nada aqui o alcançava — e
+    // POOL É PRÉ-REQUISITO DE TUDO: todo template do catálogo exige um
+    // `poolId`, então quem aluga instalava um comando e travava num campo que
+    // não tinha como preencher.
+    get: (id) => request(`/pools/${segment(id)}`),
+    update: (id, body) => request(`/pools/${segment(id)}`, { method: 'PUT', body }),
+    remove: (id) => request(`/pools/${segment(id)}`, { method: 'DELETE' }),
+    saveMember: (id, instanceId, body) => request(`/pools/${segment(id)}/members/${segment(instanceId)}`, { method: 'PUT', body }),
+    removeMember: (id, instanceId) => request(`/pools/${segment(id)}/members/${segment(instanceId)}`, { method: 'DELETE' })
+  },
+  // Quem pode usar comando restrito. Sem nenhum cadastrado, só o próprio
+  // número do bot responde a comando de dono — é assim que se cadastra o
+  // primeiro, e é o que `noOwnerYet` serve para a tela explicar.
+  owners: {
+    list: () => request('/owners'),
+    add: (contactId) => request('/owners', { method: 'POST', body: { contactId } }),
+    remove: (contactId) => request(`/owners/${segment(contactId)}`, { method: 'DELETE' })
+  },
+  // A cascata do menu: config da conversa > padrão do tipo > padrão do código.
+  // `effective` devolve o que de fato vale, já resolvido.
+  menuConfig: {
+    effective: (chatId, chatKind) => request(withQuery('/menu-config/effective', { chatId, chatKind })),
+    get: (kind, id) => request(withQuery(`/menu-config/${segment(kind)}`, id ? { id } : undefined)),
+    save: (kind, id, body) => request(withQuery(`/menu-config/${segment(kind)}`, id ? { id } : undefined), { method: 'PUT', body }),
+    remove: (kind, id) => request(withQuery(`/menu-config/${segment(kind)}`, id ? { id } : undefined), { method: 'DELETE' })
   },
   templates: {
     updates: () => request('/templates/updates'),
@@ -148,6 +174,12 @@ export const api = {
     describe: (id, description) => request(`/media/${segment(id)}`, { method: 'PUT', body: { description } }),
     mover: (id, folder) => request(`/media/${segment(id)}`, { method: 'PUT', body: { folder } }),
     remove: (id) => request(`/media/${segment(id)}`, { method: 'DELETE' }),
+    // Reescreve o conteúdo mantendo o id, para os comandos que apontam
+    // para o arquivo continuarem achando o mesmo arquivo.
+    rewrite: (id, contentBase64) => request(`/media/${segment(id)}/content`, { method: 'PUT', body: { contentBase64 } }),
+    // Que comandos apontam para este arquivo. Separa o que é certo do que só
+    // "pode ser", porque comando que monta o caminho na hora alcança qualquer um.
+    usage: (id) => request(`/media/${segment(id)}/usage`, { method: 'POST' }),
     // Endereço dos bytes, não uma chamada: vai direto no src da miniatura.
     contentUrl: (id) => `/api/v1/media/${segment(id)}/content`
   },

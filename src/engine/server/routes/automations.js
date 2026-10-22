@@ -2,6 +2,7 @@ import { ErroHttp, resposta } from '../transport.js'
 import { validarAutomacao } from '../validate.js'
 import { criarServicoAutomacoes } from '../automationsService.js'
 import { conflitosDeComando } from '../conflitos.js'
+import { usosDoArquivo } from '../usosDeArquivo.js'
 
 export function registrarRotasAutomations (roteador, db) {
   const servico = criarServicoAutomacoes(db)
@@ -19,6 +20,73 @@ export function registrarRotasAutomations (roteador, db) {
   // Comandos respondidos por mais de uma automação ligada. Ver conflitos.js
   // para por que isto avisa em vez de bloquear.
   roteador.get('/automations/conflitos', () => conflitosDeComando(db))
+
+  // QUE COMANDOS USAM ESTE ARQUIVO.
+  //
+  // O vínculo nunca foi indexado: ele mora dentro do documento, em três campos
+  // alternativos do nó que envia arquivo. O efeito era o botão de apagar do
+  // acervo avisando "Comandos que usam este arquivo deixam de encontrá-lo" sem
+  // poder dizer quais — e quem apaga decidindo no escuro.
+  //
+  // É POST porque o arquivo chega como dado (id, caminho e pasta): o motor não
+  // enxerga o acervo, quem tem os bytes é o outro lado. Ver `usosDeArquivo.js`
+  // para por que a resposta separa o que é certo do que é "talvez".
+  // AS FAMÍLIAS QUE EXISTEM, com os comandos de cada uma.
+  //
+  // A tela precisa oferecer interruptores, e para isso precisa saber o que há.
+  // A lista sai dos comandos PUBLICADOS, não de um cadastro à parte: família é
+  // um campo do comando, e manter um cadastro paralelo criaria famílias que
+  // não existem e comandos órfãos de família que existe.
+  roteador.get('/automations/familias', () => {
+    const linhas = db.prepare(`
+      SELECT a.id AS automation_id, r.doc_json
+      FROM automations a
+      JOIN automation_revisions r ON r.id = a.active_revision_id
+      WHERE a.active_revision_id IS NOT NULL AND a.native = 0
+    `).all()
+    const porFamilia = new Map()
+    const semFamilia = []
+    for (const linha of linhas) {
+      let documento = null
+      try { documento = JSON.parse(linha.doc_json) } catch { continue }
+      const nome = documento?.name || linha.automation_id
+      const gatilho = (documento?.flow?.nodes || []).find((n) => n?.type === 'trigger.command')
+      const item = { automationId: linha.automation_id, nome, comando: gatilho?.config?.command || null }
+      const familia = typeof documento?.display?.family === 'string' && documento.display.family.trim()
+        ? documento.display.family.trim()
+        : null
+      if (!familia) { semFamilia.push(item); continue }
+      if (!porFamilia.has(familia)) porFamilia.set(familia, [])
+      porFamilia.get(familia).push(item)
+    }
+    return {
+      familias: [...porFamilia.entries()]
+        .map(([familia, comandos]) => ({ familia, comandos }))
+        .sort((a, b) => a.familia.localeCompare(b.familia)),
+      // Comando sem família não some da tela: ele continua podendo ser
+      // desligado um a um, e esconder isso faria parecer que só quem tem
+      // família é controlável.
+      semFamilia
+    }
+  })
+
+  roteador.post('/automations/usos-de-arquivo', ({ body }) => {
+    const linhas = db.prepare(`
+      SELECT a.id AS automation_id, r.doc_json
+      FROM automations a
+      JOIN automation_revisions r ON r.id = a.active_revision_id
+      WHERE a.active_revision_id IS NOT NULL AND a.native = 0
+    `).all()
+    const automacoes = linhas.map((linha) => {
+      let documento = null
+      try { documento = JSON.parse(linha.doc_json) } catch { documento = null }
+      return { id: linha.automation_id, nome: documento?.name || linha.automation_id, documento }
+    })
+    return usosDoArquivo(
+      { id: body?.id, path: body?.path, folder: body?.folder },
+      automacoes
+    )
+  })
   roteador.post('/automations', ({ body }) => resposta(201, criar(body)))
   roteador.get('/automations/:id', ({ params }) => {
     const row = obterAutomation.get(params.id)

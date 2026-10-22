@@ -187,6 +187,7 @@ export function descompilar (documento, template = null) {
   // O QUE ELA É, e o que a acorda — as duas primeiras coisas que se lê.
   h(`tipo: ${CLASSES[gatilho.type] || gatilho.type}`)
   h(`dispara com: ${gatilho.type === 'trigger.command' ? cfg.command : 'qualquer mensagem'}`)
+  if (documento.display?.family) h(`família: ${documento.display.family}`)
   if (documento.display?.menuLabel) {
     const desc = documento.display.menuDescription
     h(`menu: ${documento.display.menuLabel}${desc ? ` — ${desc}` : ''}`)

@@ -45,6 +45,11 @@
         },
         "menuDescription": {
           "type": "string"
+        },
+        "family": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
         }
       }
     },

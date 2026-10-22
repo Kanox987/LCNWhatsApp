@@ -75,7 +75,21 @@ function substituirEmValor (valor, parametros) {
 
 export function renderizarTemplate (template, parametrosFornecidos = {}) {
   const parametros = resolverParametros(template, parametrosFornecidos)
-  return substituirEmValor(structuredClone(template.documentTemplate), parametros)
+  const documento = substituirEmValor(structuredClone(template.documentTemplate), parametros)
+  // A CATEGORIA DO TEMPLATE VIRA A FAMÍLIA DO COMANDO.
+  //
+  // Antes ela morria aqui: servia para agrupar a vitrine do catálogo e não
+  // chegava ao comando instalado. Depois de instalar, 29 comandos viravam uma
+  // lista plana sem nenhum agrupamento — e era isso que impedia "desligar os
+  // comandos de download neste grupo" de sequer ser uma frase com sentido.
+  //
+  // É VALOR INICIAL, não imposição: o template pode declarar a própria família
+  // (e aí ela ganha), e quem editar o texto depois troca para o que quiser.
+  // A lista fechada de categorias continua valendo só para o catálogo.
+  if (template?.category && !documento?.display?.family) {
+    documento.display = { ...(documento.display || {}), family: template.category }
+  }
+  return documento
 }
 
 // As declarações de variável passam pela MESMA substituição do documento —

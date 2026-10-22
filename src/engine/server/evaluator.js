@@ -8,6 +8,7 @@ import { ErroHttp } from './transport.js'
 import { interpolar, resolverCaminho } from './interpolate.js'
 import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
+import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
@@ -1315,7 +1316,7 @@ function passaEscopoPara (db, candidato, refs, chat) {
 // decidir se uma automação "roda" ali.
 function automacoesVisiveisEm (db, chatDoEvento) {
   const linhas = db.prepare(`
-    SELECT a.active_revision_id, r.doc_json
+    SELECT a.id AS automation_id, a.active_revision_id, r.doc_json
     FROM automations a
     JOIN automation_revisions r ON r.id = a.active_revision_id
     WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL
@@ -1329,6 +1330,11 @@ function automacoesVisiveisEm (db, chatDoEvento) {
     if (!documento) continue
     const refs = obterRefs.all(linha.active_revision_id)
     if (!escopoCasa(db, refs, chatDoEvento)) continue
+    // O MENU MUDA DE ACORDO, que é metade do pedido: desligar uma família
+    // numa conversa tem de sumir com ela do menu dali. Anunciar um comando que
+    // responde "estou desligado" — ou, em grupo, que não responde nada — seria
+    // o menu mentindo sobre o que o bot faz naquele lugar.
+    if (desligadoNaConversa(db, chatDoEvento, { automationId: linha.automation_id, documento }).desligado) continue
     const trigger = acharTrigger(documento)
     const rotulo = documento.display?.menuLabel || trigger?.config?.command
     // Regra automática (anti-link e afins) não é um comando que alguém digita,
@@ -1507,6 +1513,33 @@ export function avaliarEvento (db, evento) {
         const cedeAoDono = candidato.native === 1 && palavraDoGatilho && palavrasQueCasaram.has(palavraDoGatilho)
 
         if (!cedeAoComando && !cedeAoDono && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
+          // DESLIGADO NESTA CONVERSA — e a conferência vem AQUI, depois de
+          // casar, nunca antes.
+          //
+          // Antes do casamento ela seria catastrófica no privado: toda
+          // mensagem passaria por todo comando desligado, e cada um deles
+          // responderia "estou desligado". O portão só faz sentido sobre um
+          // comando que a pessoa de fato chamou.
+          //
+          // Isto é diferente de `grupo_ativo`, que decide se o bot EXISTE no
+          // grupo. Aqui o bot existe e o comando casou; o que se decide é se
+          // ele faz aquilo ali.
+          const desligamento = desligadoNaConversa(db, evento.chat, {
+            automationId: candidato.automation_id,
+            documento
+          })
+          if (desligamento.desligado) {
+            status = 'desligado'
+            // O comando CASOU, e isso consome a palavra: sem marcar, o nativo
+            // de mesmo nome responderia no lugar dele, e a pessoa veria o bot
+            // reagir a um comando que ela acabou de desligar.
+            if (!ehAutomatico) algumComandoCasou = true
+            if (!ehAutomatico && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
+            const aviso = avisoDeDesligado(evento.chat, desligamento)
+            if (aviso && candidato.deployment_mode === 'live') {
+              comandosGerados = [{ commandType: 'whatsapp.reply', payload: { chatId: evento.chat.id, text: aviso } }]
+            }
+          } else {
           status = candidato.deployment_mode === 'live' ? 'matched_live' : 'matched_shadow'
           // Vale para sombra também: o comando CASOU, e é isso que consome a
           // mensagem. Só ao vivo aqui faria o mesmo evento se comportar
@@ -1533,6 +1566,7 @@ export function avaliarEvento (db, evento) {
               detalheErro = { message: erro.message }
               comandosGerados = []
             }
+          }
           }
         }
       }

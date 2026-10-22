@@ -456,7 +456,7 @@ export function compilar (texto) {
     responder: { strategy: 'weighted_rendezvous', poolId: '' },
     flow: { nodes: [], edges: [] }
   }
-  let display = null
+  const display = {}
 
   // O id entra AQUI, antes do laço do cabeçalho, porque é de onde ele vem: a
   // abertura. Entrar depois punha as chaves `id` e `revision` em ordem trocada
@@ -587,10 +587,19 @@ export function compilar (texto) {
       }
       case 'menu': {
         const [rotulo, ...resto] = valor.split('—')
-        display = { menuLabel: rotulo.trim() }
+        display.menuLabel = rotulo.trim()
         if (resto.length) display.menuDescription = resto.join('—').trim()
         break
       }
+      // A FAMÍLIA do comando: "download", "figurinha", "compra e venda".
+      //
+      // Texto livre de propósito. O catálogo tem uma lista fechada de
+      // categorias no schema dele, e ela serve para agrupar a VITRINE — mas
+      // obrigar o comando instalado a caber nessas quatro seria teto no
+      // código: quem usa o sistema tem famílias que eu não tenho como
+      // adivinhar. A categoria do template entra como valor inicial; daí em
+      // diante quem manda é esta linha.
+      case 'família': display.family = valor; break
       case 'onde': doc.scope.include.push(lerDestino(valor, l.n)); break
       case 'menos': doc.scope.exclude.push(lerDestino(valor, l.n)); break
       case 'pool': doc.responder.poolId = valor; break
@@ -630,7 +639,7 @@ export function compilar (texto) {
     throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
   }
 
-  if (display) doc.display = display
+  if (Object.keys(display).length) doc.display = display
 
   // --- corpo --------------------------------------------------------------
   const nos = [{ id: null, type: tipoDoGatilho, config: gatilhoConfig }]

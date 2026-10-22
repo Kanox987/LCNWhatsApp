@@ -92,6 +92,8 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
     },
     automacoes: {
       conflitos: () => requisitar('GET', '/automations/conflitos'),
+      usosDeArquivo: (arquivo) => requisitar('POST', '/automations/usos-de-arquivo', arquivo),
+      familias: () => requisitar('GET', '/automations/familias'),
       obterMeta: () => requisitar('GET', '/meta/automation-editor?schemaVersion=1'),
       listar: () => requisitar('GET', '/automations'),
       criar: (documento) => requisitar('POST', '/automations', documento),

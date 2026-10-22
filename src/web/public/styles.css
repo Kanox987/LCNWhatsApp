@@ -1475,3 +1475,34 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
   padding: 8px 10px;
   margin: 6px 0;
 }
+
+/* =========================================================================
+   Telas novas: donos, pools, menu, famílias e usos de arquivo.
+   ========================================================================= */
+
+/* Duas colunas com o conteúdo à esquerda e a ação à direita. É a forma da
+   maioria das listas destas telas: uma coisa e o que se faz com ela. */
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.row-between.compact { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.row-between.compact:last-child { border-bottom: 0; }
+.row-between p { margin: 2px 0 0; }
+
+/* Pilha curta, para listas dentro de um cartão. `stack-lg` já existia para o
+   espaçamento entre seções. */
+.stack-sm { display: flex; flex-direction: column; gap: 4px; }
+
+/* O interruptor de família: caixa mais a palavra do estado. A palavra existe
+   porque um quadradinho sozinho não diz se marcado é ligado ou desligado —
+   e aqui errar o sentido desliga comandos sem querer. */
+.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.switch span { font-size: 12px; color: var(--text-muted); }
+
+/* Onde a lista de "quem usa este arquivo" aparece, dentro do cartão. */
+.acervo-usos:empty { display: none; }
+.acervo-usos { margin: 8px 0; }

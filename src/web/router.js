@@ -34,6 +34,8 @@ export function criarRoteadorWeb (aplicacao) {
   const meta = () => aplicacao.motor.meta
   const retencao = () => aplicacao.motor.retencao
   const templates = () => aplicacao.motor.templates
+  const donos = () => aplicacao.motor.donos
+  const menu = () => aplicacao.motor.menu
 
   // Saúde do BFF em si + do motor por trás — nunca lança 500 só porque o
   // motor está fora do ar (mesmo espírito de "motor não está rodando" que
@@ -63,6 +65,10 @@ export function criarRoteadorWeb (aplicacao) {
       ? aplicacao.acervo.mover(params.id, body.folder)
       : aplicacao.acervo.descrever(params.id, body?.description)
   ))
+  // O CONTEÚDO, não o rótulo. `PUT /media/:id` (acima) mexe em pasta e
+  // descrição; este troca os bytes e mantém o id — sem ele, editar um arquivo
+  // significava perder a referência de todo comando que apontava para ele.
+  roteador.put('/api/v1/media/:id/content', ({ params, body }) => aplicacao.acervo.reescrever(params.id, body))
   roteador.delete('/api/v1/media/:id', ({ params }) => aplicacao.acervo.remover(params.id))
   roteador.post('/api/v1/instances', ({ body }) => resposta(201, aplicacao.instancias.criar(body?.nome)))
   roteador.get('/api/v1/instances/:id', ({ params }) => aplicacao.instancias.obter(params.id))
@@ -85,6 +91,18 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.get('/api/v1/meta/automation-editor', () => automacoes().obterMeta())
   roteador.get('/api/v1/automations', () => automacoes().listar())
   roteador.get('/api/v1/automations/conflicts', () => automacoes().conflitos())
+  // As famílias existentes, para a tela de uma conversa poder oferecer os
+  // interruptores sem inventar um cadastro paralelo.
+  roteador.get('/api/v1/automations/families', () => automacoes().familias())
+  // Quais comandos usam um arquivo do acervo. O arquivo vem daqui (o motor não
+  // enxerga o acervo) e o cruzamento acontece lá, que é onde estão os
+  // documentos publicados.
+  roteador.post('/api/v1/media/:id/usage', async ({ params }) => {
+    const acervo = await aplicacao.acervo.listar()
+    const arquivo = (acervo?.files || []).find((f) => f.id === params.id)
+    if (!arquivo) throw new ErroHttp(404, `Arquivo não encontrado: ${params.id}.`)
+    return automacoes().usosDeArquivo({ id: arquivo.id, path: arquivo.path, folder: arquivo.folder })
+  })
   roteador.post('/api/v1/automations', ({ body }) => automacoes().criar(body))
   roteador.get('/api/v1/automations/:id', ({ params }) => automacoes().obter(params.id))
   roteador.delete('/api/v1/automations/:id', ({ params }) => automacoes().remover(params.id))
@@ -268,6 +286,34 @@ export function criarRoteadorWeb (aplicacao) {
     documento.id = params.id
     return automacoes().salvarRascunho(params.id, documento, req?.headers?.['if-match'])
   })
+
+  // --- donos ---
+  //
+  // O motor tem isto inteiro desde sempre (`routes/owners.js`), e o BFF nunca
+  // repassou: `GET /api/v1/owners` respondia "Rota não encontrada". O efeito
+  // era um beco sem saída para quem aluga o sistema — `chavesReservadas.js`
+  // manda usar "a tela de Donos", a tela não existia, e `__owner__` é chave
+  // reservada, então nem pela aba Dados dava para contornar. Sobrava cadastrar
+  // dono por mensagem de WhatsApp de si para si, ou HTTP direto no motor —
+  // justamente o que quem não tem terminal não alcança.
+  roteador.get('/api/v1/owners', () => donos().listar())
+  roteador.post('/api/v1/owners', ({ body }) => donos().adicionar(body?.contactId))
+  roteador.delete('/api/v1/owners/:contactId', ({ params }) => donos().remover(params.contactId))
+
+  // --- configuração do menu ---
+  //
+  // Mesma história: CRUD pronto no motor (`routes/menu.js`), incluindo a
+  // pré-visualização que a própria rota diz existir "para a UI", e nenhuma
+  // rota aqui. Até hoje o menu só se configurava de dentro do WhatsApp, pelo
+  // comando de configuração, um campo por mensagem.
+  //
+  // `effective` é o que de fato vale numa conversa, já resolvida a cascata
+  // (config da conversa > padrão do tipo > padrão do código): é o que permite
+  // a tela mostrar o resultado em vez de a pessoa deduzir qual camada ganhou.
+  roteador.get('/api/v1/menu-config/effective', ({ query }) => menu().obterEfetivo(query.get('chatId'), query.get('chatKind')))
+  roteador.get('/api/v1/menu-config/:kind', ({ params, query }) => menu().obter(params.kind, query.get('id')))
+  roteador.put('/api/v1/menu-config/:kind', ({ params, query, body }) => menu().salvar(params.kind, query.get('id'), body))
+  roteador.delete('/api/v1/menu-config/:kind', ({ params, query }) => menu().remover(params.kind, query.get('id')))
 
   // --- pools (coordenação multi-bot) ---
   roteador.get('/api/v1/pools', () => pools().listar())
