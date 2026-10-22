@@ -175,7 +175,11 @@ function exporArquivo (registro) {
     mimetype: registro.mimetype,
     sizeBytes: registro.sizeBytes,
     description: registro.description || null,
-    createdAt: registro.createdAt
+    createdAt: registro.createdAt,
+    // Quando o conteúdo foi reescrito pela última vez. Só existe em arquivo
+    // que foi editado — num arquivo subido e nunca mexido não há o que datar,
+    // e inventar `updatedAt = createdAt` faria todo arquivo parecer editado.
+    ...(registro.updatedAt ? { updatedAt: registro.updatedAt } : {})
   }
 }
 
@@ -363,6 +367,49 @@ export function atualizarDescricao (id, description) {
   const registro = arquivos.find((a) => a.id === id)
   if (!registro) return null
   registro.description = typeof description === 'string' && description.trim() ? description.trim() : null
+  gravarIndice(arquivos)
+  return exporArquivo(registro)
+}
+
+// REESCREVER O CONTEÚDO, MANTENDO O ID.
+//
+// Não existia em camada nenhuma: a biblioteca tinha `guardar`, `remover`,
+// `atualizarDescricao` e `moverPara`, e nada que trocasse os bytes. Então
+// "editar um arquivo" era apagar e subir de novo — com ID NOVO, o que quebra
+// toda automação que o referencia por `fileId`, em silêncio e só na próxima
+// vez que o comando rodar.
+//
+// O ID É O PONTO. É por ele que um comando aponta para o arquivo, e é ele que
+// precisa sobreviver à edição. O tipo também: trocar o conteúdo de um .html
+// por um .png mudaria como o arquivo é ENVIADO (documento contra foto) sem
+// ninguém pedir, então a extensão e o mime continuam os do registro.
+export function reescrever (id, buffer) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
+    throw new ErroDeAcervo('Arquivo vazio.')
+  }
+  const arquivos = lerIndice()
+  const registro = arquivos.find((a) => a.id === id)
+  if (!registro) throw new ErroDeAcervo('Arquivo não encontrado no acervo.', 404)
+
+  if (buffer.length > LIMITE_POR_ARQUIVO_BYTES) {
+    throw new ErroDeAcervo(`Arquivo grande demais: o limite por arquivo é ${Math.round(LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`)
+  }
+  // A cota conta o que o arquivo VAI ocupar, descontando o que ele já ocupa —
+  // senão reescrever um arquivo grande com um menor seria recusado por falta
+  // de espaço que ele mesmo está devolvendo.
+  const atual = uso()
+  const depois = atual.usedBytes - (registro.sizeBytes || 0) + buffer.length
+  if (atual.quotaBytes !== null && depois > atual.quotaBytes) {
+    throw new ErroDeAcervo(
+      `Não cabe no acervo: falta espaço. Ficaria com ${depois} de ${atual.quotaBytes} bytes. Apague algo antes.`,
+      507
+    )
+  }
+
+  garantirPastas()
+  fs.writeFileSync(caminhoDoArquivo(registro.id, registro.ext), buffer, { mode: 0o600 })
+  registro.sizeBytes = buffer.length
+  registro.updatedAt = new Date().toISOString()
   gravarIndice(arquivos)
   return exporArquivo(registro)
 }

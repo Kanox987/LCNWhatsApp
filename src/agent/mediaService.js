@@ -42,6 +42,26 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     }
   }
 
+  // REESCREVER O CONTEÚDO de um arquivo que já existe, mantendo o id.
+  //
+  // O id é por onde os comandos apontam para o arquivo (`fileId`). Sem esta
+  // operação, editar era apagar e subir de novo — id novo, e todo comando que
+  // referenciava o antigo passava a não achar nada, em silêncio.
+  function reescrever (id, body) {
+    const base64 = body?.contentBase64
+    if (typeof base64 !== 'string' || !base64) {
+      throw new biblioteca.ErroDeAcervo('Envie o novo conteúdo em contentBase64.')
+    }
+    if (base64.length > LIMITE_BASE64) {
+      throw new biblioteca.ErroDeAcervo(
+        `Arquivo grande demais: o limite por arquivo é ${Math.round(acervo.LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`
+      )
+    }
+    const buffer = decodificarBase64(base64)
+    if (!buffer) throw new biblioteca.ErroDeAcervo('Conteúdo do arquivo inválido ou vazio.')
+    return biblioteca.reescrever(id, buffer)
+  }
+
   function enviar (body) {
     const base64 = body?.contentBase64
     if (typeof base64 !== 'string' || !base64) {
@@ -102,5 +122,5 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
 
   // Sem definirCota: o teto do acervo é configuração de quem instala, não
   // ação do painel. Ver o comentário em mediaLibrary.js.
-  return { listar, enviar, conteudo, remover, descrever, mover }
+  return { listar, enviar, reescrever, conteudo, remover, descrever, mover }
 }

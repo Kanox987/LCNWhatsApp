@@ -45,6 +45,9 @@ export function criarAplicacao ({
     acervo: {
       listar: () => mediaService.listar(),
       enviar: (body) => mediaService.enviar(body),
+      // Trocar os bytes mantendo o id — é o que faz "editar" ser editar, e não
+      // apagar e subir de novo com outro id.
+      reescrever: (id, body) => mediaService.reescrever(id, body),
       conteudo: (id) => mediaService.conteudo(id),
       remover: (id) => mediaService.remover(id),
       descrever: (id, descricao) => mediaService.descrever(id, descricao),

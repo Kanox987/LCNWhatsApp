@@ -44,7 +44,7 @@ function lerComoBase64 (arquivo) {
   })
 }
 
-function previaDoArquivo (arquivo) {
+function previaDoArquivo (arquivo, refresh) {
   const url = api.media.contentUrl(arquivo.id)
 
   if (arquivo.kind === 'image') {
@@ -76,12 +76,53 @@ function previaDoArquivo (arquivo) {
         }
       }
     })
-    caixa.append(ver)
+    // EDITAR o conteúdo, mantendo o id.
+    //
+    // Até aqui "editar um arquivo" era apagar e subir de novo — com ID NOVO, e
+    // todo comando que apontava para ele por `fileId` passava a não achar
+    // nada, em silêncio, só na próxima vez que rodasse. O id é o que liga o
+    // acervo ao comando; ele tem de sobreviver à edição.
+    const editar = button('Editar', {
+      variant: 'quiet',
+      onClick: async (evento) => {
+        const controle = evento.currentTarget
+        setBusy(controle, true, 'Abrindo…')
+        try {
+          const resposta = await fetch(url)
+          if (!resposta.ok) throw new Error('Não foi possível ler o arquivo.')
+          const area = el('textarea', { className: 'lcn-editor', rows: '14', spellcheck: 'false' }, await resposta.text())
+          const salvar = button('Salvar conteúdo', {
+            variant: 'primary',
+            onClick: async () => {
+              setBusy(salvar, true, 'Salvando…')
+              try {
+                await api.media.rewrite(arquivo.id, btoa(unescape(encodeURIComponent(area.value))))
+                notify('Conteúdo salvo — o arquivo continua com o mesmo id.')
+                await refresh?.()
+              } catch (erro) {
+                notify(erro.message, 'danger')
+                setBusy(salvar, false)
+              }
+            }
+          })
+          caixa.replaceChildren(area, el('div', { className: 'button-row' }, [salvar]))
+        } catch (erro) {
+          notify(erro.message, 'danger')
+          setBusy(controle, false)
+        }
+      }
+    })
+    caixa.append(ver, editar)
     return caixa
   }
 
+  // VÍDEO E DOCUMENTO recebiam só um glifo, e não havia como ABRIR nem baixar
+  // nada pela tela — nem aqui, nem em botão nenhum. O motor já servia os bytes
+  // com `content-disposition: attachment` para esses tipos desde sempre: era
+  // só não existir link.
   return el('div', { className: 'acervo-previa acervo-previa-simbolo' }, [
-    el('span', { 'aria-hidden': 'true', text: SIMBOLO_TIPO[arquivo.kind] || '◇' })
+    el('span', { 'aria-hidden': 'true', text: SIMBOLO_TIPO[arquivo.kind] || '◇' }),
+    el('a', { href: url, className: 'button button-quiet', download: arquivo.name || '' }, 'Baixar')
   ])
 }
 
@@ -153,10 +194,52 @@ function cartaoDeArquivo (arquivo, refresh) {
     }
   })
 
+  // QUEM USA ESTE ARQUIVO — e o aviso de apagar deixa de ser um palpite.
+  //
+  // A confirmação dizia "Comandos que usam este arquivo deixam de encontrá-lo"
+  // sem poder dizer QUAIS, porque o vínculo nunca foi indexado. Agora ela
+  // pergunta antes, e nomeia. Se a consulta falhar, o aviso volta ao genérico
+  // em vez de impedir a remoção: saber quem usa é uma ajuda, não um portão.
+  const nomesDeQuemUsa = async () => {
+    try {
+      const usos = await api.media.usage(arquivo.id)
+      return [
+        ...(usos?.certos || []).map((u) => `• ${u.nome} (${u.como})`),
+        ...(usos?.talvez || []).map((u) => `• ${u.nome} — talvez: ${u.como}`)
+      ]
+    } catch {
+      return null
+    }
+  }
+
+  const verUsos = el('div', { className: 'acervo-usos' })
+  const consultar = button('Quem usa', {
+    variant: 'quiet',
+    onClick: async (evento) => {
+      const controle = evento.currentTarget
+      setBusy(controle, true, 'Procurando…')
+      const linhas = await nomesDeQuemUsa()
+      setBusy(controle, false)
+      if (linhas === null) {
+        verUsos.replaceChildren(el('p', { className: 'muted compact', text: 'Não consegui consultar agora.' }))
+        return
+      }
+      verUsos.replaceChildren(linhas.length
+        ? el('pre', { className: 'readonly-box', text: linhas.join('\n') })
+        : el('p', { className: 'muted compact', text: 'Nenhum comando publicado aponta para este arquivo.' }))
+    }
+  })
+
   const remover = button('Remover', {
     variant: 'danger-quiet',
     onClick: async (evento) => {
-      if (!window.confirm(`Remover "${arquivo.name}" do acervo? Comandos que usam este arquivo deixam de encontrá-lo.`)) return
+      const linhas = await nomesDeQuemUsa()
+      const detalhe = linhas === null
+        ? 'Comandos que usam este arquivo deixam de encontrá-lo.'
+        : (linhas.length
+            ? `Estes comandos apontam para ele:\n\n${linhas.join('\n')}\n\nEles deixam de encontrá-lo.`
+            : 'Nenhum comando publicado aponta para ele.')
+      if (!window.confirm(`Remover "${arquivo.name}" do acervo?\n\n${detalhe}`)) return
       const controle = evento.currentTarget
       setBusy(controle, true, 'Removendo…')
       try {
@@ -171,7 +254,8 @@ function cartaoDeArquivo (arquivo, refresh) {
   })
 
   return el('article', { className: 'list-card acervo-card' }, [
-    previaDoArquivo(arquivo),
+    previaDoArquivo(arquivo, refresh),
+    verUsos,
     el('div', { className: 'list-card-main' }, [
       el('div', {}, [
         el('h2', { text: arquivo.name }),
@@ -181,8 +265,79 @@ function cartaoDeArquivo (arquivo, refresh) {
     ]),
     el('div', { className: 'acervo-campo-descricao' }, [descricao, salvarDescricao]),
     el('div', { className: 'acervo-campo-descricao' }, [campoPasta, salvarPasta]),
-    el('small', { className: 'muted', text: `${formatarBytes(arquivo.sizeBytes)} · ${arquivo.mimetype} · enviado em ${formatDate(arquivo.createdAt)}` }),
-    el('div', { className: 'button-row' }, [copiarCaminho, copiarId, remover])
+    el('small', { className: 'muted', text: `${formatarBytes(arquivo.sizeBytes)} · ${arquivo.mimetype} · enviado em ${formatDate(arquivo.createdAt)}${arquivo.updatedAt ? ` · editado em ${formatDate(arquivo.updatedAt)}` : ''}` }),
+    el('div', { className: 'button-row' }, [copiarCaminho, copiarId, consultar, remover])
+  ])
+}
+
+// CRIAR UM ARQUIVO DE TEXTO AQUI, sem subir nada.
+//
+// O motor já aceitaria desde sempre — `POST /media` quer `contentBase64` e um
+// mimetype, e `text/plain` e `text/html` estão entre os tipos aceitos. O que
+// faltava era a tela: ela só tinha um seletor de arquivo, então escrever uma
+// página ou um texto exigia criar o arquivo noutro programa, salvar, e subir.
+function painelDeTextoNovo (limites, refresh) {
+  const aceitos = limites?.acceptedTypes || []
+  const tiposDeTexto = [
+    ['text/plain', 'Texto simples (.txt)'],
+    ['text/html', 'Página HTML (.html)']
+  ].filter(([mime]) => aceitos.includes(mime))
+  // Se o acervo deixar de aceitar texto, esta seção some sozinha em vez de
+  // oferecer um tipo que o motor vai recusar.
+  if (!tiposDeTexto.length) return null
+
+  const nome = el('input', { type: 'text', className: 'input', placeholder: 'pagina.html' })
+  const tipo = el('select', { className: 'input' }, tiposDeTexto.map(([v, t]) => el('option', { value: v, text: t })))
+  const pasta = el('input', { type: 'text', className: 'input', placeholder: 'paginas' })
+  const conteudo = el('textarea', { className: 'lcn-editor', rows: '12', spellcheck: 'false', placeholder: '<!doctype html>\n<title>Minha página</title>' })
+  const mensagem = el('div')
+
+  const criar = button('Criar no acervo', {
+    variant: 'primary',
+    onClick: async () => {
+      mensagem.replaceChildren()
+      if (!conteudo.value.trim()) {
+        mensagem.replaceChildren(el('div', { className: 'notice notice-danger' }, [el('p', { text: 'Escreva algum conteúdo — arquivo vazio o acervo recusa.' })]))
+        return
+      }
+      setBusy(criar, true, 'Criando…')
+      try {
+        await api.media.upload({
+          // `btoa` sozinho quebra em acento: ele só aceita latin-1, e um "ç"
+          // no texto vira erro. A volta por encodeURIComponent é o caminho
+          // padrão para passar UTF-8 por ele.
+          contentBase64: btoa(unescape(encodeURIComponent(conteudo.value))),
+          mimetype: tipo.value,
+          name: nome.value.trim() || undefined,
+          folder: pasta.value.trim() || undefined
+        })
+        notify('Arquivo criado no acervo.')
+        conteudo.value = ''
+        nome.value = ''
+        await refresh?.()
+      } catch (erro) {
+        mensagem.replaceChildren(el('div', { className: 'notice notice-danger' }, [el('p', { text: erro.message })]))
+      } finally {
+        setBusy(criar, false)
+      }
+    }
+  })
+
+  return el('section', { className: 'panel stack-lg' }, [
+    el('div', { className: 'panel-heading' }, [
+      el('div', {}, [
+        el('h2', { text: 'Escrever um arquivo' }),
+        el('p', { text: 'Para o que você escreve aqui mesmo, em vez de subir de outro programa. Depois de criado, dá para editar o conteúdo sem trocar o identificador.' })
+      ])
+    ]),
+    el('div', { className: 'form-grid' }, [
+      field('Nome', nome, 'Opcional. Vazio recebe um nome genérico com a extensão certa.'),
+      field('Tipo', tipo, 'HTML é guardado como DOCUMENTO: quem receber baixa e abre no navegador. Texto simples vai como mensagem na conversa.'),
+      field('Pasta', pasta, 'Opcional, até três níveis.')
+    ]),
+    field('Conteúdo', conteudo),
+    mensagem,
+    el('div', { className: 'button-row' }, [criar])
   ])
 }
 
@@ -328,6 +483,7 @@ export async function renderAcervo ({ refresh }) {
 
   return el('div', { className: 'stack-lg' }, [
     painelDeEnvio(limits, refresh),
+    painelDeTextoNovo(limits, refresh),
     painelDeUso(usage),
     el('div', { className: 'section-heading' }, [
       el('div', {}, [
