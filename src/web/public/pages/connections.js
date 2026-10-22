@@ -216,6 +216,8 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
   const aberturaDoCarrossel = el('input', { type: 'text', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.cabecalho || '') : '', placeholder: '🔎 Achei isto para "{{busca}}":' })
   const textoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.texto || '', placeholder: '⬇️ Baixar esta' })
   const comandoDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.comando || '', placeholder: '/musica {{url}}' })
+  const urlDoBotao = el('input', { type: 'text', value: funcao?.resposta?.botao?.url || '', placeholder: 'https://seu-site.com/jogo/{{id}}' })
+  const janelaDoBotao = el('input', { type: 'checkbox', checked: funcao?.resposta?.botao?.janela !== false })
   const limiteDeCards = el('input', { type: 'number', min: '1', max: '10', step: '1', value: funcao?.resposta?.forma === 'carrossel' ? (funcao?.resposta?.limite ?? '') : '' })
   const descarteCampo = el('input', { type: 'text', value: funcao?.resposta?.descartar?.campo || '', placeholder: 'duracao' })
   const descarteAcima = el('input', { type: 'number', step: '1', value: funcao?.resposta?.descartar?.acima ?? '' })
@@ -304,7 +306,9 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
     ]),
     el('div', { className: 'form-grid' }, [
       field('Rótulo do botão', textoDoBotao, 'O que a pessoa lê no botão. Vazio = card sem botão.'),
-      field('Comando que o botão manda', comandoDoBotao, 'O bot recebe isto como se a pessoa tivesse digitado — inclusive o argumento daquele card, por exemplo "/musica {{url}}".')
+      field('Comando que o botão manda', comandoDoBotao, 'O bot recebe isto como se a pessoa tivesse digitado — inclusive o argumento daquele card, por exemplo "/musica {{url}}".'),
+      field('…ou uma URL que o botão abre', urlDoBotao, 'Um ou outro, nunca os dois. É assim que se abre uma página pelo WhatsApp: não existe HTML rodando dentro da mensagem — existe um botão com um endereço, e o aplicativo abre aquela página. Aceita os campos do card. ATENÇÃO: botão que abre página NÃO volta para o bot, então ele não serve para saber qual card foi escolhido.'),
+      field('Abrir dentro do WhatsApp', janelaDoBotao, 'Marcado, a página abre numa janela do próprio WhatsApp no celular. Desmarcado, vai para o navegador. No WhatsApp Web abre outra aba de qualquer jeito — quem decide é o aplicativo de quem recebe.')
     ]),
     el('div', { className: 'form-grid' }, [
       field('Quantos cards', limiteDeCards, 'Até 10, que é o teto do WhatsApp. Vazio manda todos os que vierem.'),
@@ -422,9 +426,13 @@ function editorDeFuncao (funcao, { endereco, aoRemover }) {
         corpo: corpoDoCard.value.trim(),
         rodape: rodapeDoCard.value.trim() || null,
         cabecalho: aberturaDoCarrossel.value.trim() || null,
-        // Os dois ou nenhum: botão com rótulo e sem comando não faz nada ao
-        // ser tocado, e é pior que não ter botão.
-        botao: rotulo && comando ? { texto: rotulo, comando } : null,
+        // Rótulo mais UMA das duas ações. Botão com rótulo e sem ação não faz
+        // nada ao ser tocado, e é pior que não ter botão.
+        botao: rotulo && (comando || urlDoBotao.value.trim())
+          ? (urlDoBotao.value.trim()
+              ? { texto: rotulo, url: urlDoBotao.value.trim(), janela: janelaDoBotao.checked }
+              : { texto: rotulo, comando })
+          : null,
         limite: Number.isFinite(limite) && limite > 0 ? Math.round(limite) : null,
         vazio: vazioDoCarrossel.value.trim() || null,
         estilo: estiloDoCarrossel.value,

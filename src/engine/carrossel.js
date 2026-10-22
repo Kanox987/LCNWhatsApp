@@ -63,8 +63,41 @@ function midiaDoUpload (midia, upload) {
 //
 // `display_text` é o que a pessoa lê; `id` é o que o bot recebe. Os dois
 // viajam no mesmo JSON porque é assim que o nativeFlow os transporta.
+// O OUTRO BOTÃO: `cta_url`, que ABRE UMA PÁGINA em vez de mandar mensagem.
+//
+// É o que está por trás dos "jogos dentro do WhatsApp". Não existe HTML rodando
+// dentro da bolha da mensagem, e nunca existiu: o que existe é um botão com
+// uma URL, e o aplicativo abre aquela página numa janela dele. O HTML continua
+// sendo um site, hospedado em outro lugar.
+//
+// `webview_interaction: true` é o campo que faz a página abrir DENTRO do
+// WhatsApp no celular em vez de jogar o navegador por cima; só
+// `webview_presentation` não basta. No WhatsApp Web ele abre outra aba de
+// qualquer jeito — quem decide isso é o aplicativo de quem recebe, não nós.
+//
+// `merchant_url` repete a URL porque é assim que o campo viaja no nativeFlow.
+//
+// DIFERENÇA QUE IMPORTA para quem monta o comando: `quick_reply` volta para o
+// bot (o id chega como se a pessoa tivesse digitado); `cta_url` é executado no
+// aparelho e NÃO avisa o bot de nada. Um botão que abre página não serve para
+// saber qual card a pessoa escolheu.
+const PAGINA_EM_JANELA = Object.freeze({ webview_interaction: true, webview_presentation: 'full' })
+
 function montarBotao (botao) {
-  if (!botao?.texto || !botao?.comando) return []
+  if (!botao?.texto) return []
+  if (botao.url) {
+    return [{
+      name: 'cta_url',
+      buttonParamsJson: JSON.stringify({
+        display_text: botao.texto,
+        url: botao.url,
+        merchant_url: botao.url,
+        // Abrir fora, no navegador, é o comportamento de quem NÃO pede janela.
+        ...(botao.janela === false ? {} : PAGINA_EM_JANELA)
+      })
+    }]
+  }
+  if (!botao.comando) return []
   // `disabled: false` está no bot de referência e vai junto: mensagem
   // interativa que o servidor aceita e o aplicativo não desenha não deixa
   // rastro nenhum, então aqui a forma é copiada inteira em vez de reduzida ao
@@ -139,6 +172,18 @@ export function montarCard (midia, upload, { titulo, legenda, rodape, botao } = 
 //               carrossel de fotos do /dow usa aqui há semanas, PROVADA neste
 //               aparelho — o texto vai em mensagem separada.
 //   semEmbrulho - o completo sem o viewOnce.
+//   bizNoStanza - o <biz> mandado à mão, por `customNodes`. É A QUE ESTÁ NO AR
+//               e a única PROVADA com botão dentro do card: é assim que o
+//               /buscar entrega hoje. Ver NO_DE_FLUXO_NATIVO logo abaixo.
+//   fluxoNoTopo - um `nativeFlowMessage` vazio no nível principal, para a
+//               biblioteca montar o nó sozinha. A outra saída para o mesmo
+//               problema, não testada neste aparelho.
+//
+// A declaração aceita ainda `botoes`, `menu` e `diagnóstico`, que NÃO são
+// carrosséis: as duas primeiras são as formas de queda descritas adiante, e
+// `diagnóstico` manda todas as formas numeradas de uma vez, para uma tentativa
+// só responder qual delas aquele aparelho desenha. A lista completa vive em
+// `declaracao.js` (`ESTILOS`), que é quem valida o que o painel grava.
 export const ESTILOS_DE_CARROSSEL = Object.freeze(['completo', 'simples', 'semEmbrulho', 'bizNoStanza', 'fluxoNoTopo'])
 
 // O NÓ QUE DIZ AO WHATSAPP "ISTO É NATIVE FLOW".
@@ -175,19 +220,30 @@ export const NO_DE_FLUXO_NATIVO = Object.freeze({
   }]
 })
 
-// AS OUTRAS DUAS FORMAS DE OFERECER AS MESMAS OPÇÕES.
+// AS OUTRAS DUAS FORMAS DE OFERECER AS MESMAS OPÇÕES — hoje, QUEDA.
 //
-// O teste do dono respondeu o que três deploys não responderam: carrossel COM
-// BOTÃO não é desenhado pelo WhatsApp dele em forma nenhuma — e o carrossel de
-// fotos do /dow, que tem a lista de botões VAZIA, é desenhado há semanas. O
-// botão dentro do card é o que o aplicativo recusa.
+// ESTE BLOCO JÁ AFIRMOU O CONTRÁRIO, e a correção importa mais que o texto
+// novo. Ele dizia: "carrossel COM BOTÃO não é desenhado pelo WhatsApp dele em
+// forma nenhuma; o botão dentro do card é o que o aplicativo recusa". Era o que
+// três deploys mostravam, e estava certo PARA AQUELE MOMENTO — antes do
+// `bizNoStanza` existir.
 //
-// (E o exemplo do takeshi-bot, que eu tinha citado como prova, manda cards SEM
-// botão. O código deles suporta; o exemplo não usa. Eu nunca tive a prova que
-// disse ter.)
+// Hoje é falso, e dá para conferir sem acreditar em mim: a conexão
+// `midia.buscar` está declarada com `estilo: bizNoStanza` e um botão dentro do
+// card, o /buscar entrega esse carrossel, e o toque chega ao bot como
+// `/musica <link>`. O que faltava não era o aplicativo aceitar o botão no card:
+// era o stanza ANUNCIAR que a mensagem é native flow, e os botões só dentro
+// dos cards não fazem a biblioteca anunciar sozinha (ver NO_DE_FLUXO_NATIVO).
 //
-// Então o botão sai de dentro do card e vira mensagem própria, nas duas formas
-// que o WhatsApp comum conhece há mais tempo:
+// (O que continua valendo da versão antiga: o exemplo do takeshi-bot que eu
+// citei como prova manda cards SEM botão. O código deles suporta; o exemplo não
+// usa. Eu nunca tive a prova que disse ter — e a conclusão que tirei dali era
+// errada nas duas direções.)
+//
+// Então estas duas formas deixaram de ser "o jeito que funciona" e passaram a
+// ser o que sempre deveriam ter sido: a QUEDA para o aparelho que não desenhar
+// botão no card. O carrossel continua saindo; o que muda é onde a escolha
+// aparece. São as duas formas que o WhatsApp comum conhece há mais tempo:
 //
 //   botoes - até três botões de resposta rápida, lado a lado.
 //   menu   - uma lista de escolha, que abre com o nome e a descrição de cada

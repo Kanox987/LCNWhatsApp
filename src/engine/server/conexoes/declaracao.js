@@ -303,14 +303,7 @@ function validarRespostaPorForma (resposta, onde) {
       corpo: exigirTexto(resposta.corpo, `${onde} — o texto de cada card`),
       rodape: typeof resposta.rodape === 'string' ? resposta.rodape : null,
       cabecalho: typeof resposta.cabecalho === 'string' ? resposta.cabecalho : null,
-      botao: botao
-        ? {
-            texto: exigirTexto(botao.texto, `${onde} — o rótulo do botão do card`),
-            // O que o botão MANDA, e é um comando do próprio bot. Aceita os
-            // campos do item, que é como ele aponta para AQUELE resultado.
-            comando: exigirTexto(botao.comando, `${onde} — o comando que o botão manda`)
-          }
-        : null,
+      botao: botao ? botaoDoCard(botao, onde) : null,
       // O QUE NEM DEVE APARECER NA ESCOLHA.
       //
       // O pedido do dono: "músicas com mais de 15 min nem devem entrar na
@@ -623,6 +616,67 @@ export function resolverDestino (endereco, funcao) {
 //
 // Só http/https, e a recusa é explícita: um `file://` ou um esquema exótico aqui
 // viraria leitura de disco pelo processo do gateway.
+// O BOTÃO DE UM CARD, nas suas duas naturezas.
+//
+// `comando` MANDA uma mensagem de volta ao bot — é o "baixar este", e é o que
+// permite saber qual card a pessoa escolheu sem guardar estado nenhum entre as
+// duas mensagens.
+//
+// `url` ABRE UMA PÁGINA no aparelho e NÃO avisa o bot de nada. É o que está
+// por trás dos "jogos dentro do WhatsApp": não existe HTML rodando dentro da
+// mensagem, existe um botão com um endereço, e o aplicativo abre aquela página
+// numa janela dele.
+//
+// UM OU OUTRO, nunca os dois: são botões de tipos diferentes no protocolo
+// (`quick_reply` contra `cta_url`), e aceitar os dois campos juntos obrigaria
+// esta camada a escolher por quem declarou — exatamente o tipo de escolha
+// silenciosa que depois vira "por que esse botão não faz o que eu escrevi?".
+function botaoDoCard (botao, onde) {
+  const texto = exigirTexto(botao.texto, `${onde} — o rótulo do botão do card`)
+  const temUrl = typeof botao.url === 'string' && botao.url.trim()
+  const temComando = typeof botao.comando === 'string' && botao.comando.trim()
+  if (temUrl && temComando) {
+    throw new ErroDeDeclaracao(
+      `${onde}: o botão do card manda um comando OU abre uma URL — vieram os dois. Um botão que abre página não volta para o bot, então ele não serve para saber qual card foi escolhido.`
+    )
+  }
+  if (temUrl) {
+    // A URL aceita os campos do item ("https://.../{{id}}"), então ela só pode
+    // ser conferida como endereço quando não tiver marcador — conferir um
+    // texto com "{{" dentro recusaria a forma que torna o botão útil.
+    const url = botao.url.trim()
+    if (!url.includes('{{')) validarEnderecoDeBotao(url, onde)
+    return {
+      texto,
+      url,
+      // Abrir DENTRO do WhatsApp é o padrão, porque é o que a pessoa espera de
+      // um botão numa conversa. `janela: nao` manda para o navegador.
+      janela: botao.janela !== false && botao.janela !== 'nao'
+    }
+  }
+  return {
+    texto,
+    // O que o botão MANDA, e é um comando do próprio bot. Aceita os campos do
+    // item, que é como ele aponta para AQUELE resultado.
+    comando: exigirTexto(botao.comando, `${onde} — o comando que o botão manda, ou uma URL em "url"`)
+  }
+}
+
+// Mesma regra do endereço de uma conexão: http ou https e nada mais. Um
+// "javascript:" ou um "data:" num botão seria código escolhido por quem
+// declarou a conexão rodando no aparelho de quem recebeu a mensagem.
+function validarEnderecoDeBotao (url, onde) {
+  let alvo
+  try {
+    alvo = new URL(url)
+  } catch {
+    throw new ErroDeDeclaracao(`${onde}: a URL do botão é inválida — veio "${url}".`)
+  }
+  if (alvo.protocol !== 'http:' && alvo.protocol !== 'https:') {
+    throw new ErroDeDeclaracao(`${onde}: a URL do botão precisa ser http ou https — veio "${alvo.protocol}".`)
+  }
+}
+
 export function validarEndereco (endereco) {
   const texto = exigirTexto(endereco, 'O endereço do serviço')
   let url
