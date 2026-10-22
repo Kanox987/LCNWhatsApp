@@ -110,15 +110,32 @@ export function validarAutomacao (db, documento) {
     }
   })
 
-  // Uma condição sem os dois caminhos é meia decisão: o lado faltante encerra
-  // o fluxo em silêncio, que é exatamente o que a ramificação veio evitar.
+  // Uma condição precisa levar a ALGUM lugar — mas não aos dois.
+  //
+  // A regra antiga exigia as duas saídas, com o argumento de que o lado
+  // faltante "encerra o fluxo em silêncio". Para um documento montado à mão
+  // isso é verdade; para um VIGIA é o contrário, e foi assim que ela barrou um
+  // template do próprio catálogo.
+  //
+  // `anti-silenciado` olha toda mensagem do grupo e apaga a de quem está
+  // silenciado. O ramo falso é "não faz nada", e é o caso da esmagadora maioria
+  // das mensagens — não é meia decisão, é A decisão. E a linguagem não tem
+  // palavra para escrever "nada": exigir o `senão` ali obrigaria a inventar uma
+  // ação que não existe. O resultado era um `.lcn` versionado que compilava e
+  // que a publicação recusava, com uma mensagem sobre arestas que ninguém que
+  // escreveu o texto tem como ligar ao que escreveu.
+  //
+  // O que a regra protegia de verdade continua: condição que não leva a lugar
+  // nenhum é um galho morto, e segue recusada. Aresta pendurada, ciclo e saída
+  // inadmitida são conferidos acima, cada um por conta própria.
   nodes.forEach((node, indice) => {
     if (node?.type !== 'condition.compare') return
-    for (const lado of ['true', 'false']) {
-      const temSaida = edges.some((e) => e.from === node.id && e.on === lado)
-      if (!temSaida) {
-        erros.push({ path: `/flow/nodes/${indice}`, message: `a condição ${node.id} precisa de uma saída '${lado}'` })
-      }
+    const saidas = edges.filter((e) => e.from === node.id && (e.on === 'true' || e.on === 'false'))
+    if (!saidas.length) {
+      erros.push({
+        path: `/flow/nodes/${indice}`,
+        message: `a condição ${node.id} não leva a lugar nenhum: ela precisa de pelo menos um caminho ('true' ou 'false')`
+      })
     }
   })
 

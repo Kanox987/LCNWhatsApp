@@ -201,7 +201,29 @@ const semLadoFalso = base('x', [
   { from: 'g', to: 'c', on: 'matched' },
   { from: 'c', to: 'r', on: 'true' }
 ])
-check('condição sem a saída "false" é rejeitada', validarAutomacao(db, semLadoFalso).some((e) => e.message.includes("saída 'false'")))
+// UM LADO SÓ É LEGÍTIMO, e esta expectativa já foi a oposta.
+//
+// A regra exigia as duas saídas, com o argumento de que o lado faltante
+// "encerra o fluxo em silêncio". Isso vale para um documento montado à mão e é
+// o CONTRÁRIO para um vigia: `anti-silenciado` olha toda mensagem do grupo e
+// apaga a de quem está silenciado — o ramo falso é "não faz nada", e é o caso
+// da esmagadora maioria das mensagens. A linguagem nem tem palavra para
+// escrever "nada".
+//
+// O efeito era um template versionado do próprio catálogo que compilava e que a
+// publicação recusava.
+check('condição com um lado só é aceita — "não faz nada" é uma decisão', !validarAutomacao(db, semLadoFalso).some((e) => e.message.includes('condição c')))
+
+// O que a regra protegia de verdade: galho morto continua recusado.
+const condicaoSemSaida = base('z', [
+  { id: 'g', type: 'trigger.command', config: { command: '/z', match: 'exact', allowFrom: 'external' } },
+  { id: 'c', type: 'condition.compare', config: { left: { source: 'literal', value: 1 }, operator: 'eq', right: { source: 'literal', value: 1 } } }
+], [
+  { from: 'g', to: 'c', on: 'matched' }
+])
+const errosDoGalhoMorto = validarAutomacao(db, condicaoSemSaida)
+check('condição que não leva a lugar nenhum continua rejeitada', errosDoGalhoMorto.some((e) => e.message.includes('não leva a lugar nenhum')))
+check('e o erro diz o que fazer', errosDoGalhoMorto.some((e) => /pelo menos um caminho/.test(e.message)))
 
 const doisGatilhos = base('y', [
   { id: 'g1', type: 'trigger.command', config: { command: '/a', match: 'exact', allowFrom: 'external' } },

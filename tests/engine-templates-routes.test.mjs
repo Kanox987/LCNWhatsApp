@@ -63,6 +63,29 @@ try {
   const semProvenance = await api.resolver('GET', '/automations/nao-veio-de-template/provenance', contexto())
   check('automação sem proveniência (criada manualmente) responde installedFromTemplate: false', semProvenance.installedFromTemplate === false)
 
+  // O TEMPLATE QUE COMPILAVA E NÃO PUBLICAVA.
+  //
+  // `anti-silenciado` é um vigia que apaga a mensagem de quem está silenciado.
+  // Ele tem `se` e não tem `senão`, porque o ramo falso é "não faz nada" — o
+  // caso da esmagadora maioria das mensagens que passam por ele.
+  //
+  // A validação exigia as DUAS saídas de toda condição, então este arquivo
+  // versionado do próprio catálogo era recusado na instalação, com uma mensagem
+  // sobre arestas que ninguém que escreveu o texto tem como ligar ao que
+  // escreveu. E não havia como consertar pelo texto: a linguagem não tem
+  // palavra para dizer "nada".
+  //
+  // Este caso existe para que a regra não volte: ele instala o arquivo de
+  // verdade, pelo caminho de verdade.
+  const vigiaDeUmLadoSo = await api.resolver('POST', '/templates/anti-silenciado/install', contexto({
+    automationIds: { 'anti-silenciado': 'anti-silenciado-de-teste' },
+    parameters: { 'anti-silenciado': { poolId: 'pool-teste' } },
+    scope: { include: [{ kind: 'all_groups' }] }
+  }))
+  check('template com "se" e sem "senão" instala', vigiaDeUmLadoSo.status === 201, vigiaDeUmLadoSo.status)
+  const documentoDoVigia = vigiaDeUmLadoSo.body?.installed?.[0]
+  check('e nasce publicado como qualquer outro', Boolean(documentoDoVigia?.activeRevisionId || documentoDoVigia?.id), JSON.stringify(documentoDoVigia || {}).slice(0, 120))
+
   const poolInexistente = await capturarErro('POST', '/templates/ajuda/install', {
     parameters: { ajuda: { poolId: 'pool-que-nao-existe' } },
     scope: { include: [{ kind: 'group', id: '1@g.us' }] }
