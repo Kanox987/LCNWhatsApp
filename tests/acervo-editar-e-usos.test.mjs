@@ -125,6 +125,13 @@ check('a tela pergunta quem usa ANTES de apagar', tela.includes('nomesDeQuemUsa'
 check('vídeo e documento ganham link de baixar', tela.includes("download: arquivo.name"))
 // `btoa` sozinho quebra em acento — ele só aceita latin-1.
 check('o texto com acento passa pelo caminho de UTF-8', tela.includes('encodeURIComponent(conteudo.value)'))
+// VER O TEXTO NÃO PODE COMER O BOTÃO DE EDITAR.
+//
+// A primeira versão trocava o conteúdo da caixa inteira, botões inclusive:
+// quem clicasse em "Ver o texto" perdia o "Editar" até recarregar a página.
+// Apareceu no primeiro uso com um arquivo de verdade, no servidor.
+check('os botões de texto ficam fora da área de conteúdo', tela.includes('acoes.append(ver, editar)'))
+check('e o conteúdo tem área própria', tela.includes('conteudo.replaceChildren'))
 
 fs.rmSync(pastaTeste, { recursive: true, force: true })
 console.log(falhas === 0 ? '\nacervo: editar e saber quem usa — tudo certo' : `\nacervo: ${falhas} falha(s)`)

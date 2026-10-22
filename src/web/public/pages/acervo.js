@@ -61,6 +61,13 @@ function previaDoArquivo (arquivo, refresh) {
 
   if (arquivo.kind === 'text') {
     const caixa = el('div', { className: 'acervo-previa acervo-previa-texto' })
+    // OS BOTÕES FICAM, O CONTEÚDO VAI EMBAIXO.
+    //
+    // A primeira versão trocava o conteúdo da caixa inteira, botões inclusive:
+    // quem clicava em "Ver o texto" perdia o "Editar" até recarregar a página.
+    // Apareceu no primeiro uso com um arquivo de verdade.
+    const acoes = el('div', { className: 'button-row' })
+    const conteudo = el('div', {})
     const ver = button('Ver o texto', {
       variant: 'quiet',
       onClick: async (evento) => {
@@ -69,7 +76,8 @@ function previaDoArquivo (arquivo, refresh) {
         try {
           const resposta = await fetch(url)
           if (!resposta.ok) throw new Error('Não foi possível ler o arquivo.')
-          caixa.replaceChildren(el('pre', { className: 'readonly-box', text: await resposta.text() }))
+          conteudo.replaceChildren(el('pre', { className: 'readonly-box', text: await resposta.text() }))
+          setBusy(controle, false)
         } catch (erro) {
           notify(erro.message, 'danger')
           setBusy(controle, false)
@@ -105,14 +113,16 @@ function previaDoArquivo (arquivo, refresh) {
               }
             }
           })
-          caixa.replaceChildren(area, el('div', { className: 'button-row' }, [salvar]))
+          conteudo.replaceChildren(area, el('div', { className: 'button-row' }, [salvar]))
+          setBusy(controle, false)
         } catch (erro) {
           notify(erro.message, 'danger')
           setBusy(controle, false)
         }
       }
     })
-    caixa.append(ver, editar)
+    acoes.append(ver, editar)
+    caixa.append(acoes, conteudo)
     return caixa
   }
 
