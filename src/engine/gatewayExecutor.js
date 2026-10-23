@@ -239,7 +239,8 @@ async function executarPagina (client, comando) {
         rodape: p.footer,
         url: p.url,
         rotulo: p.buttonLabel,
-        janela: p.inApp !== false
+        janela: p.inApp !== false,
+        forma: p.forma === 'janela' ? 'janela' : 'link'
       }), opcoesDeCitacao(p.replyTo)),
       TIMEOUT_ENVIO_MS,
       `timeout ao mandar a página do comando ${comando.id}`

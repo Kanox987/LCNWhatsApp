@@ -93,20 +93,57 @@ function midiaDoUpload (midia, upload) {
 // saber qual card a pessoa escolheu.
 const PAGINA_EM_JANELA = Object.freeze({ webview_interaction: true, webview_presentation: 'full' })
 
+// AS DUAS FORMAS DE BOTÃO QUE ABREM UMA PÁGINA.
+//
+// São dois nomes de botão diferentes no protocolo, os dois não documentados, e
+// nenhum é "o certo" — por isso são escolha de quem monta o comando, e não
+// constante no meu código. O mesmo motivo das formas de carrossel: quando um
+// aparelho não desenha, quem recebeu "nada" troca a forma e testa de novo, em
+// vez de esperar alguém editar arquivo.
+//
+//   link   - `cta_url` com os campos de webview. MEDIDO funcionando em
+//            23/10/2026, num número comum: abriu dentro do WhatsApp, em tela
+//            cheia, com o endereço no cabeçalho.
+//   janela - `open_webview` com um objeto `link`. É a forma que o takeshi-bot
+//            usa no comando de jogo dele (`src/commands/member/games/
+//            tubes.js`), conferida no código: `in_app_webview: true` e
+//            `full_screen: true`. Ele diz "tela cheia" em letras, o que
+//            confirma que o jogo abre POR CIMA da conversa, não na bolha.
+export const FORMAS_DE_PAGINA = Object.freeze(['link', 'janela'])
+
+function botaoDePagina (botao) {
+  // `janela` só vale para a forma `link`: é ela que tem como pedir o navegador
+  // em vez da janela interna. A forma `open_webview` existe para abrir dentro.
+  if (botao.forma === 'janela') {
+    return {
+      name: 'open_webview',
+      buttonParamsJson: JSON.stringify({
+        // Aqui o rótulo se chama `title`, não `display_text` — nome diferente
+        // para a mesma coisa, e trocar um pelo outro deixa o botão sem texto.
+        title: botao.texto,
+        link: {
+          url: botao.url,
+          in_app_webview: botao.janela !== false,
+          full_screen: botao.janela !== false
+        }
+      })
+    }
+  }
+  return {
+    name: 'cta_url',
+    buttonParamsJson: JSON.stringify({
+      display_text: botao.texto,
+      url: botao.url,
+      merchant_url: botao.url,
+      // Abrir fora, no navegador, é o comportamento de quem NÃO pede janela.
+      ...(botao.janela === false ? {} : PAGINA_EM_JANELA)
+    })
+  }
+}
+
 function montarBotao (botao) {
   if (!botao?.texto) return []
-  if (botao.url) {
-    return [{
-      name: 'cta_url',
-      buttonParamsJson: JSON.stringify({
-        display_text: botao.texto,
-        url: botao.url,
-        merchant_url: botao.url,
-        // Abrir fora, no navegador, é o comportamento de quem NÃO pede janela.
-        ...(botao.janela === false ? {} : PAGINA_EM_JANELA)
-      })
-    }]
-  }
+  if (botao.url) return [botaoDePagina(botao)]
   if (!botao.comando) return []
   // `disabled: false` está no bot de referência e vai junto: mensagem
   // interativa que o servidor aceita e o aplicativo não desenha não deixa
@@ -297,7 +334,7 @@ export function montarBotoesDeEscolha (itens, { texto = null, rodape = null } = 
 // `cta_url` — e vale repetir a diferença, porque ela é o que decide quando usar
 // cada um: `quick_reply` VOLTA para o bot; `cta_url` é executado no aparelho e
 // não avisa o bot de nada.
-export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo, janela = true }) {
+export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo, janela = true, forma = 'link' }) {
   return {
     viewOnceMessageV2: {
       message: {
@@ -305,7 +342,7 @@ export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo,
           body: { text: texto || ' ' },
           ...(rodape ? { footer: { text: rodape } } : {}),
           nativeFlowMessage: {
-            buttons: montarBotao({ texto: rotulo, url, janela }),
+            buttons: montarBotao({ texto: rotulo, url, janela, forma }),
             messageParamsJson: ''
           }
         }

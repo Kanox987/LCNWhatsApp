@@ -185,7 +185,11 @@ export const ACOES = Object.freeze([
       { chave: 'footer', rotulo: 'rodapé', tipo: 'texto' },
       // Dentro do WhatsApp é o padrão, porque é o que se espera de um botão
       // numa conversa. Desligado, vai para o navegador do aparelho.
-      { chave: 'inApp', rotulo: 'dentro do WhatsApp', tipo: 'booleano' }
+      { chave: 'inApp', rotulo: 'dentro do WhatsApp', tipo: 'booleano' },
+      // DUAS FORMAS, nenhuma documentada e nenhuma "a certa". Quando um
+      // aparelho não desenha uma, troca-se a palavra e testa de novo — o
+      // mesmo motivo das formas de carrossel.
+      { chave: 'forma', rotulo: 'forma', tipo: 'palavra', palavras: { link: 'link', janela: 'janela' } }
     ]
   },
   {

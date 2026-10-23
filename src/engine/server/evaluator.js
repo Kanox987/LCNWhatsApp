@@ -672,6 +672,8 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           ...(no.config.footer ? { footer: interpolar(no.config.footer, contexto) } : {}),
           // Dentro do WhatsApp é o padrão; `false` manda para o navegador.
           inApp: no.config.inApp !== false,
+          // A forma do botão: `link` (cta_url) ou `janela` (open_webview).
+          forma: no.config.forma === 'janela' ? 'janela' : 'link',
           ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
         }
       })

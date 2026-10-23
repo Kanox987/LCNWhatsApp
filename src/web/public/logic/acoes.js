@@ -237,6 +237,7 @@ export const ACOES = Object.freeze([
       { chave: 'url', rotulo: 'Endereço', ajuda: 'A página a abrir. Aceita variáveis, então dá para apontar para a página daquele item — "https://seu-site.com/{{message.args}}". Precisa ser http ou https.' },
       { chave: 'buttonLabel', rotulo: 'Texto do botão', ajuda: 'O que a pessoa lê no botão.' },
       { chave: 'footer', rotulo: 'Rodapé', ajuda: 'Opcional, abaixo do texto.' },
+      { chave: 'forma', rotulo: 'Forma do botão', ajuda: 'Duas maneiras de pedir a mesma coisa, nenhuma documentada pela Meta. "link" foi medida funcionando num número comum. "janela" é a forma que o bot de referência usa no comando de jogo dele. Aparelho que não desenha uma pode desenhar a outra — por isso são duas, e não uma escolhida por mim.' },
       { chave: 'inApp', rotulo: 'Abrir dentro do WhatsApp', ajuda: 'A página abre numa janela do próprio WhatsApp, em TELA CHEIA por cima da conversa — nunca dentro da bolha da mensagem, que não existe em forma nenhuma. O campo não é documentado pela Meta (ela documenta só a abertura no navegador), mas foi medido funcionando num número comum; por não ser documentado, pode parar sem aviso.' }
     ]
   },
