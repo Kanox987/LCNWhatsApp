@@ -1,0 +1,112 @@
+// MANDAR UMA PÁGINA, de um comando qualquer.
+//
+// A pesquisa do dono desfez a premissa e vale repetir: NÃO existe HTML rodando
+// dentro de uma mensagem do WhatsApp. O que existe é um botão com uma URL, e o
+// aplicativo abre aquela página numa janela dele — o site continua sendo um
+// site, hospedado onde a pessoa quiser.
+//
+// O botão de página já existia, mas só DENTRO de um card de carrossel, montado
+// a partir da resposta de uma conexão declarada. Ou seja: para mandar uma
+// página era preciso ter um serviço HTTP devolvendo uma lista de itens com
+// imagem. Para "manda esta página", isso é um caminho inteiro de volta por
+// nada — e era o que faltava para o HTML servir para alguma coisa.
+//
+// A DIFERENÇA QUE DECIDE QUANDO USAR CADA UM, e por isso ela está no aviso do
+// template e no glossário: `quick_reply` VOLTA para o bot; `cta_url` é
+// executado no aparelho e não avisa o bot de nada.
+import fs from 'node:fs'
+import { compilar } from '../src/lcn/compilar.js'
+import { descompilar } from '../src/lcn/descompilar.js'
+import { montarBotaoDePagina } from '../src/engine/carrossel.js'
+import { ACOES_SUPORTADAS } from '../src/engine/server/runtimeCapabilities.js'
+import { ACOES } from '../src/lcn/vocabulario.js'
+
+let falhas = 0
+const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
+
+// --- a mensagem que sai ---------------------------------------------------
+const msg = montarBotaoDePagina({ texto: 'Toque para abrir:', rodape: 'LCN', url: 'https://jogo.exemplo/x', rotulo: '🎮 Jogar', janela: true })
+const interativa = msg.viewOnceMessageV2.message.interactiveMessage
+const botao = interativa.nativeFlowMessage.buttons[0]
+const params = JSON.parse(botao.buttonParamsJson)
+
+check('sai como botão de abrir endereço', botao.name === 'cta_url', botao.name)
+check('com o endereço', params.url === 'https://jogo.exemplo/x')
+check('e o rótulo que a pessoa lê', params.display_text === '🎮 Jogar')
+// É este campo, e não o `webview_presentation` sozinho, que faz a página abrir
+// DENTRO do WhatsApp no celular.
+check('pede janela dentro do WhatsApp', params.webview_interaction === true)
+check('o texto vai no corpo', interativa.body.text === 'Toque para abrir:')
+check('e o rodapé no rodapé', interativa.footer.text === 'LCN')
+
+const noNavegador = montarBotaoDePagina({ url: 'https://exemplo.com', rotulo: 'Abrir', janela: false })
+const semJanela = JSON.parse(noNavegador.viewOnceMessageV2.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson)
+check('desligando a janela, vira link comum', semJanela.webview_interaction === undefined)
+
+// Corpo vazio não pode ir vazio: mensagem interativa sem corpo é recusada por
+// alguns clientes, e a recusa não deixa rastro nenhum.
+const semTexto = montarBotaoDePagina({ url: 'https://exemplo.com', rotulo: 'Abrir' })
+check('sem texto, o corpo não fica vazio', semTexto.viewOnceMessageV2.message.interactiveMessage.body.text.length > 0)
+
+// --- a ação existe nas quatro camadas ------------------------------------
+check('a palavra existe na linguagem', ACOES.some((a) => a.palavra === 'abre página'))
+check('o tipo está nas capacidades do runtime', ACOES_SUPORTADAS.includes('action.whatsapp.webview'))
+
+const schema = JSON.parse(fs.readFileSync(new URL('../src/engine/server/schema/automation.v1.schema.json', import.meta.url), 'utf8'))
+check('o schema aceita o nó', Object.values(schema.definitions).some((d) => d?.properties?.type?.const === 'action.whatsapp.webview'))
+
+const avaliador = fs.readFileSync(new URL('../src/engine/server/evaluator.js', import.meta.url), 'utf8')
+check('o motor sabe executar', avaliador.includes("case 'action.whatsapp.webview'"))
+const gateway = fs.readFileSync(new URL('../src/engine/gatewayExecutor.js', import.meta.url), 'utf8')
+check('o gateway tem executor próprio', gateway.includes("'whatsapp.webview': executarPagina"))
+
+// QUEDA PARA TEXTO. Mensagem interativa que o aplicativo não desenha não deixa
+// rastro: a conversa fica vazia e ninguém sabe por quê. Com a queda, o
+// endereço sempre chega — como link escrito, que é clicável do mesmo jeito.
+check('e cai para texto quando o botão é recusado', gateway.includes('mandando o endereço como texto'))
+
+// --- a linguagem escreve e relê ------------------------------------------
+const fonte = [
+  'automação jogar',
+  '  id: jogar',
+  '  nome: Jogar',
+  '  tipo: comando',
+  '  dispara com: /jogar',
+  '  pool: p',
+  '  acessa: texto',
+  '  casa: exato',
+  '  quem: qualquer um',
+  '',
+  '  abre página "Partida pronta:"',
+  '    endereço: "https://jogo.exemplo/{{message.args}}"',
+  '    botão: "🎮 Jogar"',
+  '    dentro do WhatsApp: sim',
+  '',
+  '# nós: gatilho-comando, abrir-pagina'
+].join('\n')
+
+const doc = compilar(fonte)
+const no = doc.flow.nodes.find((n) => n.type === 'action.whatsapp.webview')
+check('a linguagem escreve a ação', Boolean(no))
+check('com o endereço', no.config.url === 'https://jogo.exemplo/{{message.args}}')
+check('o rótulo do botão', no.config.buttonLabel === '🎮 Jogar')
+check('e a janela', no.config.inApp === true)
+// A ida e volta é o que permite ABRIR essa automação para editar depois.
+check('vai e volta idêntico', JSON.stringify(compilar(descompilar(doc))) === JSON.stringify(doc))
+
+// --- o comando do catálogo ------------------------------------------------
+const template = compilar(fs.readFileSync(new URL('../src/engine/templates/catalog/abrir-pagina.lcn', import.meta.url), 'utf8'))
+check('o template do catálogo compila', template.template.templateId === 'abrir-pagina')
+check('e usa a ação', template.documentTemplate.flow.nodes.some((n) => n.type === 'action.whatsapp.webview'))
+// Ele já nasce com família: é o primeiro template a declarar uma, e serve de
+// exemplo de como se escreve.
+check('nasce com família configurável', template.template.parameters.some((p) => p.key === 'familia'))
+
+// Os dois avisos que o template precisa carregar, porque são as duas coisas
+// que alguém supõe errado: que o HTML roda na mensagem, e que o botão volta.
+const avisos = template.template.warnings.map((a) => a.text).join(' ')
+check('avisa que não há HTML dentro da mensagem', /NÃO existe HTML rodando dentro/.test(avisos))
+check('avisa que o botão não volta para o bot', /não volta para o bot/i.test(avisos))
+
+console.log(falhas === 0 ? '\nmandar uma página: tudo certo' : `\nmandar uma página: ${falhas} falha(s)`)
+process.exit(falhas === 0 ? 0 : 1)

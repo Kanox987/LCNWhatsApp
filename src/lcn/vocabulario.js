@@ -165,6 +165,29 @@ export const ACOES = Object.freeze([
     tipo: 'action.whatsapp.metadata',
     campos: []
   },
+  // Mandar uma PÁGINA: uma mensagem com um botão que abre um endereço.
+  //
+  // Não existe HTML rodando dentro de uma mensagem do WhatsApp — o que existe
+  // é um botão com uma URL, e o aplicativo abre aquela página numa janela
+  // dele. Esta ação é isso, e nada além disso: o site continua sendo um site,
+  // hospedado onde você quiser.
+  //
+  // O botão NÃO VOLTA para o bot. Quem toca abre a página e pronto; se o
+  // comando precisa saber que a pessoa escolheu algo, isso tem de vir da
+  // própria página falando com o serviço dela.
+  {
+    palavra: 'abre página',
+    tipo: 'action.whatsapp.webview',
+    campos: [
+      { chave: 'text', inline: true, tipo: 'texto' },
+      { chave: 'url', rotulo: 'endereço', tipo: 'texto' },
+      { chave: 'buttonLabel', rotulo: 'botão', tipo: 'texto' },
+      { chave: 'footer', rotulo: 'rodapé', tipo: 'texto' },
+      // Dentro do WhatsApp é o padrão, porque é o que se espera de um botão
+      // numa conversa. Desligado, vai para o navegador do aparelho.
+      { chave: 'inApp', rotulo: 'dentro do WhatsApp', tipo: 'booleano' }
+    ]
+  },
   {
     palavra: 'apaga mensagem',
     tipo: 'action.whatsapp.delete',

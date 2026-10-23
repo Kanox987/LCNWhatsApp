@@ -1,0 +1,61 @@
+template abrir-pagina v1
+  nome: Mandar uma página
+  descrição: Responde com um botão que abre um endereço. No celular a página abre numa janela do próprio WhatsApp; no WhatsApp Web abre outra aba. Serve para jogo, formulário, catálogo, painel — qualquer coisa que seja um site. O endereço pode ser fixo ou vir escrito junto com o comando.
+  categoria: utilitarios
+
+automação
+  nome: Mandar uma página
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Abre uma página
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  abre página "{{params.texto}}"
+    endereço: "{{params.url}}"
+    botão: "{{params.rotulo}}"
+    rodapé: "{{params.rodape}}"
+    dentro do WhatsApp: {{params.dentroDoApp}}
+
+configurável
+  command: texto = "/abrir"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita.
+  url: texto = "https://exemplo.com"
+    rótulo: Endereço da página
+    ajuda: Precisa ser http ou https. Aceita variáveis — "https://seu-site.com/{{message.args}}" abre a página do que a pessoa escreveu depois do comando.
+  rotulo: texto = "Abrir"
+    rótulo: Texto do botão
+    ajuda: O que a pessoa lê no botão.
+  texto: texto = "Toque para abrir:"
+    rótulo: Texto da mensagem
+    ajuda: O que aparece acima do botão.
+  rodape: texto = ""
+    rótulo: Rodapé
+    ajuda: Opcional, abaixo do texto.
+  dentroDoApp: liga/desliga = sim
+    rótulo: Abrir dentro do WhatsApp
+    ajuda: Ligado, a página abre numa janela do próprio WhatsApp no celular. Desligado, vai para o navegador do aparelho. No WhatsApp Web abre outra aba de qualquer jeito.
+  familia: texto = "utilitarios"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  NÃO existe HTML rodando dentro de uma mensagem do WhatsApp. O que existe é este botão: o aplicativo abre o endereço numa janela dele, e o site continua hospedado onde você quiser. Para a página falar com algum serviço seu, quem faz isso é a própria página — o bot só entrega o endereço.
+
+avisa nota
+  O botão NÃO volta para o bot. Quem toca abre a página e pronto; o comando não fica sabendo. Se você precisa saber que a pessoa escolheu algo, isso tem de vir da própria página conversando com o serviço dela.
+
+avisa compatibilidade
+  Mensagem com botão depende do aplicativo de quem recebe desenhar. Quando não desenha, o comando manda o endereço como texto, que continua clicável. E há relato de que abrir DENTRO do WhatsApp dependa de a conta ser verificada — em conta comum pode abrir no navegador do aparelho. Vale testar no seu antes de prometer a alguém.
+
+# nós: gatilho-comando, abrir-pagina

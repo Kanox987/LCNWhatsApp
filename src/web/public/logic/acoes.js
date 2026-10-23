@@ -223,6 +223,24 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.whatsapp.webview',
+    rotulo: 'Mandar uma página',
+    familia: 'resposta',
+    resumo: 'Manda uma mensagem com um botão que abre um endereço. No celular a página abre numa janela do próprio WhatsApp; no WhatsApp Web abre outra aba — quem decide é o aplicativo de quem recebe.',
+    exemplo: 'Alguém digita "/jogar" e recebe um botão "🎮 Jogar" que abre o jogo.',
+    ressalva: {
+      level: 'note',
+      text: 'Não existe HTML rodando dentro de uma mensagem do WhatsApp: o que existe é este botão, e o site continua hospedado onde você quiser. E o botão NÃO volta para o bot — quem toca abre a página e pronto. Se o comando precisa saber o que a pessoa fez lá, isso tem de vir da própria página falando com o serviço dela.'
+    },
+    campos: [
+      { chave: 'text', rotulo: 'Texto da mensagem', ajuda: 'O que aparece acima do botão. Aceita variáveis.' },
+      { chave: 'url', rotulo: 'Endereço', ajuda: 'A página a abrir. Aceita variáveis, então dá para apontar para a página daquele item — "https://seu-site.com/{{message.args}}". Precisa ser http ou https.' },
+      { chave: 'buttonLabel', rotulo: 'Texto do botão', ajuda: 'O que a pessoa lê no botão.' },
+      { chave: 'footer', rotulo: 'Rodapé', ajuda: 'Opcional, abaixo do texto.' },
+      { chave: 'inApp', rotulo: 'Abrir dentro do WhatsApp', ajuda: 'Ligado, a página abre numa janela do próprio WhatsApp no celular. Desligado, vai para o navegador do aparelho.' }
+    ]
+  },
+  {
     tipo: 'action.whatsapp.metadata',
     rotulo: 'Mostrar os metadados da mensagem',
     familia: 'resposta',

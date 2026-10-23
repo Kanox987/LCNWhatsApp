@@ -202,6 +202,9 @@
                 "$ref": "#/definitions/actionWhatsappMetadata"
               },
               {
+                "$ref": "#/definitions/actionWhatsappWebview"
+              },
+              {
                 "$ref": "#/definitions/actionWhatsappRich"
               },
               {
@@ -1351,6 +1354,51 @@
             "errorText": {
               "type": "string",
               "description": "Quando o serviço não conseguiu baixar. Aceita {{erro}} com o motivo que o serviço deu."
+            }
+          }
+        }
+      }
+    },
+    "actionWhatsappWebview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.webview"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url",
+            "buttonLabel"
+          ],
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "buttonLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "footer": {
+              "type": "string"
+            },
+            "inApp": {
+              "type": "boolean"
             }
           }
         }

@@ -32,7 +32,8 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // `whatsapp.reply`. Entra nesta lista mesmo assim, porque é esta lista que
   // diz o que uma automação pode DECLARAR — um tipo de nó fora dela é recusado
   // na publicação, e seria recusado depois de alguém escrever o comando.
-  'action.whatsapp.metadata'
+  'action.whatsapp.metadata',
+  'action.whatsapp.webview'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([

@@ -4,8 +4,7 @@ import { criarFila } from './fila.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
   ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
-  montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel
-} from './carrossel.js'
+  montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel, montarBotaoDePagina } from './carrossel.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -220,6 +219,40 @@ function opcoesDeEnvio (payload) {
   if (Array.isArray(payload?.mentions) && payload.mentions.length) opcoes.mentions = payload.mentions
   if (payload?.forward === true) opcoes.forward = true
   return Object.keys(opcoes).length ? opcoes : undefined
+}
+
+// MANDAR UMA PÁGINA.
+//
+// É uma mensagem interativa com um botão `cta_url`, e cai para TEXTO quando o
+// aplicativo de quem recebe não a desenha. A queda não é tratamento de erro, é
+// parte do desenho: uma mensagem interativa que o servidor aceita e o
+// aplicativo não desenha não deixa rastro nenhum — a conversa fica vazia e
+// ninguém sabe por quê. Com a queda, o endereço SEMPRE chega, nem que seja
+// como link escrito, que é clicável de qualquer jeito.
+async function executarPagina (client, comando) {
+  const p = comando.payload
+  const comoTexto = [p.text, p.url, p.footer].filter(Boolean).join('\n')
+  try {
+    await comTimeout(
+      () => enviarERegistrar(client, p.chatId, montarBotaoDePagina({
+        texto: p.text,
+        rodape: p.footer,
+        url: p.url,
+        rotulo: p.buttonLabel,
+        janela: p.inApp !== false
+      }), opcoesDeCitacao(p.replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao mandar a página do comando ${comando.id}`
+    )
+  } catch (erro) {
+    if (erro?.code === 'LCN_TIMEOUT') throw erro
+    console.warn(`[engine] Botão de página recusado (${mensagemDoErro(erro)}) — mandando o endereço como texto.`)
+    await comTimeout(
+      () => enviarERegistrar(client, p.chatId, { type: 'text', text: comoTexto }, opcoesDeCitacao(p.replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao mandar o endereço do comando ${comando.id}`
+    )
+  }
 }
 
 async function executarResposta (client, comando) {
@@ -1123,6 +1156,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
 
     const executor = {
       'whatsapp.reply': executarResposta,
+      'whatsapp.webview': executarPagina,
       'whatsapp.recover': executarRecover,
       'whatsapp.menu': executarMenu,
       'whatsapp.delete': executarApagar,

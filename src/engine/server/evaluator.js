@@ -648,6 +648,36 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    // MANDAR UMA PÁGINA: mensagem com um botão que abre um endereço.
+    //
+    // O endereço é interpolado como qualquer texto, então ele pode vir do que
+    // a pessoa escreveu ou de uma variável — é assim que um comando aponta
+    // para a página DAQUELE item. O que ele não pode é ficar em branco: botão
+    // sem endereço não faz nada ao ser tocado, e é pior que não ter botão.
+    case 'action.whatsapp.webview': {
+      const url = interpolar(no.config.url, contexto).trim()
+      // Marcador que não resolveu vira endereço literal "{{...}}", que o
+      // aplicativo recusa — e a pessoa fica sem entender por que o botão não
+      // abre nada. Melhor não mandar o botão e dizer o motivo no histórico.
+      if (!url || url.includes('{{')) {
+        throw new ErroDeFluxo(`o endereço da página ficou vazio ou não resolveu: "${no.config.url}"`)
+      }
+      comandos.push({
+        commandType: 'whatsapp.webview',
+        payload: {
+          chatId: evento.chat.id,
+          text: interpolar(no.config.text || '', contexto),
+          url,
+          buttonLabel: interpolar(no.config.buttonLabel || 'Abrir', contexto),
+          ...(no.config.footer ? { footer: interpolar(no.config.footer, contexto) } : {}),
+          // Dentro do WhatsApp é o padrão; `false` manda para o navegador.
+          inApp: no.config.inApp !== false,
+          ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
+        }
+      })
+      return 'success'
+    }
+
     // Guardar no acervo a mídia que chegou pelo WhatsApp.
     //
     // Mesma fronteira da figurinha: o motor NUNCA vê a mídia. Ele repassa o

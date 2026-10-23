@@ -275,6 +275,35 @@ export function montarBotoesDeEscolha (itens, { texto = null, rodape = null } = 
   }
 }
 
+// UMA MENSAGEM COM UM BOTÃO QUE ABRE UMA PÁGINA.
+//
+// É o que faltava para o botão de página servir a um comando qualquer. Até
+// aqui ele só existia DENTRO de um card de carrossel, montado a partir da
+// resposta de uma conexão declarada — ou seja: para mandar uma página era
+// preciso ter um serviço HTTP que devolvesse uma lista de itens com imagem.
+// Para "manda esta página", isso é um caminho inteiro de volta por nada.
+//
+// A forma é a mesma de `montarBotoesDeEscolha`, trocando o `quick_reply` pelo
+// `cta_url` — e vale repetir a diferença, porque ela é o que decide quando usar
+// cada um: `quick_reply` VOLTA para o bot; `cta_url` é executado no aparelho e
+// não avisa o bot de nada.
+export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo, janela = true }) {
+  return {
+    viewOnceMessageV2: {
+      message: {
+        interactiveMessage: {
+          body: { text: texto || ' ' },
+          ...(rodape ? { footer: { text: rodape } } : {}),
+          nativeFlowMessage: {
+            buttons: montarBotao({ texto: rotulo, url, janela }),
+            messageParamsJson: ''
+          }
+        }
+      }
+    }
+  }
+}
+
 export function montarMenuDeEscolha (itens, { texto = null, rodape = null, titulo = 'Escolha' } = {}) {
   const linhas = itens.slice(0, 10).filter((i) => i.botao?.comando).map((i, n) => ({
     title: (i.titulo || `Opção ${n + 1}`).slice(0, 24),
