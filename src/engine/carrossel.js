@@ -111,6 +111,33 @@ const PAGINA_EM_JANELA = Object.freeze({ webview_interaction: true, webview_pres
 //            confirma que o jogo abre POR CIMA da conversa, não na bolha.
 export const FORMAS_DE_PAGINA = Object.freeze(['link', 'janela'])
 
+// AS VARIAÇÕES QUE O DIAGNÓSTICO DISPARA.
+//
+// Quando o aplicativo não desenha, não há erro em lugar nenhum: o envio é
+// confirmado e a conversa fica vazia. Descobrir qual variação ele aceita, uma
+// por vez, custa uma ida e volta com a pessoa a cada tentativa — então vão
+// todas de uma vez, numeradas, e uma resposta só diz qual apareceu.
+//
+// É o mesmo recurso que o carrossel já tem (`estilo: diagnóstico`), pelo mesmo
+// motivo. Cada entrada diz só o que MUDA em relação à base.
+export const VARIACOES_DE_PAGINA = Object.freeze([
+  { nome: 'link', forma: 'link' },
+  { nome: 'janela', forma: 'janela' },
+  // O takeshi manda um `quick_reply` ANTES do `open_webview` no comando de
+  // jogo dele. Pode ser decoração, pode ser que o aplicativo só desenhe o
+  // fluxo nativo quando há um botão de resposta junto — não dá para saber sem
+  // mandar.
+  { nome: 'janela+resposta', forma: 'janela', comCompanheiro: true },
+  // Sem o embrulho de visualização única. Ele é truque de transporte, e o
+  // carrossel aqui já mostrou que em certas formas ele atrapalha.
+  { nome: 'janela sem embrulho', forma: 'janela', semEmbrulho: true },
+  { nome: 'link sem embrulho', forma: 'link', semEmbrulho: true },
+  // O envelope cruzado: cada forma com o envelope da outra, para separar o que
+  // é do botão do que é do envelope.
+  { nome: 'janela com params', forma: 'janela', comParams: true },
+  { nome: 'link com header', forma: 'link', comHeader: true }
+])
+
 function botaoDePagina (botao) {
   // `janela` só vale para a forma `link`: é ela que tem como pedir o navegador
   // em vez da janela interna. A forma `open_webview` existe para abrir dentro.
@@ -334,7 +361,7 @@ export function montarBotoesDeEscolha (itens, { texto = null, rodape = null } = 
 // `cta_url` — e vale repetir a diferença, porque ela é o que decide quando usar
 // cada um: `quick_reply` VOLTA para o bot; `cta_url` é executado no aparelho e
 // não avisa o bot de nada.
-export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo, janela = true, forma = 'link' }) {
+export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo, janela = true, forma = 'link', variacao = {} }) {
   // O ENVELOPE MUDA COM A FORMA, e isso não é capricho: medido no aparelho do
   // dono, a forma `janela` foi ACEITA pelo servidor e não desenhada pelo
   // aplicativo — o envio foi confirmado e a conversa ficou vazia.
@@ -353,21 +380,29 @@ export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo,
   // A forma `link` fica como está, porque está PROVADA assim neste aparelho —
   // não se troca o que funciona por simetria.
   const comoOTakeshi = forma === 'janela'
-  return {
-    viewOnceMessageV2: {
-      message: {
-        interactiveMessage: {
-          body: { text: texto || ' ' },
-          ...(comoOTakeshi ? { header: { hasMediaAttachment: false } } : {}),
-          ...(rodape ? { footer: { text: rodape } } : {}),
-          nativeFlowMessage: {
-            buttons: montarBotao({ texto: rotulo, url, janela, forma }),
-            ...(comoOTakeshi ? {} : { messageParamsJson: '' })
-          }
-        }
-      }
+  const comHeader = variacao.comHeader ?? comoOTakeshi
+  const comParams = variacao.comParams ?? !comoOTakeshi
+  const botoes = montarBotao({ texto: rotulo, url, janela, forma })
+  // O companheiro é um botão de resposta rápida ANTES do de página, como o
+  // takeshi manda. O id vai vazio de propósito: tocá-lo não deve virar comando.
+  const comCompanheiro = variacao.comCompanheiro === true
+  const interactiveMessage = {
+    body: { text: texto || ' ' },
+    ...(comHeader ? { header: { hasMediaAttachment: false } } : {}),
+    ...(rodape ? { footer: { text: rodape } } : {}),
+    nativeFlowMessage: {
+      buttons: comCompanheiro
+        ? [{ name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '🎮', id: '🎮' }) }, ...botoes]
+        : botoes,
+      ...(comParams ? { messageParamsJson: '' } : {})
     }
   }
+  // Sem embrulho: a mensagem interativa vai crua. O `viewOnceMessageV2` é
+  // truque de transporte, e o carrossel aqui já mostrou que em certas formas
+  // ele atrapalha em vez de ajudar.
+  return variacao.semEmbrulho === true
+    ? { interactiveMessage }
+    : { viewOnceMessageV2: { message: { interactiveMessage } } }
 }
 
 export function montarMenuDeEscolha (itens, { texto = null, rodape = null, titulo = 'Escolha' } = {}) {

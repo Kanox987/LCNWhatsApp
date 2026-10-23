@@ -17,7 +17,7 @@
 import fs from 'node:fs'
 import { compilar } from '../src/lcn/compilar.js'
 import { descompilar } from '../src/lcn/descompilar.js'
-import { montarBotaoDePagina } from '../src/engine/carrossel.js'
+import { montarBotaoDePagina, VARIACOES_DE_PAGINA } from '../src/engine/carrossel.js'
 import { ACOES_SUPORTADAS } from '../src/engine/server/runtimeCapabilities.js'
 import { ACOES } from '../src/lcn/vocabulario.js'
 import { renderizarTemplate } from '../src/engine/templates/render.js'
@@ -122,6 +122,47 @@ check('sem escolher, vale a forma "link"', padrao.viewOnceMessageV2.message.inte
 const janelaDesligada = JSON.parse(montarBotaoDePagina({ url: 'https://x', rotulo: 'Ir', janela: false, forma: 'janela' })
   .viewOnceMessageV2.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson)
 check('forma janela com a janela desligada vai para o navegador', janelaDesligada.link.in_app_webview === false)
+
+// --- O DIAGNÓSTICO --------------------------------------------------------
+//
+// Quando o aplicativo não desenha, não há erro em lugar nenhum: o envio é
+// confirmado e a conversa fica vazia. Foi o que aconteceu com a forma
+// `janela` — `sent: 1`, zero falhas, e nada na tela. Descobrir qual variação
+// o aparelho aceita uma por vez custa uma ida e volta com a pessoa a cada
+// tentativa; o diagnóstico manda todas numeradas de uma vez.
+//
+// Cada variação precisa produzir uma mensagem DIFERENTE das outras — duas
+// iguais gastariam o teste da pessoa sem responder nada.
+const assinaturas = new Map()
+for (const v of VARIACOES_DE_PAGINA) {
+  const m = montarBotaoDePagina({ texto: 't', url: 'https://x', rotulo: 'Ir', forma: v.forma, variacao: v })
+  const i = m.interactiveMessage || m.viewOnceMessageV2?.message?.interactiveMessage
+  check(`a variação "${v.nome}" produz mensagem interativa`, Boolean(i))
+  const assinatura = JSON.stringify([
+    Boolean(m.viewOnceMessageV2),
+    Boolean(i.header),
+    i.nativeFlowMessage.messageParamsJson !== undefined,
+    i.nativeFlowMessage.buttons.map((b) => b.name)
+  ])
+  if (assinaturas.has(assinatura)) {
+    check(`a variação "${v.nome}" é diferente das outras`, false, `igual a "${assinaturas.get(assinatura)}"`)
+  } else {
+    assinaturas.set(assinatura, v.nome)
+  }
+}
+check('todas as variações são distintas entre si', assinaturas.size === VARIACOES_DE_PAGINA.length, `${assinaturas.size} de ${VARIACOES_DE_PAGINA.length}`)
+check('o diagnóstico cobre as duas formas', VARIACOES_DE_PAGINA.some((v) => v.forma === 'link') && VARIACOES_DE_PAGINA.some((v) => v.forma === 'janela'))
+// A hipótese que veio do bot de referência: ele manda um `quick_reply` ANTES
+// do botão de página. Pode ser decoração, pode ser o que faz o aplicativo
+// desenhar — e só mandando dá para saber.
+check('inclui a variação com botão de resposta junto', VARIACOES_DE_PAGINA.some((v) => v.comCompanheiro))
+check('e a variação sem o embrulho de visualização única', VARIACOES_DE_PAGINA.some((v) => v.semEmbrulho))
+
+const gatewayDiag = fs.readFileSync(new URL('../src/engine/gatewayExecutor.js', import.meta.url), 'utf8')
+check('o gateway numera as variações', gatewayDiag.includes('[${n}] ${variacao.nome}'))
+// Sem dizer quantas foram, a pessoa não distingue "a 7 não apareceu" de "só
+// vieram 6".
+check('e fecha dizendo quantas mandou', gatewayDiag.includes('variações numeradas acima'))
 
 // --- a ação existe nas quatro camadas ------------------------------------
 check('a palavra existe na linguagem', ACOES.some((a) => a.palavra === 'abre página'))

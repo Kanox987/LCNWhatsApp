@@ -189,7 +189,7 @@ export const ACOES = Object.freeze([
       // DUAS FORMAS, nenhuma documentada e nenhuma "a certa". Quando um
       // aparelho não desenha uma, troca-se a palavra e testa de novo — o
       // mesmo motivo das formas de carrossel.
-      { chave: 'forma', rotulo: 'forma', tipo: 'palavra', palavras: { link: 'link', janela: 'janela' } }
+      { chave: 'forma', rotulo: 'forma', tipo: 'palavra', palavras: { link: 'link', janela: 'janela', 'diagnóstico': 'diagnóstico' } }
     ]
   },
   {

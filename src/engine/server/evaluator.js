@@ -673,7 +673,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           // Dentro do WhatsApp é o padrão; `false` manda para o navegador.
           inApp: no.config.inApp !== false,
           // A forma do botão: `link` (cta_url) ou `janela` (open_webview).
-          forma: no.config.forma === 'janela' ? 'janela' : 'link',
+          forma: ['janela', 'diagnóstico'].includes(no.config.forma) ? no.config.forma : 'link',
           ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
         }
       })

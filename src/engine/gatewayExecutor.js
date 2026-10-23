@@ -4,7 +4,7 @@ import { criarFila } from './fila.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
   ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
-  montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel, montarBotaoDePagina } from './carrossel.js'
+  montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel, montarBotaoDePagina, VARIACOES_DE_PAGINA } from './carrossel.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -232,6 +232,51 @@ function opcoesDeEnvio (payload) {
 async function executarPagina (client, comando) {
   const p = comando.payload
   const comoTexto = [p.text, p.url, p.footer].filter(Boolean).join('\n')
+
+  // DIAGNÓSTICO: manda TODAS as variações, numeradas, de uma vez.
+  //
+  // Quando o aplicativo não desenha, não há erro em lugar nenhum — o envio é
+  // confirmado e a conversa fica vazia. Descobrir qual variação ele aceita uma
+  // por vez custa uma ida e volta com a pessoa a cada tentativa. Assim, uma
+  // resposta só ("vieram a 2 e a 5") resolve. É o mesmo recurso que o
+  // carrossel já tem, pelo mesmo motivo.
+  if (p.forma === 'diagnóstico') {
+    let n = 0
+    for (const variacao of VARIACOES_DE_PAGINA) {
+      n++
+      try {
+        await comTimeout(
+          () => enviarERegistrar(client, p.chatId, montarBotaoDePagina({
+            texto: `[${n}] ${variacao.nome}`,
+            rodape: p.footer,
+            url: p.url,
+            rotulo: p.buttonLabel,
+            janela: p.inApp !== false,
+            forma: variacao.forma,
+            variacao
+          })),
+          TIMEOUT_ENVIO_MS,
+          `timeout na variação ${variacao.nome} do comando ${comando.id}`
+        )
+        console.log(`[engine] página ${comando.id}: variação ${n} "${variacao.nome}" enviada`)
+      } catch (erro) {
+        if (erro?.code === 'LCN_TIMEOUT') throw erro
+        console.warn(`[engine] variação ${n} "${variacao.nome}" recusada: ${mensagemDoErro(erro)}`)
+      }
+    }
+    // O fecho diz quantas foram, para a pessoa saber quantas PROCURAR — sem
+    // isso ela não tem como distinguir "a 7 não apareceu" de "só vieram 6".
+    await comTimeout(
+      () => enviarERegistrar(client, p.chatId, {
+        type: 'text',
+        text: `Mandei ${n} variações numeradas acima. Diga quais apareceram — as que não aparecerem, o aplicativo recusou sem avisar.`
+      }),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao fechar o diagnóstico do comando ${comando.id}`
+    )
+    return
+  }
+
   try {
     await comTimeout(
       () => enviarERegistrar(client, p.chatId, montarBotaoDePagina({

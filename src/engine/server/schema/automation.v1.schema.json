@@ -1403,7 +1403,8 @@
             "forma": {
               "enum": [
                 "link",
-                "janela"
+                "janela",
+                "diagnóstico"
               ]
             }
           }

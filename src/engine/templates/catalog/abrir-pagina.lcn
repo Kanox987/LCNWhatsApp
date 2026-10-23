@@ -40,9 +40,9 @@ configurável
   dentroDoApp: liga/desliga = sim
     rótulo: Abrir dentro do WhatsApp
     ajuda: Abre a página numa janela do próprio WhatsApp, em tela cheia por cima da conversa. O campo não é documentado pela Meta, mas foi medido funcionando num número comum — e por não ser documentado pode parar sem aviso. Desligado, vai para o navegador do aparelho. No WhatsApp Web abre outra aba de qualquer jeito.
-  forma: opção (link, janela) = "link"
+  forma: opção (link, janela, diagnóstico) = "link"
     rótulo: Forma do botão
-    ajuda: Duas maneiras de pedir a mesma coisa, nenhuma documentada pela Meta. "link" foi medida funcionando aqui. "janela" é a forma que o bot de referência usa no comando de jogo dele. Se uma não desenhar no aparelho de quem recebe, troque pela outra e teste de novo.
+    ajuda: Duas maneiras de pedir a mesma coisa, nenhuma documentada pela Meta. "link" foi medida funcionando aqui. "janela" é a forma que o bot de referência usa no comando de jogo dele. Se uma não desenhar no aparelho de quem recebe, troque pela outra. "diagnóstico" manda TODAS as variações numeradas de uma vez — serve para descobrir qual o aparelho aceita sem precisar de uma tentativa por vez, já que quando ele recusa não aparece erro em lugar nenhum.
   familia: texto = "utilitarios"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
