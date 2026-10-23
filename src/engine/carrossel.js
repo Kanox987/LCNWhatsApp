@@ -70,10 +70,15 @@ function midiaDoUpload (midia, upload) {
 // uma URL, e o aplicativo abre aquela página numa janela dele. O HTML continua
 // sendo um site, hospedado em outro lugar.
 //
-// `webview_interaction: true` é o campo que faz a página abrir DENTRO do
-// WhatsApp no celular em vez de jogar o navegador por cima; só
-// `webview_presentation` não basta. No WhatsApp Web ele abre outra aba de
-// qualquer jeito — quem decide isso é o aplicativo de quem recebe, não nós.
+// `webview_interaction` PEDE que a página abra dentro do WhatsApp — e é pedido,
+// não garantia. Conferido na documentação da Meta para este botão: ela diz que
+// a URL carrega "no navegador padrão do dispositivo" e documenta três campos
+// (nome, rótulo, endereço). `webview_interaction`, `webview_presentation` e
+// `merchant_url` não aparecem lá. Relato de fornecedor diz que a janela interna
+// só vale para conta do Business Platform com volume alto, por modelo aprovado.
+//
+// Mandamos assim mesmo porque não custa nada e é o que os bots de referência
+// fazem — mas o comentário fica honesto: o esperado é abrir o navegador.
 //
 // `merchant_url` repete a URL porque é assim que o campo viaja no nativeFlow.
 //

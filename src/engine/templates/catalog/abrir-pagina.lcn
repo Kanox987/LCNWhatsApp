@@ -38,7 +38,7 @@ configurável
     ajuda: Opcional, abaixo do texto.
   dentroDoApp: liga/desliga = sim
     rótulo: Abrir dentro do WhatsApp
-    ajuda: Ligado, a página abre numa janela do próprio WhatsApp no celular. Desligado, vai para o navegador do aparelho. No WhatsApp Web abre outra aba de qualquer jeito.
+    ajuda: PEDE que a página abra numa janela do próprio WhatsApp — é pedido, não garantia: o campo não é documentado pela Meta, e o comportamento documentado é abrir no navegador do aparelho. Desligado, nem pede. No WhatsApp Web abre outra aba de qualquer jeito.
   familia: texto = "utilitarios"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -50,12 +50,15 @@ configurável
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
 
 avisa nota
-  NÃO existe HTML rodando dentro de uma mensagem do WhatsApp. O que existe é este botão: o aplicativo abre o endereço numa janela dele, e o site continua hospedado onde você quiser. Para a página falar com algum serviço seu, quem faz isso é a própria página — o bot só entrega o endereço.
+  NÃO existe HTML rodando dentro de uma mensagem do WhatsApp. O que existe é este botão: quem toca abre o endereço, e o site continua hospedado onde você quiser. Para a página falar com algum serviço seu, quem faz isso é a própria página — o bot só entrega o endereço.
 
 avisa nota
   O botão NÃO volta para o bot. Quem toca abre a página e pronto; o comando não fica sabendo. Se você precisa saber que a pessoa escolheu algo, isso tem de vir da própria página conversando com o serviço dela.
 
 avisa compatibilidade
-  Mensagem com botão depende do aplicativo de quem recebe desenhar. Quando não desenha, o comando manda o endereço como texto, que continua clicável. E há relato de que abrir DENTRO do WhatsApp dependa de a conta ser verificada — em conta comum pode abrir no navegador do aparelho. Vale testar no seu antes de prometer a alguém.
+  Mensagem com botão depende do aplicativo de quem recebe desenhar. Quando não desenha, o comando manda o endereço como texto, que continua clicável.
+
+avisa não oficial
+  ABRIR DENTRO DO WHATSAPP NÃO É DOCUMENTADO, e a expectativa honesta é que a página abra no NAVEGADOR do aparelho. A documentação da Meta para este tipo de botão diz, em letras, que a URL carrega "no navegador padrão do dispositivo", e documenta só três campos: o nome do botão, o rótulo e o endereço. Os campos que pedem a janela interna não aparecem lá — e, segundo relato de fornecedor, a janela interna só vale para conta do WhatsApp Business Platform com volume alto, por modelo aprovado. Deixe a opção ligada se quiser tentar, mas não prometa a ninguém que abre dentro sem ter visto acontecer no aparelho.
 
 # nós: gatilho-comando, abrir-pagina
