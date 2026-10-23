@@ -226,7 +226,7 @@ export const ACOES = Object.freeze([
     tipo: 'action.whatsapp.webview',
     rotulo: 'Mandar uma página',
     familia: 'resposta',
-    resumo: 'Manda uma mensagem com um botão que abre um endereço. O comportamento documentado pela Meta é abrir no navegador do aparelho; abrir DENTRO do WhatsApp é caminho não documentado, e a opção pede sem poder garantir.',
+    resumo: 'Manda uma mensagem com um botão que abre um endereço. Com a opção ligada, a página abre numa janela do próprio WhatsApp, em tela cheia por cima da conversa — medido funcionando, embora a Meta documente apenas a abertura no navegador.',
     exemplo: 'Alguém digita "/jogar" e recebe um botão "🎮 Jogar" que abre o jogo.',
     ressalva: {
       level: 'note',
@@ -237,7 +237,7 @@ export const ACOES = Object.freeze([
       { chave: 'url', rotulo: 'Endereço', ajuda: 'A página a abrir. Aceita variáveis, então dá para apontar para a página daquele item — "https://seu-site.com/{{message.args}}". Precisa ser http ou https.' },
       { chave: 'buttonLabel', rotulo: 'Texto do botão', ajuda: 'O que a pessoa lê no botão.' },
       { chave: 'footer', rotulo: 'Rodapé', ajuda: 'Opcional, abaixo do texto.' },
-      { chave: 'inApp', rotulo: 'Pedir para abrir dentro do WhatsApp', ajuda: 'PEDE a janela interna — é pedido, não garantia. A documentação da Meta para este botão diz que a URL carrega no navegador padrão do dispositivo, e os campos que pedem a janela interna não aparecem lá. Ligado não custa nada; só não prometa a ninguém antes de ver acontecer no aparelho.' }
+      { chave: 'inApp', rotulo: 'Abrir dentro do WhatsApp', ajuda: 'A página abre numa janela do próprio WhatsApp, em TELA CHEIA por cima da conversa — nunca dentro da bolha da mensagem, que não existe em forma nenhuma. O campo não é documentado pela Meta (ela documenta só a abertura no navegador), mas foi medido funcionando num número comum; por não ser documentado, pode parar sem aviso.' }
     ]
   },
   {

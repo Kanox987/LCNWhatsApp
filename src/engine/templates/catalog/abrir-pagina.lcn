@@ -38,7 +38,7 @@ configurável
     ajuda: Opcional, abaixo do texto.
   dentroDoApp: liga/desliga = sim
     rótulo: Abrir dentro do WhatsApp
-    ajuda: PEDE que a página abra numa janela do próprio WhatsApp — é pedido, não garantia: o campo não é documentado pela Meta, e o comportamento documentado é abrir no navegador do aparelho. Desligado, nem pede. No WhatsApp Web abre outra aba de qualquer jeito.
+    ajuda: Abre a página numa janela do próprio WhatsApp, em tela cheia por cima da conversa. O campo não é documentado pela Meta, mas foi medido funcionando num número comum — e por não ser documentado pode parar sem aviso. Desligado, vai para o navegador do aparelho. No WhatsApp Web abre outra aba de qualquer jeito.
   familia: texto = "utilitarios"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -59,6 +59,9 @@ avisa compatibilidade
   Mensagem com botão depende do aplicativo de quem recebe desenhar. Quando não desenha, o comando manda o endereço como texto, que continua clicável.
 
 avisa não oficial
-  ABRIR DENTRO DO WHATSAPP NÃO É DOCUMENTADO, e a expectativa honesta é que a página abra no NAVEGADOR do aparelho. A documentação da Meta para este tipo de botão diz, em letras, que a URL carrega "no navegador padrão do dispositivo", e documenta só três campos: o nome do botão, o rótulo e o endereço. Os campos que pedem a janela interna não aparecem lá — e, segundo relato de fornecedor, a janela interna só vale para conta do WhatsApp Business Platform com volume alto, por modelo aprovado. Deixe a opção ligada se quiser tentar, mas não prometa a ninguém que abre dentro sem ter visto acontecer no aparelho.
+  ABRIR DENTRO DO WHATSAPP NÃO É DOCUMENTADO, e funciona assim mesmo. A documentação da Meta para este botão diz que a URL carrega "no navegador padrão do dispositivo" e lista só três campos — nome, rótulo e endereço. Os campos que pedem a janela interna não aparecem lá. MEDIDO em 23/10/2026, num número comum pelo protocolo de aparelho conectado: a página ABRIU dentro do WhatsApp, em tela cheia, com o endereço no cabeçalho e um X para fechar. Ou seja: o caminho não documentado funciona hoje — e exatamente por não ser documentado, pode parar de funcionar sem aviso. Desligando a opção, vai para o navegador.
+
+avisa nota
+  A página abre em TELA CHEIA, por cima da conversa — não dentro da bolha da mensagem. Isso não é limitação deste comando: não existe, em forma nenhuma, HTML renderizado dentro de uma bolha do WhatsApp. O que se vê por aí "dentro da mensagem" é ou este mesmo caminho (que também abre por cima), ou os Flows da Meta — telas nativas montadas por ela a partir de uma descrição em JSON, que não são a sua página e exigem conta do Business Platform.
 
 # nós: gatilho-comando, abrir-pagina

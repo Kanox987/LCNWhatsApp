@@ -70,15 +70,20 @@ function midiaDoUpload (midia, upload) {
 // uma URL, e o aplicativo abre aquela página numa janela dele. O HTML continua
 // sendo um site, hospedado em outro lugar.
 //
-// `webview_interaction` PEDE que a página abra dentro do WhatsApp — e é pedido,
-// não garantia. Conferido na documentação da Meta para este botão: ela diz que
-// a URL carrega "no navegador padrão do dispositivo" e documenta três campos
-// (nome, rótulo, endereço). `webview_interaction`, `webview_presentation` e
-// `merchant_url` não aparecem lá. Relato de fornecedor diz que a janela interna
-// só vale para conta do Business Platform com volume alto, por modelo aprovado.
+// `webview_interaction` é o que faz a página abrir DENTRO do WhatsApp, e não é
+// documentado. A documentação da Meta para este botão diz que a URL carrega
+// "no navegador padrão do dispositivo" e lista três campos (nome, rótulo,
+// endereço); `webview_interaction`, `webview_presentation` e `merchant_url`
+// não aparecem lá.
 //
-// Mandamos assim mesmo porque não custa nada e é o que os bots de referência
-// fazem — mas o comentário fica honesto: o esperado é abrir o navegador.
+// MEDIDO em 23/10/2026, num número comum falando pelo protocolo de aparelho
+// conectado: a página abriu dentro do WhatsApp, em tela cheia, com o endereço
+// no cabeçalho e um X para fechar. Então o caminho não documentado funciona —
+// e, exatamente por não ser documentado, pode parar sem aviso. É o mesmo
+// risco do código colorido, que viaja marcado como conteúdo da Meta AI.
+//
+// E "dentro do WhatsApp" é POR CIMA da conversa, nunca dentro da bolha: HTML
+// renderizado dentro de uma mensagem não existe em forma nenhuma.
 //
 // `merchant_url` repete a URL porque é assim que o campo viaja no nativeFlow.
 //
