@@ -49,6 +49,29 @@ check('desligando a janela, vira link comum', semJanela.webview_interaction === 
 const semTexto = montarBotaoDePagina({ url: 'https://exemplo.com', rotulo: 'Abrir' })
 check('sem texto, o corpo não fica vazio', semTexto.viewOnceMessageV2.message.interactiveMessage.body.text.length > 0)
 
+// --- POR QUE ESTA MENSAGEM NÃO PRECISA DO <biz> NA MÃO --------------------
+//
+// O carrossel com botão precisa: os botões ficam dentro de
+// `carouselMessage.cards[]`, e o resolvedor da zapo-js não percorre os cards.
+// Por isso o estilo `bizNoStanza` manda o nó `<biz>` por `customNodes`.
+//
+// Aqui o `nativeFlowMessage` está no NÍVEL PRINCIPAL do `interactiveMessage`,
+// e foi isso que eu confirmei lendo a biblioteca instalada (zapo-js 1.8.2):
+//
+//   `resolveButtonAddonKindFrom` procura `msg.interactiveMessage
+//   .nativeFlowMessage` — acha, devolve 'interactive', e o despachante anexa
+//   `buildButtonAddonNode` sozinho.
+//
+//   `unwrapMessage` desfaz `viewOnceMessageV2` ANTES dessa procura, então o
+//   embrulho é transparente para ela.
+//
+// Este caso guarda a propriedade que faz isso valer — e que uma refatoração
+// descuidada quebraria em silêncio, porque mensagem interativa que o servidor
+// aceita e o aplicativo não desenha não deixa rastro nenhum.
+const dentro = msg.viewOnceMessageV2.message.interactiveMessage
+check('o fluxo nativo fica no NÍVEL PRINCIPAL, não dentro de cards', Boolean(dentro.nativeFlowMessage) && !dentro.carouselMessage)
+check('e o embrulho é o viewOnceMessageV2, que a biblioteca desfaz', Boolean(msg.viewOnceMessageV2?.message))
+
 // --- a ação existe nas quatro camadas ------------------------------------
 check('a palavra existe na linguagem', ACOES.some((a) => a.palavra === 'abre página'))
 check('o tipo está nas capacidades do runtime', ACOES_SUPORTADAS.includes('action.whatsapp.webview'))
