@@ -133,9 +133,18 @@ function lerAcao (linha, filhas) {
     const config = { scope, key: mm[2] }
     if (categoryKey) config.categoryKey = categoryKey
     if (def.palavra === 'soma') {
-      const n = Number(mm[3].trim())
-      if (!Number.isInteger(n)) throw new ErroDeSintaxe('"soma" precisa de um número inteiro', linha.n)
-      config.by = n
+      const bruto = mm[3].trim()
+      // Num TEMPLATE o passo pode ser o buraco que quem instala preenche,
+      // igual a qualquer outro campo numérico. Sem esta exceção, `soma chat x
+      // = {{params.passo}}` era erro de sintaxe — a única família de campo em
+      // que o marcador não valia.
+      if (ehMarcador(bruto)) {
+        config.by = bruto
+      } else {
+        const n = Number(bruto)
+        if (!Number.isInteger(n)) throw new ErroDeSintaxe('"soma" precisa de um número inteiro', linha.n)
+        config.by = n
+      }
     } else {
       config.value = descitar(mm[3], linha.n)
     }
@@ -245,7 +254,15 @@ function lerAcao (linha, filhas) {
     const campo = def.campos.find((c) => c.rotulo === rotulo)
     if (!campo) throw new ErroDeSintaxe(`"${def.palavra}" não tem campo "${rotulo}"`, filha.n)
     if (campo.tipo === 'texto') config[campo.chave] = descitar(valor, filha.n)
-    else if (campo.tipo === 'booleano') config[campo.chave] = valor === 'sim' || valor === 'true'
+    else if (campo.tipo === 'booleano') {
+      // MESMA EXCEÇÃO DO NÚMERO E DA OPÇÃO, e a falta dela aqui era a pior das
+      // três: `{{params.x}}` não é "sim" nem "true", então virava `false`
+      // CALADO. O campo ficava no documento com o valor errado, e quem
+      // instalou escolhendo "sim" recebia o contrário sem nada avisando.
+      // Apareceu instalando o comando de página: `dentroDoApp: true` saiu
+      // `inApp: false`.
+      config[campo.chave] = ehMarcador(valor) ? valor : (valor === 'sim' || valor === 'true')
+    }
     else if (campo.tipo === 'numero') {
       // Mesma razão do `ehMarcador` logo abaixo, e o mesmo defeito que lá já
       // estava resolvido: num TEMPLATE o valor pode ser o buraco que quem

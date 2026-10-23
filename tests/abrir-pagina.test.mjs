@@ -20,6 +20,7 @@ import { descompilar } from '../src/lcn/descompilar.js'
 import { montarBotaoDePagina } from '../src/engine/carrossel.js'
 import { ACOES_SUPORTADAS } from '../src/engine/server/runtimeCapabilities.js'
 import { ACOES } from '../src/lcn/vocabulario.js'
+import { renderizarTemplate } from '../src/engine/templates/render.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -107,6 +108,40 @@ check('nasce com família configurável', template.template.parameters.some((p) 
 const avisos = template.template.warnings.map((a) => a.text).join(' ')
 check('avisa que não há HTML dentro da mensagem', /NÃO existe HTML rodando dentro/.test(avisos))
 check('avisa que o botão não volta para o bot', /não volta para o bot/i.test(avisos))
+
+// --- A ESCOLHA DE QUEM INSTALA TEM DE CHEGAR ----------------------------
+//
+// Campo BOOLEANO de ação não aceitava marcador de template, e falhava CALADO:
+// `{{params.dentroDoApp}}` não é "sim" nem "true", então virava `false` no
+// documento. Quem instalasse escolhendo "sim" receberia o contrário, sem nada
+// avisando. Apareceu instalando este comando no servidor — passei
+// `dentroDoApp: true` e saiu `inApp: false`.
+//
+// Os campos de NÚMERO e de OPÇÃO já tinham essa exceção; o booleano era o
+// único sem, e o único cujo erro não dá para ver.
+for (const escolha of [true, false]) {
+  const doc = renderizarTemplate(
+    { ...template.template, documentTemplate: template.documentTemplate },
+    { command: '/x', url: 'https://e.com', rotulo: 'Ir', texto: 't', rodape: '', dentroDoApp: escolha, familia: 'utilitarios', allowFrom: 'external', poolId: 'p' }
+  )
+  const noRenderizado = doc.flow.nodes.find((n) => n.type === 'action.whatsapp.webview')
+  check(`instalando com "dentro do WhatsApp = ${escolha}", chega ${escolha}`, noRenderizado.config.inApp === escolha, JSON.stringify(noRenderizado.config.inApp))
+}
+
+// Mesma raiz, outra família de campo: o passo do contador também só aceitava
+// número literal, e era a única em que o marcador dava erro de sintaxe.
+const comPasso = compilar([
+  'template t v1', '  nome: T', '  categoria: utilitarios', '',
+  'automação a', '  id: a', '  tipo: comando', '  dispara com: /a',
+  '  pool: p', '  acessa: texto', '  casa: exato', '  quem: qualquer um', '',
+  '  soma chat n = {{params.passo}}', '',
+  'configurável', '  passo: número = 1', '    rótulo: Passo'
+].join('\n'))
+check('o passo do contador aceita marcador de template', comPasso.documentTemplate.flow.nodes[1].config.by === '{{params.passo}}')
+const passoResolvido = renderizarTemplate(
+  { ...comPasso.template, documentTemplate: comPasso.documentTemplate }, { passo: 5 }
+)
+check('e vira número de verdade na instalação', passoResolvido.flow.nodes[1].config.by === 5, JSON.stringify(passoResolvido.flow.nodes[1].config.by))
 
 console.log(falhas === 0 ? '\nmandar uma página: tudo certo' : `\nmandar uma página: ${falhas} falha(s)`)
 process.exit(falhas === 0 ? 0 : 1)
