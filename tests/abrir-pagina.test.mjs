@@ -97,6 +97,22 @@ check('pedindo janela interna', paramsJanela.link?.in_app_webview === true)
 check('e tela cheia', paramsJanela.link?.full_screen === true)
 check('a forma "janela" NÃO tem display_text', paramsJanela.display_text === undefined)
 
+// O ENVELOPE MUDA COM A FORMA, e foi medido: a primeira versão da forma
+// `janela` foi ACEITA pelo servidor e não desenhada pelo aplicativo — envio
+// confirmado, conversa vazia. A diferença não estava no botão, estava no
+// envelope. O takeshi-bot monta `body` + `header { hasMediaAttachment: false }`
+// e NÃO manda `messageParamsJson`; é a mesma lição que o comentário do
+// carrossel aqui já registrava ("era o header que faltava, não o body").
+const envelopeJanela = comoJanela.viewOnceMessageV2.message.interactiveMessage
+check('a forma janela leva o header do bot de referência', envelopeJanela.header?.hasMediaAttachment === false, JSON.stringify(envelopeJanela.header))
+check('e NÃO leva messageParamsJson', envelopeJanela.nativeFlowMessage.messageParamsJson === undefined)
+
+// A forma `link` fica como está, porque está provada assim neste aparelho —
+// não se troca o que funciona por simetria.
+const envelopeLink = msg.viewOnceMessageV2.message.interactiveMessage
+check('a forma link continua sem header', envelopeLink.header === undefined)
+check('e continua com messageParamsJson', envelopeLink.nativeFlowMessage.messageParamsJson === '')
+
 // A forma padrão continua sendo a medida funcionando.
 const padrao = montarBotaoDePagina({ url: 'https://jogo/x', rotulo: 'Ir' })
 check('sem escolher, vale a forma "link"', padrao.viewOnceMessageV2.message.interactiveMessage.nativeFlowMessage.buttons[0].name === 'cta_url')

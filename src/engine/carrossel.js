@@ -335,15 +335,34 @@ export function montarBotoesDeEscolha (itens, { texto = null, rodape = null } = 
 // cada um: `quick_reply` VOLTA para o bot; `cta_url` é executado no aparelho e
 // não avisa o bot de nada.
 export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo, janela = true, forma = 'link' }) {
+  // O ENVELOPE MUDA COM A FORMA, e isso não é capricho: medido no aparelho do
+  // dono, a forma `janela` foi ACEITA pelo servidor e não desenhada pelo
+  // aplicativo — o envio foi confirmado e a conversa ficou vazia.
+  //
+  // A diferença estava no envelope, não no botão. O takeshi-bot, que manda
+  // `open_webview` em produção, monta assim (conferido em
+  // `src/services/interactiveMessages.js`):
+  //
+  //   body + header { hasMediaAttachment: false }, e NADA de messageParamsJson
+  //
+  // O header acompanhando o body é a mesma coisa que o comentário do carrossel
+  // aqui em cima já registrava: "era o header que faltava, não o body". E
+  // campo a mais numa mensagem interativa é motivo conhecido de o aplicativo
+  // descartar tudo calado, então `messageParamsJson` sai junto.
+  //
+  // A forma `link` fica como está, porque está PROVADA assim neste aparelho —
+  // não se troca o que funciona por simetria.
+  const comoOTakeshi = forma === 'janela'
   return {
     viewOnceMessageV2: {
       message: {
         interactiveMessage: {
           body: { text: texto || ' ' },
+          ...(comoOTakeshi ? { header: { hasMediaAttachment: false } } : {}),
           ...(rodape ? { footer: { text: rodape } } : {}),
           nativeFlowMessage: {
             buttons: montarBotao({ texto: rotulo, url, janela, forma }),
-            messageParamsJson: ''
+            ...(comoOTakeshi ? {} : { messageParamsJson: '' })
           }
         }
       }
