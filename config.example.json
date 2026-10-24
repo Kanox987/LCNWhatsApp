@@ -18,6 +18,7 @@
   "hardware": {
     "markOnline": true,
     "logLevel": "silent",
+    "comandosSimultaneos": 2,
     "maxMidiaMB": 60,
     "downloadConcorrencia": 2,
     "bandwidthLimit": {
