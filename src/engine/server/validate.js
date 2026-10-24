@@ -37,6 +37,10 @@ function temCiclo (ids, edges) {
 }
 
 export function validarAutomacao (db, documento) {
+  if (!documento && db && typeof db === 'object' && !db.prepare) {
+    documento = db
+    db = null
+  }
   const erros = []
   if (!validarSchema(documento)) {
     for (const erro of validarSchema.errors || []) {
@@ -139,11 +143,11 @@ export function validarAutomacao (db, documento) {
     }
   })
 
-  const connectionExiste = db.prepare('SELECT 1 FROM connections WHERE id = ?')
-  const conexaoCompleta = db.prepare('SELECT config_json FROM connections WHERE id = ?')
+  const connectionExiste = db?.prepare ? db.prepare('SELECT 1 FROM connections WHERE id = ?') : null
+  const conexaoCompleta = db?.prepare ? db.prepare('SELECT config_json FROM connections WHERE id = ?') : null
   nodes.forEach((node, indice) => {
     const ref = node?.type === 'action.http' ? node.config?.connectionRef : null
-    if (typeof ref === 'string' && ref && !connectionExiste.get(ref)) {
+    if (typeof ref === 'string' && ref && connectionExiste && !connectionExiste.get(ref)) {
       erros.push({ path: `/flow/nodes/${indice}/config/connectionRef`, message: `conexão inexistente: ${ref}` })
     }
   })
@@ -155,7 +159,7 @@ export function validarAutomacao (db, documento) {
   // usasse o comando, e o serviço recusaria com uma mensagem que ninguém liga à
   // automação. Recusar aqui transforma isso em erro de publicação, com caminho.
   nodes.forEach((node, indice) => {
-    if (node?.type !== 'action.connection.call') return
+    if (node?.type !== 'action.connection.call' || !conexaoCompleta) return
     const caminho = `/flow/nodes/${indice}/config`
     const ref = node.config?.connectionRef
     const linha = typeof ref === 'string' && ref ? conexaoCompleta.get(ref) : null
@@ -280,7 +284,7 @@ export function validarAutomacao (db, documento) {
   })
 
   const poolId = documento?.responder?.poolId
-  if (typeof poolId === 'string' && poolId) {
+  if (typeof poolId === 'string' && poolId && db?.prepare) {
     const poolExiste = db.prepare('SELECT 1 FROM pools WHERE id = ?').get(poolId)
     if (!poolExiste) erros.push({ path: '/responder/poolId', message: `pool inexistente: ${poolId}` })
   }

@@ -22,7 +22,7 @@ import * as bandwidth from './bandwidth.js'
 import { classificarFechamento, mensagemParaClasse, codigoParaClasse } from './connectionReasons.js'
 import { EXIT_QUARANTINED } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
-import { construirEventoDeMensagem, construirEventoDeIndisponivel } from './engine/zapoAdapter.js'
+import { construirEventoDeMensagem, construirEventoDeIndisponivel, construirEventoDeGrupo } from './engine/zapoAdapter.js'
 import { tipoPodeCasar } from './engine/canonicalEvent.js'
 import { fecharOrfaos } from './engine/orfaos.js'
 import { emitirDesconhecidoDebug, emitirEventoDebug } from './engine/eventSink.js'
@@ -99,11 +99,18 @@ export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, 
   // nada, porque o tipo dela nem está na política de entrada. Resultado: a
   // mensagem real é descartada calada.
   //
-  // Foi assim que um "/ping" em grupo não respondeu, e por que 39% dos eventos
-  // gravados eram lixo que ainda por cima atrapalhava.
-  if (!tipoPodeCasar(eventoCanonico?.message?.kind)) {
+  // Num evento de grupo, filtramos ações não suportadas pelo porteiro logo aqui,
+  // antes de onerar a rede ou o motor com stanzas irrelevantes.
+  const kind = eventoCanonico?.message?.kind || (eventoCanonico?.group ? 'group' : null)
+  if (!tipoPodeCasar(kind)) {
     if (cfg?.hardware?.debug) {
-      log?.(`[engine] ignorado: ${eventoCanonico?.message?.kind} não casa com automação (esboço antes de decifrar)`)
+      log?.(`[engine] ignorado: ${kind} não casa com automação (esboço antes de decifrar ou tipo não mapeado)`)
+    }
+    return Promise.resolve()
+  }
+  if (eventoCanonico?.group && !['add', 'remove', 'promote', 'demote', 'subject'].includes(eventoCanonico.group.action)) {
+    if (cfg?.hardware?.debug) {
+      log?.(`[engine] evento de grupo ignorado: ação "${eventoCanonico.group.action}" não é monitorada pelo porteiro`)
     }
     return Promise.resolve()
   }
@@ -375,8 +382,20 @@ export async function iniciar () {
     // dados daquele grupo cai na hora. É o que impede {{sender.isAdmin}} de
     // decidir permissão com informação velha — o TTL lá dentro é só rede de
     // segurança para o caso de uma dessas notificações se perder.
-    client.on('group', (event) => {
+    //
+    // A INVALIDAÇÃO VEM PRIMEIRO: qualquer decisão de autorização posterior
+    // precisa enxergar o estado limpo do grupo.
+    client.on('group', async (event) => {
+      const recebidoEmMs = Date.now()
       try { groupInfo.invalidar(event?.groupJid || event?.chatJid) } catch {}
+      if (cfg.hardware?.debug) log(`group action=${event?.action} group=${event?.groupJid || event?.chatJid}`)
+      try {
+        const eventoCanonico = construirEventoDeGrupo(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
+        emitirEventoDebug(eventoCanonico, cfg, log)
+        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico, cfg, log)
+      } catch (e) {
+        if (cfg.hardware?.debug) log('evento de grupo/motor falhou:', e.message)
+      }
     })
 
     client.on('message', async (event) => {

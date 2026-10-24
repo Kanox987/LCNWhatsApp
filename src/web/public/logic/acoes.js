@@ -66,6 +66,28 @@ export const GATILHOS = Object.freeze([
       { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'A barreira acima vale de qualquer jeito.' },
       { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot.' }
     ]
+  },
+  {
+    tipo: 'trigger.group',
+    rotulo: 'Porteiro: quando o grupo muda',
+    resumo: 'A automação observa as entradas, saídas e moderações no grupo (quem entra, quem sai, quem é promovido ou rebaixado, ou quando o nome do grupo muda).',
+    exemplo: 'Alguém entra no grupo e o bot confere se está na lista autorizada, removendo quem não estiver.',
+    ressalva: {
+      level: 'info',
+      text: 'O porteiro só atua em grupos autorizados (onde grupo_ativo está ligado). Para expulsar ou moderar membros, o bot precisa ser administrador do grupo.'
+    },
+    campos: [
+      {
+        chave: 'actions',
+        rotulo: 'Ações observadas',
+        ajuda: 'Escolha quais eventos de grupo acionam este porteiro: add (entrou), remove (saiu), promote (promoveu), demote (rebaixou) ou subject (mudou o nome).'
+      },
+      {
+        chave: 'requireOwner',
+        rotulo: 'Só o dono',
+        ajuda: 'Restringe a execução às ações geradas ou autorizadas pelo dono do bot.'
+      }
+    ]
   }
 ])
 

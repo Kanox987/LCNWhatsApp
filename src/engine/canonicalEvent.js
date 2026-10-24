@@ -12,6 +12,22 @@ export function calcularEventId ({ accountId, chatId, senderId, providerMessageI
   return `${accountId}:${chatId}:${senderId}:${providerMessageId}`
 }
 
+// Deduplicação de evento de grupo:
+// O evento de grupo não traz id de mensagem (providerMessageId). A chave
+// determinística é montada a partir da conta, do grupo, da ação, dos
+// participantes envolvidos (ordenados) ou assunto alterado, e do timestamp.
+// Assim, notificações duplicadas ou capturadas em reconexão produzem o mesmo
+// eventId e a idempotência do banco impede reexecuções.
+export function calcularEventIdDeGrupo ({ accountId, groupJid, action, participants = [], timestampSeconds = 0, subject = '' }) {
+  const alvos = (participants || [])
+    .map((p) => (typeof p === 'string' ? p : (p.phoneJid || p.id || p.jid || '')))
+    .filter(Boolean)
+    .sort()
+    .join(',')
+  const extra = alvos || subject || ''
+  return `${accountId}:${groupJid}:${action}:${extra}:${timestampSeconds}`
+}
+
 // Reaproveita os helpers JÁ TESTADOS de visu.js em vez de reimplementar
 // detecção de formato de protobuf — visu única e áudio têm casos de borda
 // (viewOnceMessageV2Extension, envelopes ephemeralMessage/deviceSentMessage)
@@ -35,7 +51,7 @@ export function calcularEventId ({ accountId, chatId, senderId, providerMessageI
 //
 // `unavailable` entra pelo mesmo motivo: chega antes do reenvio da mensagem
 // real e ocuparia o id do mesmo jeito.
-export const TIPOS_QUE_CASAM = Object.freeze(['text', 'audio', 'image', 'video', 'document', 'view_once', 'sticker'])
+export const TIPOS_QUE_CASAM = Object.freeze(['text', 'audio', 'image', 'video', 'document', 'view_once', 'sticker', 'group'])
 
 export function tipoPodeCasar (kind) {
   return TIPOS_QUE_CASAM.includes(kind)
@@ -92,6 +108,10 @@ export function ehRespostaDeBotao (msg) {
 }
 
 export function validarFormaCanonica (evt) {
-  const camposObrigatorios = ['provider', 'accountId', 'eventId', 'occurredAt', 'replay', 'chat', 'sender', 'message', 'providerRef']
-  return camposObrigatorios.every((campo) => campo in evt)
+  if (!evt || typeof evt !== 'object') return false
+  const camposObrigatorios = ['provider', 'accountId', 'eventId', 'occurredAt', 'replay', 'chat', 'sender', 'providerRef']
+  const temCorpo = 'message' in evt || 'group' in evt
+  return temCorpo && camposObrigatorios.every((campo) => campo in evt)
 }
+
+export { construirEventoDeGrupo } from './zapoAdapter.js'

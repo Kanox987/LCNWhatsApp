@@ -54,6 +54,7 @@ function campoDoCabecalho (campo) {
     campo.repetivel ? 'pode repetir' : null,
     campo.vale === 'comando' ? 'só comando' : null,
     campo.vale === 'vigia' ? 'só vigia' : null,
+    campo.vale === 'porteiro' ? 'só porteiro' : null,
     campo.depende ? `vem depois de "${campo.depende}"` : null
   ].filter(Boolean)
   return dobravel(`${campo.chave}:`, campo.rotulo || marcas[0] || null, [

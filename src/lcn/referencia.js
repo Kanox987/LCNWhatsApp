@@ -24,7 +24,7 @@
 // linguagem deixaria de compilar sozinha. Quem junta é o BFF, que já tem os
 // dois lados à mão.
 import {
-  ACOES, BLOCOS_DE_TEMPLATE, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES,
+  ACOES, ACOES_DE_GRUPO, BLOCOS_DE_TEMPLATE, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES,
   DESTINOS, EXIGENCIAS, MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES,
   ORIGENS, PALAVRAS_DE_OPERANDO, TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR
 } from './vocabulario.js'
@@ -80,6 +80,25 @@ export const TRECHOS = Object.freeze([
       '  casa: exato ou com argumentos',
       '',
       '  responde "pacote: {{argumentos.pacote}} · autor: {{argumentos.autor}}"'
+    ].join('\n')
+  },
+  {
+    chave: 'porteiro-remover-intruso',
+    rotulo: 'Porteiro: remover quem não está na lista',
+    quando: 'Dispara quando alguém entra no grupo e remove quem não tiver autorização.',
+    onde: 'arquivo',
+    texto: [
+      'automação porteiro',
+      '  id: porteiro',
+      '  nome: Porteiro',
+      '  tipo: porteiro',
+      '  quando for: entrou',
+      '  pool: pool-local',
+      '',
+      '  se var target_group_member autorizado != "sim"',
+      '    remove do grupo',
+      '      quem: quem foi marcado',
+      '      nunca o dono: sim'
     ].join('\n')
   },
   {
@@ -314,7 +333,7 @@ function prosaDoCampoDeGatilho (prosa, doc, vale) {
   const gatilhos = prosa?.GATILHOS || []
   const daClasse = gatilhos.filter((g) => {
     if (vale === 'ambos' || !vale) return true
-    return CLASSES[g.tipo] === vale
+    return Array.isArray(vale) ? vale.includes(CLASSES[g.tipo]) : CLASSES[g.tipo] === vale
   })
   for (const g of [...daClasse, ...gatilhos]) {
     const achado = (g.campos || []).find((c) => c.chave === doc)
@@ -374,7 +393,7 @@ function juntarAcao (acao, prosa) {
 // qualquer outra coisa seria a quarta cópia do vocabulário.
 function palavrasParaRealce () {
   const enums = [
-    CLASSES, CASAMENTOS, ORIGENS, TIPOS_DE_MENSAGEM, EXIGENCIAS, ONDE_PROCURAR,
+    CLASSES, CASAMENTOS, ORIGENS, TIPOS_DE_MENSAGEM, ACOES_DE_GRUPO, EXIGENCIAS, ONDE_PROCURAR,
     DESTINOS, TIPOS_DE_CONFIG, TIPOS_DE_VALOR, NIVEIS_DE_AVISO
   ]
   return Object.freeze({
@@ -439,6 +458,7 @@ export function montarReferencia ({ prosa = null } = {}) {
       casamentos: Object.freeze(Object.values(CASAMENTOS)),
       origens: Object.freeze(Object.values(ORIGENS)),
       tiposDeMensagem: Object.freeze(Object.values(TIPOS_DE_MENSAGEM)),
+      acoesDeGrupo: Object.freeze(Object.values(ACOES_DE_GRUPO)),
       exigencias: Object.freeze(Object.values(EXIGENCIAS)),
       ondeProcurar: Object.freeze(Object.values(ONDE_PROCURAR)),
       destinos: Object.freeze(Object.values(DESTINOS)),

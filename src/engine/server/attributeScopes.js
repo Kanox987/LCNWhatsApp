@@ -36,15 +36,24 @@ function kindDaConversa (chat) {
   return chat?.kind === 'group' ? 'group' : 'contact'
 }
 
-// Quem o comando está mirando: o primeiro mencionado (@fulano) ou, na falta
-// de menção, o autor da mensagem citada. É o que faz "/adv @fulano" punir o
-// fulano e não quem digitou. Sem alvo, devolve null — e a ação é ignorada em
-// vez de cair no remetente por engano, que puniria a pessoa errada.
+// Quem o comando está mirando: o primeiro mencionado (@fulano), o autor da
+// mensagem citada ou, em evento de grupo (porteiro), o participante da ação
+// (quem entrou, saiu, foi promovido ou rebaixado). É o que faz "/adv @fulano"
+// punir o fulano e não quem digitou, e faz o porteiro validar se quem entrou
+// está autorizado. Sem alvo, devolve null — e a ação é ignorada em vez de cair
+// no remetente por engano, que puniria a pessoa errada.
 export function resolverAlvo (evento) {
   const mencionado = evento?.message?.mentions?.[0]
   if (typeof mencionado === 'string' && mencionado) return mencionado
   const citado = evento?.message?.quotedRef?.participant
   if (typeof citado === 'string' && citado) return citado
+  const participante = evento?.group?.participants?.[0]
+  if (participante) {
+    const alvo = typeof participante === 'string'
+      ? participante
+      : (participante.id || participante.phoneJid || participante.jid)
+    if (typeof alvo === 'string' && alvo) return alvo
+  }
   return null
 }
 

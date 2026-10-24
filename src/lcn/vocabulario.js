@@ -351,18 +351,31 @@ export const ONDE_PROCURAR = Object.freeze({
   quoted: 'na citada'
 })
 
-// As duas CLASSES de automação, e a diferença não é detalhe de gatilho.
+// As três CLASSES de automação, e a diferença não é detalhe de gatilho.
 //
 // Um comando é acordado por alguém digitar. Um vigia fica ligado o tempo todo,
 // olhando a conversa — é o download automático, e é o "responder bom dia" que o
-// dono descreveu. Ele não tem gatilho de comando nenhum.
+// dono descreveu. Um porteiro vigia a porta do grupo — entradas, saídas,
+// promoções e rebaixamentos. Ele não tem mensagem para olhar.
 //
-// Estava escondido na palavra de abertura (`comando /x` contra `ao receber
-// mensagem`), como se fosse variação do mesmo. A primeira coisa que se lê agora
-// é o que a automação É.
+// A primeira coisa que se lê agora é o que a automação É.
 export const CLASSES = Object.freeze({
   'trigger.command': 'comando',
-  'trigger.message': 'vigia'
+  'trigger.message': 'vigia',
+  'trigger.group': 'porteiro'
+})
+
+// As 5 ações de grupo que o porteiro compreende.
+//
+// A biblioteca Zapo tipa 38 ações de grupo, mas apenas cinco são espécies de
+// evento com utilidade prática para automação da porta. Mapeamos apenas estas
+// cinco em português e descartamos as demais.
+export const ACOES_DE_GRUPO = Object.freeze({
+  add: 'entrou',
+  remove: 'saiu',
+  promote: 'promoveu',
+  demote: 'rebaixou',
+  subject: 'mudou o nome'
 })
 
 export const TIPOS_DE_MENSAGEM = Object.freeze({
@@ -449,47 +462,53 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     vale: 'ambos',
     obrigatorio: true,
     palavras: CLASSES,
-    ajuda: 'O que a automação É, e é a primeira coisa a escrever: um comando acorda quando alguém digita; um vigia fica ligado olhando a conversa.'
+    ajuda: 'O que a automação É, e é a primeira coisa a escrever: um comando acorda quando alguém digita; um vigia fica ligado olhando a conversa; um porteiro monitora a porta do grupo (entradas, saídas, moderações).'
   },
   {
     chave: 'dispara com',
-    vale: 'ambos',
+    vale: ['comando', 'vigia'],
     obrigatorio: 'comando',
     doc: 'command',
     ajuda: 'Num comando, a palavra digitada. Num vigia, a frase "qualquer mensagem" — o que ele observa se diz nas linhas seguintes.'
   },
   { chave: 'casa', vale: 'comando', palavras: CASAMENTOS, doc: 'match' },
-  { chave: 'quem', vale: 'ambos', palavras: ORIGENS, doc: 'allowFrom' },
+  { chave: 'quem', vale: ['comando', 'vigia'], palavras: ORIGENS, doc: 'allowFrom' },
   { chave: 'argumentos', vale: 'comando', doc: 'args' },
   { chave: 'palavras', vale: 'vigia', doc: 'keywords' },
-  { chave: 'quando for', vale: 'vigia', palavras: TIPOS_DE_MENSAGEM, doc: 'messageKinds' },
+  {
+    chave: 'quando for',
+    vale: ['vigia', 'porteiro'],
+    palavras: { ...TIPOS_DE_MENSAGEM, ...ACOES_DE_GRUPO },
+    doc: 'messageKinds',
+    ajuda: 'Num vigia, os tipos de mensagem observados (texto, foto...). Num porteiro, as ações observadas no grupo (entrou, saiu, promoveu, rebaixou, mudou o nome).'
+  },
   {
     chave: 'acessa',
-    vale: 'ambos',
+    vale: ['comando', 'vigia'],
     palavras: TIPOS_DE_MENSAGEM,
     ajuda: 'Os tipos de mensagem que a automação chega a VER. É exigência, não preferência: o motor não avalia a automação para tipo que não esteja aqui, então quem declara só texto nunca vê a mensagem de voz — e falha calado.'
   },
   {
     chave: 'precisa de um link',
-    vale: 'ambos',
+    vale: ['comando', 'vigia'],
     palavras: ONDE_PROCURAR,
     ajuda: 'Diz que a automação só roda se houver um link, e onde procurar. A ordem escrita é a ordem da procura. O motor resolve antes do fluxo começar, então a ação só escreve "o link".'
   },
   {
     chave: 'precisa de uma mídia',
-    vale: 'ambos',
+    vale: ['comando', 'vigia'],
     palavras: ONDE_PROCURAR,
     ajuda: 'O mesmo para foto, vídeo, áudio ou documento: "na mensagem ou na citada" aceita as duas formas — mandar junto com o comando, ou responder um arquivo já enviado.'
   },
   {
     chave: 'sem ele',
-    vale: 'ambos',
+    vale: ['comando', 'vigia'],
     depende: 'precisa de um link',
     ajuda: 'O que responder quando o link não aparece. Fica aqui, junto do que ele guarda, e não perdido entre os textos da ação.'
   },
   {
     chave: 'sem ela',
-    vale: 'ambos',
+    vale: ['comando', 'vigia'],
     depende: 'precisa de uma mídia',
     ajuda: 'O que responder quando não vem mídia nenhuma. Sem isto o comando fica mudo, e quem mandou acha que o bot quebrou.'
   },
@@ -498,27 +517,27 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
   { chave: 'nome', vale: 'ambos', ajuda: 'O nome que aparece no painel. Para quem lê a lista de comandos daqui a um mês.' },
   {
     chave: 'menu',
-    vale: 'ambos',
+    vale: ['comando', 'vigia'],
     ajuda: 'A linha que este comando ocupa no menu, no formato "rótulo — descrição". Sem esta linha, o comando funciona mas não aparece no menu.'
   },
   {
     chave: 'família',
-    vale: 'ambos',
+    vale: 'todos',
     ajuda: 'A que grupo de comandos este pertence — "download", "figurinha", "compra e venda". É texto livre: serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, em vez de comando por comando.'
   },
-  { chave: 'onde', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas".' },
-  { chave: 'menos', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
-  { chave: 'pool', vale: 'ambos', ajuda: 'Qual conjunto de números responde. Crie um na aba Automações antes, se ainda não tiver.' },
-  { chave: 'histórico', vale: 'ambos', ajuda: 'Se a automação enxerga mensagem antiga ou só a que está chegando agora.' },
+  { chave: 'onde', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas".' },
+  { chave: 'menos', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
+  { chave: 'pool', vale: 'todos', ajuda: 'Qual conjunto de números responde. Crie um na aba Automações antes, se ainda não tiver.' },
+  { chave: 'histórico', vale: ['comando', 'vigia'], ajuda: 'Se a automação enxerga mensagem antiga ou só a que está chegando agora.' },
   {
     chave: 'prioridade',
-    vale: 'ambos',
+    vale: 'todos',
     palavras: PRIORIDADES,
     ajuda: 'Quando a fila está disputada, quem passa primeiro. Pergunte "se isto esperar, o que se perde?" — e não "isto é pesado?". Capturar uma visualização única é "muito alta" porque a mídia deixa de existir se esperar; baixar um vídeo é "baixa" porque o endereço continua lá amanhã. Vale para TODOS os envios desta automação. Sem esta linha, fica em "normal".'
   },
   {
     chave: 'sem vaga',
-    vale: 'ambos',
+    vale: 'todos',
     ajuda: 'O que fazer quando a fila está cheia e recusa ANTES de começar. "descarta" fecha calado, registrando o motivo. Um texto entre aspas avisa quem mandou — uma vez só, pela mesma fila, e se nem o aviso couber isso também fica registrado. Sem esta linha, descarta.'
   }
 ])
@@ -527,11 +546,11 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
 // presença da linha já é a resposta. "só dono" não tem como ser "só dono: não"
 // — essa linha seria uma maneira comprida de não escrever nada.
 export const MARCAS_DO_CABECALHO = Object.freeze([
-  { chave: 'só dono', vale: 'ambos', doc: 'requireOwner' },
+  { chave: 'só dono', vale: 'todos', doc: 'requireOwner' },
   { chave: 'com link', vale: 'vigia', doc: 'containsLink' },
   { chave: 'só link de mídia', vale: 'vigia', doc: 'mediaLinkOnly' },
   { chave: 'também em comandos', vale: 'vigia', doc: 'alsoOnCommands' },
-  { chave: 'desligada', vale: 'ambos', ajuda: 'Nasce desligada: fica gravada e não responde até alguém ligar no painel.' }
+  { chave: 'desligada', vale: 'todos', ajuda: 'Nasce desligada: fica gravada e não responde até alguém ligar no painel.' }
 ])
 
 // --- o cabeçalho do TEMPLATE ---------------------------------------------
