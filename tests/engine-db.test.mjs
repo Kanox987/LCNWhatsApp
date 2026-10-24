@@ -13,6 +13,7 @@ for (const esperada of ['instances', 'pools', 'pool_members', 'connections', 'au
 }
 
 check('journal_mode é WAL (ou "memory" no caso de :memory:, ambos aceitáveis)', ['wal', 'memory'].includes(db.pragma('journal_mode', { simple: true })))
+check('cache_size do SQLite é configurado com KiB negativo (-4096 para 4 MB)', db.pragma('cache_size', { simple: true }) === -4096)
 
 // Rodar de novo (idempotência) não deve duplicar nem lançar.
 let relancouSemErro = true

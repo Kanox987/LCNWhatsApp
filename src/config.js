@@ -23,6 +23,12 @@ export const PADRAO = {
     },
     modoEconomia: true,
     debug: false,
+    // Tamanho do cache em memória do SQLite do motor central (db.js), em MB.
+    // O better-sqlite3 adota aproximadamente 16 MiB por conexão por padrão.
+    // No SQLite, valor NEGATIVO no pragma significa KiB e POSITIVO páginas.
+    // Padrão sensato: 4 MB (economiza 75% da RAM do cache sem estrangular I/O).
+    // Sem teto no código: máquinas folgadas sobem; alvos de 512 MB descem.
+    cacheSqliteMB: 4,
     // Como a conexão aparece em "Aparelhos conectados" no celular. Só rótulo e
     // ícone — não muda o que a conexão é. Gravado no pareamento: trocar depois
     // não renomeia sessão existente. Ver src/aparelho.js para a lista.

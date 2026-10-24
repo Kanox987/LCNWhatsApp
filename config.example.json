@@ -21,6 +21,7 @@
     "comandosSimultaneos": 2,
     "maxMidiaMB": 60,
     "downloadConcorrencia": 2,
+    "cacheSqliteMB": 4,
     "bandwidthLimit": {
       "downloadBytesPerSecond": 0,
       "uploadBytesPerSecond": 0
