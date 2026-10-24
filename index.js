@@ -12,6 +12,7 @@ import { garantirConfig } from './src/config.js'
 import { iniciarSaida } from './src/api/output.js'
 import { iniciar } from './src/connection.js'
 import * as state from './src/state.js'
+import { iniciarEspelhoLog } from './src/espelhoLog.js'
 
 garantirPastas()
 
@@ -25,24 +26,16 @@ garantirPastas()
 // porque no Windows um process.kill() não roda handler nenhum no alvo.
 const ARQ_PID = path.join(PASTA_DADOS, 'bot.pid')
 fs.writeFileSync(ARQ_PID, String(process.pid))
-process.on('exit', () => { try { fs.rmSync(ARQ_PID) } catch {} })
-
 // Espelha os logs num arquivo (data/bot.log) pra o painel poder mostrá-los mesmo
-// rodando dentro do container (onde não há `docker logs`). Cap de tamanho simples.
+// rodando dentro do container (onde não há `docker logs`). Usa um WriteStream
+// com rotação em execução para não travar o event loop com I/O síncrono a cada linha.
 const ARQ_LOG = path.join(PASTA_DADOS, 'bot.log')
-try { if (fs.existsSync(ARQ_LOG) && fs.statSync(ARQ_LOG).size > 1048576) fs.rmSync(ARQ_LOG) } catch {}
-function espelhar (orig) {
-  return (...args) => {
-    orig(...args)
-    try {
-      const linha = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')
-      // não espelha os blocos de QR (arte ASCII) pro arquivo
-      if (!/[█▄▀]/.test(linha)) fs.appendFileSync(ARQ_LOG, linha + '\n')
-    } catch {}
-  }
-}
-console.log = espelhar(console.log.bind(console))
-console.error = espelhar(console.error.bind(console))
+const espelho = iniciarEspelhoLog({ arquivo: ARQ_LOG })
+
+process.on('exit', () => {
+  try { fs.rmSync(ARQ_PID) } catch {}
+  try { espelho.fecharSincrono() } catch {}
+})
 
 const cfg = garantirConfig()
 iniciarSaida(cfg)        // no-op enquanto outputApi.enabled = false
@@ -53,10 +46,27 @@ state.gravar()
 // sempre quando o processo morre de queda.
 state.iniciarBatimento()
 
-iniciar().catch((e) => {
+let encerrando = false
+async function encerrar (codigo = 0) {
+  if (encerrando) return
+  encerrando = true
+  try {
+    await espelho.fechar()
+  } catch {}
+  process.exit(codigo)
+}
+
+iniciar().catch(async (e) => {
   console.error('Falha ao iniciar:', e)
-  process.exit(1)
+  await encerrar(1)
 })
 
-process.on('SIGTERM', () => { state.definirConexao({ conectado: false }); process.exit(0) })
-process.on('SIGINT', () => { state.definirConexao({ conectado: false }); process.exit(0) })
+process.on('SIGTERM', async () => {
+  state.definirConexao({ conectado: false })
+  await encerrar(0)
+})
+
+process.on('SIGINT', async () => {
+  state.definirConexao({ conectado: false })
+  await encerrar(0)
+})
