@@ -46,6 +46,13 @@ function carregarSaudePersistida () {
 
 let estado = { ...INICIAL, metricas: { ...INICIAL.metricas }, saude: carregarSaudePersistida() }
 let timer = null
+let fonteDeRecursos = null
+
+// O batimento já publica o estado do processo. Ler os contadores ali evita
+// criar um timer e uma escrita em disco para cada admissão de uma rajada.
+export function registrarFonteDeRecursos (fonte) {
+  fonteDeRecursos = fonte
+}
 
 function agendarFlush () {
   clearTimeout(timer)
@@ -55,6 +62,7 @@ function agendarFlush () {
 export function gravar () {
   try {
     garantirPastas()
+    if (fonteDeRecursos) estado.recursos = fonteDeRecursos()
     // MEDIR ANTES DE PROMETER, e medir o que importa.
     //
     // `rss` sozinho não distingue os dois jeitos de a memória crescer, e eles

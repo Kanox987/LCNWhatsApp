@@ -15,6 +15,7 @@
 // função declarada. É isso que dispensa a proteção contra SSRF exigida pelo
 // `action.http` genérico — quem aponta o endereço é o dono, não o comando.
 import { limitesDeMidia } from '../mediaLimits.js'
+import { executoresDeRecursos } from './filasDeRecursos.js'
 import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, lerBase64DeMidia, descartarResposta } from '../mediaBudget.js'
 import { resolverDestino, TIPOS_DE_ENVIO } from './server/conexoes/declaracao.js'
 
@@ -255,20 +256,41 @@ export function criarExecutorDeConexao ({
   limiteBytes = limitesDeMidia(cfg).geral,
   orcamento = criarOrcamentoDeMidia(limitesDeMidia(cfg).orcamento)
 } = {}) {
+  const { rede, cpu } = executoresDeRecursos(cfg)
   const tetoGeral = limitesDeMidia(cfg).geral
   limiteBytes = Number.isSafeInteger(limiteBytes) && limiteBytes > 0 ? Math.min(limiteBytes, tetoGeral) : tetoGeral
-  async function chamar (url, opcoes, esperaMs = TIMEOUT_REQUISICAO_MS) {
-    const controle = new AbortController()
-    const timer = setTimeout(() => controle.abort(), esperaMs)
-    try {
-      return await buscar(url, { ...opcoes, signal: controle.signal })
-    } catch {
-      // O endereço fica no diagnóstico, não na conversa.
-      throw new ErroDeConexao(`Não consegui falar com o serviço (${url}).`, { paraPessoa: FALHA_NOSSA })
-    } finally {
-      clearTimeout(timer)
-    }
+  async function chamar (url, opcoes, consumir, esperaMs = TIMEOUT_REQUISICAO_MS) {
+    // O relógio HTTP nasce depois da admissão, e a vaga só volta depois da
+    // leitura. Esperar na fila não pode consumir o prazo do serviço externo.
+    return rede(async () => {
+      const controle = new AbortController()
+      const timer = setTimeout(() => controle.abort(), esperaMs)
+      try {
+        let resposta
+        try {
+          resposta = await buscar(url, { ...opcoes, signal: controle.signal })
+        } catch (erro) {
+          if (erro?.code === 'LCN_SEM_VAGA') throw erro
+          throw new ErroDeConexao(`Não consegui falar com o serviço (${url}).`, { paraPessoa: FALHA_NOSSA })
+        }
+        return await consumir(resposta)
+      } finally {
+        clearTimeout(timer)
+      }
+    })
   }
+  const chamarJson = (url, opcoes, oQue, campoDoErro, esperaMs) =>
+    chamar(url, opcoes, (resposta) => jsonOuErro(resposta, oQue, campoDoErro), esperaMs)
+
+  const buscarMidia = (url, opcoes, lote) => chamar(url, opcoes, async (resposta) => {
+    if (!resposta.ok) {
+      await descartarResposta(resposta)
+      throw new ErroDeConexao(`Não consegui buscar o arquivo (${resposta.status}).`, { paraPessoa: FALHA_NOSSA })
+    }
+    const recebida = lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes, orcamento }))
+    recebida.mime = resposta.headers?.get?.('content-type') || 'image/jpeg'
+    return recebida
+  })
 
   // A FRASE DO SERVIÇO, quando ela serve a quem usou o comando.
   //
@@ -329,7 +351,7 @@ export function criarExecutorDeConexao ({
       // Passados 30s, perguntar de 5 em 5 em vez de 1,5: o pedido curto
       // continua respondendo rápido, e o longo para de encher o log.
       await dormir(agora() - comeco > 30000 ? ESPERA_MAXIMA_ENTRE_CONSULTAS_MS : ESPERA_ENTRE_CONSULTAS_MS)
-      estado = await jsonOuErro(await chamar(url, { method: 'GET', headers: cabecalhos }), `acompanhar ${oQueFaz}`, forma.campoDoErro)
+      estado = await chamarJson(url, { method: 'GET', headers: cabecalhos }, `acompanhar ${oQueFaz}`, forma.campoDoErro)
       const atual = String(porCaminho(estado, forma.campoDoEstado) ?? '')
       // Estado desconhecido ENCERRA a espera. Girar num estado que esta versão
       // não conhece é pior que parar e dizer o que veio.
@@ -405,7 +427,7 @@ export function criarExecutorDeConexao ({
     // foto de dois minutos morria aos 20 segundos — com o serviço ainda
     // trabalhando do outro lado, e ninguém sabendo por quê.
     const espera = Number.isFinite(funcao.esperaSegundos) ? funcao.esperaSegundos * 1000 : TIMEOUT_REQUISICAO_MS
-    const primeira = await jsonOuErro(await chamar(pedido.url, pedido.opcoes, espera), `chamar ${funcao.nome}`, funcao.resposta?.campoDoErro)
+    const primeira = await chamarJson(pedido.url, pedido.opcoes, `chamar ${funcao.nome}`, funcao.resposta?.campoDoErro, espera)
 
     // Resposta com arquivos NA HORA, sem protocolo de trabalho: conversão é
     // rápida, e obrigar um serviço de dois segundos a devolver identificador e
@@ -433,7 +455,7 @@ export function criarExecutorDeConexao ({
           { paraPessoa: FALHA_NOSSA }
         )
       }
-      const recebida = lote.adicionar(lerBase64DeMidia(conteudo, { limiteBytes, orcamento }))
+      const recebida = await cpu(() => lote.adicionar(lerBase64DeMidia(conteudo, { limiteBytes, orcamento })))
       const mime = (funcao.resposta.campoDoMime ? porCaminho(primeira, funcao.resposta.campoDoMime) : null) ||
         'application/octet-stream'
       // O tipo DECLARADO ganha do deduzido: um webp pode ser figurinha ou foto,
@@ -486,19 +508,10 @@ export function criarExecutorDeConexao ({
           // A credencial só acompanha endereço do PRÓPRIO serviço: mandá-la
           // para outra origem entregaria a chave dele a quem ele apontou.
           const mesmaOrigem = url.startsWith(declaracao.endereco)
-          let resposta
           try {
-            resposta = await chamar(url, { method: 'GET', headers: mesmaOrigem ? cabecalhos : {} })
-          } catch {
-            continue
-          }
-          if (!resposta.ok) { await descartarResposta(resposta); continue }
-          try {
-            achada = lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes, orcamento }))
-            achada.mime = resposta.headers?.get?.('content-type') || 'image/jpeg'
+            achada = await buscarMidia(url, { method: 'GET', headers: mesmaOrigem ? cabecalhos : {} }, lote)
           } catch (erro) {
-            // Falta de orçamento encerra o lote; tentar outra capa reteria as
-            // anteriores enquanto disputa a mesma memória que acabou.
+            // Outra capa não cria vaga; a política do cabeçalho decide a recusa.
             if (erro.code === 'LCN_SEM_VAGA') throw erro
             continue
           }
@@ -599,14 +612,9 @@ export function criarExecutorDeConexao ({
         continue
       }
       const url = /^https?:\/\//i.test(item.url) ? item.url : `${base}${item.url}`
-      const resposta = await chamar(url, { method: 'GET', headers: cabecalhos })
-      if (!resposta.ok) {
-        await descartarResposta(resposta)
-        throw new ErroDeConexao(`Não consegui buscar o arquivo (${resposta.status}).`, { paraPessoa: FALHA_NOSSA })
-      }
       let recebida
       try {
-        recebida = lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes, orcamento }))
+        recebida = await buscarMidia(url, { method: 'GET', headers: cabecalhos }, lote)
       } catch (erro) {
         if (erro.code !== 'LCN_MIDIA_GRANDE') throw erro
         foraPorTamanho++

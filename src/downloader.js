@@ -16,6 +16,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { limitesDeMidia } from './mediaLimits.js'
+import { executoresDeRecursos } from './engine/filasDeRecursos.js'
 import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, descartarResposta } from './mediaBudget.js'
 
 const ESPERA_ENTRE_CONSULTAS_MS = 1500
@@ -151,6 +152,7 @@ function formatarMB (bytes) {
 
 export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesDeMidia(cfg).orcamento), buscar = fetch, dormir = (ms) => new Promise((r) => setTimeout(r, ms)), agora = () => Date.now() } = {}) {
   const conf = configuracaoDeDownload(cfg)
+  const { rede } = executoresDeRecursos(cfg)
 
   function exigirConfiguracao () {
     if (!conf.api) {
@@ -166,23 +168,31 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
     }
   }
 
-  async function chamar (caminho, opcoes = {}) {
-    const controle = new AbortController()
-    const timer = setTimeout(() => controle.abort(), TIMEOUT_REQUISICAO_MS)
-    try {
-      return await buscar(`${conf.api}${caminho}`, {
-        ...opcoes,
-        signal: controle.signal,
-        headers: { Authorization: `Bearer ${conf.token}`, ...(opcoes.headers || {}) }
-      })
-    } catch (erro) {
-      // Serviço fora do ar é a causa mais comum, e o erro cru de rede não diz
-      // isso para quem só mandou um link no WhatsApp.
-      throw new ErroDeDownload(`Não consegui falar com o serviço de download (${conf.api}).`, { paraPessoa: FALHA_NOSSA })
-    } finally {
-      clearTimeout(timer)
-    }
+  async function chamar (caminho, opcoes, consumir) {
+    // A vaga acompanha o CORPO, não só os cabeçalhos. Soltá-la antes de
+    // arrayBuffer deixaria todos os downloads lerem memória simultaneamente.
+    return rede(async () => {
+      const controle = new AbortController()
+      const timer = setTimeout(() => controle.abort(), TIMEOUT_REQUISICAO_MS)
+      try {
+        let resposta
+        try {
+          resposta = await buscar(`${conf.api}${caminho}`, {
+            ...opcoes, signal: controle.signal,
+            headers: { Authorization: `Bearer ${conf.token}`, ...(opcoes?.headers || {}) }
+          })
+        } catch (erro) {
+          if (erro?.code === 'LCN_SEM_VAGA') throw erro
+          throw new ErroDeDownload(`Não consegui falar com o serviço de download (${conf.api}).`, { paraPessoa: FALHA_NOSSA })
+        }
+        return await consumir(resposta)
+      } finally {
+        clearTimeout(timer)
+      }
+    })
   }
+
+  const chamarJson = (caminho, opcoes, oQue) => chamar(caminho, opcoes, (resposta) => jsonOuErro(resposta, oQue))
 
   async function jsonOuErro (resposta, oQue) {
     if (resposta.status === 401 || resposta.status === 403) {
@@ -213,7 +223,7 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
   // nosso, para o log.
   async function desistirDoTrabalho (job) {
     try {
-      await chamar(`/jobs/${encodeURIComponent(job)}/cancelar`, { method: 'POST' })
+      await chamar(`/jobs/${encodeURIComponent(job)}/cancelar`, { method: 'POST' }, descartarResposta)
     } catch (erro) {
       console.warn(`[download] Não consegui cancelar o trabalho ${job}: ${erro?.message || erro}`)
     }
@@ -227,7 +237,7 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
       // Passados 30s, perguntar de 5 em 5 segundos em vez de 1,5 — o download
       // curto continua respondendo rápido, e o longo para de encher o log.
       await dormir(agora() - comeco > 30000 ? ESPERA_MAXIMA_ENTRE_CONSULTAS_MS : ESPERA_ENTRE_CONSULTAS_MS)
-      estado = await jsonOuErro(await chamar(`/jobs/${encodeURIComponent(job)}`), 'acompanhar o download')
+      estado = await chamarJson(`/jobs/${encodeURIComponent(job)}`, {}, 'acompanhar o download')
       if (!EM_ANDAMENTO.has(estado?.estado)) return estado
     }
     // "vale olhar por lá" era instrução interna vazando: quem está no WhatsApp
@@ -259,11 +269,11 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
   async function baixarInterno (url, modo, lote) {
     exigirConfiguracao()
 
-    const pedido = await jsonOuErro(await chamar('/download', {
+    const pedido = await chamarJson('/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, modo: modo || conf.modoPadrao })
-    }), 'pedir o download')
+    }, 'pedir o download')
 
     if (!pedido?.job) throw new ErroDeDownload('O serviço aceitou o pedido mas não devolveu um trabalho para acompanhar.', { paraPessoa: FALHA_NOSSA })
 
@@ -298,14 +308,15 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
         continue
       }
 
-      const resposta = await chamar(midia.url)
-      if (!resposta.ok) {
-        await descartarResposta(resposta)
-        throw new ErroDeDownload(`Não consegui buscar o arquivo baixado (${resposta.status}).`)
-      }
       let recebida
       try {
-        recebida = lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes: conf.limiteBytes, orcamento }))
+        recebida = await chamar(midia.url, {}, async (resposta) => {
+          if (!resposta.ok) {
+            await descartarResposta(resposta)
+            throw new ErroDeDownload(`Não consegui buscar o arquivo baixado (${resposta.status}).`)
+          }
+          return lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes: conf.limiteBytes, orcamento }))
+        })
       } catch (erro) {
         if (erro.code !== 'LCN_MIDIA_GRANDE') throw erro
         grandesDemais.push(erro.bytes)

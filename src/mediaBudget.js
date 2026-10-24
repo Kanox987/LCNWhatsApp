@@ -7,22 +7,31 @@ function validarBytes (bytes) {
 export function criarOrcamentoDeMidia (limiteBytes) {
   validarBytes(limiteBytes)
   let reservados = 0
+  let totalReservados = 0
+  let totalLiberados = 0
+  let picoReservados = 0
+  let recusas = 0
   return {
     adquirir (bytes) {
       validarBytes(bytes)
       // Não há espera aqui: reter meio álbum enquanto espera espaço para o
       // resto pode impedir que qualquer álbum termine e devolva sua reserva.
       if (bytes > limiteBytes - reservados) {
+        recusas++
         const erro = new Error('Não há memória livre no orçamento de mídias para receber este arquivo agora.')
         erro.code = 'LCN_SEM_VAGA'
+        erro.recurso = 'memoria'
         throw erro
       }
       reservados += bytes
+      totalReservados += bytes
+      picoReservados = Math.max(picoReservados, reservados)
     },
     liberar (bytes) {
       validarBytes(bytes)
       if (bytes > reservados) throw new Error('Liberação de mídia excede a reserva: o mesmo conteúdo não pode ser liberado duas vezes.')
       reservados -= bytes
+      totalLiberados += bytes
     },
     ajustarLimite (bytes) {
       validarBytes(bytes)
@@ -30,7 +39,7 @@ export function criarOrcamentoDeMidia (limiteBytes) {
       // reservas ficam recusadas até o uso voltar a caber no novo limite.
       limiteBytes = bytes
     },
-    estado: () => ({ limiteBytes, reservados, livres: Math.max(0, limiteBytes - reservados) })
+    estado: () => ({ limiteBytes, reservados, livres: Math.max(0, limiteBytes - reservados), totalReservados, totalLiberados, picoReservados, recusas })
   }
 }
 

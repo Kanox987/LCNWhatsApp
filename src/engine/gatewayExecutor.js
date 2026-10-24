@@ -2,7 +2,8 @@ import { AsyncLocalStorage } from 'async_hooks'
 import * as enviadas from '../enviadas.js'
 import { limitesDeMidia } from '../mediaLimits.js'
 import { criarOrcamentoDeMidia } from '../mediaBudget.js'
-import { criarFila } from './fila.js'
+import { criarFilasDeRecursos, comContextoDeComando, filasDoComando, prioridadeDoComando } from './filasDeRecursos.js'
+import { registrarFonteDeRecursos } from '../state.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
   ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
@@ -105,7 +106,12 @@ function resolverTextoComLatencia (texto, receivedAtMs) {
 async function confirmarFailOpen (clienteEngine, comando, status, resultado = null) {
   try {
     await comTimeout(
-      () => clienteEngine.execucoes.confirmar(comando.id, { status, ...(resultado ? { resultado } : {}) }),
+      () => clienteEngine.execucoes.confirmar(comando.id, {
+        status,
+        // Resultado alimenta a continuação de uma cadeia; detail é persistido
+        // no histórico mesmo quando a execução termina recusada.
+        ...(resultado ? (resultado.code === 'LCN_SEM_VAGA' ? { detail: resultado } : { resultado }) : {})
+      }),
       TIMEOUT_CONFIRMACAO_MS,
       `timeout ao confirmar o comando ${comando.id}`
     )
@@ -143,36 +149,34 @@ async function confirmarFailOpen (clienteEngine, comando, status, resultado = nu
 // O recurso disputado é o SOCKET: enviar e subir mídia. É só isso que a fila
 // protege agora. Um comando longo ocupa a conexão só nos instantes em que
 // realmente fala com ela, e solta entre um e outro.
-let ultimoAvisoDeFila = 0
-let filaDoSocket = null
-let limiteDaFila = null
+const filasPorCliente = new WeakMap()
+let configuracaoDasFilas = {}
 
-// O limite vem da configuração DAQUELE número (painel: "Comandos ao mesmo
-// tempo"), e é lido na primeira vez que alguém manda alguma coisa. Trocar o
-// valor vale a partir do próximo arranque — mexer na fila com trabalho dentro
-// dela trocaria um problema de lentidão por um de mensagem perdida.
+// Mantido para quem configura antes do primeiro envio. Cada instância nasce
+// com sua configuração; alterar uma fila viva perderia pendências admitidas.
 export function configurarFilaDoSocket (cfg) {
-  const limite = Number(cfg?.hardware?.comandosSimultaneos)
-  if (Number.isInteger(limite) && limite >= 1) limiteDaFila = limite
+  if (cfg) configuracaoDasFilas = cfg
+}
+
+export function obterFilasDoGateway (client, cfg = configuracaoDasFilas) {
+  if (!filasPorCliente.has(client)) {
+    const ultimoAviso = {}
+    const filas = criarFilasDeRecursos(cfg, {
+      aoMudar: ({ recurso, esperando, emCurso, limite }) => {
+        if (!esperando) return
+        const agora = Date.now()
+        if (agora - (ultimoAviso[recurso] || 0) < 5000) return
+        ultimoAviso[recurso] = agora
+        console.log(`[engine] fila ${recurso}: ${emCurso} em curso, ${esperando} esperando (limite ${limite})`)
+      }
+    })
+    filasPorCliente.set(client, filas)
+  }
+  return filasPorCliente.get(client)
 }
 
 function socket () {
-  if (!filaDoSocket) {
-    filaDoSocket = criarFila({
-      limite: limiteDaFila || undefined,
-      // A espera só vira log quando ela EXISTE, e no máximo uma vez a cada
-      // cinco segundos: numa rajada de trinta pedidos, trinta linhas iguais
-      // não informam mais que uma.
-      aoMudar: ({ esperando, emCurso, limite }) => {
-        if (!esperando) return
-        const agora = Date.now()
-        if (agora - ultimoAvisoDeFila < 5000) return
-        ultimoAvisoDeFila = agora
-        console.log(`[engine] fila do envio: ${emCurso} em curso, ${esperando} esperando (limite ${limite})`)
-      }
-    })
-  }
-  return filaDoSocket
+  return filasDoComando().socket
 }
 
 // A ESPERA NA FILA NÃO CONTA PARA O RELÓGIO DO ENVIO.
@@ -190,7 +194,7 @@ async function enviarERegistrar (client, destino, conteudo, opcoes) {
   const resultado = await semContarAEspera((sinal) => socket().executar(() => {
     sinal()
     return client.message.send(destino, conteudo, opcoes)
-  }))
+  }, { prioridade: prioridadeDoComando() }))
   enviadas.registrar(resultado?.id)
   return resultado
 }
@@ -201,7 +205,7 @@ async function subirMidia (client, buffer, opcoes) {
   return semContarAEspera((sinal) => socket().executar(() => {
     sinal()
     return client.message.upload(buffer, opcoes)
-  }))
+  }, { prioridade: prioridadeDoComando() }))
 }
 
 function opcoesDeCitacao (replyTo) {
@@ -262,7 +266,7 @@ async function executarPagina (client, comando) {
         )
         console.log(`[engine] página ${comando.id}: variação ${n} "${variacao.nome}" enviada`)
       } catch (erro) {
-        if (erro?.code === 'LCN_TIMEOUT') throw erro
+        if (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_SEM_VAGA') throw erro
         console.warn(`[engine] variação ${n} "${variacao.nome}" recusada: ${mensagemDoErro(erro)}`)
       }
     }
@@ -293,7 +297,7 @@ async function executarPagina (client, comando) {
       `timeout ao mandar a página do comando ${comando.id}`
     )
   } catch (erro) {
-    if (erro?.code === 'LCN_TIMEOUT') throw erro
+    if (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_SEM_VAGA') throw erro
     console.warn(`[engine] Botão de página recusado (${mensagemDoErro(erro)}) — mandando o endereço como texto.`)
     await comTimeout(
       () => enviarERegistrar(client, p.chatId, { type: 'text', text: comoTexto }, opcoesDeCitacao(p.replyTo)),
@@ -417,6 +421,7 @@ async function executarDownload (client, comando, deps) {
         `timeout ao avisar o início do download do comando ${comando.id}`
       )
     } catch (erro) {
+      if (erro?.code === 'LCN_SEM_VAGA') throw erro
       console.warn(`[engine] Não consegui avisar o início do download: ${mensagemDoErro(erro)}`)
     }
   }
@@ -425,6 +430,7 @@ async function executarDownload (client, comando, deps) {
   try {
     midia = await criarBaixador({ cfg, orcamento: deps.orcamento }).baixar(url, modo)
   } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
     // O registro fica como falha mesmo assim — a pessoa recebeu uma mensagem,
     // mas não recebeu o que pediu, e o histórico não pode dizer que deu certo.
     //
@@ -447,6 +453,7 @@ async function executarDownload (client, comando, deps) {
       legenda, entrega, opcoesCitacao: opcoesDeCitacao(replyTo), comandoId: comando.id
     })
   } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
     // ESTE é o caso que deixou o dono olhando "⏳ Baixando…" para sempre: o
     // arquivo veio inteiro e o envio ao WhatsApp é que falhou. O tamanho entra
     // na mensagem porque é a causa mais provável — o serviço aceita arquivo
@@ -627,6 +634,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
         `timeout ao avisar o início da chamada do comando ${comando.id}`
       )
     } catch (erro) {
+      if (erro?.code === 'LCN_SEM_VAGA') throw erro
       console.warn(`[engine] Não consegui avisar o início da chamada: ${mensagemDoErro(erro)}`)
     }
   }
@@ -681,6 +689,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
       const declaracao = await clienteEngine.conexoes.resolvida(conexao)
       resultado = await criarExecutorDeConexao({ limiteBytes, orcamento, cfg }).executar(declaracao, funcao, entradas || {}, arquivo, arquivo2)
     } catch (erro) {
+      if (erro?.code === 'LCN_SEM_VAGA') throw erro
       await avisar(mensagemParaPessoa(erro))
       throw erro
     }
@@ -778,6 +787,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
           console.log(`[engine] carrossel ${comando.id}: forma "${estilo}", ${cards.length} card(s) e botão`)
         }
       } catch (erro) {
+        if (erro?.code === 'LCN_SEM_VAGA') throw erro
         // Mensagem interativa depende do aplicativo de quem recebe. Cair para
         // texto não é tratamento de erro, é parte do desenho: o conteúdo sempre
         // chega de algum jeito, e aqui ele chega como a lista escrita.
@@ -827,6 +837,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
         comandoId: comando.id
       })
     } catch (erro) {
+      if (erro?.code === 'LCN_SEM_VAGA') throw erro
       await avisar(`recebi ${formatarMB(bytesTotais)} mas não consegui enviar aqui (${mensagemParaPessoa(erro)})`)
       throw erro
     }
@@ -874,6 +885,7 @@ async function executarGuardarNoAcervo (client, comando, deps) {
       folder: pasta || null
     })
   } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
     // O erro do acervo é acionável por quem mandou: "tipo não aceito",
     // "grande demais", "não cabe". Vai inteiro, ao contrário dos nossos.
     await avisar(erro?.message || 'não consegui guardar')
@@ -1015,7 +1027,7 @@ async function executarMenu (client, comando) {
       `timeout ao enviar o menu do comando ${comando.id}`
     )
   } catch (erro) {
-    if (erro?.code === 'LCN_TIMEOUT') throw erro
+    if (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_SEM_VAGA') throw erro
     // O envio interativo falhou (app antigo, formato recusado pelo servidor).
     // Cair para texto é melhor que a pessoa ficar sem menu nenhum.
     console.warn(`[engine] Menu interativo recusado, enviando como texto: ${mensagemDoErro(erro)}`)
@@ -1147,7 +1159,7 @@ async function executarMensagemRica (client, comando) {
       `timeout ao enviar a mensagem formatada do comando ${comando.id}`
     )
   } catch (erro) {
-    if (erro?.code === 'LCN_TIMEOUT') throw erro
+    if (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_SEM_VAGA') throw erro
     // Esperado sempre que a Meta mudar algo. Cair para texto comum mantém a
     // automação útil em vez de simplesmente parar de responder.
     console.warn(`[engine] Mensagem formatada recusada, enviando como texto: ${mensagemDoErro(erro)}`)
@@ -1234,53 +1246,88 @@ async function executarEnvioDeArquivo (client, comando, deps) {
   )
 }
 
-export async function executarComandos (client, comandos, clienteEngine, deps = {}) {
-  configurarFilaDoSocket(deps?.cfg)
-  for (const comando of Array.isArray(comandos) ? comandos : []) {
-    let status
-
-    const executor = {
-      'whatsapp.reply': executarResposta,
-      'whatsapp.webview': executarPagina,
-      'whatsapp.recover': executarRecover,
-      'whatsapp.menu': executarMenu,
-      'whatsapp.delete': executarApagar,
-      'group.remove': executarRemoverDoGrupo,
-      'whatsapp.rich': executarMensagemRica,
-      'whatsapp.sendFile': executarEnvioDeArquivo,
-      'media.download': executarDownload,
-      'connection.call': executarChamadaDeConexao,
-      'acervo.save': executarGuardarNoAcervo
-    }[comando?.commandType]
-
-    let resultado = null
-    if (!executor) {
-      console.warn(`[engine] Tipo de comando desconhecido; execução recusada: ${comando?.commandType || '(ausente)'}`)
-      status = 'outcome_unknown'
-    } else {
-      try {
-        // `clienteEngine` entra nas dependências porque a chamada de conexão
-        // precisa buscar a declaração no motor — é o único executor que
-        // consulta o motor em vez de só agir sobre o WhatsApp.
-        // O executor devolve resultado só quando o comando é ELO DE CADEIA:
-        // aí ele não entrega nada, guarda o arquivo e passa a referência
-        // adiante. Em tudo mais o retorno é indiferente.
-        resultado = (await executor(client, comando, { ...(await resolverDependencias(deps)), clienteEngine })) || null
-        status = 'sent'
-      } catch (erro) {
-        status = (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_RESULTADO_INCERTO')
-          ? 'outcome_unknown'
-          : 'failed'
-        // O nome e a origem entram porque "The operation was aborted" sozinho
-        // não diz de qual camada veio — e foi exatamente esse log cego que
-        // custou uma investigação inteira para achar o envio do download.
-        console.warn(`[engine] Falha ao executar o comando ${comando.id} (${comando.commandType}): ${erro?.name || 'Erro'}: ${mensagemDoErro(erro)}`)
-        const origem = String(erro?.stack || '').split('\n')[1]
-        if (origem) console.warn(`[engine]   origem:${origem.replace(/^\s*at\s*/, ' ')}`)
+async function tratarSemVaga (client, comando, erro, filas) {
+  filas.registrarRecusa(erro)
+  const politica = comando.payload?.scheduling?.onNoSlot
+  const resultado = {
+    code: 'LCN_SEM_VAGA', recurso: erro.recurso || 'desconhecido',
+    motivo: erro.motivo || 'sem_orcamento', prioridade: prioridadeDoComando(),
+    decisao: politica?.kind === 'notify' ? 'notify' : 'discard'
+  }
+  console.warn(`[engine] LCN_SEM_VAGA comando=${comando.id} recurso=${resultado.recurso} prioridade=${resultado.prioridade} motivo=${resultado.motivo} decisao=${resultado.decisao}`)
+  if (resultado.decisao === 'notify') {
+    try {
+      if (!comando.payload?.chatId || typeof politica.text !== 'string' || !politica.text.trim()) {
+        throw new Error('O aviso de falta de vaga veio sem conversa ou texto válido.')
       }
+      // Uma única tentativa na mesma fila de envios e com a mesma urgência.
+      // Este catch nunca volta ao executor: falhar no aviso não cria recursão.
+      await comTimeout(
+        () => enviarERegistrar(client, comando.payload.chatId, { type: 'text', text: politica.text }, opcoesDeCitacao(comando.payload.replyTo)),
+        TIMEOUT_ENVIO_MS, `timeout ao avisar falta de vaga do comando ${comando.id}`
+      )
+      resultado.aviso = 'enviado'
+      filas.registrarAviso('enviados')
+    } catch (erroDoAviso) {
+      resultado.aviso = erroDoAviso?.code === 'LCN_SEM_VAGA' ? 'recusado' : 'falhou'
+      resultado.codigoDoAviso = erroDoAviso?.code || 'LCN_FALHA_AVISO'
+      filas.registrarAviso(resultado.aviso === 'recusado' ? 'recusados' : 'falharam')
+      console.warn(`[engine] Aviso de LCN_SEM_VAGA ${resultado.aviso} comando=${comando.id}: ${resultado.codigoDoAviso}: ${mensagemDoErro(erroDoAviso)}; erro original preservado: ${mensagemDoErro(erro)}`)
     }
+  }
+  return resultado
+}
 
-    await confirmarFailOpen(clienteEngine, comando, status, resultado)
+export async function executarComandos (client, comandos, clienteEngine, deps = {}) {
+  const filas = deps.filas || obterFilasDoGateway(client, deps.cfg)
+  registrarFonteDeRecursos(() => ({ ...filas.estado, memoria: (deps.orcamento || orcamentoDoGateway)?.estado() || null }))
+  for (const comando of Array.isArray(comandos) ? comandos : []) {
+    await comContextoDeComando(comando?.payload?.scheduling, filas, async () => {
+      let status
+      const politica = comando?.payload?.scheduling?.onNoSlot
+      if (politica?.kind && !['discard', 'notify'].includes(politica.kind)) {
+        filas.registrarPoliticaInvalida()
+        console.warn(`[engine] Política sem vaga inválida (${politica.kind}) no comando ${comando.id}; o compilador deveria ter barrado. Tratando como discard, sem repetir.`)
+      }
+      const executor = {
+        'whatsapp.reply': executarResposta,
+        'whatsapp.webview': executarPagina,
+        'whatsapp.recover': executarRecover,
+        'whatsapp.menu': executarMenu,
+        'whatsapp.delete': executarApagar,
+        'group.remove': executarRemoverDoGrupo,
+        'whatsapp.rich': executarMensagemRica,
+        'whatsapp.sendFile': executarEnvioDeArquivo,
+        'media.download': executarDownload,
+        'connection.call': executarChamadaDeConexao,
+        'acervo.save': executarGuardarNoAcervo
+      }[comando?.commandType]
+      let resultado = null
+      if (!executor) {
+        console.warn(`[engine] Tipo de comando desconhecido; execução recusada: ${comando?.commandType || '(ausente)'}`)
+        status = 'outcome_unknown'
+      } else {
+        try {
+          const resolvidas = await resolverDependencias(deps)
+          // A recuperação e a entrada de mídia compartilham rede com o HTTP,
+          // sem segurar a vaga de socket durante o download.
+          const baixarBuffer = (...args) => filas.executar('rede', () => resolvidas.baixarBuffer(...args))
+          resultado = (await executor(client, comando, { ...resolvidas, baixarBuffer, clienteEngine })) || null
+          status = 'sent'
+        } catch (erro) {
+          if (erro?.code === 'LCN_SEM_VAGA') {
+            status = 'failed'
+            resultado = await tratarSemVaga(client, comando, erro, filas)
+          } else {
+            status = (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_RESULTADO_INCERTO') ? 'outcome_unknown' : 'failed'
+            console.warn(`[engine] Falha ao executar o comando ${comando.id} (${comando.commandType}): ${erro?.name || 'Erro'}: ${mensagemDoErro(erro)}`)
+            const origem = String(erro?.stack || '').split('\n')[1]
+            if (origem) console.warn(`[engine]   origem:${origem.replace(/^\s*at\s*/, ' ')}`)
+          }
+        }
+      }
+      await confirmarFailOpen(clienteEngine, comando, status, resultado)
+    })
   }
 }
 

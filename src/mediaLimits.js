@@ -12,6 +12,8 @@ export function limitesDeMidia (cfg) {
   const geral = emBytes(cfg?.hardware?.maxMidiaMB, 64)
   return {
     geral,
+    downloadConcorrencia: Number.isSafeInteger(cfg?.hardware?.downloadConcorrencia) && cfg.hardware.downloadConcorrencia > 0
+      ? cfg.hardware.downloadConcorrencia : 2,
     download: Math.min(geral, emBytes(cfg?.download?.limiteMB, 64)),
     // O álbum fica vivo até a entrega: limitar cada arquivo não limita a
     // soma. Este padrão pode ser trocado em hardware.orcamentoMidiaMB.
