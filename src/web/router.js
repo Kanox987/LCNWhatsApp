@@ -107,7 +107,15 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.get('/api/v1/automations/:id', ({ params }) => automacoes().obter(params.id))
   roteador.delete('/api/v1/automations/:id', ({ params }) => automacoes().remover(params.id))
   roteador.get('/api/v1/automations/:id/revisions', ({ params }) => automacoes().listarRevisoes(params.id))
-  roteador.get('/api/v1/automations/:id/revisions/:rev', ({ params }) => automacoes().obterRevisao(params.id, params.rev))
+  roteador.get('/api/v1/automations/:id/revisions/:rev', async ({ params }) => {
+    const rev = await automacoes().obterRevisao(params.id, params.rev)
+    if (!rev) return rev
+    let texto = null
+    if (rev.document) {
+      try { texto = descompilar(rev.document) } catch { texto = null }
+    }
+    return { ...rev, texto }
+  })
   roteador.put('/api/v1/automations/:id/draft', ({ params, body, req }) => automacoes().salvarRascunho(params.id, body, req?.headers?.['if-match']))
   roteador.post('/api/v1/automations/:id/validate', ({ params, body }) => automacoes().validar(params.id, body))
   roteador.post('/api/v1/automations/:id/publish', ({ params, body }) => automacoes().publicar(params.id, body?.revision))

@@ -1,8 +1,9 @@
 import { api } from '../api.js'
-import { badge, button, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
+import { badge, button, copyText, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
 import { criarControleParametro, rotuloTipo, valorParametro } from '../logic/parametros.js'
 import { editorLcn } from './editor-lcn.js'
 import { referenciaLcn } from './referencia-lcn.js'
+import { analisarErroApagar, mensagemConfirmacaoApagar, statusRevisao, textoDaRevisao } from '../logic/automacoes.js'
 
 function statusAutomation (automation) {
   if (!automation.activeRevisionId) return badge('Somente rascunho', 'neutral')
@@ -80,6 +81,119 @@ async function painelReconfiguracao (automation, { refresh }) {
     el('div', { className: 'form-grid' }, campos),
     el('div', { className: 'button-row' }, [salvar])
   ].filter(Boolean))
+}
+
+// O HISTÓRICO DE REVISÕES DE UMA AUTOMAÇÃO.
+//
+// O motor guarda cada versão em `automation_revisions`. Aqui a tela exibe a
+// lista por ordem decrescente, mostra qual revisão está ativa agora e permite
+// LER o texto de qualquer revisão antiga.
+//
+// A ARMADILHA QUE JÁ ACONTECEU NESTE PROJETO:
+// 'acoes' e 'conteudo' ficam estritamente separados. O botão "Ver o texto"
+// preenche a área de conteúdo sem substituir a área de botões (`acoes`),
+// evitando o bug histórico em que `caixa.replaceChildren` devorava o botão
+// de editar e outros controles do cartão.
+async function painelRevisoes (automation) {
+  let revisoes = []
+  try {
+    revisoes = await api.automations.revisions(automation.id)
+  } catch (erro) {
+    return el('div', { className: 'notice notice-danger compact' }, [
+      el('strong', { text: 'Não foi possível carregar as revisões.' }),
+      el('p', { text: erro.message })
+    ])
+  }
+
+  if (!Array.isArray(revisoes) || !revisoes.length) {
+    return el('div', { className: 'notice notice-info compact' }, [
+      el('p', { text: 'Nenhuma revisão encontrada para esta automação.' })
+    ])
+  }
+
+  const itens = revisoes.map((rev) => {
+    const estado = statusRevisao(rev, automation.activeRevisionId)
+    const selo = badge(estado.rotulo, estado.tom)
+
+    // OS BOTÕES FICAM NA ÁREA DE AÇÕES; O TEXTO VAI EMBAIXO NA ÁREA DE CONTEÚDO.
+    const acoes = el('div', { className: 'button-row' })
+    const conteudo = el('div', { className: 'stack-sm' })
+    let aberto = false
+
+    const verTexto = button('Ver o texto', {
+      variant: 'quiet',
+      onClick: async (evento) => {
+        const controle = evento.currentTarget
+        if (aberto) {
+          conteudo.replaceChildren()
+          aberto = false
+          controle.textContent = 'Ver o texto'
+          return
+        }
+        setBusy(controle, true, 'Lendo…')
+        try {
+          const dados = await api.automations.revision(automation.id, rev.revision)
+          const texto = textoDaRevisao(dados)
+
+          const avisoSomenteLeitura = el('p', {
+            className: 'muted compact',
+            text: 'Visualização somente leitura desta revisão. Para alterar esta automação, use o editor na versão atual.'
+          })
+
+          const blocoTexto = el('pre', {
+            className: 'readonly-box compact',
+            style: 'white-space: pre; overflow-x: auto; max-height: 280px;'
+          }, texto)
+
+          const copiar = button('Copiar texto', {
+            variant: 'quiet',
+            onClick: async (evCopiar) => {
+              const c = evCopiar.currentTarget
+              await copyText(texto)
+              c.textContent = 'Copiado!'
+              setTimeout(() => { c.textContent = 'Copiar texto' }, 1400)
+            }
+          })
+
+          conteudo.replaceChildren(
+            avisoSomenteLeitura,
+            blocoTexto,
+            el('div', { className: 'button-row' }, [copiar])
+          )
+          aberto = true
+          controle.textContent = 'Esconder texto'
+        } catch (erro) {
+          conteudo.replaceChildren(el('p', { className: 'muted compact', text: `Não consegui ler esta revisão: ${erro.message}` }))
+        } finally {
+          setBusy(controle, false)
+        }
+      }
+    })
+
+    acoes.append(verTexto)
+
+    return el('div', { className: 'list-card compact stack-sm' }, [
+      el('div', { className: 'row-between compact' }, [
+        el('div', {}, [
+          el('strong', { text: `Revisão #${rev.revision}` }),
+          el('p', { className: 'muted compact', text: `Salva em ${formatDate(rev.createdAt)}` })
+        ]),
+        selo
+      ]),
+      acoes,
+      conteudo
+    ])
+  })
+
+  return el('section', { className: 'card stack' }, [
+    el('div', { className: 'panel-heading' }, [
+      el('div', {}, [
+        el('h3', { text: 'Histórico de revisões' }),
+        el('p', { text: 'Versões salvas desta automação. A visualização é somente leitura.' })
+      ])
+    ]),
+    el('div', { className: 'stack-sm' }, itens)
+  ])
 }
 
 async function renderList ({ navigate, refresh }) {
@@ -182,6 +296,136 @@ async function renderList ({ navigate, refresh }) {
       }
     }))
 
+    // HISTÓRICO DE REVISÕES.
+    //
+    // Carrega sob demanda as versões gravadas no banco e permite ler o texto de
+    // qualquer revisão antiga em modo somente leitura.
+    const areaRevisoes = el('div', { className: 'stack' })
+    let revisoesAbertas = false
+    actions.append(button('Revisões', {
+      variant: 'quiet',
+      onClick: async (event) => {
+        const control = event.currentTarget
+        if (revisoesAbertas) {
+          areaRevisoes.replaceChildren()
+          revisoesAbertas = false
+          return
+        }
+        setBusy(control, true, 'Carregando…')
+        try {
+          areaRevisoes.replaceChildren(await painelRevisoes(automation))
+          revisoesAbertas = true
+        } catch (error) {
+          areaRevisoes.replaceChildren(errorState({ message: error.message, details: error?.details }))
+          revisoesAbertas = true
+        } finally {
+          setBusy(control, false)
+        }
+      }
+    }))
+
+    // TIRAR DO AR (DESPUBLICAR).
+    //
+    // Ação segura: tira do ar e mantém 100% do histórico e das configurações.
+    // É o caminho seguro para comandos que já rodaram e não podem ser apagados
+    // sem destruir auditoria.
+    if (automation.activeRevisionId) {
+      actions.append(button('Tirar do ar', {
+        variant: 'quiet',
+        title: 'Tira do ar sem perder o histórico de execuções.',
+        onClick: async (event) => {
+          const control = event.currentTarget
+          const confirmou = window.confirm(
+            `Tirar a automação "${name}" do ar?\n\n` +
+            'Ela deixará de responder no WhatsApp, mas todas as configurações e o histórico de execuções serão preservados.'
+          )
+          if (!confirmou) return
+          setBusy(control, true, 'Tirando…')
+          try {
+            await api.automations.unpublish(automation.id)
+            notify(`Automação "${name}" tirada do ar. O histórico foi preservado.`)
+            await refresh()
+          } catch (error) {
+            notify(error.message, 'danger')
+            setBusy(control, false)
+          }
+        }
+      }))
+    }
+
+    // APAGAR AUTOMAÇÃO.
+    //
+    // Só permitido quando NÃO houver histórico dependente. Se houver (HTTP 409),
+    // a tela NÃO mostra erro vermelho: exibe o aviso claro do motor e oferece
+    // "Tirar do ar" no lugar.
+    const areaAviso = el('div', { className: 'stack' })
+    actions.append(button('Apagar', {
+      variant: 'danger-quiet',
+      title: 'Remove esta automação (só permitido quando não há histórico dependente).',
+      onClick: async (event) => {
+        const control = event.currentTarget
+        setBusy(control, true, 'Conferindo…')
+        let totalExecucoes = null
+        try {
+          const runs = await api.executions.list({ automationId: automation.id, runStatus: 'aconteceu' })
+          if (Array.isArray(runs?.items)) {
+            totalExecucoes = runs.nextCursor ? `${runs.items.length}+` : runs.items.length
+          }
+        } catch {
+          totalExecucoes = null
+        } finally {
+          setBusy(control, false)
+        }
+
+        const confirmou = window.confirm(mensagemConfirmacaoApagar({
+          nome,
+          id: automation.id,
+          totalExecucoes
+        }))
+        if (!confirmou) return
+
+        setBusy(control, true, 'Apagando…')
+        areaAviso.replaceChildren()
+        try {
+          await api.automations.remove(automation.id)
+          notify(`Automação "${name}" apagada.`)
+          await refresh()
+        } catch (error) {
+          setBusy(control, false)
+          const analise = analisarErroApagar(error)
+          if (analise.bloqueadoPorHistorico) {
+            areaAviso.replaceChildren(
+              el('div', { className: 'notice notice-warning' }, [
+                el('strong', { text: 'Não é possível apagar automação com histórico' }),
+                el('p', { text: analise.mensagem }),
+                automation.activeRevisionId
+                  ? el('div', { className: 'button-row' }, [
+                      button('Tirar do ar agora', {
+                        variant: 'primary',
+                        onClick: async (ev) => {
+                          const b = ev.currentTarget
+                          setBusy(b, true, 'Tirando…')
+                          try {
+                            await api.automations.unpublish(automation.id)
+                            notify(`Automação "${name}" tirada do ar. O histórico foi preservado.`)
+                            await refresh()
+                          } catch (errUnpub) {
+                            notify(errUnpub.message, 'danger')
+                            setBusy(b, false)
+                          }
+                        }
+                      })
+                    ])
+                  : el('p', { className: 'muted compact', text: 'Esta automação já está fora do ar. Seu histórico permanece protegido para auditoria.' })
+              ])
+            )
+          } else {
+            notify(error.message, 'danger')
+          }
+        }
+      }
+    }))
+
     // VERSÃO NOVA DO TEMPLATE DISPONÍVEL.
     //
     // Ninguém abre o formulário de um comando que está funcionando, então
@@ -219,12 +463,14 @@ async function renderList ({ navigate, refresh }) {
       ]),
       avisoDeConflito,
       avisoDeVersao,
+      areaAviso,
       el('div', { className: 'list-card-meta' }, [
         el('span', { text: automation.activeRevisionId ? `Revisão ativa #${automation.draft?.revision || '—'}` : 'Ainda não publicada' }),
         el('span', { text: `Atualizada em ${formatDate(automation.updatedAt)}` })
       ]),
       actions,
-      areaConfig
+      areaConfig,
+      areaRevisoes
     ])
   }))
 }
@@ -251,7 +497,32 @@ async function renderList ({ navigate, refresh }) {
 async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
   const documento = atual?.draft?.document
 
-  const acoes = [button('← Voltar para a lista', { onClick: () => navigate('/automations') })]
+  const areaRevisoes = el('div', { className: 'stack' })
+  let revisoesAbertas = false
+  const acoes = [
+    button('← Voltar para a lista', { onClick: () => navigate('/automations') }),
+    button('Histórico de revisões', {
+      variant: 'quiet',
+      onClick: async (event) => {
+        const control = event.currentTarget
+        if (revisoesAbertas) {
+          areaRevisoes.replaceChildren()
+          revisoesAbertas = false
+          return
+        }
+        setBusy(control, true, 'Carregando…')
+        try {
+          areaRevisoes.replaceChildren(await painelRevisoes(atual))
+          revisoesAbertas = true
+        } catch (error) {
+          areaRevisoes.replaceChildren(errorState({ message: error.message, details: error?.details }))
+          revisoesAbertas = true
+        } finally {
+          setBusy(control, false)
+        }
+      }
+    })
+  ]
 
   setPageHeader({
     eyebrow: `Editando ${atual.id}`,
@@ -322,7 +593,35 @@ async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
     }
   })
 
-  const editor = editorLcn({ texto: lido.texto, botoes: [salvar, publicar] })
+  const tirarDoAr = atual.activeRevisionId
+    ? button('Tirar do ar', {
+        variant: 'quiet',
+        title: 'Tira do ar preservando o histórico de execuções.',
+        onClick: async () => {
+          const nome = documento?.name || atual.id
+          const confirmou = window.confirm(
+            `Tirar a automação "${nome}" do ar?\n\n` +
+            'Ela deixará de responder no WhatsApp, mas todas as configurações e o histórico de execuções serão preservados.'
+          )
+          if (!confirmou) return
+          setBusy(tirarDoAr, true, 'Tirando…')
+          try {
+            await api.automations.unpublish(atual.id)
+            notify(`Automação "${nome}" tirada do ar. O histórico foi preservado.`)
+            refresh?.()
+          } catch (erro) {
+            editor.mostrarErro('Não consegui tirar do ar', erro.message, null)
+          } finally {
+            setBusy(tirarDoAr, false)
+          }
+        }
+      })
+    : null
+
+  const botoes = [salvar, publicar]
+  if (tirarDoAr) botoes.push(tirarDoAr)
+
+  const editor = editorLcn({ texto: lido.texto, botoes })
 
   return el('div', { className: 'stack' }, [
     el('div', { className: 'notice notice-info' }, [
@@ -330,8 +629,7 @@ async function renderEditorDeTexto ({ atual, motivo, navigate, refresh }) {
       el('p', { text: motivo }),
       el('p', { text: 'O texto vira exatamente o mesmo documento que o motor executa. Salvar cria um rascunho; publicar é que coloca no ar.' })
     ]),
-    // A referência fica AO LADO, e o editor e ela nascem juntos. Antes a ajuda
-    // existia só na tela de criar — quem editava não tinha onde olhar.
+    areaRevisoes,
     el('div', { className: 'lcn-oficina' }, [
       editor.elemento,
       referenciaLcn({ inserir: editor.inserir })

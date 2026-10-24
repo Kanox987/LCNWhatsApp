@@ -117,7 +117,7 @@ export function registrarRotasAutomations (roteador, db) {
     if (comHistorico.total > 0) {
       throw new ErroHttp(409,
         `Esta automação já executou ${comHistorico.total} vez(es) e o histórico dessas execuções depende dela. ` +
-        'Para tirá-la do ar sem perder o histórico, use "Despublicar" ou desligue a automação.')
+        'Para tirá-la do ar sem perder o histórico, use "Tirar do ar" ou desligue a automação.')
     }
 
     const apagar = db.transaction(() => {
