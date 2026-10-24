@@ -7,25 +7,17 @@
 // arbitrário. O custo é ~33% a mais no corpo da requisição, aceitável para um
 // painel que roda em 127.0.0.1.
 import * as acervo from '../mediaLibrary.js'
-
-// Teto do corpo decodificado, conferido ANTES de alocar o buffer inteiro: sem
-// isto, um base64 gigante viraria memória antes de qualquer validação.
-const LIMITE_BASE64 = Math.ceil((acervo.LIMITE_POR_ARQUIVO_BYTES * 4) / 3) + 1024
-
-// Buffer.from(x, 'base64') NÃO falha com entrada inválida: ele simplesmente
-// ignora os caracteres que não reconhece e devolve o que sobrou. "!!!isto
-// não é base64!!!" vira 9 bytes de lixo em vez de erro. Por isso o formato é
-// conferido antes — senão lixo entraria no acervo como se fosse arquivo.
-const BASE64_VALIDO = /^[A-Za-z0-9+/]+={0,2}$/
-
-function decodificarBase64 (bruto) {
-  const limpo = String(bruto).replace(/\s+/g, '')
-  if (!limpo || limpo.length % 4 !== 0 || !BASE64_VALIDO.test(limpo)) return null
-  const buffer = Buffer.from(limpo, 'base64')
-  return buffer.length ? buffer : null
-}
+import { decodificarBase64 } from '../mediaBase64.js'
 
 export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
+  function decodificar (base64) {
+    try {
+      return decodificarBase64(base64, biblioteca.LIMITE_POR_ARQUIVO_BYTES)
+    } catch (erro) {
+      throw new biblioteca.ErroDeAcervo(erro.message)
+    }
+  }
+
   // Os limites viajam junto com a lista de propósito: a tela precisa deles
   // para montar o `accept` do seletor e recusar arquivo grande ANTES de ler
   // 32 MB em memória. Duplicar esses números no navegador seria criar uma
@@ -52,13 +44,7 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     if (typeof base64 !== 'string' || !base64) {
       throw new biblioteca.ErroDeAcervo('Envie o novo conteúdo em contentBase64.')
     }
-    if (base64.length > LIMITE_BASE64) {
-      throw new biblioteca.ErroDeAcervo(
-        `Arquivo grande demais: o limite por arquivo é ${Math.round(acervo.LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`
-      )
-    }
-    const buffer = decodificarBase64(base64)
-    if (!buffer) throw new biblioteca.ErroDeAcervo('Conteúdo do arquivo inválido ou vazio.')
+    const buffer = decodificar(base64)
     return biblioteca.reescrever(id, buffer)
   }
 
@@ -67,14 +53,8 @@ export function criarServicoAcervo ({ biblioteca = acervo } = {}) {
     if (typeof base64 !== 'string' || !base64) {
       throw new biblioteca.ErroDeAcervo('Envie o conteúdo do arquivo em contentBase64.')
     }
-    if (base64.length > LIMITE_BASE64) {
-      throw new biblioteca.ErroDeAcervo(
-        `Arquivo grande demais: o limite por arquivo é ${Math.round(acervo.LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`
-      )
-    }
 
-    const buffer = decodificarBase64(base64)
-    if (!buffer) throw new biblioteca.ErroDeAcervo('Conteúdo do arquivo inválido ou vazio.')
+    const buffer = decodificar(base64)
 
     return biblioteca.guardar(buffer, {
       mimetype: body?.mimetype,

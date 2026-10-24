@@ -20,9 +20,9 @@ function servico (respostas) {
     // O dublê serve JSON e ARQUIVO: depois que o trabalho termina, o executor
     // busca cada mídia apontada. `arquivo:` diz "esta resposta são bytes".
     if (proxima && proxima.arquivo !== undefined) {
-      return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(proxima.arquivo) }
+      return { ok: true, status: 200, headers: new Headers({ 'content-length': String(Buffer.byteLength(proxima.arquivo)) }), arrayBuffer: async () => Buffer.from(proxima.arquivo) }
     }
-    return { ok: true, status: 200, json: async () => proxima, arrayBuffer: async () => Buffer.from('bytes') }
+    return { ok: true, status: 200, json: async () => proxima, headers: new Headers({ 'content-length': '5' }), arrayBuffer: async () => Buffer.from('bytes') }
   }
   return { buscar, chamadas }
 }

@@ -15,6 +15,8 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { limitesDeMidia } from './mediaLimits.js'
+import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, descartarResposta } from './mediaBudget.js'
 
 const ESPERA_ENTRE_CONSULTAS_MS = 1500
 // A espera entre consultas cresce com o tempo: um download longo não precisa
@@ -136,7 +138,7 @@ export function configuracaoDeDownload (cfg) {
     token: lerToken(d.tokenArquivo),
     tokenArquivo: d.tokenArquivo || '',
     modoPadrao: d.modoPadrao || 'auto',
-    limiteBytes: (Number(d.limiteMB) > 0 ? Number(d.limiteMB) : 64) * 1024 * 1024,
+    limiteBytes: limitesDeMidia(cfg).download,
     // Sem piso: um piso silencioso ignoraria o que a pessoa configurou. Só
     // valor sem sentido (zero, negativo, não-número) cai no padrão.
     esperaMaximaMs: (Number(d.esperaMaximaSegundos) > 0 ? Number(d.esperaMaximaSegundos) : 300) * 1000
@@ -147,7 +149,7 @@ function formatarMB (bytes) {
   return `${(Number(bytes || 0) / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
 }
 
-export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promise((r) => setTimeout(r, ms)), agora = () => Date.now() } = {}) {
+export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesDeMidia(cfg).orcamento), buscar = fetch, dormir = (ms) => new Promise((r) => setTimeout(r, ms)), agora = () => Date.now() } = {}) {
   const conf = configuracaoDeDownload(cfg)
 
   function exigirConfiguracao () {
@@ -254,7 +256,7 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
     return Array.isArray(midias) ? midias.filter((m) => m?.url) : []
   }
 
-  async function baixar (url, modo) {
+  async function baixarInterno (url, modo, lote) {
     exigirConfiguracao()
 
     const pedido = await jsonOuErro(await chamar('/download', {
@@ -297,22 +299,26 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
       }
 
       const resposta = await chamar(midia.url)
-      if (!resposta.ok) throw new ErroDeDownload(`Não consegui buscar o arquivo baixado (${resposta.status}).`)
-      const buffer = Buffer.from(await resposta.arrayBuffer())
-      if (!buffer.length) throw new ErroDeDownload('O arquivo baixado veio vazio.')
-      if (buffer.length > conf.limiteBytes) {
-        grandesDemais.push(buffer.length)
+      if (!resposta.ok) {
+        await descartarResposta(resposta)
+        throw new ErroDeDownload(`Não consegui buscar o arquivo baixado (${resposta.status}).`)
+      }
+      let recebida
+      try {
+        recebida = lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes: conf.limiteBytes, orcamento }))
+      } catch (erro) {
+        if (erro.code !== 'LCN_MIDIA_GRANDE') throw erro
+        grandesDemais.push(erro.bytes)
         continue
       }
 
-      baixadas.push({
-        buffer,
+      baixadas.push(Object.assign(recebida, {
         nome: midia.nome || 'midia',
         mime: midia.mime || 'application/octet-stream',
         // Tipo que o WhatsApp entende. O que o serviço não classifica vai como
         // documento, que é o único formato que aceita qualquer coisa.
         tipo: TIPO_WHATSAPP[midia.tipo] || 'document'
-      })
+      }))
     }
 
     if (!baixadas.length) {
@@ -328,6 +334,16 @@ export function criarBaixador ({ cfg, buscar = fetch, dormir = (ms) => new Promi
       // — entregar 8 de 10 fotos calado faria a pessoa achar que o post tinha 8.
       foraPorTamanho: grandesDemais.length,
       descricao: typeof estado?.descricao === 'string' ? estado.descricao : null
+    }
+  }
+
+  async function baixar (url, modo) {
+    const lote = criarLoteDeMidias()
+    try {
+      return { ...(await baixarInterno(url, modo, lote)), liberar: lote.liberar }
+    } catch (erro) {
+      lote.liberar()
+      throw erro
     }
   }
 

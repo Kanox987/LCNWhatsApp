@@ -74,9 +74,9 @@ function servico (respostas) {
     chamadas.push({ url, metodo: opcoes.method, headers: opcoes.headers || {}, body: opcoes.body })
     const proxima = respostas.shift()
     if (proxima && proxima.arquivo !== undefined) {
-      return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(proxima.arquivo) }
+      return { ok: true, status: 200, headers: new Headers({ 'content-length': String(Buffer.byteLength(proxima.arquivo)) }), arrayBuffer: async () => Buffer.from(proxima.arquivo) }
     }
-    return { ok: true, status: 200, json: async () => proxima, arrayBuffer: async () => Buffer.from('bytes') }
+    return { ok: true, status: 200, json: async () => proxima, headers: new Headers({ 'content-length': '5' }), arrayBuffer: async () => Buffer.from('bytes') }
   }
   return { buscar, chamadas }
 }

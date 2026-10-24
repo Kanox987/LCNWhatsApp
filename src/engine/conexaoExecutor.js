@@ -14,6 +14,8 @@
 // O QUE NÃO MUDA. A automação continua sem escolher destino: ela nomeia uma
 // função declarada. É isso que dispensa a proteção contra SSRF exigida pelo
 // `action.http` genérico — quem aponta o endereço é o dono, não o comando.
+import { limitesDeMidia } from '../mediaLimits.js'
+import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, lerBase64DeMidia, descartarResposta } from '../mediaBudget.js'
 import { resolverDestino, TIPOS_DE_ENVIO } from './server/conexoes/declaracao.js'
 
 const TIMEOUT_REQUISICAO_MS = 20000
@@ -249,8 +251,12 @@ export function criarExecutorDeConexao ({
   dormir = (ms) => new Promise((r) => setTimeout(r, ms)),
   agora = () => Date.now(),
   esperaMaximaMs = 300000,
-  limiteBytes = 64 * 1024 * 1024
+  cfg,
+  limiteBytes = limitesDeMidia(cfg).geral,
+  orcamento = criarOrcamentoDeMidia(limitesDeMidia(cfg).orcamento)
 } = {}) {
+  const tetoGeral = limitesDeMidia(cfg).geral
+  limiteBytes = Number.isSafeInteger(limiteBytes) && limiteBytes > 0 ? Math.min(limiteBytes, tetoGeral) : tetoGeral
   async function chamar (url, opcoes, esperaMs = TIMEOUT_REQUISICAO_MS) {
     const controle = new AbortController()
     const timer = setTimeout(() => controle.abort(), esperaMs)
@@ -334,7 +340,7 @@ export function criarExecutorDeConexao ({
 
   // `declaracao` é o que a rota interna do motor devolve: endereço,
   // autenticação, funções e a chave já resolvida.
-  async function executar (declaracao, nomeDaFuncao, entradas, arquivo = null, arquivo2 = null) {
+  async function executarInterno (declaracao, nomeDaFuncao, entradas, arquivo, arquivo2, lote) {
     const funcao = (declaracao?.funcoes || []).find((f) => f.nome === nomeDaFuncao)
     if (!funcao) {
       // Diagnóstico e conversa separados: o nome da função é detalhe de
@@ -413,7 +419,7 @@ export function criarExecutorDeConexao ({
       if (erroDireto) throw new ErroDeConexao(String(erroDireto))
       return {
         forma: 'mídia',
-        ...(await buscarArquivos(porCaminho(primeira, funcao.resposta?.campo), { base: declaracao.endereco, cabecalhos })),
+        ...(await buscarArquivos(porCaminho(primeira, funcao.resposta?.campo), { base: declaracao.endereco, cabecalhos, lote })),
         descricao: textoOuNulo(porCaminho(primeira, funcao.resposta?.campoDaDescricao || 'descricao'))
       }
     }
@@ -427,12 +433,7 @@ export function criarExecutorDeConexao ({
           { paraPessoa: FALHA_NOSSA }
         )
       }
-      const buffer = Buffer.from(conteudo, 'base64')
-      if (!buffer.length) throw new ErroDeConexao('O arquivo veio vazio.', { paraPessoa: FALHA_NOSSA })
-      if (buffer.length > limiteBytes) {
-        const mb = (n) => `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
-        throw new ErroDeConexao(`O arquivo tem ${mb(buffer.length)} e o limite para envio é ${mb(limiteBytes)}.`)
-      }
+      const recebida = lote.adicionar(lerBase64DeMidia(conteudo, { limiteBytes, orcamento }))
       const mime = (funcao.resposta.campoDoMime ? porCaminho(primeira, funcao.resposta.campoDoMime) : null) ||
         'application/octet-stream'
       // O tipo DECLARADO ganha do deduzido: um webp pode ser figurinha ou foto,
@@ -442,7 +443,7 @@ export function criarExecutorDeConexao ({
         : tipoPeloMime(String(mime))
       return {
         forma: 'mídia',
-        midias: [{ buffer, nome: nomeParaMime(String(mime)), mime: String(mime), tipo }],
+        midias: [Object.assign(recebida, { nome: nomeParaMime(String(mime)), mime: String(mime), tipo })],
         foraPorTamanho: 0,
         descricao: null
       }
@@ -491,16 +492,22 @@ export function criarExecutorDeConexao ({
           } catch {
             continue
           }
-          if (!resposta.ok) continue
-          const buffer = Buffer.from(await resposta.arrayBuffer())
-          if (!buffer.length || buffer.length > limiteBytes) continue
-          achada = { buffer, mime: resposta.headers?.get?.('content-type') || 'image/jpeg' }
+          if (!resposta.ok) { await descartarResposta(resposta); continue }
+          try {
+            achada = lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes, orcamento }))
+            achada.mime = resposta.headers?.get?.('content-type') || 'image/jpeg'
+          } catch (erro) {
+            // Falta de orçamento encerra o lote; tentar outra capa reteria as
+            // anteriores enquanto disputa a mesma memória que acabou.
+            if (erro.code === 'LCN_SEM_VAGA') throw erro
+            continue
+          }
           break
         }
         if (!achada) continue
         const valores = { ...item, n: cards.length + 1 }
         cards.push({
-          midia: { buffer: achada.buffer, mime: achada.mime, tipo: 'image', nome: `card-${i + 1}.jpg` },
+          midia: Object.assign(achada, { tipo: 'image', nome: `card-${i + 1}.jpg` }),
           titulo: forma.titulo ? escrever(forma.titulo, valores) : null,
           corpo: escrever(forma.corpo, valores),
           rodape: forma.rodape ? escrever(forma.rodape, valores) : null,
@@ -544,7 +551,7 @@ export function criarExecutorDeConexao ({
     if (erroDoServico) throw new ErroDeConexao(String(erroDoServico))
 
     const lista = porCaminho(final, funcao.resposta.campoDoResultado)
-    const buscados = await buscarArquivos(lista, { base: declaracao.endereco, cabecalhos })
+    const buscados = await buscarArquivos(lista, { base: declaracao.endereco, cabecalhos, lote })
     // A ordem declarada, quando existe: a capa antes da música, por exemplo.
     // O que não está na lista vai para o fim, na ordem em que veio.
     if (funcao.resposta.ordemDosTipos) {
@@ -577,7 +584,7 @@ export function criarExecutorDeConexao ({
   // fotos, recusar tudo por causa de um vídeo entregaria zero foto. Se nenhum
   // couber, aí sim é erro. E quem entrega precisa saber quantos ficaram de
   // fora — entregar 8 de 10 calado faria a pessoa achar que o post tinha 8.
-  async function buscarArquivos (lista, { base, cabecalhos }) {
+  async function buscarArquivos (lista, { base, cabecalhos, lote }) {
     const itens = Array.isArray(lista) ? lista.filter((m) => m?.url) : []
     const midias = []
     let foraPorTamanho = 0
@@ -594,23 +601,25 @@ export function criarExecutorDeConexao ({
       const url = /^https?:\/\//i.test(item.url) ? item.url : `${base}${item.url}`
       const resposta = await chamar(url, { method: 'GET', headers: cabecalhos })
       if (!resposta.ok) {
+        await descartarResposta(resposta)
         throw new ErroDeConexao(`Não consegui buscar o arquivo (${resposta.status}).`, { paraPessoa: FALHA_NOSSA })
       }
-      const buffer = Buffer.from(await resposta.arrayBuffer())
-      if (!buffer.length) throw new ErroDeConexao('O arquivo veio vazio.', { paraPessoa: FALHA_NOSSA })
-      if (buffer.length > limiteBytes) {
+      let recebida
+      try {
+        recebida = lote.adicionar(await lerRespostaDeMidia(resposta, { limiteBytes, orcamento }))
+      } catch (erro) {
+        if (erro.code !== 'LCN_MIDIA_GRANDE') throw erro
         foraPorTamanho++
-        maior = Math.max(maior, buffer.length)
+        maior = Math.max(maior, erro.bytes)
         continue
       }
-      midias.push({
-        buffer,
+      midias.push(Object.assign(recebida, {
         nome: item.nome || 'arquivo',
         mime: item.mime || 'application/octet-stream',
         // O que o serviço não classifica vai como documento, que é o único
         // formato que o WhatsApp aceita para qualquer coisa.
         tipo: TIPO_WHATSAPP[item.tipo] || 'document'
-      })
+      }))
     }
 
     if (!midias.length && foraPorTamanho) {
@@ -618,6 +627,16 @@ export function criarExecutorDeConexao ({
       throw new ErroDeConexao(`O arquivo tem ${mb(maior)} e o limite para envio é ${mb(limiteBytes)}.`)
     }
     return { midias, foraPorTamanho }
+  }
+
+  async function executar (declaracao, nomeDaFuncao, entradas, arquivo = null, arquivo2 = null) {
+    const lote = criarLoteDeMidias()
+    try {
+      return { ...(await executarInterno(declaracao, nomeDaFuncao, entradas, arquivo, arquivo2, lote)), liberar: lote.liberar, transferir: lote.transferir }
+    } catch (erro) {
+      lote.liberar()
+      throw erro
+    }
   }
 
   return { executar }

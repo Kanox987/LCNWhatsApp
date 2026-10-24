@@ -26,7 +26,7 @@ function servico (respostas) {
     chamadas.push({ url, metodo: opcoes.method, body: opcoes.body })
     const proxima = respostas.shift()
     if (proxima && proxima.arquivo !== undefined) {
-      return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(proxima.arquivo) }
+      return { ok: true, status: 200, headers: new Headers({ 'content-length': String(Buffer.byteLength(proxima.arquivo)) }), arrayBuffer: async () => Buffer.from(proxima.arquivo) }
     }
     if (proxima && proxima.status && !proxima.ok) {
       return { ok: false, status: proxima.status, json: async () => proxima.corpo }

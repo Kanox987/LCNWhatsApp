@@ -26,7 +26,7 @@ function servico ({ job = 'j1', estados = [], midias = [], erroDoJob = null, byt
       return { ok: true, status: 200, json: async () => ({ estado, erro: erroDoJob, descricao: 'Título do vídeo', midias }) }
     }
     if (caminho.startsWith('/media/')) {
-      return { ok: true, status: 200, arrayBuffer: async () => new TextEncoder().encode(bytesDaMidia ?? 'bytes-do-video').buffer }
+      return { ok: true, status: 200, headers: new Headers({ 'content-length': String(Buffer.byteLength(bytesDaMidia ?? 'bytes-do-video')) }), arrayBuffer: async () => new TextEncoder().encode(bytesDaMidia ?? 'bytes-do-video').buffer }
     }
     return { ok: false, status: 404, json: async () => ({}) }
   }

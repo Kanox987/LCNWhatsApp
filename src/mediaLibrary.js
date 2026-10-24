@@ -218,6 +218,32 @@ export function lerConteudo (id) {
   return fs.readFileSync(caminho)
 }
 
+export async function lerConteudoAsync (id, limiteBytes = LIMITE_POR_ARQUIVO_BYTES) {
+  const caminho = caminhoPara(id)
+  if (!caminho) throw new ErroDeAcervo('Arquivo não encontrado no acervo.', 404)
+  const arquivo = await fs.promises.open(caminho, 'r')
+  try {
+    const { size } = await arquivo.stat()
+    if (!Number.isSafeInteger(limiteBytes) || limiteBytes <= 0 || size > limiteBytes) {
+      throw new ErroDeAcervo('Arquivo grande demais: o conteúdo atual não cabe na reserva de mídia.')
+    }
+    // O índice pode envelhecer enquanto o painel reescreve o arquivo. Ler em
+    // um buffer de tamanho já conferido impede crescimento durante a leitura
+    // de ultrapassar a reserva; a operação assíncrona não bloqueia o socket.
+    const buffer = Buffer.alloc(size)
+    let lidos = 0
+    while (lidos < size) {
+      const { bytesRead } = await arquivo.read(buffer, lidos, size - lidos, lidos)
+      if (!bytesRead) throw new ErroDeAcervo('O arquivo mudou durante a leitura; tente enviar novamente.')
+      lidos += bytesRead
+    }
+    if ((await arquivo.stat()).size !== size) throw new ErroDeAcervo('O arquivo mudou durante a leitura; tente enviar novamente.')
+    return buffer
+  } finally {
+    await arquivo.close()
+  }
+}
+
 // Grava um arquivo novo. `nomeOriginal` é só rótulo — nunca vira caminho.
 export function guardar (buffer, { mimetype, name, description, folder } = {}) {
   if (!Buffer.isBuffer(buffer) || !buffer.length) {

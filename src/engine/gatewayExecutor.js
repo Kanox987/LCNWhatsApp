@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks'
 import * as enviadas from '../enviadas.js'
+import { limitesDeMidia } from '../mediaLimits.js'
+import { criarOrcamentoDeMidia } from '../mediaBudget.js'
 import { criarFila } from './fila.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
@@ -421,7 +423,7 @@ async function executarDownload (client, comando, deps) {
 
   let midia
   try {
-    midia = await criarBaixador({ cfg }).baixar(url, modo)
+    midia = await criarBaixador({ cfg, orcamento: deps.orcamento }).baixar(url, modo)
   } catch (erro) {
     // O registro fica como falha mesmo assim — a pessoa recebeu uma mensagem,
     // mas não recebeu o que pediu, e o histórico não pode dizer que deu certo.
@@ -451,6 +453,8 @@ async function executarDownload (client, comando, deps) {
     // muito maior do que o WhatsApp entrega.
     await avisar(`baixei ${formatarMB(bytesTotais)} mas não consegui enviar aqui (${mensagemParaPessoa(erro)})`)
     throw erro
+  } finally {
+    midia.liberar?.()
   }
 
   // Entregar 8 de 10 fotos calado faria a pessoa achar que o post tinha 8.
@@ -466,6 +470,35 @@ async function executarDownload (client, comando, deps) {
 // álbum — nunca há caminho em que as mídias simplesmente não chegam.
 const SEM_LEGENDA = new Set(['audio', 'sticker'])
 
+async function usarMidia (midia, operacao) {
+  if (midia.usar) return midia.usar(operacao)
+  return operacao(midia.carregar ? await midia.carregar() : midia.buffer)
+}
+
+function referenciaDoAcervo (registro, { acervo, limiteBytes, orcamento }) {
+  const midia = {
+    id: registro.id,
+    nome: registro.name,
+    mime: registro.mimetype,
+    tipo: registro.kind,
+    bytes: registro.sizeBytes,
+    carregar: () => acervo.lerConteudoAsync(registro.id, Math.min(registro.sizeBytes, limiteBytes))
+  }
+  midia.usar = async (operacao) => {
+    if (midia.bytes > limiteBytes) throw new Error('O arquivo do acervo excede o limite geral de mídia configurado.')
+    orcamento.adquirir(midia.bytes)
+    try {
+      // Nenhum buffer fica na lista. A queda de carrossel para álbum chama
+      // carregar de novo pelo id, sem guardar a pasta inteira como reserva.
+      let buffer = await midia.carregar()
+      try { return await operacao(buffer) } finally { buffer = null }
+    } finally {
+      orcamento.liberar(midia.bytes)
+    }
+  }
+  return midia
+}
+
 async function enviarEmSequencia (client, chatId, midias, legenda, opcoesCitacao, comandoId) {
   // A legenda vai na PRIMEIRA mídia que aceita legenda — e, se nenhuma aceita,
   // numa mensagem de texto depois.
@@ -477,17 +510,15 @@ async function enviarEmSequencia (client, chatId, midias, legenda, opcoesCitacao
   const comLegenda = legenda ? midias.findIndex((m) => !SEM_LEGENDA.has(m.tipo)) : -1
 
   for (const [i, m] of midias.entries()) {
-    const conteudo = { type: m.tipo, media: m.buffer, mimetype: m.mime }
-    if (m.tipo === 'document') conteudo.fileName = m.nome
-    // Uma só leva a legenda: repetida em cada uma, o mesmo texto apareceria
-    // dez vezes seguidas. Áudio e figurinha não têm legenda no WhatsApp —
-    // mandar uma faria a biblioteca recusar o envio inteiro por causa de um
-    // campo decorativo.
-    if (i === comLegenda) conteudo.caption = legenda
     await comTimeout(
-      // Citar só a primeira: dez respostas citando a mesma mensagem poluem a
-      // conversa sem informar nada a mais.
-      () => enviarERegistrar(client, chatId, conteudo, i === 0 ? opcoesCitacao : undefined),
+      () => usarMidia(m, async (buffer) => {
+        const conteudo = { type: m.tipo, media: buffer, mimetype: m.mime }
+        if (m.tipo === 'document') conteudo.fileName = m.nome
+        // A legenda só acompanha a primeira mídia compatível; áudio e
+        // figurinha não aceitam esse campo e fariam o envio ser recusado.
+        if (i === comLegenda) conteudo.caption = legenda
+        return enviarERegistrar(client, chatId, conteudo, i === 0 ? opcoesCitacao : undefined)
+      }),
       TIMEOUT_ENVIO_MS * 4,
       `timeout ao enviar a mídia ${i + 1}/${midias.length} do comando ${comandoId}`
     )
@@ -518,10 +549,10 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
     if (!pai?.id) throw new Error('o servidor não devolveu o id do álbum')
 
     for (const [i, m] of midias.entries()) {
-      const upload = await subirMidia(client, m.buffer, {
+      const upload = await usarMidia(m, (buffer) => subirMidia(client, buffer, {
         type: m.tipo === 'video' ? 'video' : 'image',
         mimetype: m.mime
-      })
+      }))
       // Só a primeira leva legenda, que é como um álbum de verdade aparece.
       // Picar o texto entre as mídias foi tentado e o dono recusou: "ficou
       // muito feio".
@@ -537,6 +568,9 @@ async function enviarComoAlbum (client, chatId, midias, legenda, opcoesCitacao, 
     // problemas em lugares completamente diferentes.
     console.log(`[engine] álbum ${comandoId}: pai ${pai.id} fechado com ${midias.length} mídia(s)`)
   } catch (erro) {
+    // Trocar o formato não cria memória: uma recusa de reserva não deve
+    // começar outra tentativa nem ser confundida com falha do álbum.
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
     // Queda para sequência, e ela é DELIBERADA: o protocolo tem álbum, mas nada
     // garante que o servidor aceite de um bot ou que o app de quem recebe
     // agrupe. Igual ao menu com botões — o conteúdo sempre chega de algum jeito.
@@ -577,7 +611,8 @@ function nomeDeArquivoDaMidia (tipo, mime) {
 
 async function executarChamadaDeConexao (client, comando, deps) {
   const { chatId, conexao, funcao, entradas, entrega, replyTo, ackText, caption, errorText, mediaInput, mediaRef, mediaInput2, mediaRef2 } = comando.payload
-  const { clienteEngine, criarExecutorDeConexao, mediaRefCache, baixarBuffer, limiteBytes } = deps
+  const { clienteEngine, criarExecutorDeConexao, mediaRefCache, baixarBuffer, limiteBytes, orcamento, cfg } = deps
+  const usosDasEntradas = []
   if (!clienteEngine?.conexoes?.resolvida) throw new Error('sem acesso ao motor para resolver a conexão')
 
   const avisar = criarAvisador(client, comando, { chatId, replyTo, errorText })
@@ -618,9 +653,11 @@ async function executarChamadaDeConexao (client, comando, deps) {
     // cadeia, os bytes nunca saíram deste processo — o cache guardou o próprio
     // buffer em vez de um nó do WhatsApp. Tentar baixar de novo seria pedir ao
     // WhatsApp uma mídia que nunca foi dele.
+    if (entrada.node?.lcnMidia) usosDasEntradas.push(entrada.node.lcnMidia.reter())
     const buffer = entrada.node?.lcnBuffer
       ? entrada.node.lcnBuffer
       : await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
+    if (buffer.length > limiteBytes) throw new Error('A mídia da conexão excede o limite geral configurado.')
     // O mime vem do nó da mídia — é o que o WhatsApp disse que aquilo é, e vale
     // mais que a categoria. `entrada.tipo` é só "image/video/audio".
     const mime = entrada.node?.mimetype || mimeProvavel(entrada.tipo)
@@ -635,165 +672,173 @@ async function executarChamadaDeConexao (client, comando, deps) {
       ...(campo === mediaInput2 ? { campo } : {})
     }
   }
-  const arquivo = await resolverArquivo(mediaRef, mediaInput)
-  const arquivo2 = await resolverArquivo(mediaRef2, mediaInput2)
-
   let resultado
   try {
-    const declaracao = await clienteEngine.conexoes.resolvida(conexao)
-    resultado = await criarExecutorDeConexao().executar(declaracao, funcao, entradas || {}, arquivo, arquivo2)
-  } catch (erro) {
-    await avisar(mensagemParaPessoa(erro))
-    throw erro
-  }
+    const arquivo = await resolverArquivo(mediaRef, mediaInput)
+    const arquivo2 = await resolverArquivo(mediaRef2, mediaInput2)
 
-  // ELO DE CADEIA: não entrega nada. Guarda o arquivo aqui mesmo — no mesmo
-  // cache da mídia que chega pela conversa — e devolve a REFERÊNCIA. O motor
-  // retoma o fluxo com ela e o passo seguinte a recebe como arquivo.
-  //
-  // O invariante 4 não muda de lado: os bytes continuam só neste processo, e o
-  // que atravessa é token. É o contrato de sempre, usado na outra direção.
-  if (comando.payload.encadeado) {
+    try {
+      const declaracao = await clienteEngine.conexoes.resolvida(conexao)
+      resultado = await criarExecutorDeConexao({ limiteBytes, orcamento, cfg }).executar(declaracao, funcao, entradas || {}, arquivo, arquivo2)
+    } catch (erro) {
+      await avisar(mensagemParaPessoa(erro))
+      throw erro
+    }
+
+    // ELO DE CADEIA: não entrega nada. Guarda o arquivo aqui mesmo — no mesmo
+    // cache da mídia que chega pela conversa — e devolve a REFERÊNCIA. O motor
+    // retoma o fluxo com ela e o passo seguinte a recebe como arquivo.
+    //
+    // O invariante 4 não muda de lado: os bytes continuam só neste processo, e o
+    // que atravessa é token. É o contrato de sempre, usado na outra direção.
+    if (comando.payload.encadeado) {
+      if (resultado.forma === 'texto') {
+        const texto = typeof resultado.dados === 'string' ? resultado.dados : JSON.stringify(resultado.dados)
+        return { texto }
+      }
+      const primeira = (resultado.midias || [])[0]
+      if (!primeira) {
+        await avisar('a chamada terminou mas não veio arquivo nenhum')
+        throw new Error(`a chamada ${conexao}.${funcao} não devolveu arquivo para o passo seguinte`)
+      }
+      // Mais de um arquivo no meio de um cano é ambíguo: qual deles segue? Em
+      // vez de escolher calado, o primeiro segue e o resto é dito.
+      if ((resultado.midias || []).length > 1) {
+        await nota(`⚠️ A conversão devolveu ${resultado.midias.length} arquivos e o próximo passo usa só o primeiro.`)
+      }
+      const node = { lcnBuffer: primeira.buffer, lcnMidia: primeira.reter ? primeira : null, mimetype: primeira.mime }
+      const token = mediaRefCache.criar({ node, tipo: primeira.tipo, interno: {} }, undefined, () => {
+        node.lcnBuffer = null
+        node.lcnMidia = null
+        primeira.liberar?.()
+      })
+      resultado.transferir?.(primeira)
+      return { token, tipo: primeira.tipo, mime: primeira.mime }
+    }
+
+    // CARDS COM BOTÃO: uma mensagem só, com a capa, o texto e o botão de cada
+    // resultado. Cada imagem é enviada ao servidor do WhatsApp antes, como no
+    // carrossel de mídia — a diferença é que aqui o card leva botão.
+    if (resultado.forma === 'carrossel') {
+      const cards = []
+      for (const card of resultado.cards || []) {
+        const upload = await usarMidia(card.midia, (buffer) => subirMidia(client, buffer, { type: 'image', mimetype: card.midia.mime }))
+        cards.push(montarCard(card.midia, upload, { titulo: card.titulo, legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
+      }
+      const abertura = caption || resultado.cabecalho
+      // A FORMA vem da declaração. "diagnóstico" manda as três, numeradas: uma
+      // tentativa só responde qual delas o aplicativo de quem recebe desenha —
+      // porque quando ele não desenha, não há erro em lugar nenhum para ler.
+      // No diagnóstico entram as formas de carrossel E as de escolha: o teste do
+      // dono mostrou que carrossel com botão não é desenhado em forma nenhuma,
+      // então a pergunta passou a ser "e o botão FORA do card, aparece?".
+      const estilos = resultado.estilo === 'diagnóstico'
+        ? [...ESTILOS_DE_CARROSSEL, ...FORMAS_DE_ESCOLHA]
+        : [resultado.estilo || 'completo']
+      try {
+        for (const estilo of estilos) {
+          const texto = estilos.length > 1 ? `[${estilo}] ${abertura || ''}`.trim() : abertura
+          // BOTÃO FORA DO CARD. O carrossel vai sem botão — que é a forma
+          // desenhada aqui há semanas — e a escolha vem na mensagem seguinte.
+          if (FORMAS_DE_ESCOLHA.includes(estilo)) {
+            await comTimeout(
+              () => enviarERegistrar(client, chatId, montarCarrossel(cards.map((c) => ({ ...c, nativeFlowMessage: { buttons: [] } })), { estilo: 'simples' })),
+              TIMEOUT_ENVIO_MS * 4,
+              `timeout ao enviar os cards do comando ${comando.id}`
+            )
+            const escolha = estilo === 'botoes'
+              ? montarBotoesDeEscolha(resultado.cards, { texto })
+              : montarMenuDeEscolha(resultado.cards, { texto })
+            await comTimeout(
+              () => enviarERegistrar(client, chatId, escolha),
+              TIMEOUT_ENVIO_MS,
+              `timeout ao enviar a escolha do comando ${comando.id}`
+            )
+            console.log(`[engine] escolha ${comando.id}: forma "${estilo}", ${resultado.cards.length} opção(ões)`)
+            continue
+          }
+          // Na forma "simples" o texto não cabe dentro da mensagem: vai antes.
+          if (estilo === 'simples' && texto) {
+            await comTimeout(
+              () => enviarERegistrar(client, chatId, { type: 'text', text: texto }),
+              TIMEOUT_ENVIO_MS,
+              `timeout ao abrir o carrossel do comando ${comando.id}`
+            )
+          }
+          await comTimeout(
+            // Sem citar a mensagem que acionou: é como o `sendCarousel` do
+            // takeshi-bot manda, e citação em mensagem interativa é mais uma
+            // chance de o aplicativo descartar tudo calado.
+            //
+            // As opções levam o nó <biz> quando a forma pede — ver carrossel.js.
+            () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto, estilo }), opcoesDoCarrossel(estilo)),
+            TIMEOUT_ENVIO_MS * 4,
+            `timeout ao enviar o carrossel do comando ${comando.id}`
+          )
+          console.log(`[engine] carrossel ${comando.id}: forma "${estilo}", ${cards.length} card(s) e botão`)
+        }
+      } catch (erro) {
+        // Mensagem interativa depende do aplicativo de quem recebe. Cair para
+        // texto não é tratamento de erro, é parte do desenho: o conteúdo sempre
+        // chega de algum jeito, e aqui ele chega como a lista escrita.
+        console.warn(`[engine] Carrossel com botão recusado (${mensagemDoErro(erro)}) — mandando como texto.`)
+        const linhas = (resultado.cards || []).map((c, i) => `*${i + 1}.* ${c.titulo || ''}\n${c.corpo}${c.rodape ? `\n_${c.rodape}_` : ''}`)
+        await comTimeout(
+          () => enviarERegistrar(client, chatId, {
+            type: 'text',
+            text: [abertura, ...linhas].filter(Boolean).join('\n')
+          }, opcoesDeCitacao(replyTo)),
+          TIMEOUT_ENVIO_MS,
+          `timeout ao mandar a lista do comando ${comando.id}`
+        )
+      }
+      return
+    }
+
+    // Resposta de texto vai como texto. É o caso de uma IA, de uma consulta de
+    // preço, de qualquer coisa que responda em palavras.
     if (resultado.forma === 'texto') {
       const texto = typeof resultado.dados === 'string' ? resultado.dados : JSON.stringify(resultado.dados)
-      return { texto }
-    }
-    const primeira = (resultado.midias || [])[0]
-    if (!primeira) {
-      await avisar('a chamada terminou mas não veio arquivo nenhum')
-      throw new Error(`a chamada ${conexao}.${funcao} não devolveu arquivo para o passo seguinte`)
-    }
-    // Mais de um arquivo no meio de um cano é ambíguo: qual deles segue? Em
-    // vez de escolher calado, o primeiro segue e o resto é dito.
-    if ((resultado.midias || []).length > 1) {
-      await nota(`⚠️ A conversão devolveu ${resultado.midias.length} arquivos e o próximo passo usa só o primeiro.`)
-    }
-    return {
-      token: mediaRefCache.criar({ node: { lcnBuffer: primeira.buffer, mimetype: primeira.mime }, tipo: primeira.tipo, interno: {} }),
-      tipo: primeira.tipo,
-      mime: primeira.mime
-    }
-  }
-
-  // CARDS COM BOTÃO: uma mensagem só, com a capa, o texto e o botão de cada
-  // resultado. Cada imagem é enviada ao servidor do WhatsApp antes, como no
-  // carrossel de mídia — a diferença é que aqui o card leva botão.
-  if (resultado.forma === 'carrossel') {
-    const cards = []
-    for (const card of resultado.cards || []) {
-      const upload = await subirMidia(client, card.midia.buffer, { type: 'image', mimetype: card.midia.mime })
-      cards.push(montarCard(card.midia, upload, { titulo: card.titulo, legenda: card.corpo, rodape: card.rodape, botao: card.botao }))
-    }
-    const abertura = caption || resultado.cabecalho
-    // A FORMA vem da declaração. "diagnóstico" manda as três, numeradas: uma
-    // tentativa só responde qual delas o aplicativo de quem recebe desenha —
-    // porque quando ele não desenha, não há erro em lugar nenhum para ler.
-    // No diagnóstico entram as formas de carrossel E as de escolha: o teste do
-    // dono mostrou que carrossel com botão não é desenhado em forma nenhuma,
-    // então a pergunta passou a ser "e o botão FORA do card, aparece?".
-    const estilos = resultado.estilo === 'diagnóstico'
-      ? [...ESTILOS_DE_CARROSSEL, ...FORMAS_DE_ESCOLHA]
-      : [resultado.estilo || 'completo']
-    try {
-      for (const estilo of estilos) {
-        const texto = estilos.length > 1 ? `[${estilo}] ${abertura || ''}`.trim() : abertura
-        // BOTÃO FORA DO CARD. O carrossel vai sem botão — que é a forma
-        // desenhada aqui há semanas — e a escolha vem na mensagem seguinte.
-        if (FORMAS_DE_ESCOLHA.includes(estilo)) {
-          await comTimeout(
-            () => enviarERegistrar(client, chatId, montarCarrossel(cards.map((c) => ({ ...c, nativeFlowMessage: { buttons: [] } })), { estilo: 'simples' })),
-            TIMEOUT_ENVIO_MS * 4,
-            `timeout ao enviar os cards do comando ${comando.id}`
-          )
-          const escolha = estilo === 'botoes'
-            ? montarBotoesDeEscolha(resultado.cards, { texto })
-            : montarMenuDeEscolha(resultado.cards, { texto })
-          await comTimeout(
-            () => enviarERegistrar(client, chatId, escolha),
-            TIMEOUT_ENVIO_MS,
-            `timeout ao enviar a escolha do comando ${comando.id}`
-          )
-          console.log(`[engine] escolha ${comando.id}: forma "${estilo}", ${resultado.cards.length} opção(ões)`)
-          continue
-        }
-        // Na forma "simples" o texto não cabe dentro da mensagem: vai antes.
-        if (estilo === 'simples' && texto) {
-          await comTimeout(
-            () => enviarERegistrar(client, chatId, { type: 'text', text: texto }),
-            TIMEOUT_ENVIO_MS,
-            `timeout ao abrir o carrossel do comando ${comando.id}`
-          )
-        }
-        await comTimeout(
-          // Sem citar a mensagem que acionou: é como o `sendCarousel` do
-          // takeshi-bot manda, e citação em mensagem interativa é mais uma
-          // chance de o aplicativo descartar tudo calado.
-          //
-          // As opções levam o nó <biz> quando a forma pede — ver carrossel.js.
-          () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto, estilo }), opcoesDoCarrossel(estilo)),
-          TIMEOUT_ENVIO_MS * 4,
-          `timeout ao enviar o carrossel do comando ${comando.id}`
-        )
-        console.log(`[engine] carrossel ${comando.id}: forma "${estilo}", ${cards.length} card(s) e botão`)
-      }
-    } catch (erro) {
-      // Mensagem interativa depende do aplicativo de quem recebe. Cair para
-      // texto não é tratamento de erro, é parte do desenho: o conteúdo sempre
-      // chega de algum jeito, e aqui ele chega como a lista escrita.
-      console.warn(`[engine] Carrossel com botão recusado (${mensagemDoErro(erro)}) — mandando como texto.`)
-      const linhas = (resultado.cards || []).map((c, i) => `*${i + 1}.* ${c.titulo || ''}\n${c.corpo}${c.rodape ? `\n_${c.rodape}_` : ''}`)
       await comTimeout(
-        () => enviarERegistrar(client, chatId, {
-          type: 'text',
-          text: [abertura, ...linhas].filter(Boolean).join('\n')
-        }, opcoesDeCitacao(replyTo)),
+        () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
         TIMEOUT_ENVIO_MS,
-        `timeout ao mandar a lista do comando ${comando.id}`
+        `timeout ao responder a chamada do comando ${comando.id}`
       )
+      return
     }
-    return
-  }
 
-  // Resposta de texto vai como texto. É o caso de uma IA, de uma consulta de
-  // preço, de qualquer coisa que responda em palavras.
-  if (resultado.forma === 'texto') {
-    const texto = typeof resultado.dados === 'string' ? resultado.dados : JSON.stringify(resultado.dados)
-    await comTimeout(
-      () => enviarERegistrar(client, chatId, { type: 'text', text: texto }, opcoesDeCitacao(replyTo)),
-      TIMEOUT_ENVIO_MS,
-      `timeout ao responder a chamada do comando ${comando.id}`
-    )
-    return
-  }
+    // Resposta com arquivos: o executor já os buscou (ele tem o endereço e a
+    // credencial). Aqui só entrega, pelo mesmo caminho do download — álbum quando
+    // dá, sequência quando não dá.
+    const midias = resultado.midias || []
+    if (!midias.length) {
+      await avisar('a chamada terminou mas não veio arquivo nenhum')
+      throw new Error(`a chamada ${conexao}.${funcao} não devolveu arquivo`)
+    }
 
-  // Resposta com arquivos: o executor já os buscou (ele tem o endereço e a
-  // credencial). Aqui só entrega, pelo mesmo caminho do download — álbum quando
-  // dá, sequência quando não dá.
-  const midias = resultado.midias || []
-  if (!midias.length) {
-    await avisar('a chamada terminou mas não veio arquivo nenhum')
-    throw new Error(`a chamada ${conexao}.${funcao} não devolveu arquivo`)
-  }
-
-  const bytesTotais = midias.reduce((n, m) => n + m.buffer.length, 0)
-  try {
-    await entregarMidias(client, chatId, midias, {
-      // A descrição do serviço (título do vídeo, autor) só entra quando o
-      // comando não trouxe legenda própria — quem configurou manda.
-      legenda: caption || resultado.descricao || null,
-      entrega,
-      opcoesCitacao: opcoesDeCitacao(replyTo),
-      comandoId: comando.id
-    })
-  } catch (erro) {
-    await avisar(`recebi ${formatarMB(bytesTotais)} mas não consegui enviar aqui (${mensagemParaPessoa(erro)})`)
-    throw erro
-  }
-  if (resultado.foraPorTamanho > 0) {
-    const n = resultado.foraPorTamanho
-    await nota(n === 1
-      ? '⚠️ Um dos arquivos era grande demais para o WhatsApp e ficou de fora.'
-      : `⚠️ ${n} arquivos eram grandes demais para o WhatsApp e ficaram de fora.`)
+    const bytesTotais = midias.reduce((n, m) => n + m.buffer.length, 0)
+    try {
+      await entregarMidias(client, chatId, midias, {
+        // A descrição do serviço (título do vídeo, autor) só entra quando o
+        // comando não trouxe legenda própria — quem configurou manda.
+        legenda: caption || resultado.descricao || null,
+        entrega,
+        opcoesCitacao: opcoesDeCitacao(replyTo),
+        comandoId: comando.id
+      })
+    } catch (erro) {
+      await avisar(`recebi ${formatarMB(bytesTotais)} mas não consegui enviar aqui (${mensagemParaPessoa(erro)})`)
+      throw erro
+    }
+    if (resultado.foraPorTamanho > 0) {
+      const n = resultado.foraPorTamanho
+      await nota(n === 1
+        ? '⚠️ Um dos arquivos era grande demais para o WhatsApp e ficou de fora.'
+        : `⚠️ ${n} arquivos eram grandes demais para o WhatsApp e ficaram de fora.`)
+    }
+  } finally {
+    resultado?.liberar?.()
+    for (const soltar of usosDasEntradas) soltar()
   }
 }
 
@@ -862,10 +907,10 @@ async function enviarComoCarrossel (client, chatId, midias, legenda, opcoesCitac
   try {
     const cards = []
     for (const m of midias) {
-      const upload = await subirMidia(client, m.buffer, {
+      const upload = await usarMidia(m, (buffer) => subirMidia(client, buffer, {
         type: m.tipo === 'video' ? 'video' : 'image',
         mimetype: m.mime
-      })
+      }))
       // CARD SEM LEGENDA, de propósito.
       //
       // A primeira tentativa foi espalhar a legenda pelos cards, e o dono
@@ -893,6 +938,7 @@ async function enviarComoCarrossel (client, chatId, midias, legenda, opcoesCitac
       )
     }
   } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
     console.warn(`[engine] Carrossel não foi aceito (${mensagemDoErro(erro)}) — tentando como álbum.`)
     await enviarComoAlbum(client, chatId, midias, legenda, opcoesCitacao, comandoId)
   }
@@ -1142,12 +1188,7 @@ async function executarEnvioDeArquivo (client, comando, deps) {
     // junto como documento seria entregar um .txt no meio das fotos.
     const midias = arquivos
       .filter((r) => r.kind !== 'text')
-      .map((r) => ({
-        buffer: acervo.lerConteudo(r.id),
-        nome: r.name,
-        mime: r.mimetype,
-        tipo: r.kind === 'document' ? 'document' : r.kind
-      }))
+      .map((r) => referenciaDoAcervo(r, deps))
     if (!midias.length) throw new Error(`a pasta "${payload.pasta}" só tem texto, e texto não vai em carrossel`)
 
     await entregarMidias(client, payload.chatId, midias, {
@@ -1177,19 +1218,17 @@ async function executarEnvioDeArquivo (client, comando, deps) {
     throw new Error(`arquivo não encontrado no acervo: ${payload.fileId || payload.caminho}`)
   }
 
-  const buffer = acervo.lerConteudo(registro.id)
-
-  // 'text' no acervo é resposta pronta: vai como mensagem de texto, não como
-  // documento anexado — que é o que a pessoa espera ao guardar um texto.
-  const conteudo = registro.kind === 'text'
-    ? { type: 'text', text: buffer.toString('utf8') }
-    : { type: registro.kind === 'document' ? 'document' : registro.kind, media: buffer, mimetype: registro.mimetype }
-
-  if (conteudo.type !== 'text' && payload.caption) conteudo.caption = payload.caption
-  if (conteudo.type === 'document') conteudo.fileName = registro.name
-
   await comTimeout(
-    () => enviarERegistrar(client, payload.chatId, conteudo),
+    () => usarMidia(referenciaDoAcervo(registro, deps), async (buffer) => {
+      // Texto guardado é resposta pronta: mandar como anexo mudaria o que a
+      // pessoa espera ao escolher um texto do acervo.
+      const conteudo = registro.kind === 'text'
+        ? { type: 'text', text: buffer.toString('utf8') }
+        : { type: registro.kind, media: buffer, mimetype: registro.mimetype }
+      if (conteudo.type !== 'text' && payload.caption) conteudo.caption = payload.caption
+      if (conteudo.type === 'document') conteudo.fileName = registro.name
+      return enviarERegistrar(client, payload.chatId, conteudo)
+    }),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar o arquivo do comando ${comando.id}`
   )
@@ -1248,7 +1287,19 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
 // Carregadas sob demanda para o teste poder injetar tudo sem tocar em disco
 // nem em processo externo.
 let padroesCarregados = null
+let orcamentoDoGateway = null
 async function resolverDependencias (deps) {
+  const limites = limitesDeMidia(deps.cfg)
+  if (!deps.orcamento) {
+    orcamentoDoGateway ||= criarOrcamentoDeMidia(limites.orcamento)
+    orcamentoDoGateway.ajustarLimite(limites.orcamento)
+  }
+  const limiteInjetado = Number(deps.limiteBytes)
+  deps = {
+    ...deps,
+    limiteBytes: Number.isSafeInteger(limiteInjetado) && limiteInjetado > 0 ? Math.min(limiteInjetado, limites.geral) : limites.geral,
+    orcamento: deps.orcamento || orcamentoDoGateway
+  }
   if (deps.mediaRefCache) return deps
   if (!padroesCarregados) {
     const [cache, visu, acervo, downloader, conexao] = await Promise.all([
@@ -1269,8 +1320,7 @@ async function resolverDependencias (deps) {
         const meJid = client.getCredentials?.()?.meJid
         return meJid ? meJid.replace(/:\d+@/, '@') : null
       },
-      criarBaixador: downloader.criarBaixador,
-      limiteBytes: 64 * 1024 * 1024
+      criarBaixador: downloader.criarBaixador
     }
   }
   return { ...padroesCarregados, ...deps }

@@ -15,21 +15,30 @@ const cache = new Map() // token -> { valor, expiraEm }
 
 let intervaloVarredura = null
 
+function descartar (token) {
+  const entrada = cache.get(token)
+  if (!entrada) return
+  cache.delete(token)
+  // Mídia produzida por uma conexão conserva a reserva enquanto o próximo
+  // elo ainda pode usá-la. Expirar o token também devolve esses bytes.
+  entrada.aoDescartar?.()
+}
+
 function iniciarVarredura () {
   if (intervaloVarredura) return
   intervaloVarredura = setInterval(() => {
     const agora = Date.now()
     for (const [token, entrada] of cache) {
-      if (entrada.expiraEm <= agora) cache.delete(token)
+      if (entrada.expiraEm <= agora) descartar(token)
     }
   }, 60 * 1000)
   intervaloVarredura.unref?.() // não deve manter o processo vivo sozinho
 }
 
-export function criar (valor, ttlMs = TTL_MS) {
+export function criar (valor, ttlMs = TTL_MS, aoDescartar = null) {
   iniciarVarredura()
   const token = crypto.randomUUID()
-  cache.set(token, { valor, expiraEm: Date.now() + ttlMs })
+  cache.set(token, { valor, expiraEm: Date.now() + ttlMs, aoDescartar })
   return token
 }
 
@@ -37,7 +46,7 @@ export function resolver (token) {
   const entrada = cache.get(token)
   if (!entrada) return null
   if (entrada.expiraEm <= Date.now()) {
-    cache.delete(token)
+    descartar(token)
     return null
   }
   return entrada.valor
@@ -45,6 +54,6 @@ export function resolver (token) {
 
 // Só pra teste — evita que o setInterval real vaze estado entre casos.
 export function _reiniciarParaTeste () {
-  cache.clear()
+  for (const token of cache.keys()) descartar(token)
   if (intervaloVarredura) { clearInterval(intervaloVarredura); intervaloVarredura = null }
 }
