@@ -80,7 +80,8 @@ Detalhes e casos específicos: [docs/INSTALACAO.md](docs/INSTALACAO.md).
 
 Figurinha usa um serviço de conversão declarado na aba **Conexões**; o bot não
 exige **ffmpeg** instalado. Apagar mensagem e remover pessoas de grupo exigem
-que o número seja **administrador** do grupo.
+que o número seja **administrador** do grupo. O painel avisa isso em cada
+comando, antes de você instalar.
 
 ---
 
