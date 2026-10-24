@@ -49,6 +49,13 @@ function resolverChatId (key, kind) {
   return key.remoteJid
 }
 
+// A admissão usa o mesmo endereço do evento canônico sem construir mídia ou
+// aprender contatos de mensagens que serão recusadas na borda.
+export function chatIdDoEvento (event) {
+  if (!event?.key) return event?.groupJid || event?.chatJid || event?.id
+  return resolverChatId(event.key, resolverChatKind(event.key))
+}
+
 // O texto que a pessoa escreveu — inclusive quando ela escreveu na LEGENDA de
 // uma foto, vídeo ou documento.
 //
@@ -381,7 +388,7 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
   // formatos já vêm na chave, e é o que faz a menção funcionar depois.
   try { lidMap.aprenderDaChave(key) } catch {}
   const chatKind = resolverChatKind(key)
-  const chatId = resolverChatId(key, chatKind)
+  const chatId = chatIdDoEvento(event)
   const senderId = resolverSenderId(key)
   const msgBruta = event.message
   const msg = desembrulhar(msgBruta) || msgBruta
@@ -422,7 +429,7 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
     provider: 'zapo',
     accountId,
     eventId: calcularEventId({ accountId, chatId, senderId, providerMessageId: key.id }),
-    occurredAt: new Date((event.timestampSeconds ?? Date.now() / 1000) * 1000).toISOString(),
+    occurredAt: new Date((event.timestampSeconds ?? (recebidoEmMs ?? Date.now()) / 1000) * 1000).toISOString(),
     replay: event.offline === true,
     receivedAtMs: recebidoEmMs ?? Date.now(),
     chat: { id: chatId, kind: chatKind },
@@ -449,14 +456,14 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
 export function construirEventoDeIndisponivel (event, { accountId, recebidoEmMs, botId }) {
   const key = event.key || {}
   const chatKind = resolverChatKind(key)
-  const chatId = resolverChatId(key, chatKind)
+  const chatId = chatIdDoEvento(event)
   const senderId = resolverSenderId(key)
 
   return {
     provider: 'zapo',
     accountId,
     eventId: calcularEventId({ accountId, chatId, senderId, providerMessageId: key.id }),
-    occurredAt: new Date((event.timestampSeconds ?? Date.now() / 1000) * 1000).toISOString(),
+    occurredAt: new Date((event.timestampSeconds ?? (recebidoEmMs ?? Date.now()) / 1000) * 1000).toISOString(),
     replay: event.offline === true,
     receivedAtMs: recebidoEmMs ?? Date.now(),
     chat: { id: chatId, kind: chatKind },
@@ -478,7 +485,7 @@ export function construirEventoDeIndisponivel (event, { accountId, recebidoEmMs,
 // Quem provocou o evento é `authorJid` (o sender); os afetados pela ação
 // estão em `participants` (os alvos de moderação).
 export function construirEventoDeGrupo (event, { accountId, recebidoEmMs, botId }) {
-  const groupJid = event.groupJid || event.chatJid || event.id
+  const groupJid = chatIdDoEvento(event)
   const authorJid = event.authorJid || event.author
 
   if (event.authorJidAlt) {
@@ -534,7 +541,9 @@ export function construirEventoDeGrupo (event, { accountId, recebidoEmMs, botId 
   const nomeDeQuemEnviou = resolverNome(event, senderId)
 
   const action = event.action
-  const timestampSeconds = event.timestampSeconds ?? event.timestamp ?? Math.floor(Date.now() / 1000)
+  // Sem horário do provedor, a espera na admissão não pode mudar a identidade
+  // do evento: o instante de recebimento foi capturado antes de enfileirar.
+  const timestampSeconds = event.timestampSeconds ?? event.timestamp ?? Math.floor((recebidoEmMs ?? Date.now()) / 1000)
 
   // Deduplicação determinística:
   // Como não há providerMessageId (key.id), a chave é calculada a partir

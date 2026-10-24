@@ -10,7 +10,7 @@ import path from 'path'
 import { garantirPastas, PASTA_DADOS } from './src/paths.js'
 import { garantirConfig } from './src/config.js'
 import { iniciarSaida } from './src/api/output.js'
-import { iniciar } from './src/connection.js'
+import { iniciar, desligar } from './src/connection.js'
 import * as state from './src/state.js'
 import { iniciarEspelhoLog } from './src/espelhoLog.js'
 
@@ -50,6 +50,7 @@ let encerrando = false
 async function encerrar (codigo = 0) {
   if (encerrando) return
   encerrando = true
+  await desligar()
   try {
     await espelho.fechar()
   } catch {}

@@ -10,6 +10,8 @@ de mídia; não entra no cálculo da urgência.
 {
   "hardware": {
     "comandosSimultaneos": 2,
+    "admissaoConcorrencia": 8,
+    "admissaoLogJanelaMs": 5000,
     "downloadConcorrencia": 2,
     "cpuConcorrencia": 1,
     "maxPendentes": 256,
@@ -102,45 +104,58 @@ Uma nota informativa após entrega já concluída continua sendo melhor esforço
 Comandos com várias operações podem já ter enviado um ACK ou parte da mídia;
 `failed` descreve a operação recusada, sem desfazer efeitos anteriores.
 
-## API para quem fará a admissão de eventos
+## Admissão na conexão
 
-`src/connection.js` não foi alterado. O encaixe deve criar **uma** fila para a
-instância e usar a mesma fila em todas as chegadas; criar uma fila por evento
-eliminaria o limite compartilhado.
+`src/connection.js` cria uma fila `admissao` por processo, compartilhada entre
+mensagens, eventos de grupo, mensagens indisponíveis e reconexões. Ela limita
+cadeias completas: construção canônica, enriquecimento, avaliação no motor,
+execução dos comandos e confirmação. A invalidação do cache de grupo acontece
+**primeiro, fora da fila**, mesmo quando o encaminhamento será recusado.
 
-```js
-import { criarFila } from './engine/fila.js'
+Os listeners são síncronos e retornam imediatamente. A construção do evento
+canônico só começa ao obter vaga; pendentes retêm o evento recebido, e recusados
+não criam referências de mídia nem cadeias de promessa. A API
+`fila.tentarExecutar(tarefa, { chave, prioridade })` retorna `null` na recusa
+imediata, publicando os contadores pelo observador. Para trabalho admitido,
+retorna uma promessa; ela ainda pode rejeitar por deslocamento ou expiração.
+`fila.executar()` preserva a API anterior, com rejeição `LCN_SEM_VAGA`.
 
-const admissao = criarFila({
-  recurso: 'eventos',
-  limite: 2,
-  maxPendentes: cfg.hardware.maxPendentes,
-  agingMs: cfg.hardware.agingMs,
-  esperaMaximaMs: cfg.hardware.esperaMaximaMs,
-  aoMudar: (estado) => publicarEstadoDaAdmissao(estado)
-})
+`chave` é o mesmo endereço de `chat.id`. A fila mantém uma única lista global de
+pendências e um mapa de chaves admitidas. Só a primeira tarefa de cada conversa
+disputa uma vaga; esperar a conversa não ocupa concorrência global. Duas tarefas
+da mesma chave nunca se cruzam, mesmo com prioridades diferentes. Chaves sem
+trabalho são removidas após conclusão, falha, deslocamento ou expiração. O mapa
+fica limitado ao número de tarefas admitidas, sem histórico de conversas.
 
-async function admitirEvento (evento) {
-  try {
-    // Antes do avaliador ainda não há cabeçalho compilado: não inferir
-    // urgência pelo tipo de mídia ou pelo tamanho do evento.
-    return await admissao.executar(() => processarEvento(evento), {
-      prioridade: 'normal'
-    })
-  } catch (erro) {
-    if (erro.code !== 'LCN_SEM_VAGA') throw erro
-    registrarRecusaDoEvento(evento, erro)
-  }
-}
-```
+Os padrões são `hardware.admissaoConcorrencia: 8`, `hardware.maxPendentes: 256`
+e `hardware.admissaoLogJanelaMs: 5000`. A admissão reutiliza `agingMs` e
+`esperaMaximaMs`. Esses valores são configuráveis no arquivo da instância e
+entram em vigor no próximo arranque do processo; reconectar não recria uma fila
+viva. A concorrência da admissão é independente da concorrência de socket.
 
-`processarEvento`, `publicarEstadoDaAdmissao` e `registrarRecusaDoEvento` no
-exemplo representam o encaixe do consumidor. A API entregue é
-`criarFila(opcoes).executar(tarefa, { prioridade })`, que devolve o valor ou
-erro da tarefa, e o getter `estado`. O observador é opcional e não pode
-interromper a fila. `agora: () => milissegundos` permite testes determinísticos.
-O chamador deve passar uma função, sem começar o trabalho antes da admissão.
-Não deve adquirir a mesma fila de novo enquanto segura sua vaga.
+Antes da avaliação não há cabeçalho conhecido: toda entrada usa prioridade
+`normal`. A recusa é descarte local, sem mensagem na conversa. Um resumo por
+janela registra a fila, a quantidade recusada, as expirações separadas, o total
+recusado no processo e os instantes inicial/final. Um único timer garante o
+resumo mesmo se não chegarem outros eventos. A janela é configurável; no padrão
+nunca saem duas dessas linhas em menos de cinco segundos.
+
+`fila.encerrar()` fecha a porta imediatamente, recusa novas tarefas com
+`LCN_SEM_VAGA` e motivo `encerrada`, e aguarda as admitidas, mantendo o prazo de
+espera existente. Chamadas repetidas retornam a mesma promessa. Sinais, pedidos
+de reinício/logout e saídas supervisionadas passam pela drenagem antes de
+fechar a conexão. O ponto de entrada aguarda a drenagem antes de fechar o log.
+O último resumo respeita a janela, podendo acrescentar até uma janela ao
+encerramento. Não há interrupção forçada de tarefas ativas.
+
+O timeout da ponte com o motor aborta a requisição HTTP: soltar a vaga sem
+cancelar a requisição deixaria trabalho de transporte fora do limite. Isso não
+desfaz efeitos já avaliados pelo motor, nem transforma timeout em confirmação.
+
+A ordem estrita tem um custo deliberado: um `/play` longo segura os eventos
+seguintes **da mesma conversa**, inclusive `/ping`. Outras conversas continuam
+em paralelo enquanto houver vagas globais. A fila de socket permanece restrita
+a envio/upload, e seu teste original continua intacto.
 
 Para operações do gateway, `criarFilasDeRecursos(cfg)` fornece `socket`, `rede`,
 `cpu`, `executar(recurso, tarefa, { prioridade })` e `estado`.
@@ -155,7 +170,9 @@ comum. Testes podem injetar esse conjunto em `deps.filas` do gateway.
 
 O batimento de `state.js` publica `recursos` no arquivo de estado do gateway,
 sem um timer de escrita por admissão. Cada processo de instância publica seu
-conjunto de filas e orçamento. O getter permite observar imediatamente:
+conjunto de filas e orçamento. A admissão é publicada separadamente em `state.admissao`, inclusive antes do
+primeiro comando, com limites, picos, recusas, expirações, espera, `encerrada`
+e `chavesAtivas` (tamanho atual do mapa). O getter permite observar imediatamente:
 
 - `filas.<recurso>`: execução atual, espera atual, limites, pico ativo e pico
   pendente, iniciadas, concluídas, recusas, deslocadas, expiradas e recusas por
@@ -171,4 +188,7 @@ conjunto de filas e orçamento. O getter permite observar imediatamente:
   [MEMORIA-DE-MIDIA.md](MEMORIA-DE-MIDIA.md).
 
 Verificação: `node tests/fila-prioridade.test.mjs` e
-`node tests/filas-recursos.test.mjs`, também incluídos em `npm test`.
+`node tests/filas-recursos.test.mjs` e `node tests/fila-admissao.test.mjs`,
+também incluídos em `npm test`. A admissão cobre 10 mil entradas, 500 eventos
+na mesma conversa, 500 eventos em 50 grupos, motor lento, limpeza das chaves,
+invalidação sob lotação, resumo das recusas e drenagem.
