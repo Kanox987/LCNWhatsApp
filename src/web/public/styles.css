@@ -370,7 +370,12 @@ h1, h2, h3, h4 {
   padding: 14px 16px;
   display: flex; align-items: center; justify-content: space-between;
   gap: 14px;
+  flex-wrap: wrap;
   transition: border-color var(--speed) ease, box-shadow var(--speed) ease;
+}
+.list-card > .notice,
+.list-card > .stack {
+  width: 100%;
 }
 .list-card.compact { padding: 11px 14px; }
 .list-card-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -863,7 +868,7 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
 .wizard-message { padding: 11px 14px; border-radius: var(--radius-sm); background: var(--warning-bg); color: var(--warning); font-size: 0.86rem; border-left: 2px solid currentColor; }
 /* Vários contêineres são criados vazios e só recebem conteúdo quando há algo
    a dizer — sem isto sobra uma faixa colorida ocupando espaço à toa. */
-.wizard-message:empty, .notice:empty, .readonly-box:empty, .review-card:empty, .detail-panel:empty { display: none; }
+.wizard-message:empty, .notice:empty, .readonly-box:empty, .review-card:empty, .detail-panel:empty, .list-card > .stack:empty { display: none; }
 .step-intro { color: var(--text-muted); margin: 0 0 14px; font-size: 0.9rem; }
 .hint-list { margin: 6px 0 0; padding-left: 18px; color: var(--text-muted); font-size: 0.83rem; }
 .hint-list li + li { margin-top: 2px; }
