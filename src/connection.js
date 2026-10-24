@@ -22,7 +22,8 @@ import * as bandwidth from './bandwidth.js'
 import { classificarFechamento, mensagemParaClasse, codigoParaClasse } from './connectionReasons.js'
 import { EXIT_QUARANTINED } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
-import { construirEventoDeMensagem, construirEventoDeIndisponivel, construirEventoDeGrupo } from './engine/zapoAdapter.js'
+import { construirEventoDeMensagem, construirEventoDeIndisponivel, construirEventoDeGrupo, chatIdDoEvento } from './engine/zapoAdapter.js'
+import { criarFila } from './engine/fila.js'
 import { tipoPodeCasar } from './engine/canonicalEvent.js'
 import { fecharOrfaos } from './engine/orfaos.js'
 import { emitirDesconhecidoDebug, emitirEventoDebug } from './engine/eventSink.js'
@@ -34,6 +35,13 @@ import { APARELHOS, resolverAparelho } from './aparelho.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
+let encerrarConexao = null
+
+// O ponto de entrada fecha o espelho de logs depois da drenagem. Ter dois
+// handlers de sinal chamando exit em paralelo encerrava o processo cedo demais.
+export function desligar () {
+  return encerrarConexao?.({ sair: false }) || Promise.resolve()
+}
 // Pareamento por código aceita o número por argumento ou ambiente, além do
 // terminal. Sem isso ele só existia de forma interativa (`pergunta()` no
 // stdin), e um bot iniciado pelo painel — que roda destacado, sem terminal —
@@ -81,6 +89,110 @@ async function numeroParaParear () {
   return (await pergunta('Digite seu número com DDI (ex: 5511999999999): ')).replace(/\D/g, '')
 }
 const SESSION_ID = 'default'
+
+export const ADMISSAO_CONCORRENCIA_PADRAO = 8
+export const ADMISSAO_LOG_JANELA_MS_PADRAO = 5000
+
+export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } = {}) {
+  const hardware = cfg.hardware || {}
+  const positivo = (valor, padrao) => Number.isSafeInteger(valor) && valor > 0 ? valor : padrao
+  const janelaMs = positivo(hardware.admissaoLogJanelaMs, ADMISSAO_LOG_JANELA_MS_PADRAO)
+  let contadas = 0
+  let expiradasContadas = 0
+  let recusadas = 0
+  let expiradas = 0
+  let timer = null
+  let publicacao = null
+  let encerramento = null
+  const escrever = (texto) => { try { registrar(texto) } catch {} }
+  const fila = criarFila({
+    recurso: 'admissao',
+    limite: positivo(hardware.admissaoConcorrencia, ADMISSAO_CONCORRENCIA_PADRAO),
+    maxPendentes: hardware.maxPendentes,
+    agingMs: hardware.agingMs,
+    esperaMaximaMs: hardware.esperaMaximaMs,
+    aoMudar: (estado) => {
+      recusadas += estado.recusas - contadas
+      expiradas += estado.expiradas - expiradasContadas
+      contadas = estado.recusas
+      expiradasContadas = estado.expiradas
+      if ((recusadas || expiradas) && !timer) {
+        const inicio = new Date().toISOString()
+        // Um único timer por janela garante também o resumo da última rajada,
+        // mesmo que depois dela não chegue mais nenhuma mensagem.
+        publicacao = new Promise((resolver) => {
+          timer = setTimeout(() => {
+            escrever(`[engine] fila admissao: recusados=${recusadas}, expirados=${expiradas}, totalRecusados=${contadas}, janela=${inicio}..${new Date().toISOString()}`)
+            recusadas = 0
+            expiradas = 0
+            timer = null
+            resolver()
+          }, janelaMs)
+          timer.unref?.()
+        })
+      }
+      aoMudar?.(estado)
+    }
+  })
+  return {
+    admitir (chave, tarefa) {
+      // Ainda não existe automação avaliada: toda entrada tem urgência normal
+      // e recusa local. Sem promessa para recusada, sem aviso no WhatsApp.
+      const trabalho = fila.tentarExecutar(tarefa, { chave, prioridade: 'normal' })
+      return trabalho?.catch((erro) => {
+        if (erro?.code !== 'LCN_SEM_VAGA' && erro?.code !== 'LCN_TIMEOUT') {
+          escrever(`[engine] evento admitido falhou: ${erro?.message || erro}`)
+        }
+      }) || null
+    },
+    encerrar () {
+      if (!encerramento) {
+        encerramento = fila.encerrar().then(async () => {
+          // O último resumo também precisa sair no desligamento. Esperar o
+          // timer preserva a janela mínima em vez de despejar duas linhas juntas.
+          if (timer) { timer.ref?.(); await publicacao }
+        })
+      }
+      return encerramento
+    },
+    get estado () { return { ...fila.estado, logJanelaMs: janelaMs } }
+  }
+}
+
+export function registrarEntradaDeEventos (client, clienteEngine, {
+  admissao, obterContexto, registrar = log, encaminhar = encaminharEventoAoMotor,
+  invalidarGrupo = groupInfo.invalidar
+}) {
+  function receber (tipo, event) {
+    const recebidoEmMs = Date.now()
+    // Permissões não podem esperar a fila: até um evento recusado invalida o
+    // cache antes que a próxima mensagem possa consultar sender.isAdmin.
+    if (tipo === 'group') {
+      try { invalidarGrupo(chatIdDoEvento(event)) } catch {}
+    }
+    const { cfg, accountId } = obterContexto()
+    return admissao.admitir(chatIdDoEvento(event), () => {
+      const opcoes = { accountId, recebidoEmMs, botId: jidProprio(client) }
+      let eventoCanonico
+      if (tipo === 'group') {
+        eventoCanonico = construirEventoDeGrupo(event, opcoes)
+      } else if (tipo === 'message_unavailable') {
+        eventoCanonico = construirEventoDeIndisponivel(event, opcoes)
+      } else {
+        registrarContatoConhecido(event)
+        eventoCanonico = construirEventoDeMensagem(event, opcoes)
+        if (eventoCanonico?.message?.kind === 'unknown') emitirDesconhecidoDebug(event, cfg, registrar)
+      }
+      emitirEventoDebug(eventoCanonico, cfg, registrar)
+      return encaminhar(client, clienteEngine, eventoCanonico, cfg, registrar)
+    })
+  }
+  // Os listeners são síncronos: o recebimento nunca aguarda o motor. Até a
+  // construção canônica só acontece depois de ocupar uma vaga de admissão.
+  client.on('message', (event) => { receber('message', event) })
+  client.on('group', (event) => { receber('group', event) })
+  client.on('message_unavailable', (event) => { receber('message_unavailable', event) })
+}
 
 // Dispara o caminho novo sem bloquear nem substituir a captura existente.
 // Embora sink/executor sejam defensivos por conta própria, o catch final
@@ -260,6 +372,7 @@ export async function iniciar () {
   let falhas = 0
   let clienteAtual = null
   let reiniciando = false
+  let desligando = false
   // Handle do setTimeout(conectar, espera) do retry transiente — guardado
   // pra poder cancelar se um fechamento TERMINAL (logout/conflito/
   // fatal_account/quarentena) chegar logo depois de um retry já agendado.
@@ -276,11 +389,16 @@ export async function iniciar () {
   // Uma instância por processo, reaproveitada por todas as mensagens e por
   // todas as reconexões do WaClient.
   const clienteEngine = criarClienteEngine()
+  // Compartilhada inclusive nas reconexões: trocar o socket não pode abrir
+  // outro orçamento de cadeias enquanto a fila anterior ainda está viva.
+  const admissao = criarAdmissaoDeEventos(cfg)
+  state.registrarFonteDeAdmissao(() => admissao.estado)
 
   // Hot-reload: a maioria do config (captura, transcrição, atualização) é lida ao
   // vivo pelos handlers via closure em `cfg`. Só reconecta quando muda algo que
   // precisa recriar o client (logLevel, markOnline).
   observar((novo) => {
+    if (desligando) return
     cfg = novo
     accountId = resolverAccountId({ cfg, pastaDados: PASTA_DADOS })
     bandwidth.configurar(cfg.hardware?.bandwidthLimit)
@@ -297,15 +415,34 @@ export async function iniciar () {
   // pareada na próxima tentativa de resume (failure_not_authorized/401,
   // credenciais limpas pelo próprio Zapo) — visto num teste real durante a
   // migração. disconnect() fecha a conexão preservando as credenciais.
-  let desligando = false
-  async function desligarGracioso () {
-    if (desligando) return
+  let desligamento = null
+  function desligarGracioso ({ codigo = 0, apagarSessao = false, sair = true } = {}) {
+    if (desligamento) return desligamento
     desligando = true
-    try { await clienteAtual?.disconnect() } catch {}
-    process.exit(0)
+    clearTimeout(handleRetry)
+    desligamento = (async () => {
+      // Recusar primeiro e desconectar por último deixa os admitidos concluírem
+      // seus envios; fechar o socket antes transformaria a drenagem em falhas.
+      await admissao.encerrar()
+      if (apagarSessao) {
+        try { await clienteAtual?.logout() } catch {}
+        await sleepMs(800)
+        try {
+          for (const f of fs.readdirSync(PASTA_SESSAO)) {
+            fs.rmSync(path.join(PASTA_SESSAO, f), { recursive: true, force: true })
+          }
+        } catch (e) { log('erro limpando sessão:', e.message) }
+        state.definirConexao({ conectado: false, numero: null, nome: null })
+        log('Sessão limpa. Reiniciando pra novo login (veja o QR/código nos logs)...')
+      } else {
+        try { await clienteAtual?.disconnect() } catch {}
+      }
+      state.gravar()
+      if (sair) process.exit(codigo)
+    })()
+    return desligamento
   }
-  process.on('SIGINT', desligarGracioso)
-  process.on('SIGTERM', desligarGracioso)
+  encerrarConexao = desligarGracioso
 
   // Comando "apagar dados do número" (vindo do painel > Serviço): o painel cria
   // data/logout.request; aqui deslogamos, limpamos a sessão e saímos pra reiniciar
@@ -313,6 +450,7 @@ export async function iniciar () {
   const reqLogout = path.join(PASTA_DADOS, 'logout.request')
   const reqRestart = path.join(PASTA_DADOS, 'restart.request')
   setInterval(async () => {
+    if (desligando) return
     // Painel pediu refresh da lista de grupos (sem precisar reiniciar o bot).
     if (fs.existsSync(ARQ_GRUPOS_REFRESH)) {
       try { fs.unlinkSync(ARQ_GRUPOS_REFRESH) } catch {}
@@ -324,28 +462,17 @@ export async function iniciar () {
     if (fs.existsSync(reqRestart)) {
       try { fs.unlinkSync(reqRestart) } catch {}
       log('🔄 Comando recebido: reiniciando o bot...')
-      await sleepMs(300)
-      process.exit(0)
+      await desligarGracioso()
+      return
     }
     if (!fs.existsSync(reqLogout)) return
     try { fs.unlinkSync(reqLogout) } catch {}
     log('🔌 Comando recebido: apagando dados do número e reiniciando...')
-    try { await clienteAtual?.logout() } catch {}
-    await sleepMs(800)
-    try {
-      for (const f of fs.readdirSync(PASTA_SESSAO)) {
-        fs.rmSync(path.join(PASTA_SESSAO, f), { recursive: true, force: true })
-      }
-    } catch (e) { log('erro limpando sessão:', e.message) }
-    state.definirConexao({ conectado: false, numero: null, nome: null })
-    state.gravar()
-    log('Sessão limpa. Reiniciando pra novo login (veja o QR/código nos logs)...')
-    await sleepMs(400)
-    process.exit(0)
+    await desligarGracioso({ apagarSessao: true })
   }, 3000)
 
   async function conectar () {
-    if (reiniciando) return
+    if (reiniciando || desligando) return
     bandwidth.configurar(cfg.hardware?.bandwidthLimit)
     const nivel = cfg.hardware?.logLevel
     const logger = nivel && nivel !== 'silent' ? new ConsoleLogger(nivel) : undefined
@@ -378,61 +505,13 @@ export async function iniciar () {
       if (cfg.hardware?.debug) log('mutation:', JSON.stringify(event).slice(0, 500))
     })
 
-    // Promoveu, rebaixou, entrou, saiu, mudou o nome do grupo: o cache de
-    // dados daquele grupo cai na hora. É o que impede {{sender.isAdmin}} de
-    // decidir permissão com informação velha — o TTL lá dentro é só rede de
-    // segurança para o caso de uma dessas notificações se perder.
-    //
-    // A INVALIDAÇÃO VEM PRIMEIRO: qualquer decisão de autorização posterior
-    // precisa enxergar o estado limpo do grupo.
-    client.on('group', async (event) => {
-      const recebidoEmMs = Date.now()
-      try { groupInfo.invalidar(event?.groupJid || event?.chatJid) } catch {}
-      if (cfg.hardware?.debug) log(`group action=${event?.action} group=${event?.groupJid || event?.chatJid}`)
-      try {
-        const eventoCanonico = construirEventoDeGrupo(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
-        emitirEventoDebug(eventoCanonico, cfg, log)
-        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico, cfg, log)
-      } catch (e) {
-        if (cfg.hardware?.debug) log('evento de grupo/motor falhou:', e.message)
-      }
-    })
-
-    client.on('message', async (event) => {
-      // Capturado antes de qualquer outro trabalho: é o t0 usado por
-      // automações como /ping pra medir latência de ponta a ponta
-      // (recebimento -> resposta enviada), incluindo o hop pelo motor.
-      const recebidoEmMs = Date.now()
-      if (cfg.hardware?.debug) log(`message key.id=${event.key?.id} fromMe=${event.key?.fromMe}`)
-      registrarContatoConhecido(event)
-      // Construção, debug e envio ficam isolados: um erro aqui não pode
-      // derrubar o event emitter da conexão.
-      try {
-        const eventoCanonico = construirEventoDeMensagem(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
-        emitirEventoDebug(eventoCanonico, cfg, log)
-        // Mensagem que o sistema não soube ler diz, no log, QUE FORMA tinha.
-        // Sem isso, "o botão não faz nada" morre em `kind: unknown`.
-        if (eventoCanonico?.message?.kind === 'unknown') emitirDesconhecidoDebug(event, cfg, log)
-        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico, cfg, log)
-      } catch (e) {
-        if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
-      }
-    })
-
-    client.on('message_unavailable', async (event) => {
-      const recebidoEmMs = Date.now()
-      if (cfg.hardware?.debug) log(`message_unavailable kind=${event.kind} resendRequested=${event.resendRequested}`)
-      try {
-        const eventoCanonico = construirEventoDeIndisponivel(event, { accountId, recebidoEmMs, botId: jidProprio(client) })
-        emitirEventoDebug(eventoCanonico, cfg, log)
-        encaminharEventoAoMotor(client, clienteEngine, eventoCanonico, cfg, log)
-      } catch (e) {
-        if (cfg.hardware?.debug) log('evento canônico/motor falhou:', e.message)
-      }
+    registrarEntradaDeEventos(client, clienteEngine, {
+      admissao, obterContexto: () => ({ cfg, accountId })
     })
 
     client.on('connection', ({ status, reason, isLogout }) => {
       if (status === 'open') {
+        if (desligando) return
         falhas = 0
         state.registrarSucessoConexao()
         state.limparQR()
@@ -469,6 +548,7 @@ export async function iniciar () {
       // como a doc do Zapo descreve em prosa.
       if (status === 'close') {
         state.definirConexao({ conectado: false })
+        if (desligando) return
         const classe = classificarFechamento({ reason, isLogout })
 
         if (classe === 'auto_gerenciado') {
@@ -498,6 +578,7 @@ export async function iniciar () {
             clearTimeout(handleRetry)
             reiniciando = true
             entrarEmQuarentena(reason)
+            if (process.env.LCN_SUPERVISED === 'systemd') void desligarGracioso({ codigo: EXIT_QUARANTINED })
             return
           }
           const espera = Math.min(30000, 2000 * falhas)
@@ -522,7 +603,7 @@ export async function iniciar () {
         log(mensagemParaClasse(classe, reason))
         if (process.env.LCN_SUPERVISED === 'systemd') {
           state.gravar()
-          setTimeout(() => process.exit(codigoParaClasse(classe)), 300)
+          void desligarGracioso({ codigo: codigoParaClasse(classe) })
         }
       }
     })
@@ -591,10 +672,7 @@ export async function iniciar () {
 function entrarEmQuarentena (motivo) {
   state.definirSaude({ status: 'quarentena', motivo, desde: Date.now() })
   log(`⚠️  Muitas falhas de conexão seguidas sem sucesso — entrando em quarentena (motivo mais recente: ${motivo}). Não vou mais tentar reconectar sozinho.`)
-  if (process.env.LCN_SUPERVISED === 'systemd') {
-    state.gravar()
-    setTimeout(() => process.exit(EXIT_QUARANTINED), 300)
-  }
+  state.gravar()
 }
 
 function avaliarAutoUpdate (falhas, cfg) {

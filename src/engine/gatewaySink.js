@@ -11,10 +11,16 @@ function motivoDaFalha (erro) {
 
 export async function enviarEventoAoMotor (cliente, eventoCanonico, { timeoutMs = 1500 } = {}) {
   let timer
+  const controlador = new AbortController()
   try {
-    const envio = Promise.resolve().then(() => cliente.eventos.enviar(eventoCanonico))
+    const envio = Promise.resolve().then(() => cliente.eventos.enviar(eventoCanonico, { signal: controlador.signal }))
     const timeout = new Promise((resolve) => {
-      timer = setTimeout(() => resolve({ timeout: true }), Math.max(0, timeoutMs))
+      timer = setTimeout(() => {
+        // Vencer a corrida não encerra HTTP: sem abortar, cada timeout soltava
+        // uma vaga e deixava outra requisição viva fora do limite de admissão.
+        resolve({ timeout: true })
+        controlador.abort()
+      }, Math.max(0, timeoutMs))
     })
     const resultado = await Promise.race([
       envio.then((resposta) => ({ resposta }), (erro) => ({ erro })),

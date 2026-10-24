@@ -18,10 +18,11 @@ function montarQueryExecucoes (filtros = {}) {
 // O override permite que gateways em container usem o bind-mount do Quadlet;
 // processos nativos continuam no caminho XDG calculado em paths.js.
 export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET || SOCKET_PATH } = {}) {
-  const requisitar = (method, pathname, body, headers = {}) => new Promise((resolve, reject) => {
+  const requisitar = (method, pathname, body, headers = {}, signal) => new Promise((resolve, reject) => {
     const conteudo = body === undefined ? null : JSON.stringify(body)
     const req = http.request({
       socketPath,
+      signal,
       method,
       path: pathname,
       headers: conteudo === null ? headers : {
@@ -31,6 +32,9 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       }
     }, (res) => {
       const partes = []
+      // Um corpo interrompido não emite end. Sem rejeitar aqui, a admissão
+      // manteria uma vaga presa mesmo depois de o transporte ter fechado.
+      res.on('error', reject)
       res.on('data', (parte) => partes.push(parte))
       res.on('end', () => {
         const texto = Buffer.concat(partes).toString('utf8')
@@ -56,7 +60,7 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
   return {
     saude: () => requisitar('GET', '/health'),
     eventos: {
-      enviar: (evento) => requisitar('POST', '/events', evento)
+      enviar: (evento, { signal } = {}) => requisitar('POST', '/events', evento, {}, signal)
     },
     execucoes: {
       listar: (filtros) => requisitar('GET', `/executions${montarQueryExecucoes(filtros)}`),
