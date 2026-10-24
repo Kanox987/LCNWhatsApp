@@ -95,7 +95,8 @@
               "video",
               "document",
               "view_once",
-              "sticker"
+              "sticker",
+              "group"
             ]
           }
         },
@@ -173,6 +174,9 @@
               },
               {
                 "$ref": "#/definitions/triggerMessage"
+              },
+              {
+                "$ref": "#/definitions/triggerGroup"
               },
               {
                 "$ref": "#/definitions/actionHttp"
@@ -535,6 +539,47 @@
                 "minLength": 1,
                 "maxLength": 200
               }
+            },
+            "requireOwner": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "triggerGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "trigger.group"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "actions": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "add",
+                  "remove",
+                  "promote",
+                  "demote",
+                  "subject"
+                ]
+              },
+              "description": "Ações de grupo que acionam o porteiro: add (entrou), remove (saiu), promote (promoveu), demote (rebaixou), subject (mudou o nome)."
             },
             "requireOwner": {
               "type": "boolean"

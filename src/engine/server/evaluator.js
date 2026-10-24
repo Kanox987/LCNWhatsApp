@@ -96,6 +96,13 @@ function politicaDeEntrada (documento) {
 // Isso NÃO é uma segunda regra de escopo: escopo diz onde a automação PODE
 // valer; isto diz onde o bot foi autorizado a existir. Uma automação com
 // escopo "em qualquer lugar" continua não agindo em grupo não autorizado.
+//
+// DECISÃO 2.5: grupo_ativo VALE para o porteiro.
+// Motivo: grupo_ativo representa o consentimento explícito do proprietário para o
+// bot atuar no grupo. Permitir que o porteiro execute ações punitivas (como expulsão
+// em massa ou avisos) em grupos onde o bot é mero participante passivo (como grupos
+// de família, trabalho ou grupos em que foi adicionado sem aviso prévio) seria desastroso.
+// O portão decide se o bot EXISTE ali como agente automatizado.
 function grupoBloqueado (db, evento, trigger) {
   if (evento?.chat?.kind !== 'group') return false
   if (trigger?.config?.requireOwner === true) return false
@@ -415,6 +422,16 @@ function eventoCasaGatilhoDeMensagem (evento, config) {
     if (!achou) return false
   }
 
+  return true
+}
+
+// Gatilho do porteiro: casa pela ação ocorrida no grupo (entrou, saiu, etc.).
+function eventoCasaGatilhoDeGrupo (evento, config) {
+  if (!evento?.group?.action) return false
+  const acoes = config?.actions
+  if (Array.isArray(acoes) && acoes.length && !acoes.includes(evento.group.action)) {
+    return false
+  }
   return true
 }
 
@@ -1044,6 +1061,18 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       if (evento.chat.kind !== 'group') {
         throw new ErroDeFluxo('Só dá para remover participante dentro de um grupo.')
       }
+      if (no.config?.who === 'target' && Array.isArray(evento.group?.participants) && evento.group.participants.length > 1) {
+        for (const p of evento.group.participants) {
+          const alvo = typeof p === 'string' ? p : (p.id || p.phoneJid || p.jid)
+          if (!alvo) continue
+          if (no.config?.neverRemoveOwner !== false && ehDono(db, alvo)) continue
+          comandos.push({
+            commandType: 'group.remove',
+            payload: { chatId: evento.chat.id, participantId: alvo }
+          })
+        }
+        return 'success'
+      }
       const quem = no.config?.who === 'target' ? resolverAlvo(evento) : evento.sender?.id
       if (!quem) {
         // "/ban" sem marcar ninguém é o erro de uso mais comum deste comando, e
@@ -1239,6 +1268,7 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
     return comandos
   }
   const contexto = {
+    group: evento.group ? { ...evento.group } : {},
     // A FRONTEIRA DO QUE É LEGÍVEL É ESTE OBJETO.
     //
     // Não existe mais lista de campos permitidos no interpolador: o que está
@@ -1343,12 +1373,14 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
 function inserirEvento (db, evento) {
   const jaExiste = db.prepare('SELECT 1 FROM inbound_events WHERE id = ?').get(evento.eventId)
   if (jaExiste) return false
+  const messageKind = evento.message?.kind || (evento.group ? 'group' : null)
+  const messageText = evento.message?.text ?? (evento.group?.subject ?? null)
   db.prepare(`INSERT INTO inbound_events
     (id, account_id, chat_id, chat_kind, sender_id, message_kind, message_text, replay, raw_json, received_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(
       evento.eventId, evento.accountId, evento.chat.id, evento.chat.kind, evento.sender.id,
-      evento.message.kind, evento.message.text ?? null, evento.replay ? 1 : 0,
+      messageKind, messageText, evento.replay ? 1 : 0,
       JSON.stringify(evento), new Date().toISOString()
     )
   return true
@@ -1453,7 +1485,7 @@ function exporComando (row) {
 // primeira vez (achado real do design: rede instável entre gateway e motor
 // pode causar retry do POST /events).
 export function avaliarEvento (db, evento) {
-  if (!evento?.eventId || !evento?.accountId || !evento?.chat?.id || !evento?.message?.kind) {
+  if (!evento?.eventId || !evento?.accountId || !evento?.chat?.id || (!evento?.message?.kind && !evento?.group?.action)) {
     throw new ErroHttp(400, 'Evento canônico inválido: faltam campos obrigatórios.')
   }
 
@@ -1528,21 +1560,27 @@ export function avaliarEvento (db, evento) {
         const refs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?').all(candidato.revision_id)
         const passaEscopo = passaEscopoPara(db, candidato, refs, evento.chat)
         const passaHistoria = politica.historyPolicy !== 'live_only' || evento.replay !== true
-        const passaTipo = politica.acceptedMessageKinds.includes(evento.message.kind)
+        const kindDoEvento = evento.message?.kind || (evento.group ? 'group' : null)
+        const passaTipo = Boolean(kindDoEvento && politica.acceptedMessageKinds.includes(kindDoEvento))
         // Comando restrito é o canal de administração pelo WhatsApp, então
         // mensagem do PRÓPRIO número precisa passar mesmo com
         // allowFrom:'external' — é assim que quem está com a conta na mão
         // cadastra o primeiro dono. Para comando comum, a regra de sempre
         // continua valendo (bot não reage a si mesmo).
         const ehAdministrativo = trigger.config.requireOwner === true
-        const passaAutor = ehAdministrativo ||
-          trigger.config.allowFrom !== 'external' || evento.sender.authoredBySelf !== true
         const ehAutomatico = trigger.type === 'trigger.message'
-        // inputPolicy.acceptedMessageKinds continua valendo nos dois casos: é a
+        const ehGrupo = trigger.type === 'trigger.group'
+        const passaAutor = ehGrupo || ehAdministrativo ||
+          trigger.config.allowFrom !== 'external' || evento.sender.authoredBySelf !== true
+        // inputPolicy.acceptedMessageKinds continua valendo nos três casos: é a
         // política de entrada da automação, anterior ao gatilho.
-        const passaComando = passaTipo && (ehAutomatico
-          ? (barreiraDeGatilhoAutomatico(evento) && eventoCasaGatilhoDeMensagem(evento, trigger.config))
-          : textoCasaComando(evento.message.text, trigger.config))
+        const passaComando = passaTipo && (
+          ehGrupo
+            ? eventoCasaGatilhoDeGrupo(evento, trigger.config)
+            : ehAutomatico
+              ? (barreiraDeGatilhoAutomatico(evento) && eventoCasaGatilhoDeMensagem(evento, trigger.config))
+              : textoCasaComando(evento.message?.text, trigger.config)
+        )
         // Comando restrito a dono: enquanto ninguém foi marcado como dono, a
         // instalação continua aberta (senão nasce trancada e nem dá pra
         // configurar o primeiro dono pelo WhatsApp). Depois do primeiro,
@@ -1569,7 +1607,7 @@ export function avaliarEvento (db, evento) {
         // Cede por EVENTO, e não por existir: o comando do dono pode estar
         // limitado a um grupo, e ali ele responde; nas outras conversas, onde
         // ele nem casou, o nativo continua sendo o padrão que ele é.
-        const palavraDoGatilho = !ehAutomatico && typeof trigger.config.command === 'string'
+        const palavraDoGatilho = !ehAutomatico && !ehGrupo && typeof trigger.config.command === 'string'
           ? trigger.config.command.trim().toLowerCase()
           : null
         const cedeAoDono = candidato.native === 1 && palavraDoGatilho && palavrasQueCasaram.has(palavraDoGatilho)
@@ -1595,8 +1633,8 @@ export function avaliarEvento (db, evento) {
             // O comando CASOU, e isso consome a palavra: sem marcar, o nativo
             // de mesmo nome responderia no lugar dele, e a pessoa veria o bot
             // reagir a um comando que ela acabou de desligar.
-            if (!ehAutomatico) algumComandoCasou = true
-            if (!ehAutomatico && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
+            if (!ehAutomatico && !ehGrupo) algumComandoCasou = true
+            if (!ehAutomatico && !ehGrupo && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
             const aviso = avisoDeDesligado(evento.chat, desligamento)
             if (aviso && candidato.deployment_mode === 'live') {
               comandosGerados = [{ commandType: 'whatsapp.reply', payload: { chatId: evento.chat.id, text: aviso } }]
@@ -1606,8 +1644,8 @@ export function avaliarEvento (db, evento) {
           // Vale para sombra também: o comando CASOU, e é isso que consome a
           // mensagem. Só ao vivo aqui faria o mesmo evento se comportar
           // diferente conforme o modo de uma automação vizinha.
-          if (!ehAutomatico) algumComandoCasou = true
-          if (!ehAutomatico && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
+          if (!ehAutomatico && !ehGrupo) algumComandoCasou = true
+          if (!ehAutomatico && !ehGrupo && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
           if (status === 'matched_live') {
             try {
               // Savepoint por automação (transação aninhada do better-sqlite3):

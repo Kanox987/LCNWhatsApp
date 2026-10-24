@@ -1,6 +1,7 @@
 export const GATILHOS_SUPORTADOS = Object.freeze([
   'trigger.command',
-  'trigger.message'
+  'trigger.message',
+  'trigger.group'
 ])
 
 // A urgência que uma automação pode declarar, e o que ela pode pedir quando a

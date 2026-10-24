@@ -3,7 +3,7 @@
 // importa zapo-adjacent concepts (formato de event.key/event.message) — o
 // resto do motor nunca vê essas estruturas cruas.
 import { desembrulhar, acharVisuUnica } from '../visu.js'
-import { calcularEventId, classificarMensagem } from './canonicalEvent.js'
+import { calcularEventId, calcularEventIdDeGrupo, classificarMensagem } from './canonicalEvent.js'
 import * as mediaRefCache from './mediaRefCache.js'
 import * as lidMap from '../lidMap.js'
 import { nomeDe, registrarContato } from '../directory.js'
@@ -464,5 +464,117 @@ export function construirEventoDeIndisponivel (event, { accountId, recebidoEmMs,
     ...(botId ? { bot: { id: botId } } : {}),
     message: { kind: 'unavailable' },
     providerRef: construirProviderRef(key)
+  }
+}
+
+// EVENTO DE GRUPO (porteiro):
+// Tradução do WaGroupEvent da biblioteca Zapo para o modelo canônico.
+//
+// O evento não é uma mensagem: não possui texto digitado, anexo nem comando.
+// Ele descreve ações estruturais ocorridas na porta do grupo: entradas (add),
+// saídas (remove), promoções (promote), rebaixamentos (demote) e alteração
+// do nome do grupo (subject).
+//
+// Quem provocou o evento é `authorJid` (o sender); os afetados pela ação
+// estão em `participants` (os alvos de moderação).
+export function construirEventoDeGrupo (event, { accountId, recebidoEmMs, botId }) {
+  const groupJid = event.groupJid || event.chatJid || event.id
+  const authorJid = event.authorJid || event.author
+
+  if (event.authorJidAlt) {
+    try { lidMap.registrarPar(authorJid, event.authorJidAlt) } catch {}
+  }
+
+  // A ARMADILHA DO PARTICIPANTE:
+  // Conforme levantado no PASSO-ZERO, o campo `jid` de WaGroupEventParticipant
+  // é "LID or PN" — ambíguo por definição da biblioteca. Se um participante
+  // entrar identificado pelo seu LID interno e a lista branca da automação
+  // contiver o número de telefone (ou o oposto), a comparação falharia calada.
+  //
+  // Para evitar que o porteiro expulse quem está na lista ou ignore quem não está,
+  // aprendemos qualquer par imediato (lidJid + phoneJid) e normalizamos
+  // o identificador pelo lidMap persistido.
+  const participantesBrutos = Array.isArray(event.participants) ? event.participants : []
+  const participants = participantesBrutos.map((p) => {
+    if (typeof p === 'string') {
+      const tel = p.endsWith('@s.whatsapp.net') ? p : lidMap.paraTelefone(p)
+      const phoneJid = (tel && tel.endsWith('@s.whatsapp.net')) ? tel : undefined
+      const lidJid = p.endsWith('@lid') ? p : undefined
+      return { id: phoneJid || p, rawJid: p, phoneJid, lidJid, role: undefined, isAdmin: false }
+    }
+    const rawJid = p.jid || p.id
+    const candidatoLid = [p.lidJid, p.lid, rawJid].find((x) => typeof x === 'string' && x.endsWith('@lid')) || null
+    const candidatoPhone = [p.phoneJid, p.phone, rawJid].find((x) => typeof x === 'string' && x.endsWith('@s.whatsapp.net')) || null
+
+    if (candidatoLid && candidatoPhone && candidatoLid !== candidatoPhone) {
+      try { lidMap.registrarPar(candidatoLid, candidatoPhone) } catch {}
+    }
+
+    const phoneJid = candidatoPhone || (candidatoLid ? lidMap.paraTelefone(candidatoLid) : (rawJid ? lidMap.paraTelefone(rawJid) : null))
+    const lidJid = candidatoLid || (rawJid && rawJid.endsWith('@lid') ? rawJid : null)
+    const id = (phoneJid && phoneJid.endsWith('@s.whatsapp.net') ? phoneJid : null) || phoneJid || rawJid
+
+    const role = p.role
+    const isAdmin = role === 'admin' || role === 'superadmin'
+
+    return {
+      id,
+      rawJid,
+      phoneJid: phoneJid || undefined,
+      lidJid: lidJid || undefined,
+      role,
+      isAdmin,
+      ...(p.displayName ? { displayName: p.displayName } : {}),
+      ...(p.expirationSeconds !== undefined ? { expirationSeconds: p.expirationSeconds } : {})
+    }
+  })
+
+  const senderId = lidMap.paraTelefone(authorJid) || authorJid
+  const authoredBySelf = botId ? (senderId === botId || authorJid === botId) : false
+  const nomeDeQuemEnviou = resolverNome(event, senderId)
+
+  const action = event.action
+  const timestampSeconds = event.timestampSeconds ?? event.timestamp ?? Math.floor(Date.now() / 1000)
+
+  // Deduplicação determinística:
+  // Como não há providerMessageId (key.id), a chave é calculada a partir
+  // da conta, do grupo, da ação, dos alvos e do timestamp.
+  const eventId = calcularEventIdDeGrupo({
+    accountId,
+    groupJid,
+    action,
+    participants,
+    timestampSeconds,
+    subject: event.subject || ''
+  })
+
+  return {
+    provider: 'zapo',
+    accountId,
+    eventId,
+    occurredAt: new Date(timestampSeconds * 1000).toISOString(),
+    replay: event.offline === true,
+    receivedAtMs: recebidoEmMs ?? Date.now(),
+    chat: {
+      id: groupJid,
+      kind: 'group'
+    },
+    sender: nomeDeQuemEnviou
+      ? { id: senderId, authoredBySelf, authoredByBot: false, name: nomeDeQuemEnviou }
+      : { id: senderId, authoredBySelf, authoredByBot: false },
+    ...(botId ? { bot: { id: botId } } : {}),
+    group: {
+      action,
+      author: senderId,
+      participants,
+      ...(typeof event.subject === 'string' && event.subject ? { subject: event.subject } : {}),
+      ...(typeof event.description === 'string' && event.description ? { description: event.description } : {})
+    },
+    providerRef: {
+      provider: 'zapo',
+      groupJid,
+      authorJid: event.authorJid,
+      action
+    }
   }
 }

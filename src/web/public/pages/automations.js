@@ -415,7 +415,7 @@ async function renderCriador ({ navigate, refresh }) {
     el('h2', { text: 'O essencial' }),
     el('ul', { className: 'human-summary' }, [
       el('li', { text: 'automação <id>: é por essa linha que a automação passa a existir. Não dá para repetir um id que já existe.' }),
-      el('li', { text: 'tipo: "comando" é acordado por alguém digitar; "vigia" fica ligado o tempo todo olhando a conversa (é o que serve para responder "bom dia" ou baixar link sozinho).' }),
+      el('li', { text: 'tipo: "comando" é acordado por alguém digitar; "vigia" fica ligado o tempo todo olhando a conversa (é o que serve para responder "bom dia" ou baixar link sozinho); "porteiro" monitora a porta do grupo (quem entra, quem sai, moderação ou mudança de nome).' }),
       el('li', { text: 'acessa: a que tipos de mensagem ele precisa de acesso. Não é preferência: tipo que não estiver aqui NUNCA chega nele.' }),
       el('li', { text: 'precisa de um link / de uma mídia: o que o comando precisa receber, e onde procurar ("na citada ou na mensagem" — a ordem é a ordem de procura). Com "sem ele"/"sem ela" logo abaixo, dizendo o que responder quando falta. A ação então escreve só "url: o link".' }),
       el('li', { text: 'onde: diz onde o comando pode valer. Deixar de fora não significa "em todo lugar" — significa que não casa com ninguém.' }),

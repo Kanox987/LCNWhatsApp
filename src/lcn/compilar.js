@@ -6,7 +6,7 @@
 // o mesmo portão do JSON escrito à mão. É isto que deixa a linguagem existir
 // sem reabrir a decisão de não executar código de usuário.
 import {
-  ACOES, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
+  ACOES, ACOES_DE_GRUPO, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
   MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, ORIGENS, PRIORIDADES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
@@ -23,6 +23,7 @@ const CASAMENTO_POR_PALAVRA = inverter(CASAMENTOS)
 const ORIGEM_POR_PALAVRA = inverter(ORIGENS)
 const PRIORIDADE_POR_PALAVRA = inverter(PRIORIDADES)
 const TIPO_POR_PALAVRA = inverter(TIPOS_DE_MENSAGEM)
+const ACAO_DE_GRUPO_POR_PALAVRA = inverter(ACOES_DE_GRUPO)
 const OPERADOR_POR_SIMBOLO = inverter(OPERADORES)
 const DESTINO_POR_PALAVRA = inverter(DESTINOS)
 const CONFIG_POR_PALAVRA = inverter(TIPOS_DE_CONFIG)
@@ -36,11 +37,16 @@ const VALOR_POR_PALAVRA = inverter(TIPOS_DE_VALOR)
 const ehMarcador = (texto) => /^\{\{[^{}]+\}\}$/.test(String(texto).trim())
 
 // Os campos e as linhas soltas que valem para a classe declarada, para a
-// mensagem de erro poder dizer o que existe. `vale` é 'comando', 'vigia' ou
-// 'ambos'; sem classe declarada ainda, oferece tudo.
+// mensagem de erro poder dizer o que existe. `vale` é 'comando', 'vigia',
+// 'porteiro', array de classes ou 'ambos'; sem classe declarada ainda, oferece tudo.
 function camposQueValem (tipoDoGatilho) {
   const classe = CLASSES[tipoDoGatilho] || null
-  const serve = (item) => !classe || item.vale === 'ambos' || item.vale === classe
+  const serve = (item) => {
+    if (!classe) return true
+    if (item.vale === 'ambos' || item.vale === 'todos') return true
+    if (Array.isArray(item.vale)) return item.vale.includes(classe)
+    return item.vale === classe
+  }
   const campos = CAMPOS_DO_CABECALHO.filter(serve).map((c) => `${c.chave}:`)
   const marcas = MARCAS_DO_CABECALHO.filter(serve).map((m) => m.chave)
   return `Conheço: ${campos.join(', ')} — e as linhas soltas: ${marcas.join(', ')}.`
@@ -50,7 +56,12 @@ function traduzir (mapa, valor, oQue, linha) {
   const limpo = String(valor).trim()
   if (ehMarcador(limpo)) return limpo
   const codigo = mapa[limpo]
-  if (!codigo) throw new ErroDeSintaxe(`${oQue} desconhecid${oQue.endsWith('a') ? 'a' : 'o'}: "${limpo}"`, linha)
+  if (!codigo) {
+    const feminino = oQue.startsWith('ação') || oQue.endsWith('a')
+    const genero = feminino ? 'desconhecida' : 'desconhecido'
+    const opcoes = Object.keys(mapa).join(', ')
+    throw new ErroDeSintaxe(`${oQue} ${genero}: "${limpo}". Use: ${opcoes}.`, linha)
+  }
   return codigo
 }
 
@@ -494,13 +505,27 @@ export function compilar (texto) {
     if (acaoPorPalavra(l.texto) || l.texto.startsWith('se ')) break
 
     if (l.texto === 'só dono') { gatilhoConfig.requireOwner = true; continue }
-    if (l.texto === 'com link') { gatilhoConfig.containsLink = true; continue }
-    if (l.texto === 'só link de mídia') { gatilhoConfig.mediaLinkOnly = true; continue }
-    // Por padrão a regra automática CEDE quando a mensagem já virou comando —
-    // senão "/dow <link>" aciona o comando e a regra, e o mesmo link é baixado
-    // duas vezes. Esta linha é o jeito de dizer "quero ver o comando também",
-    // que é o que uma regra de auditoria precisa.
-    if (l.texto === 'também em comandos') { gatilhoConfig.alsoOnCommands = true; continue }
+    if (l.texto === 'com link') {
+      if (tipoDoGatilho === 'trigger.group') {
+        throw new ErroDeSintaxe('"com link" não se aplica a porteiro: eventos de grupo não contêm links.', l.n)
+      }
+      gatilhoConfig.containsLink = true
+      continue
+    }
+    if (l.texto === 'só link de mídia') {
+      if (tipoDoGatilho === 'trigger.group') {
+        throw new ErroDeSintaxe('"só link de mídia" não se aplica a porteiro: eventos de grupo não contêm links.', l.n)
+      }
+      gatilhoConfig.mediaLinkOnly = true
+      continue
+    }
+    if (l.texto === 'também em comandos') {
+      if (tipoDoGatilho === 'trigger.group') {
+        throw new ErroDeSintaxe('"também em comandos" não se aplica a porteiro: eventos de grupo não são comandos.', l.n)
+      }
+      gatilhoConfig.alsoOnCommands = true
+      continue
+    }
     if (l.texto === 'desligada') { doc.enabled = false; continue }
 
     const sep = l.texto.indexOf(':')
@@ -528,6 +553,12 @@ export function compilar (texto) {
       // refinam em linhas próprias.
       case 'dispara com': {
         if (!tipoDoGatilho) throw new ErroDeSintaxe('"dispara com" precisa vir depois de "tipo:"', l.n)
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe(
+            'um porteiro não usa "dispara com": ele monitora a porta do grupo, use "quando for: entrou | saiu | promoveu | rebaixou | mudou o nome"',
+            l.n
+          )
+        }
         if (tipoDoGatilho === 'trigger.command') {
           if (!valor || /\s/.test(valor)) {
             throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, l.n)
@@ -548,6 +579,9 @@ export function compilar (texto) {
       // para por que isto existe.
       case 'precisa de um link':
       case 'precisa de uma mídia': {
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe(`"${chave}" não se aplica a porteiro: eventos de grupo não trazem mensagens para exigir link ou arquivo.`, l.n)
+        }
         const oQue = chave.slice('precisa de '.length)
         const kind = Object.keys(EXIGENCIAS).find((k) => EXIGENCIAS[k] === oQue)
         const onde = valor.split(/\s+ou\s+|,/).map((parte) => {
@@ -569,6 +603,9 @@ export function compilar (texto) {
       // que é onde o `sem mídia`/`sem dados` morava.
       case 'sem ele':
       case 'sem ela': {
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe(`"${chave}" não se aplica a porteiro: eventos de grupo não trazem mensagens.`, l.n)
+        }
         if (!doc.inputPolicy.requires) {
           throw new ErroDeSintaxe(`"${chave}" precisa vir depois de "precisa de ..."`, l.n)
         }
@@ -587,6 +624,9 @@ export function compilar (texto) {
       // e o separador é o que estiver escrito ENTRE os nomes — o que a linha
       // mostra é o que a pessoa vai digitar.
       case 'argumentos': {
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe('"argumentos" não se aplica a porteiro: um porteiro não tem texto nem parâmetros após comando.', l.n)
+        }
         if (tipoDoGatilho !== 'trigger.command') {
           throw new ErroDeSintaxe('"argumentos" é só de comando — um vigia não tem o que vem depois da palavra digitada.', l.n)
         }
@@ -608,6 +648,9 @@ export function compilar (texto) {
         break
       }
       case 'menu': {
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe('"menu" não se aplica a porteiro: eventos de grupo não aparecem no menu de comandos.', l.n)
+        }
         const [rotulo, ...resto] = valor.split('—')
         display.menuLabel = rotulo.trim()
         if (resto.length) display.menuDescription = resto.join('—').trim()
@@ -625,7 +668,11 @@ export function compilar (texto) {
       case 'onde': doc.scope.include.push(lerDestino(valor, l.n)); break
       case 'menos': doc.scope.exclude.push(lerDestino(valor, l.n)); break
       case 'pool': doc.responder.poolId = valor; break
-      case 'histórico': doc.inputPolicy.historyPolicy = valor; break
+      case 'histórico':
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe('"histórico" não se aplica a porteiro: eventos de grupo ocorrem sempre em tempo real.', l.n)
+        }
+        doc.inputPolicy.historyPolicy = valor; break
       // A URGÊNCIA, e ela vale para a automação INTEIRA.
       //
       // Um cabeçalho só não consegue dizer "a confirmação é alta e o download é
@@ -681,14 +728,34 @@ export function compilar (texto) {
       // só texto NUNCA vê a mensagem de voz — e falha calado. A palavra antiga
       // lia como se fosse preferência.
       case 'acessa':
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe('"acessa" não se aplica a porteiro: um porteiro observa eventos de entrada, saída e moderação de grupo, não mensagens.', l.n)
+        }
         doc.inputPolicy.acceptedMessageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
         break
-      case 'casa': gatilhoConfig.match = traduzir(CASAMENTO_POR_PALAVRA, valor, 'modo de casamento', l.n); break
-      case 'quem': gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'quem pode acionar', l.n); break
+      case 'casa':
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe('"casa" não se aplica a porteiro: modo de casamento é exclusivo de comandos digitados.', l.n)
+        }
+        gatilhoConfig.match = traduzir(CASAMENTO_POR_PALAVRA, valor, 'modo de casamento', l.n)
+        break
+      case 'quem':
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe('"quem" não se aplica a porteiro: eventos de grupo ocorrem sempre dentro do grupo.', l.n)
+        }
+        gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'quem pode acionar', l.n)
+        break
       case 'quando for':
-        gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
+        if (tipoDoGatilho === 'trigger.group') {
+          gatilhoConfig.actions = valor.split(',').map((t) => traduzir(ACAO_DE_GRUPO_POR_PALAVRA, t, 'ação de grupo', l.n))
+        } else {
+          gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
+        }
         break
       case 'palavras':
+        if (tipoDoGatilho === 'trigger.group') {
+          throw new ErroDeSintaxe('"palavras" não se aplica a porteiro: eventos de grupo não contêm texto de conversa.', l.n)
+        }
         gatilhoConfig.keywords = valor.split(',').map((p) => descitar(p, l.n))
         break
       // Recusar sem dizer o que existe manda a pessoa procurar a palavra certa
@@ -709,6 +776,14 @@ export function compilar (texto) {
   }
   if (tipoDoGatilho === 'trigger.command' && !gatilhoConfig.command) {
     throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
+  }
+  if (tipoDoGatilho === 'trigger.group') {
+    if (!gatilhoConfig.actions || !gatilhoConfig.actions.length) {
+      throw new ErroDeSintaxe('falta "quando for:" — um porteiro precisa dizer quais ações observa: entrou, saiu, promoveu, rebaixou ou mudou o nome', cabeca.n)
+    }
+    // O porteiro observa a porta do grupo, recebendo eventos canônicos de grupo
+    // em vez de mensagens normais de conversa.
+    doc.inputPolicy.acceptedMessageKinds = ['group']
   }
 
   if (Object.keys(display).length) doc.display = display

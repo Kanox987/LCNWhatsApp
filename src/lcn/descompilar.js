@@ -7,7 +7,7 @@
 //
 // Com o texto, qualquer documento vira algo que uma pessoa lê e edita.
 import {
-  ACOES, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, ORIGENS, OPERADORES,
+  ACOES, ACOES_DE_GRUPO, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, ORIGENS, OPERADORES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo,
   PRIORIDADES
 } from './vocabulario.js'
@@ -187,7 +187,9 @@ export function descompilar (documento, template = null) {
 
   // O QUE ELA É, e o que a acorda — as duas primeiras coisas que se lê.
   h(`tipo: ${CLASSES[gatilho.type] || gatilho.type}`)
-  h(`dispara com: ${gatilho.type === 'trigger.command' ? cfg.command : 'qualquer mensagem'}`)
+  if (gatilho.type !== 'trigger.group') {
+    h(`dispara com: ${gatilho.type === 'trigger.command' ? cfg.command : 'qualquer mensagem'}`)
+  }
   if (documento.display?.family) h(`família: ${documento.display.family}`)
   if (documento.display?.menuLabel) {
     const desc = documento.display.menuDescription
@@ -199,8 +201,10 @@ export function descompilar (documento, template = null) {
   for (const ref of documento.scope?.exclude || []) h(`menos: ${escreverDestino(ref)}`)
   h(`pool: ${documento.responder?.poolId ?? ''}`)
 
-  const tipos = documento.inputPolicy?.acceptedMessageKinds || []
-  h(`acessa: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
+  if (gatilho.type !== 'trigger.group') {
+    const tipos = documento.inputPolicy?.acceptedMessageKinds || []
+    h(`acessa: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
+  }
   if (documento.inputPolicy?.historyPolicy && documento.inputPolicy.historyPolicy !== 'live_only') {
     h(`histórico: ${documento.inputPolicy.historyPolicy}`)
   }
@@ -238,6 +242,10 @@ export function descompilar (documento, template = null) {
       h(`argumentos: ${cfg.args.names.join(` ${cfg.args.separator} `)}`)
     }
     h(`casa: ${CASAMENTOS[cfg.match] || cfg.match}`)
+  } else if (gatilho.type === 'trigger.group') {
+    if (Array.isArray(cfg.actions) && cfg.actions.length) {
+      h(`quando for: ${cfg.actions.map((a) => ACOES_DE_GRUPO[a] || a).join(', ')}`)
+    }
   } else {
     if (cfg.containsLink === true) h('com link')
     if (cfg.mediaLinkOnly === true) h('só link de mídia')
@@ -249,7 +257,9 @@ export function descompilar (documento, template = null) {
       h(`palavras: ${cfg.keywords.map(citar).join(', ')}`)
     }
   }
-  h(`quem: ${ORIGENS[cfg.allowFrom] || cfg.allowFrom}`)
+  if (gatilho.type !== 'trigger.group') {
+    h(`quem: ${ORIGENS[cfg.allowFrom] || cfg.allowFrom}`)
+  }
   if (cfg.requireOwner === true) h('só dono')
 
   linhas.push('')
