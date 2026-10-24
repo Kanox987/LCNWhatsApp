@@ -8,7 +8,8 @@
 // Com o texto, qualquer documento vira algo que uma pessoa lê e edita.
 import {
   ACOES, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, ORIGENS, OPERADORES,
-  TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo
+  TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo,
+  PRIORIDADES
 } from './vocabulario.js'
 
 const IDENT = '  '
@@ -203,6 +204,19 @@ export function descompilar (documento, template = null) {
   if (documento.inputPolicy?.historyPolicy && documento.inputPolicy.historyPolicy !== 'live_only') {
     h(`histórico: ${documento.inputPolicy.historyPolicy}`)
   }
+
+  // A POLÍTICA DE FILA, e só quando ela NÃO é o padrão.
+  //
+  // Escrever `prioridade: normal` e `sem vaga: descarta` em toda automação
+  // encheria o cabeçalho de linha que não decide nada — e o que não decide nada
+  // some no meio do que decide. Quem lê precisa ver a linha justamente quando
+  // ela é a exceção. O compilador repõe o padrão na volta, então nada se perde.
+  const fila = documento.scheduling
+  if (fila?.priority && fila.priority !== 'normal') {
+    h(`prioridade: ${PRIORIDADES[fila.priority] || fila.priority}`)
+  }
+  if (fila?.onNoSlot?.kind === 'notify') h(`sem vaga: ${JSON.stringify(fila.onNoSlot.text ?? '')}`)
+  else if (fila?.onNoSlot?.kind && fila.onNoSlot.kind !== 'discard') h(`sem vaga: ${fila.onNoSlot.kind}`)
 
   // A exigência e a mensagem de falta, lado a lado.
   const exige = documento.inputPolicy?.requires

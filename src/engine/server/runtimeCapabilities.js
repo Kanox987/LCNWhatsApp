@@ -3,6 +3,12 @@ export const GATILHOS_SUPORTADOS = Object.freeze([
   'trigger.message'
 ])
 
+// A urgência que uma automação pode declarar, e o que ela pode pedir quando a
+// fila recusa. Lista fechada dos dois lados: é o que o painel usa para montar o
+// seletor, e é contra isto que o publish confere.
+export const PRIORIDADES_SUPORTADAS = Object.freeze(['low', 'normal', 'high', 'very_high'])
+export const RECUSAS_SUPORTADAS = Object.freeze(['discard', 'notify'])
+
 export const ACOES_SUPORTADAS = Object.freeze([
   'action.whatsapp.reply',
   'action.variable.set',
@@ -66,6 +72,26 @@ export function obterCapacidadesRuntime () {
     linearOnly: false,
     flowModel: 'exclusive_branching_dag',
     edgeOutcomes: { trigger: ['matched'], condition: ['true', 'false'], action: ['success'] },
-    supportedPlaceholders: ['{{latencyMs}}']
+    supportedPlaceholders: ['{{latencyMs}}'],
+    // A POLÍTICA DE FILA, declarada como capacidade e NÃO como ação.
+    //
+    // `prioridade` e `sem vaga` não são efeito executável: não viram nó do
+    // fluxo e não entram em `actions`. Pôr uma ação falsa `action.priority` ali
+    // para "respeitar a camada" modelaria o cabeçalho como se fosse passo do
+    // comando, e o painel passaria a oferecer prioridade como coisa que se
+    // arrasta para dentro de um fluxo.
+    //
+    // Então vira capacidade própria. É isto que o painel lê para saber se o
+    // motor desta instalação entende a política antes de publicar uma automação
+    // que a declara.
+    scheduling: {
+      priorities: [...PRIORIDADES_SUPORTADAS],
+      onNoSlot: [...RECUSAS_SUPORTADAS],
+      // Honestidade sobre o que ainda não existe: `tenta de novo` depende de um
+      // agendamento que sobreviva a reinício, e ele não existe. Declarar aqui
+      // deixa o painel dizer "ainda não" em vez de a pessoa descobrir no erro
+      // de compilação.
+      naoSuportado: ['retry']
+    }
   }
 }

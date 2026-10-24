@@ -260,6 +260,74 @@
           }
         }
       }
+    },
+    "scheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "priority",
+        "onNoSlot"
+      ],
+      "description": "A politica de fila da automacao: urgencia declarada, e o que fazer quando a fila recusa antes de comecar. Nao e obrigatoria no documento: automacao escrita antes disto existir nao tem o campo, e o motor trata a ausencia como prioridade normal com descarte calado.",
+      "properties": {
+        "priority": {
+          "description": "Urgencia, nao peso. Decide so a ordem de atendimento. O custo entra pelo orcamento de bytes, e o tempo de espera pelo envelhecimento da fila.",
+          "enum": [
+            "low",
+            "normal",
+            "high",
+            "very_high"
+          ]
+        },
+        "onNoSlot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "description": "Forma marcada, nao string polimorfica: sem isto nao haveria como distinguir a palavra reservada de um texto que por acaso fosse igual a ela.",
+          "properties": {
+            "kind": {
+              "description": "discard fecha calado registrando o motivo. notify avisa quem mandou, uma vez, pela mesma fila.",
+              "enum": [
+                "discard",
+                "notify"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "notify"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "kind",
+                  "text"
+                ]
+              },
+              "else": {
+                "not": {
+                  "required": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   },
   "definitions": {
