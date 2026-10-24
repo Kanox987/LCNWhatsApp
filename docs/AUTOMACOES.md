@@ -135,6 +135,88 @@ contrário — o que aconteceria se comparasse como texto.
 
 ---
 
+## Consultar um serviço externo (conexões)
+
+Uma automação pode consultar uma API externa — para baixar uma mídia, pedir uma
+resposta a uma IA, converter figurinhas ou buscar opções na internet.
+
+### Por que o endereço não vai no comando
+
+Uma automação nunca escolhe o endereço de internet por conta própria. O endereço,
+o método HTTP, a credencial e o formato da resposta vêm da declaração feita na
+aba **Conexões** do painel web.
+
+Isso é de propósito por dois motivos:
+
+1. **Segurança**: se o comando pudesse receber qualquer URL para fazer requisições
+   HTTP na web, um usuário qualquer na conversa poderia tentar acessar a rede
+   interna do servidor (SSRF). Com a conexão declarada pelo dono, o destino é fixo.
+2. **Segredo isolado**: a credencial (Bearer, cabeçalho próprio ou parâmetro na URL)
+   fica guardada na conexão, não no comando. Quem cria a automação só nomeia a
+   função. E se o serviço falhar, o bot não vaza endereços internos nem chaves na
+   conversa.
+
+Na linguagem `.lcn`, a ação é escrita com a palavra **`chama`**, apontando para
+`<conexão>.<função>`. As entradas vão em um bloco **`com`**:
+
+```lcn
+chama midia.musica
+  com
+    busca: "{{message.args}}"
+    audio_ext: "m4a"
+  avisa: "🎵 Procurando e baixando…"
+  entrega: separado
+  cita: quem pediu
+  erro: "Não consegui baixar essa música: {{erro}}"
+```
+
+Esse é um exemplo real do catálogo: o template `tocar-musica` (comando `/play`).
+Ele envia o termo digitado para a função `musica` da conexão pronta `midia`.
+
+Outros exemplos reais no catálogo são o `baixar-midia` (comando `/dow`, que
+chama `midia.baixar` passando o link) e o `buscar-musica` (comando `/buscar`,
+que chama `midia.buscar` para achar opções).
+
+### O que o executor faz de verdade
+
+Quando a automação executa o `chama`, o executor de conexão (`conexaoExecutor.js`)
+assume o trabalho pesado no gateway:
+
+- **Autenticação tipada**: injeta a chave configurada na declaração (Bearer,
+  cabeçalho customizado ou parâmetro na URL) e impede que a credencial seja
+  enviada a origens externas diferentes da configurada.
+- **Envio de arquivos**: se a função declara entradas de mídia (como converter uma
+  foto em figurinha ou remover fundo), o corpo vira `multipart/FormData`
+  automaticamente. A linguagem permite definir de onde vem cada arquivo (`a mídia`,
+  `a mídia citada`, `a mídia anexada` ou `o resultado` de uma chamada anterior em
+  sequência).
+- **Acompanhamento de tarefas assíncronas (jobs)**: quando o processamento demora
+  (como download de vídeos ou conversões pesadas), o serviço devolve um identificador
+  de trabalho (`forma: trabalho`). O executor consulta o estado periodicamente
+  até terminar ou atingir o tempo limite, sem travar o motor.
+- **Orçamento de mídia e envio seguro**: arquivos baixados passam por limites de
+  tamanho e memória. Se um post trouxer várias mídias e apenas uma estourar o
+  teto do WhatsApp, o executor entrega as que couberem e avisa quantas ficaram
+  fora, em vez de falhar a resposta inteira.
+- **Carrossel interativo e listas**: para funções que devolvem listas (como o
+  `/buscar`), a resposta pode virar um **carrossel** de cards no WhatsApp, com
+  capa, título, texto e um botão em cada card. O executor busca as capas, alinha a
+  altura dos cards para o carrossel não quebrar a visualização e coloca no botão o
+  comando com o link daquele item (ex.: `/musica {{url}}`), permitindo que a pessoa
+  toque e baixe sem que o bot precise guardar estado na conversa. Se o aplicativo
+  da pessoa não desenhar mensagens interativas, a lista cai de forma transparente
+  para texto.
+- **Respostas imediatas em arquivo ou texto**: conversões rápidas de segundos
+  podem retornar o arquivo direto em base64 (`forma: arquivo`) ou extrair campos
+  específicos do JSON (`forma: texto` e `forma: lista`).
+- **Diagnóstico sem vazar topologia**: se o serviço externo cair ou recusar a
+  credencial (401/403), quem usou o comando recebe uma frase limpa informando a
+  instabilidade temporária, sem expor IPs ou caminhos internos. Já mensagens de
+  erro informativas geradas pela própria API (como "termo longo demais") chegam
+  direto à conversa se a conexão indicar o campo do erro.
+
+---
+
 ## Dono do bot
 
 Alguns comandos só devem responder a você. Marque contatos como **donos** e use
@@ -182,8 +264,6 @@ depende disso. Para tirá-la do ar sem perder o registro, use **Despublicar**.
 
 ## O que ainda não existe
 
-- **Chamar uma API externa** dentro de um comando. Está desenhado, mas ainda não
-  implementado.
 - **Reagir a alguém entrando no grupo** (boas-vindas, aceitar automaticamente).
 - **Vários números se revezando** para responder o mesmo comando. Hoje responde
   sempre o número que recebeu a mensagem.
