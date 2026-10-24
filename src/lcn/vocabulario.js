@@ -280,6 +280,42 @@ export const DESTINOS = Object.freeze({
   tagged: 'marcadas com'
 })
 
+// --- a URGÊNCIA da automação ---------------------------------------------
+//
+// NÃO é o peso. Isto é a pergunta "se este trabalho esperar, o que se perde?",
+// e ela tem três respostas possíveis que não se misturam:
+//
+//   - PERECIBILIDADE decide a urgência, e é só ela que mora aqui. Capturar uma
+//     visualização única é o caso-guia: se esperar, a mídia DEIXA DE EXISTIR e
+//     nenhuma repetição depois resolve.
+//   - CUSTO decide admissão e reserva, e mora no orçamento de bytes. Um vídeo
+//     de 60 MB ocupa mais orçamento que uma foto de 100 KB — e isso não o faz
+//     mais urgente.
+//   - ESPERA decide justiça, e mora no envelhecimento da fila: o de baixa
+//     prioridade sai depois, mas sai.
+//
+// Multiplicar peso por perecibilidade, que foi a primeira ideia, se inverte: o
+// caro subiria de prioridade POR ser caro, e arquivo grande furaria a fila só
+// por ser grande. Baixar um vídeo é caro e REPETÍVEL — pode esperar a noite
+// inteira. São dimensões diferentes, e separadas elas se comportam.
+//
+// Padrão sensato sim, teto no código não: quem escreve a automação declara, e
+// quem não declara fica em "normal".
+export const PRIORIDADES = Object.freeze({
+  low: 'baixa',
+  normal: 'normal',
+  high: 'alta',
+  very_high: 'muito alta'
+})
+
+// O que fazer quando NÃO HÁ VAGA — a fila cheia recusando antes de começar.
+//
+// Só duas formas existem hoje, e a terceira foi recusada de propósito. Ver o
+// comentário do campo `sem vaga` em CAMPOS_DO_CABECALHO para o motivo.
+export const RECUSAS_SEM_VAGA = Object.freeze({
+  discard: 'descarta'
+})
+
 // --- modos de casamento do comando ---------------------------------------
 export const CASAMENTOS = Object.freeze({
   exact: 'exato',
@@ -473,7 +509,18 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
   { chave: 'onde', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas".' },
   { chave: 'menos', vale: 'ambos', palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
   { chave: 'pool', vale: 'ambos', ajuda: 'Qual conjunto de números responde. Crie um na aba Automações antes, se ainda não tiver.' },
-  { chave: 'histórico', vale: 'ambos', ajuda: 'Se a automação enxerga mensagem antiga ou só a que está chegando agora.' }
+  { chave: 'histórico', vale: 'ambos', ajuda: 'Se a automação enxerga mensagem antiga ou só a que está chegando agora.' },
+  {
+    chave: 'prioridade',
+    vale: 'ambos',
+    palavras: PRIORIDADES,
+    ajuda: 'Quando a fila está disputada, quem passa primeiro. Pergunte "se isto esperar, o que se perde?" — e não "isto é pesado?". Capturar uma visualização única é "muito alta" porque a mídia deixa de existir se esperar; baixar um vídeo é "baixa" porque o endereço continua lá amanhã. Vale para TODOS os envios desta automação. Sem esta linha, fica em "normal".'
+  },
+  {
+    chave: 'sem vaga',
+    vale: 'ambos',
+    ajuda: 'O que fazer quando a fila está cheia e recusa ANTES de começar. "descarta" fecha calado, registrando o motivo. Um texto entre aspas avisa quem mandou — uma vez só, pela mesma fila, e se nem o aviso couber isso também fica registrado. Sem esta linha, descarta.'
+  }
 ])
 
 // As linhas SOLTAS do cabeçalho: sem dois-pontos e sem valor, porque a

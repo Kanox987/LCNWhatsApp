@@ -55,7 +55,34 @@ function agendarFlush () {
 export function gravar () {
   try {
     garantirPastas()
-    estado.memoriaMB = Math.round(process.memoryUsage().rss / 1048576)
+    // MEDIR ANTES DE PROMETER, e medir o que importa.
+    //
+    // `rss` sozinho não distingue os dois jeitos de a memória crescer, e eles
+    // pedem conserto oposto: objeto de JavaScript vazando mora no heap; arquivo
+    // e mídia moram FORA dele, em `arrayBuffers` — que é onde todo `Buffer` do
+    // Node vive, e está contido em `external`. Ver "o motor está vazando" ou
+    // "os arquivos estão lotando a memória externa" olhando só o `rss` é
+    // chute, e foi exatamente para parar de chutar que isto existe.
+    //
+    // `memoriaMB` fica onde estava: o painel e o `dashboard.js` leem essa
+    // chave, e trocar o nome quebraria as duas telas para não ganhar nada.
+    const mem = process.memoryUsage()
+    estado.memoriaMB = Math.round(mem.rss / 1048576)
+    estado.memoria = {
+      rssMB: Math.round(mem.rss / 1048576),
+      heapUsadoMB: Math.round(mem.heapUsed / 1048576),
+      externaMB: Math.round(mem.external / 1048576),
+      // O nome em português diria "buffers", e seria mentira por omissão: este
+      // número conta os bytes de mídia em voo, não os da fila de envio.
+      buffersMB: Math.round((mem.arrayBuffers || 0) / 1048576),
+      // ESTE PROCESSO SÓ. O container roda três — motor, painel e gateway — e
+      // somar os três é trabalho de quem lê os três arquivos de estado, não
+      // deste processo, que não tem como ver os outros. Quem apresentar a soma
+      // tem de dizer que é soma de processos: página compartilhada entre eles é
+      // contada mais de uma vez, e prometer precisão que não existe é pior que
+      // não medir.
+      processo: 'gateway'
+    }
     estado.atualizadoEm = Date.now()
     // Achado de revisão de segurança: state.json carrega o QR e o código de
     // pareamento (ambos permitem sequestrar o pareamento da conta enquanto

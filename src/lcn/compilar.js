@@ -7,7 +7,7 @@
 // sem reabrir a decisão de não executar código de usuário.
 import {
   ACOES, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
-  MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, ORIGENS,
+  MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, ORIGENS, PRIORIDADES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
@@ -21,6 +21,7 @@ export class ErroDeSintaxe extends Error {
 
 const CASAMENTO_POR_PALAVRA = inverter(CASAMENTOS)
 const ORIGEM_POR_PALAVRA = inverter(ORIGENS)
+const PRIORIDADE_POR_PALAVRA = inverter(PRIORIDADES)
 const TIPO_POR_PALAVRA = inverter(TIPOS_DE_MENSAGEM)
 const OPERADOR_POR_SIMBOLO = inverter(OPERADORES)
 const DESTINO_POR_PALAVRA = inverter(DESTINOS)
@@ -471,6 +472,10 @@ export function compilar (texto) {
     scope: { include: [], exclude: [] },
     inputPolicy: { acceptedMessageKinds: [], historyPolicy: 'live_only' },
     responder: { strategy: 'weighted_rendezvous', poolId: '' },
+    // Quem não declara urgência fica no meio, e quem não declara o que fazer
+    // sem vaga descarta calado: avisar por omissão somaria barulho ao barulho
+    // exatamente quando o sistema já está apertado.
+    scheduling: { priority: 'normal', onNoSlot: { kind: 'discard' } },
     flow: { nodes: [], edges: [] }
   }
   const display = {}
@@ -621,6 +626,56 @@ export function compilar (texto) {
       case 'menos': doc.scope.exclude.push(lerDestino(valor, l.n)); break
       case 'pool': doc.responder.poolId = valor; break
       case 'histórico': doc.inputPolicy.historyPolicy = valor; break
+      // A URGÊNCIA, e ela vale para a automação INTEIRA.
+      //
+      // Um cabeçalho só não consegue dizer "a confirmação é alta e o download é
+      // baixo" — e uma automação faz as duas coisas no mesmo documento. Entre
+      // declarar uma vez e deixar o compilador adivinhar por tipo de ação, a
+      // escolha foi declarar: inferência escondida erra exatamente nas
+      // automações mistas, que são as que mais importam.
+      case 'prioridade': {
+        // Marcador de template passa inteiro: num `.lcn` do catálogo a linha é
+        // `prioridade: {{params.prioridade}}`, e quem instala escolhe.
+        if (ehMarcador(valor)) { doc.scheduling.priority = valor; break }
+        const codigo = PRIORIDADE_POR_PALAVRA[valor]
+        // Dizer o que vale junto da recusa: sem isso a pessoa vai procurar a
+        // palavra certa num catálogo que ela não tem na mão.
+        if (!codigo) {
+          throw new ErroDeSintaxe(
+            `"prioridade" aceita: ${Object.values(PRIORIDADES).join(', ')} — veio "${valor}"`, l.n
+          )
+        }
+        doc.scheduling.priority = codigo
+        break
+      }
+      // A RECUSA, quando a fila está cheia.
+      //
+      // Aspas separam a forma reservada do texto livre, que é a mesma regra que
+      // `sem ele` e `palavras` já seguem — então "como escrevo literalmente a
+      // palavra reservada" se responde sozinho: com aspas.
+      case 'sem vaga': {
+        if (valor.startsWith('"')) {
+          doc.scheduling.onNoSlot = { kind: 'notify', text: descitar(valor, l.n) }
+          break
+        }
+        if (valor === 'descarta') { doc.scheduling.onNoSlot = { kind: 'discard' }; break }
+        // RECUSADO DE PROPÓSITO, e não por falta de vontade: não existe estado
+        // "agendado" no protocolo — uma execução termina em enviado, falhou ou
+        // resultado incerto, e nada mais. Reexecutar com um relógio aqui
+        // trocaria dez mil itens esperando na fila por dez mil relógios vivos,
+        // que é o MESMO problema com outro nome, e ainda perderia a tentativa
+        // em qualquer reinício. Primeiro o agendamento que sobrevive a
+        // reinício; a palavra depois.
+        if (valor === 'tenta de novo') {
+          throw new ErroDeSintaxe(
+            'ainda não sei "tenta de novo": reexecutar depende de um agendamento que sobreviva a reinício, e ele não existe. Use "descarta" ou um texto entre aspas para avisar.',
+            l.n
+          )
+        }
+        throw new ErroDeSintaxe(
+          `"sem vaga" aceita descarta, ou um texto entre aspas para avisar — veio "${valor}"`, l.n
+        )
+      }
       // "acessa" e não "tipos": é EXIGÊNCIA, não filtro. O motor não avalia a
       // automação para tipo que não esteja aqui, então um contador que declara
       // só texto NUNCA vê a mensagem de voz — e falha calado. A palavra antiga

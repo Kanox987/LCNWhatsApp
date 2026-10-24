@@ -1186,7 +1186,37 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
 // gatilho, seguindo a saída que cada nó devolve. Substituiu a antiga coleta
 // linear, que só conhecia "success" e encerrava em SILÊNCIO ao revisitar um
 // nó — com ramificação, silêncio viraria execução pela metade sem ninguém saber.
+// A POLÍTICA DE FILA ENTRA AQUI, NUM LUGAR SÓ, E É DE PROPÓSITO.
+//
+// A urgência é declarada no cabeçalho e vale para TODOS os comandos que a
+// automação gerar. Isso dá dois jeitos de implementar, e um deles é uma
+// armadilha: anexar `scheduling` em cada `case` que empilha comando. São muitos
+// `case`s, há duas saídas nesta função — uma delas antecipada, quando o portão
+// de exigência recusa — e há o fluxo RETOMADO, que entra por outra porta. Em
+// algum momento alguém acrescenta um `case` e esquece, e o comando sai sem
+// política. Isso não aparece em teste: aparece em produção, como um envio que
+// não respeita a prioridade que o documento pediu.
+//
+// Então `executarFluxo` passou a ser um invólucro fino: ele chama o fluxo de
+// verdade e decora o que vier, seja de qual saída for. Não dá para esquecer
+// porque não há onde esquecer.
 function executarFluxo (db, documento, triggerId, evento, retomada = null) {
+  const comandos = montarFluxo(db, documento, triggerId, evento, retomada)
+  // Automação escrita antes disto existir não tem o campo, e o padrão não pode
+  // ser inventado em dois lugares diferentes: fica aqui, e é o mesmo que o
+  // compilador repõe.
+  const fila = documento.scheduling || { priority: 'normal', onNoSlot: { kind: 'discard' } }
+  for (const comando of comandos) {
+    if (!comando || typeof comando !== 'object') continue
+    comando.payload = comando.payload || {}
+    // Já decorado não se redecora: o fluxo retomado passa por aqui de novo, e
+    // sobrescrever apagaria a política com que o comando original saiu.
+    if (!comando.payload.scheduling) comando.payload.scheduling = fila
+  }
+  return comandos
+}
+
+function montarFluxo (db, documento, triggerId, evento, retomada = null) {
   const nodesPorId = new Map(documento.flow.nodes.map((n) => [n.id, n]))
   const gatilho = nodesPorId.get(triggerId)
   const comandos = []
