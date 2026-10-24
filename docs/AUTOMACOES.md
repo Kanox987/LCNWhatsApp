@@ -264,6 +264,5 @@ depende disso. Para tirá-la do ar sem perder o registro, use **Despublicar**.
 
 ## O que ainda não existe
 
-- **Reagir a alguém entrando no grupo** (boas-vindas, aceitar automaticamente).
 - **Vários números se revezando** para responder o mesmo comando. Hoje responde
   sempre o número que recebeu a mensagem.
