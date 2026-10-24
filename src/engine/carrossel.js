@@ -111,6 +111,11 @@ const PAGINA_EM_JANELA = Object.freeze({ webview_interaction: true, webview_pres
 //            confirma que o jogo abre POR CIMA da conversa, não na bolha.
 export const FORMAS_DE_PAGINA = Object.freeze(['link', 'janela'])
 
+// O caractere do botão de resposta que acompanha a forma `janela`. Um só, para
+// ocupar pouco espaço na linha de botões e pouco espaço na conversa quando
+// alguém toca nele sem querer.
+const ACOMPANHANTE = '🔗'
+
 // AS VARIAÇÕES QUE O DIAGNÓSTICO DISPARA.
 //
 // Quando o aplicativo não desenha, não há erro em lugar nenhum: o envio é
@@ -122,19 +127,24 @@ export const FORMAS_DE_PAGINA = Object.freeze(['link', 'janela'])
 // motivo. Cada entrada diz só o que MUDA em relação à base.
 export const VARIACOES_DE_PAGINA = Object.freeze([
   { nome: 'link', forma: 'link' },
-  { nome: 'janela', forma: 'janela' },
+  // As tres entradas `janela` abaixo pedem `comCompanheiro: false` de propria
+  // vontade: fora do diagnostico a forma `janela` JA vai acompanhada (veja
+  // `montarBotaoDePagina`), e o diagnostico precisa dela nua para continuar
+  // medindo o que mede.
+  { nome: 'janela', forma: 'janela', comCompanheiro: false },
   // O takeshi manda um `quick_reply` ANTES do `open_webview` no comando de
-  // jogo dele. Pode ser decoração, pode ser que o aplicativo só desenhe o
-  // fluxo nativo quando há um botão de resposta junto — não dá para saber sem
-  // mandar.
+  // jogo dele. MEDIDO em 24/10/2026: das sete variacoes, esta foi a UNICA
+  // `janela` que chegou. As tres `janela` nuas nao chegaram nenhuma. Nao era
+  // decoracao: o aplicativo so desenha o fluxo nativo quando ha um botao de
+  // resposta junto.
   { nome: 'janela+resposta', forma: 'janela', comCompanheiro: true },
   // Sem o embrulho de visualização única. Ele é truque de transporte, e o
   // carrossel aqui já mostrou que em certas formas ele atrapalha.
-  { nome: 'janela sem embrulho', forma: 'janela', semEmbrulho: true },
+  { nome: 'janela sem embrulho', forma: 'janela', semEmbrulho: true, comCompanheiro: false },
   { nome: 'link sem embrulho', forma: 'link', semEmbrulho: true },
   // O envelope cruzado: cada forma com o envelope da outra, para separar o que
   // é do botão do que é do envelope.
-  { nome: 'janela com params', forma: 'janela', comParams: true },
+  { nome: 'janela com params', forma: 'janela', comParams: true, comCompanheiro: false },
   { nome: 'link com header', forma: 'link', comHeader: true }
 ])
 
@@ -384,15 +394,22 @@ export function montarBotaoDePagina ({ texto = null, rodape = null, url, rotulo,
   const comParams = variacao.comParams ?? !comoOTakeshi
   const botoes = montarBotao({ texto: rotulo, url, janela, forma })
   // O companheiro é um botão de resposta rápida ANTES do de página, como o
-  // takeshi manda. O id vai vazio de propósito: tocá-lo não deve virar comando.
-  const comCompanheiro = variacao.comCompanheiro === true
+  // takeshi manda. Ele não é enfeite: na forma `janela`, sem ele o aplicativo
+  // descarta a mensagem INTEIRA, calado — medido em 24/10/2026, três formas
+  // `janela` nuas, nenhuma chegou, e a única acompanhada chegou. Por isso a
+  // forma `janela` vai acompanhada por padrão, e só o diagnóstico pede nua.
+  //
+  // O texto e o id são o mesmo caractere, como no takeshi. Tocá-lo manda esse
+  // caractere de volta para a conversa; nenhum comando dispara com ele, então
+  // o bot ignora. Barulho pequeno, em troca da mensagem existir.
+  const comCompanheiro = variacao.comCompanheiro ?? (forma === 'janela')
   const interactiveMessage = {
     body: { text: texto || ' ' },
     ...(comHeader ? { header: { hasMediaAttachment: false } } : {}),
     ...(rodape ? { footer: { text: rodape } } : {}),
     nativeFlowMessage: {
       buttons: comCompanheiro
-        ? [{ name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: '🎮', id: '🎮' }) }, ...botoes]
+        ? [{ name: 'quick_reply', buttonParamsJson: JSON.stringify({ display_text: ACOMPANHANTE, id: ACOMPANHANTE }) }, ...botoes]
         : botoes,
       ...(comParams ? { messageParamsJson: '' } : {})
     }

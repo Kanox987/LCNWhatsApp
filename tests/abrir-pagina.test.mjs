@@ -85,7 +85,23 @@ check('e o embrulho é o viewOnceMessageV2, que a biblioteca desfaz', Boolean(ms
 // `full_screen: true` escrito por ele é a confirmação, vinda do bot de
 // referência, de que o jogo abre POR CIMA da conversa — não dentro da bolha.
 const comoJanela = montarBotaoDePagina({ url: 'https://jogo/x', rotulo: '🎮 Jogar', janela: true, forma: 'janela' })
-const botaoJanela = comoJanela.viewOnceMessageV2.message.interactiveMessage.nativeFlowMessage.buttons[0]
+const botoesJanela = comoJanela.viewOnceMessageV2.message.interactiveMessage.nativeFlowMessage.buttons
+
+// A FORMA `janela` NÃO VAI SOZINHA, e isso foi medido, não suposto: em
+// 24/10/2026 saíram sete variações para um número comum; as três que mandavam
+// `open_webview` nu NÃO CHEGARAM — nenhuma das três — e a única `janela` que
+// chegou foi a que levava um botão de resposta na frente. O aplicativo só
+// desenha o fluxo nativo quando há um `quick_reply` junto, e quando não
+// desenha ele descarta a mensagem inteira sem erro em lugar nenhum. É por isso
+// que o bot de referência manda os dois, e é por isso que aqui o acompanhante
+// é PADRÃO da forma, não enfeite opcional: um `open_webview` sozinho é uma
+// mensagem que não existe.
+check('a forma janela leva DOIS botões', botoesJanela.length === 2, String(botoesJanela.length))
+check('e o de resposta vem PRIMEIRO', botoesJanela[0].name === 'quick_reply', botoesJanela[0].name)
+const acompanhante = JSON.parse(botoesJanela[0].buttonParamsJson)
+check('o acompanhante tem texto e id iguais', acompanhante.display_text === acompanhante.id && !!acompanhante.display_text)
+
+const botaoJanela = botoesJanela[1]
 const paramsJanela = JSON.parse(botaoJanela.buttonParamsJson)
 
 check('a forma "janela" usa open_webview', botaoJanela.name === 'open_webview', botaoJanela.name)
@@ -120,7 +136,8 @@ check('sem escolher, vale a forma "link"', padrao.viewOnceMessageV2.message.inte
 // Mandar para o navegador também vale na forma janela: é o mesmo pedido, pelo
 // outro campo.
 const janelaDesligada = JSON.parse(montarBotaoDePagina({ url: 'https://x', rotulo: 'Ir', janela: false, forma: 'janela' })
-  .viewOnceMessageV2.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson)
+  .viewOnceMessageV2.message.interactiveMessage.nativeFlowMessage.buttons
+  .find((b) => b.name === 'open_webview').buttonParamsJson)
 check('forma janela com a janela desligada vai para o navegador', janelaDesligada.link.in_app_webview === false)
 
 // --- O DIAGNÓSTICO --------------------------------------------------------

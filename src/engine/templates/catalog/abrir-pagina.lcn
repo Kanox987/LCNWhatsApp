@@ -39,10 +39,10 @@ configurável
     ajuda: Opcional, abaixo do texto.
   dentroDoApp: liga/desliga = sim
     rótulo: Abrir dentro do WhatsApp
-    ajuda: Abre a página numa janela do próprio WhatsApp, em tela cheia por cima da conversa. O campo não é documentado pela Meta, mas foi medido funcionando num número comum — e por não ser documentado pode parar sem aviso. Desligado, vai para o navegador do aparelho. No WhatsApp Web abre outra aba de qualquer jeito.
+    ajuda: Abre a página numa janela do próprio WhatsApp, em tela cheia por cima da conversa, com o endereço no cabeçalho e um X para fechar. Medido funcionando em duas datas, dois endereços e todas as formas que chegaram. O campo não é documentado pela Meta — por isso pode parar sem aviso. Desligado, vai para o navegador do aparelho. No WhatsApp Web abre outra aba de qualquer jeito.
   forma: opção (link, janela, diagnóstico) = "link"
     rótulo: Forma do botão
-    ajuda: Duas maneiras de pedir a mesma coisa, nenhuma documentada pela Meta. "link" foi medida funcionando aqui. "janela" é a forma que o bot de referência usa no comando de jogo dele. Se uma não desenhar no aparelho de quem recebe, troque pela outra. "diagnóstico" manda TODAS as variações numeradas de uma vez — serve para descobrir qual o aparelho aceita sem precisar de uma tentativa por vez, já que quando ele recusa não aparece erro em lugar nenhum.
+    ajuda: Duas maneiras de pedir a mesma coisa, nenhuma documentada pela Meta. Use "link" — foi a única medida chegando sempre. "janela" é a forma do bot de referência e sozinha NÃO é desenhada: o aplicativo descarta a mensagem inteira, sem erro em lugar nenhum. Ela só aparece quando vem acompanhada de um botão de resposta, e é exatamente por isso que o bot de referência manda os dois juntos. "diagnóstico" manda TODAS as variações numeradas de uma vez — serve para descobrir qual o aparelho aceita sem uma tentativa por vez.
   familia: texto = "utilitarios"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -60,12 +60,12 @@ avisa nota
   O botão NÃO volta para o bot. Quem toca abre a página e pronto; o comando não fica sabendo. Se você precisa saber que a pessoa escolheu algo, isso tem de vir da própria página conversando com o serviço dela.
 
 avisa compatibilidade
-  Mensagem com botão depende do aplicativo de quem recebe desenhar. Quando não desenha, o comando manda o endereço como texto, que continua clicável.
+  Mensagem com botão depende do aplicativo de quem recebe desenhar, e quando ele recusa NÃO aparece erro em lugar nenhum: nem aqui, nem no servidor, nem no celular — a mensagem simplesmente não chega. Por isso o comando manda o endereço como texto quando o envio com botão falha de verdade. Medido em 24/10/2026: das sete variações enviadas, as quatro na forma "link" chegaram todas; as três na forma "janela" sem acompanhante não chegaram nenhuma.
 
 avisa não oficial
-  ABRIR DENTRO DO WHATSAPP NÃO É DOCUMENTADO, e funciona assim mesmo. A documentação da Meta para este botão diz que a URL carrega "no navegador padrão do dispositivo" e lista só três campos — nome, rótulo e endereço. Os campos que pedem a janela interna não aparecem lá. MEDIDO em 23/10/2026, num número comum pelo protocolo de aparelho conectado: a página ABRIU dentro do WhatsApp, em tela cheia, com o endereço no cabeçalho e um X para fechar. Ou seja: o caminho não documentado funciona hoje — e exatamente por não ser documentado, pode parar de funcionar sem aviso. Desligando a opção, vai para o navegador.
+  ABRIR DENTRO DO WHATSAPP NÃO É DOCUMENTADO, e funciona assim mesmo. A documentação da Meta para este botão diz que a URL carrega "no navegador padrão do dispositivo" e lista só três campos — nome, rótulo e endereço. Os campos que pedem a janela interna não aparecem lá. MEDIDO em 23/10/2026 e de novo em 24/10/2026, num número comum pelo protocolo de aparelho conectado, com dois endereços diferentes e em todas as formas que chegaram: a página ABRIU no navegador do próprio WhatsApp, em tela cheia, com o endereço no cabeçalho e um X para fechar. Ou seja: o caminho não documentado funciona hoje, e funciona de forma consistente — e exatamente por não ser documentado, pode parar sem aviso. Desligando a opção, vai para o navegador do aparelho.
 
 avisa nota
-  A página abre em TELA CHEIA, por cima da conversa — não dentro da bolha da mensagem. Isso não é limitação deste comando: não existe, em forma nenhuma, HTML renderizado dentro de uma bolha do WhatsApp. O que se vê por aí "dentro da mensagem" é ou este mesmo caminho (que também abre por cima), ou os Flows da Meta — telas nativas montadas por ela a partir de uma descrição em JSON, que não são a sua página e exigem conta do Business Platform.
+  Quando abre dentro do WhatsApp, abre em TELA CHEIA, por cima da conversa — não dentro da bolha da mensagem. Isso não é limitação deste comando: não existe, em forma nenhuma, HTML renderizado dentro de uma bolha do WhatsApp. O que se vê por aí "dentro da mensagem" é ou este mesmo caminho (que também abre por cima), ou os Flows da Meta — telas nativas montadas por ela a partir de uma descrição em JSON, que não são a sua página e exigem conta do Business Platform.
 
 # nós: gatilho-comando, abrir-pagina
