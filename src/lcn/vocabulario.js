@@ -343,7 +343,7 @@ export const ACOES = Object.freeze([
     tipo: 'action.variable.calculate',
     forma: 'variavel',
     campos: [
-      { chave: 'scope', tipo: 'palavra' },
+      { chave: 'scope', tipo: 'palavra', ajuda: 'Onde guardar o resultado. local vale só durante a execução e não grava atributo: não persiste para a próxima mensagem.' },
       { chave: 'categoryKey', tipo: 'palavra' },
       { chave: 'key', tipo: 'palavra' },
       { chave: 'left', tipo: 'operando' },
@@ -717,7 +717,7 @@ export const BLOCOS_DE_TEMPLATE = Object.freeze([
     bloco: 'declara',
     forma: '<escopo> <chave>: <tipo de valor>',
     palavras: TIPOS_DE_VALOR,
-    ajuda: 'As variáveis e contadores que o comando guarda — por conversa, por pessoa, por grupo. As linhas indentadas embaixo são a descrição.'
+    ajuda: 'As variáveis e contadores que o comando guarda — por conversa, por pessoa, por grupo. O escopo local não grava atributo: vale só durante a execução e não sobrevive à próxima mensagem. As linhas indentadas embaixo são a descrição.'
   },
   {
     bloco: 'avisa',
@@ -742,6 +742,8 @@ export const PALAVRAS_DE_OPERANDO = Object.freeze({
 // Os escopos de uma variável declarada, do mais estreito ao mais largo. O
 // compilador não os valida (quem valida é o schema do template), mas o editor
 // e a referência precisam saber que existem.
+// 'local' vale só durante a execução deste fluxo e não grava atributo no banco
+// — o resultado não persiste para a próxima mensagem.
 export const ESCOPOS_DE_VALOR = Object.freeze([
-  'chat', 'sender', 'member', 'target', 'targetMember', 'category', 'global'
+  'chat', 'sender', 'member', 'target', 'targetMember', 'category', 'global', 'local'
 ])

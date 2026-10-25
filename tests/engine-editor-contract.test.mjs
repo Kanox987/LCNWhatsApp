@@ -19,7 +19,7 @@ check('runtime expõe as ações executáveis, incluindo cálculo, mídia, menu 
 check('runtime expõe a condição de comparação', JSON.stringify(meta.runtime.conditions) === JSON.stringify(['condition.compare']))
 check('runtime declara um único gatilho e fluxo com ramificação (não mais linear)', meta.runtime.linearOnly === false && meta.runtime.maxTriggers === 1 && meta.runtime.flowModel === 'exclusive_branching_dag')
 check('runtime declara as saídas admitidas por família de nó', JSON.stringify(meta.runtime.edgeOutcomes.condition) === JSON.stringify(['true', 'false']))
-check('runtime declara todos os escopos de variável, incluindo os de alvo mencionado', meta.runtime.variableScopes.length === 8 && ['chat', 'sender', 'group', 'group_member', 'target', 'target_group_member', 'category', 'global'].every((e) => meta.runtime.variableScopes.includes(e)))
+check('runtime declara todos os escopos de variável, incluindo os de alvo mencionado', meta.runtime.variableScopes.length === 9 && ['chat', 'sender', 'group', 'group_member', 'target', 'target_group_member', 'category', 'global', 'local'].every((e) => meta.runtime.variableScopes.includes(e)))
 check('runtime declara apenas o placeholder realmente suportado', JSON.stringify(meta.runtime.supportedPlaceholders) === JSON.stringify(['{{latencyMs}}']))
 
 let erroVersao

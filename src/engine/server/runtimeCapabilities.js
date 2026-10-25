@@ -58,8 +58,10 @@ export const CONDICOES_SUPORTADAS = Object.freeze([
 // categoryKey junto; os outros são resolvidos a partir do próprio evento.
 // 'target' é quem o comando mira (@mencionado, ou o autor da mensagem citada)
 // — é o que permite "/adv @fulano" contar no fulano, e não em quem digitou.
+// 'local' é diferente dos outros oito: vale apenas durante a execução do
+// fluxo e não grava atributo no banco (não persiste para a próxima mensagem).
 export const ESCOPOS_DE_VARIAVEL = Object.freeze([
-  'chat', 'sender', 'group', 'group_member', 'target', 'target_group_member', 'category', 'global'
+  'chat', 'sender', 'group', 'group_member', 'target', 'target_group_member', 'category', 'global', 'local'
 ])
 
 export const OPERADORES_DE_COMPARACAO = Object.freeze([
