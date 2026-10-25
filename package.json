@@ -20,7 +20,7 @@
   "dependencies": {
     "@zapo-js/store-sqlite": "^1.2.0",
     "ajv": "^8.20.0",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^13.0.3",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "zapo-js": "^1.8.2"
