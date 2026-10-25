@@ -284,5 +284,51 @@ configurável
 }
 
 
+// --- TEXTO VAZIO NÃO PODE VIRAR PROPRIEDADE -------------------------------
+//
+// O teste de ida e volta acima percorre o catálogo, e o catálogo não tem campo
+// vazio em lugar nenhum — então estes dois casos passavam longe dele. Achados
+// por revisão externa, e reproduzidos aqui antes do conserto:
+//
+//   "sem ele: \"\"" compilava para missingText: "", o descompilador usa
+//   `if (exige.missingText)` e string vazia é falsy, então a linha não era
+//   escrita e a recompilação perdia a propriedade.
+//
+//   "menu: X —" com nada depois do travessão compilava para
+//   menuDescription: "", e o descompilador escreve o travessão só quando há
+//   descrição — mesma perda.
+//
+// O conserto é no compilador, e é o certo porque VAZIO E AUSENTE SÃO A MESMA
+// COISA para o motor: `if (aviso)` em evaluator.js:1552-1553 não responde nos
+// dois casos, e `menuDescription || null` em :1734 dá null nos dois. Guardar a
+// string vazia não configurava nada e só quebrava a invariante.
+{
+  const cabeca = (extra) => `automação x
+  revisão: 1
+  nome: X
+  tipo: comando
+  dispara com: /x
+  acessa: texto
+  quem: qualquer um
+  onde: em qualquer lugar
+  pool: pool-local
+  casa: exato
+${extra}
+  responde "oi"
+`
+  const casos = [
+    ['"sem ele" vazio', '  precisa de um link: na mensagem\n  sem ele: ""\n', (d) => d.inputPolicy?.requires?.missingText === undefined],
+    ['"menu" com travessão solto', '  menu: Meu menu —\n', (d) => d.display?.menuDescription === undefined && d.display?.menuLabel === 'Meu menu'],
+    ['"sem ele" com texto', '  precisa de um link: na mensagem\n  sem ele: "manda o link"\n', (d) => d.inputPolicy?.requires?.missingText === 'manda o link'],
+    ['"menu" com descrição', '  menu: Meu menu — faz coisa\n', (d) => d.display?.menuDescription === 'faz coisa']
+  ]
+  for (const [nome, extra, invariante] of casos) {
+    const doc = compilar(cabeca(extra))
+    check(`ida e volta fecha com ${nome}`, mesmo(doc, compilar(descompilar(doc))))
+    check(`e o documento de ${nome} guarda só o que significa algo`, invariante(doc), JSON.stringify({ display: doc.display, requires: doc.inputPolicy?.requires }))
+  }
+}
+
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LINGUAGEM PASSARAM')
 process.exit(falhas ? 1 : 0)

@@ -857,7 +857,13 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
         // Descrição antiga" seguido de "menu: Novo" dava rótulo "Novo" com a
         // descrição do antigo pendurada, metade de cada declaração. Se a
         // política é valer a última, a última tem de valer inteira.
-        if (resto.length) display.menuDescription = resto.join('—').trim()
+        // Descrição VAZIA é o mesmo que descrição nenhuma: o motor lê
+        // `menuDescription || null` (evaluator.js:1734), então "menu: X —" com
+        // nada depois do travessão não configura coisa alguma. Guardar a string
+        // vazia só quebrava a ida e volta — o descompilador não escreve o
+        // travessão solto, e a recompilação perdia a propriedade.
+        const descricao = resto.length ? resto.join('—').trim() : ''
+        if (descricao) display.menuDescription = descricao
         else delete display.menuDescription
         break
       }
@@ -1040,6 +1046,11 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
     // exigência e não pode ser pendurado nela: diria a coisa errada. Some
     // junto com a exigência que descrevia, como já acontecia antes.
     if (sem.versaoRequires !== versaoRequires) continue
+    // Texto VAZIO é o mesmo que texto nenhum: o motor faz `if (aviso)`
+    // (evaluator.js:1552-1553) e não responde em nenhum dos dois casos. Guardar
+    // a string vazia só quebrava a ida e volta — o descompilador não escreve a
+    // linha, e a recompilação perdia a propriedade. Nada observável muda.
+    if (!texto) continue
     doc.inputPolicy.requires.missingText = texto
   }
 
