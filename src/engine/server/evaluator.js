@@ -827,8 +827,17 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           ...(no.config?.folder ? { pasta: interpolar(no.config.folder, contexto) } : {}),
           ...(no.config?.name ? { nome: interpolar(no.config.name, contexto) } : {}),
           ...(no.config?.description ? { descricao: interpolar(no.config.description, contexto) } : {}),
-          ...(no.config?.okText ? { okText: no.config.okText } : {}),
-          ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+          // AQUI É `interpolar`, NÃO `interpolarTextoAcervo`, e a diferença
+          // importa: no `save` o arquivo ainda NÃO EXISTE. Quem conhece
+          // caminho, id e nome definitivos é o gateway, depois de guardar, e é
+          // ele que troca {{caminho}}, {{id}} e {{nome}} pelos valores reais
+          // (gatewayExecutor.js:1287-1291). `interpolarTextoAcervo` comeria os
+          // três aqui, com valor vazio, e o gateway não teria mais o que
+          // trocar. `interpolar` resolve as variáveis do evento — que era o
+          // defeito, {{sender.name}} chegava literal na conversa — e deixa
+          // intacto o marcador que não conhece.
+          ...(no.config?.okText ? { okText: interpolar(no.config.okText, contexto) } : {}),
+          ...(no.config?.errorText ? { errorText: interpolar(no.config.errorText, contexto) } : {})
         }
       })
       return 'success'
