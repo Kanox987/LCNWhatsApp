@@ -774,10 +774,23 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
 
     switch (chave) {
       // A CLASSE, e ela é obrigatória — ver a conferência depois do laço.
+      //
+      // E ela é ÚNICA, porque é o discriminador: o significado de todas as
+      // outras linhas do cabeçalho depende dela. Com a conferência rodando no
+      // fim, um segundo "tipo:" tornaria válida retroativamente uma linha que
+      // a classe anterior recusava — "tipo: vigia", "dispara com: /oi",
+      // "tipo: comando" passaria, e a pessoa teria escrito duas intenções
+      // contrárias sem ouvir uma palavra. Repetir não é refinar: é contradizer.
       case 'tipo': {
         const achado = Object.keys(CLASSES).find((k) => CLASSES[k] === valor)
         if (!achado) {
           throw new ErroDeSintaxe(`tipo desconhecido: "${valor}". Use: ${Object.values(CLASSES).join(' ou ')}.`, l.n)
+        }
+        if (tipoDoGatilho) {
+          throw new ErroDeSintaxe(
+            `"tipo:" aparece duas vezes, dizendo ${CLASSES[tipoDoGatilho]} e depois ${valor}. A classe decide o que todas as outras linhas significam, então escolha uma.`,
+            l.n
+          )
         }
         tipoDoGatilho = achado
         break

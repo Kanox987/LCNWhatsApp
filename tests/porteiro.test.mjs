@@ -351,6 +351,24 @@ check('"sem ele" escrito ANTES do "precisa de" continua recusado',
   errSemAntes instanceof ErroDeSintaxe && /precisa vir depois de/.test(errSemAntes.message) && errSemAntes.linha === 4,
   `linha: ${errSemAntes?.linha}, msg: ${errSemAntes?.message}`)
 
+// 5f. "tipo:" é único, porque é o DISCRIMINADOR.
+// Com a conferência rodando no fim do cabeçalho, um segundo "tipo:" tornava
+// válida retroativamente uma linha que a classe anterior recusava: "tipo:
+// vigia" + "dispara com: /oi" + "tipo: comando" compilava. Achado por revisão
+// externa, e é mais fino que os outros: aqui o que é sobrescrito não é uma
+// entrada, é o que dá significado a todas as entradas.
+const tiposRepetidos = [
+  ['vigia depois comando', 'automação tr1\n  tipo: vigia\n  dispara com: /oi\n  tipo: comando\n  pool: p1\n\n  responde "oi"\n', 4],
+  ['comando depois porteiro', 'automação tr2\n  tipo: comando\n  acessa: texto\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n\n  responde "oi"\n', 4],
+  ['a mesma classe duas vezes', 'automação tr3\n  tipo: comando\n  dispara com: /x\n  tipo: comando\n  pool: p1\n\n  responde "oi"\n', 4]
+]
+for (const [nome, texto, linhaEsperada] of tiposRepetidos) {
+  const err = recusa(texto)
+  check(`"tipo:" repetido é recusado (${nome}) na linha da segunda`,
+    err instanceof ErroDeSintaxe && /aparece duas vezes/.test(err.message) && err.linha === linhaEsperada,
+    `linha: ${err?.linha}, msg: ${err?.message}`)
+}
+
 // --- 6. Ida e Volta (Descompilação -> Compilação) -------------------------
 const lcnMultiacao = `automação port2
   nome: Monitor Geral
