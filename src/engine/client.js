@@ -19,6 +19,7 @@ function montarQueryExecucoes (filtros = {}) {
 // processos nativos continuam no caminho XDG calculado em paths.js.
 export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET || SOCKET_PATH } = {}) {
   const requisitar = (method, pathname, body, headers = {}, signal) => new Promise((resolve, reject) => {
+    signal?.throwIfAborted()
     const conteudo = body === undefined ? null : JSON.stringify(body)
     const req = http.request({
       socketPath,
@@ -34,7 +35,7 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       const partes = []
       // Um corpo interrompido não emite end. Sem rejeitar aqui, a admissão
       // manteria uma vaga presa mesmo depois de o transporte ter fechado.
-      res.on('error', reject)
+      res.on('error', (erro) => reject(signal?.aborted ? signal.reason : erro))
       res.on('data', (parte) => partes.push(parte))
       res.on('end', () => {
         const texto = Buffer.concat(partes).toString('utf8')
@@ -48,6 +49,7 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       })
     })
     req.on('error', (erro) => {
+      if (signal?.aborted) return reject(signal.reason)
       if (erro.code === 'ENOENT' || erro.code === 'ECONNREFUSED') {
         return reject(new Error('motor não está rodando — lcn engine start'))
       }
@@ -147,7 +149,7 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       prontas: () => requisitar('GET', '/connections-prontas'),
       // Com a chave. Só o gateway chama isto, pelo socket — o painel NUNCA
       // expõe esta rota (ver o comentário dela em routes/connections.js).
-      resolvida: (id) => requisitar('GET', `${caminho('/connections', id)}/resolvida`),
+      resolvida: (id, { signal } = {}) => requisitar('GET', `${caminho('/connections', id)}/resolvida`, undefined, {}, signal),
       criar: (dados) => requisitar('POST', '/connections', dados),
       obter: (id) => requisitar('GET', caminho('/connections', id)),
       atualizar: (id, dados) => requisitar('PUT', caminho('/connections', id), dados),

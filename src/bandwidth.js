@@ -43,7 +43,7 @@ export function configurar ({ downloadBytesPerSecond, uploadBytesPerSecond } = {
   configurarBucket(uploadCfg, uploadBytesPerSecond)
 }
 
-async function aguardar (bucket, bytes) {
+async function aguardar (bucket, bytes, signal) {
   let restante = Number(bytes)
   if (!Number.isFinite(restante) || restante <= 0 || !bucket.taxa) return
 
@@ -59,9 +59,19 @@ async function aguardar (bucket, bytes) {
     if (restante <= 0) return
 
     const esperaMs = Math.ceil((restante / bucket.taxa) * 1000)
-    await new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.min(esperaMs, MAX_ESPERA_MS))))
+    // Só a leitura recebe sinal. O limitador de upload continua aguardando
+    // normalmente, pois abortá-lo poderia interromper um envio já iniciado.
+    await new Promise((resolve, reject) => {
+      const abortar = () => { clearTimeout(timer); reject(signal.reason) }
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', abortar)
+        resolve()
+      }, Math.max(1, Math.min(esperaMs, MAX_ESPERA_MS)))
+      signal?.addEventListener('abort', abortar, { once: true })
+      if (signal?.aborted) { signal.removeEventListener('abort', abortar); abortar() }
+    })
   }
 }
 
-export const aguardarDownload = (bytes) => aguardar(downloadCfg, bytes)
+export const aguardarDownload = (bytes, signal) => aguardar(downloadCfg, bytes, signal)
 export const aguardarUpload = (bytes) => aguardar(uploadCfg, bytes)
