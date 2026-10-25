@@ -1504,12 +1504,14 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
 // Então `executarFluxo` passou a ser um invólucro fino: ele chama o fluxo de
 // verdade e decora o que vier, seja de qual saída for. Não dá para esquecer
 // porque não há onde esquecer.
-function executarFluxo (db, documento, triggerId, evento, retomada = null) {
-  const comandos = montarFluxo(db, documento, triggerId, evento, retomada)
-  // Automação escrita antes disto existir não tem o campo, e o padrão não pode
-  // ser inventado em dois lugares diferentes: fica aqui, e é o mesmo que o
-  // compilador repõe.
-  const fila = documento.scheduling || { priority: 'normal', onNoSlot: { kind: 'discard' } }
+export const SCHEDULING_PADRAO = Object.freeze({ priority: 'normal', onNoSlot: { kind: 'discard' } })
+
+// Decora uma lista de comandos com a política de fila da automação.
+// Automação escrita antes disto existir não tem o campo, e o padrão não pode
+// ser inventado em dois lugares diferentes: fica aqui, e é o mesmo que o
+// compilador repõe.
+export function aplicarScheduling (comandos, documento) {
+  const fila = documento?.scheduling || SCHEDULING_PADRAO
   for (const comando of comandos) {
     if (!comando || typeof comando !== 'object') continue
     comando.payload = comando.payload || {}
@@ -1518,6 +1520,11 @@ function executarFluxo (db, documento, triggerId, evento, retomada = null) {
     if (!comando.payload.scheduling) comando.payload.scheduling = fila
   }
   return comandos
+}
+
+function executarFluxo (db, documento, triggerId, evento, retomada = null) {
+  const comandos = montarFluxo(db, documento, triggerId, evento, retomada)
+  return aplicarScheduling(comandos, documento)
 }
 
 function montarFluxo (db, documento, triggerId, evento, retomada = null) {
@@ -1922,7 +1929,19 @@ export function avaliarEvento (db, evento) {
             if (!ehAutomatico && !ehGrupo && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
             const aviso = avisoDeDesligado(evento.chat, desligamento)
             if (aviso && candidato.deployment_mode === 'live') {
-              comandosGerados = [{ commandType: 'whatsapp.reply', payload: { chatId: evento.chat.id, text: aviso } }]
+              // O AVISO DE COMANDO DESLIGADO SAI COM A POLÍTICA DA AUTOMAÇÃO.
+              //
+              // Ele nasce fora do invólucro executarFluxo porque o portão de
+              // desligamento barra o evento antes de montar ou caminhar no
+              // grafo — não faz sentido rodar nós para um comando desligado.
+              // Mas o aviso é um comando executável emitido em nome daquela
+              // automação, e a regra do cabeçalho vale para todos eles: quem
+              // declarou prioridade ou descarte configurou a automação como
+              // um todo. Decorar com a mesma função do invólucro garante que
+              // o aviso respeite a fila e reaproveite o mesmo padrão.
+              comandosGerados = aplicarScheduling([
+                { commandType: 'whatsapp.reply', payload: { chatId: evento.chat.id, text: aviso } }
+              ], documento)
             }
           } else {
           status = candidato.deployment_mode === 'live' ? 'matched_live' : 'matched_shadow'
