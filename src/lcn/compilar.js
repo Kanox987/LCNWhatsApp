@@ -852,7 +852,13 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       case 'menu': {
         const [rotulo, ...resto] = valor.split('—')
         display.menuLabel = rotulo.trim()
+        // Repetir "menu:" substitui o PAR INTEIRO. Antes só o rótulo era
+        // reescrito e a descrição da linha anterior ficava: "menu: Antigo —
+        // Descrição antiga" seguido de "menu: Novo" dava rótulo "Novo" com a
+        // descrição do antigo pendurada, metade de cada declaração. Se a
+        // política é valer a última, a última tem de valer inteira.
         if (resto.length) display.menuDescription = resto.join('—').trim()
+        else delete display.menuDescription
         break
       }
       // A FAMÍLIA do comando: "download", "figurinha", "compra e venda".
@@ -1023,12 +1029,18 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
     if (!doc.inputPolicy.requires || sem.versaoRequires === 0) {
       throw new ErroDeSintaxe(`"${sem.chave}" precisa vir depois de "precisa de ..."`, sem.linha)
     }
+    // O `descitar` vem ANTES de decidir se o texto será usado, e a ordem é o
+    // conserto de um defeito: pular a entrada descartada pulava também a
+    // conferência das aspas, e "sem ele: sem aspas" passava calado quando uma
+    // exigência posterior substituía a dele. Texto malformado é erro de escrita
+    // em qualquer posição — descartar não é desculpa para não olhar.
+    const texto = descitar(sem.valor, sem.linha)
     // O texto vale para a exigência que estava escrita ACIMA dele. Se um
     // "precisa de" posterior substituiu aquela, o aviso não é mais sobre esta
     // exigência e não pode ser pendurado nela: diria a coisa errada. Some
     // junto com a exigência que descrevia, como já acontecia antes.
     if (sem.versaoRequires !== versaoRequires) continue
-    doc.inputPolicy.requires.missingText = descitar(sem.valor, sem.linha)
+    doc.inputPolicy.requires.missingText = texto
   }
 
   if (tipoDoGatilho === 'trigger.group') {

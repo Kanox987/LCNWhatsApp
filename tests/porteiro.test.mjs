@@ -369,6 +369,52 @@ for (const [nome, texto, linhaEsperada] of tiposRepetidos) {
     `linha: ${err?.linha}, msg: ${err?.message}`)
 }
 
+// 5g. Descartar o texto não é desculpa para não conferir as aspas.
+// O conserto de 5e pulava a entrada cujo "precisa de" foi substituído — e
+// pulava junto o descitar(). "sem ele: sem aspas" passava calado quando uma
+// exigência posterior substituía a dele; era recusado antes do refator. Achado
+// por revisão externa, no conserto feito poucas horas antes.
+const errSemAspas = recusa(`automação sa1
+  tipo: comando
+  dispara com: /x
+  precisa de um link: na mensagem
+  sem ele: sem aspas
+  precisa de uma mídia: na mensagem
+  pool: p1
+
+  responde "oi"
+`)
+check('"sem ele" sem aspas é recusado mesmo com a exigência substituída depois',
+  errSemAspas instanceof ErroDeSintaxe && /entre aspas/.test(errSemAspas.message) && errSemAspas.linha === 5,
+  `linha: ${errSemAspas?.linha}, msg: ${errSemAspas?.message}`)
+
+// 5h. "menu:" repetido substitui o PAR INTEIRO, não meio dele.
+// Defeito antigo, idêntico nas duas versões: o rótulo era reescrito e a
+// descrição da declaração anterior ficava pendurada, metade de cada uma.
+const menuRepetido = compilar(`automação mr1
+  tipo: comando
+  dispara com: /x
+  menu: Antigo — Descrição antiga
+  menu: Novo
+  pool: p1
+
+  responde "oi"
+`)
+check('"menu:" repetido sem descrição apaga a descrição anterior',
+  menuRepetido.display.menuLabel === 'Novo' && menuRepetido.display.menuDescription === undefined,
+  JSON.stringify(menuRepetido.display))
+
+const menuComDescricao = compilar(`automação mr2
+  tipo: comando
+  dispara com: /x
+  menu: /x — faz coisa
+  pool: p1
+
+  responde "oi"
+`)
+check('"menu:" com descrição continua guardando as duas partes',
+  menuComDescricao.display.menuLabel === '/x' && menuComDescricao.display.menuDescription === 'faz coisa')
+
 // --- 6. Ida e Volta (Descompilação -> Compilação) -------------------------
 const lcnMultiacao = `automação port2
   nome: Monitor Geral
