@@ -1,4 +1,4 @@
-template menu v1
+template menu v2
   nome: Menu de comandos
   descrição: Lista os comandos disponíveis naquela conversa. Cada grupo vê só o que vale nele, e o texto pode ser diferente em cada grupo. Vem junto com o comando de configuração, que permite mudar esse texto pelo próprio WhatsApp.
   categoria: utilitarios
@@ -15,10 +15,14 @@ automação
   quem: {{params.allowFrom}}
 
   mostra menu
+    numeração: {{params.numerar}}
     cabeçalho: "{{params.header}}"
     vazio: "{{params.emptyText}}"
 
 configurável
+  numerar: liga/desliga = não
+    rótulo: Numerar os comandos
+    ajuda: Mostra 1, 2, 3 nos itens visíveis. Os botões continuam acionando os mesmos comandos.
   command: texto = "/menu"
     rótulo: Comando
     ajuda: A palavra que a pessoa digita para ver a lista de comandos.

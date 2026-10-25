@@ -6,6 +6,7 @@
 import crypto from 'crypto'
 import { ErroHttp } from './transport.js'
 import { interpolar, resolverCaminho } from './interpolate.js'
+import { calcular, ErroDeCalculo } from './aritmetica.js'
 import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
 import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
@@ -596,7 +597,8 @@ function compararValores (esquerda, operador, direita) {
 function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
   switch (no.type) {
     case 'action.whatsapp.reply': {
-      const payload = { chatId: evento.chat.id, text: interpolar(no.config.text, contexto) }
+      const texto = interpolar(no.config.text, contexto)
+      const payload = { chatId: evento.chat.id, text: no.config.numbered === true ? numerarLinhas(texto) : texto }
       // O motor não sabe quando a resposta vai sair de verdade pelo WhatsApp
       // — só o gateway sabe, na hora do envio. Por isso o texto pode conter o
       // placeholder literal "{{latencyMs}}" (ex: template /ping) e o motor só
@@ -903,7 +905,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           // o resultado e o motor retoma daqui. Sem esta marca os dois passos
           // sairiam ao mesmo tempo, cada um pegando a mídia da mensagem: a
           // sequência compila hoje e faz a coisa errada em silêncio.
-          ...(temSucessor ? { encadeado: true, retomarDe: no.id } : {}),
+          ...(temSucessor ? { encadeado: true, retomarDe: no.id, locais: contexto.local } : {}),
           // Quem não escolheu não manda nada: o padrão vive só na entrega.
           ...(no.config?.delivery ? { entrega: no.config.delivery } : {}),
           // Qual mensagem a resposta marca: a citada (padrão, certo para o
@@ -1158,7 +1160,9 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
             header: menu.config.header,
             footer: menu.config.footer,
             fallbackText: menu.texto,
-            items: menu.itens.map((item) => ({ id: item.label, label: item.label, description: item.description || '' }))
+            // O número só muda o rótulo: o toque precisa continuar enviando
+            // o comando original, ou numerar quebraria o próprio menu.
+            items: menu.itens.map((item, i) => ({ id: item.label, label: menu.config.numbered ? `${i + 1}. ${item.label}` : item.label, description: item.description || '' }))
           }
         })
         return 'success'
@@ -1167,6 +1171,27 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
         commandType: 'whatsapp.reply',
         payload: { chatId: evento.chat.id, text: menu.texto }
       })
+      return 'success'
+    }
+
+    case 'action.variable.calculate': {
+      if (ehChaveReservada(no.config.key)) throw new ErroDeFluxo(motivoDeRecusa(no.config.key))
+      const esquerda = resolverOperando(db, no.config.left, evento, contexto)
+      const direita = resolverOperando(db, no.config.right, evento, contexto)
+      const valor = calcular(esquerda, no.config.operator, direita)
+      if (no.config.scope === 'local') {
+        if (no.config.categoryKey || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(no.config.key)) {
+          throw new ErroDeFluxo('Resultado local precisa de nome simples, sem categoria.')
+        }
+        // Local pertence à execução: duas pessoas calculando ao mesmo tempo
+        // não compartilham resultado e nenhuma variável de usuário é gravada.
+        contexto.local[no.config.key] = valor
+      } else {
+        const alvo = resolverEscopo(no.config.scope, evento, { categoryKey: no.config.categoryKey })
+        if (!alvo) throw new ErroDeFluxo(`O destino do cálculo não existe neste evento: ${no.config.scope}.`)
+        gravarAtributo(db, alvo, no.config.key, valor)
+        aplicarNasVariaveis(contexto.var, no.config.scope, no.config.key, valor, { categoryKey: no.config.categoryKey })
+      }
       return 'success'
     }
 
@@ -1268,6 +1293,9 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
     return comandos
   }
   const contexto = {
+    // A chamada externa pode dormir. Os resultados locais acompanham só a
+    // continuação desta execução, sem virar atributos de conversa ou pessoa.
+    local: Object.assign(Object.create(null), retomada?.locais || {}),
     group: evento.group ? { ...evento.group } : {},
     // A FRONTEIRA DO QUE É LEGÍVEL É ESTE OBJETO.
     //
@@ -1443,6 +1471,13 @@ function automacoesVisiveisEm (db, chatDoEvento) {
   return visiveis
 }
 
+function numerarLinhas (texto) {
+  // Linha vazia é separação visual, não item. O contador só avança quando há
+  // algo para mostrar; assim a lista montada por uma resposta mantém espaços.
+  let numero = 0
+  return texto.split(/\r?\n/).map((linha) => linha.trim() ? `${++numero}. ${linha}` : linha).join('\n')
+}
+
 // Monta o menu daquela conversa. A configuração vem em cascata (config do
 // grupo > padrão do tipo > config do nó > padrão do código), então o mesmo
 // documento de automação produz menus diferentes em grupos diferentes.
@@ -1454,7 +1489,7 @@ function renderizarMenu (db, acao, evento) {
     return { config, itens: [], texto: config.emptyText }
   }
 
-  const linhas = visiveis.map((item) => item.description ? `• ${item.label} — ${item.description}` : `• ${item.label}`)
+  const linhas = visiveis.map((item, i) => `${config.numbered ? `${i + 1}.` : '•'} ${item.label}${item.description ? ` — ${item.description}` : ''}`)
   const partes = [config.header, ...linhas]
   if (config.footer) partes.push('', config.footer)
 
@@ -1661,7 +1696,7 @@ export function avaliarEvento (db, evento) {
               // Fluxo inconsistente ou contador corrompido não pode derrubar a
               // avaliação das OUTRAS automações do mesmo evento: vira erro
               // registrado nesta, e o laço segue.
-              if (!(erro instanceof ErroDeFluxo) && !(erro instanceof ErroDeContador)) throw erro
+              if (!(erro instanceof ErroDeFluxo) && !(erro instanceof ErroDeContador) && !(erro instanceof ErroDeCalculo)) throw erro
               status = 'error'
               detalheErro = { message: erro.message }
               comandosGerados = []
@@ -1770,9 +1805,11 @@ function retomarFluxo (db, comando, resultado) {
 
   let novos = []
   try {
-    novos = executarFluxo(db, documento, gatilho.id, evento, { nodeId: payload.retomarDe, resultado })
+    // A continuação merece o mesmo savepoint do começo: um cálculo inválido
+    // depois da espera não pode deixar as gravações desse trecho pela metade.
+    novos = db.transaction(() => executarFluxo(db, documento, gatilho.id, evento, { nodeId: payload.retomarDe, resultado, locais: payload.locais }))()
   } catch (erro) {
-    if (!(erro instanceof ErroDeFluxo) && !(erro instanceof ErroDeContador)) throw erro
+    if (!(erro instanceof ErroDeFluxo) && !(erro instanceof ErroDeContador) && !(erro instanceof ErroDeCalculo)) throw erro
     db.prepare('UPDATE automation_runs SET status = ?, detail_json = ? WHERE id = ?')
       .run('error', JSON.stringify({ message: erro.message }), run.id)
     return

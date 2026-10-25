@@ -1,0 +1,35 @@
+template lista-numerada v1
+  nome: Responder uma lista numerada
+  descrição: Mostra uma lista configurável com um item por linha. A numeração é colocada ao apresentar o texto, depois de substituir as variáveis.
+  categoria: utilitarios
+
+automação
+  nome: Responder uma lista numerada
+  tipo: comando
+  dispara com: {{params.command}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  responde "{{params.itens}}"
+    numeração: {{params.numerar}}
+
+configurável
+  command: texto = "/lista"
+    rótulo: Comando
+    ajuda: Palavra que mostra a lista.
+  itens: texto = "Primeiro resultado\nSegundo resultado\nTerceiro resultado"
+    rótulo: Itens da lista
+    ajuda: Um item por linha. Aceita variáveis; linhas vazias não consomem número.
+  numerar: liga/desliga = sim
+    rótulo: Numerar os itens
+    ajuda: Desligue para apresentar o texto como foi escrito.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: external aceita outras pessoas; any também aceita suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responde este comando.
+
+# nós: gatilho, responder

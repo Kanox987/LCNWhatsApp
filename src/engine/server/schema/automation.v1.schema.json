@@ -182,6 +182,9 @@
                 "$ref": "#/definitions/actionHttp"
               },
               {
+                "$ref": "#/definitions/actionVariableCalculate"
+              },
+              {
                 "$ref": "#/definitions/actionVariableSet"
               },
               {
@@ -1076,6 +1079,175 @@
         }
       }
     },
+    "arithmeticOperand": {
+      "description": "Reutiliza os operandos da condição, restringindo literais a números e exigindo o nome da categoria. A referência comum impede que os escopos de leitura divirjam.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/comparableOperand"
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "literal"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "pattern": "^\\s*[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?\\s*$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "scope": {
+                "const": "category"
+              }
+            },
+            "required": [
+              "scope"
+            ]
+          },
+          "then": {
+            "required": [
+              "categoryKey"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "categoryKey"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "actionVariableCalculate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.variable.calculate"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "key",
+            "left",
+            "operator",
+            "right"
+          ],
+          "properties": {
+            "scope": {
+              "enum": [
+                "chat",
+                "sender",
+                "group",
+                "group_member",
+                "target",
+                "target_group_member",
+                "category",
+                "global",
+                "local"
+              ]
+            },
+            "categoryKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!__)",
+              "description": "Chave da variável. O prefixo __ é reservado do sistema (__owner__, __menu_config__) e é recusado aqui, na ação e na rota de atributos."
+            },
+            "left": {
+              "$ref": "#/definitions/arithmeticOperand"
+            },
+            "operator": {
+              "enum": [
+                "add",
+                "subtract",
+                "multiply",
+                "divide"
+              ]
+            },
+            "right": {
+              "$ref": "#/definitions/arithmeticOperand"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "scope": {
+                    "const": "category"
+                  }
+                },
+                "required": [
+                  "scope"
+                ]
+              },
+              "then": {
+                "required": [
+                  "categoryKey"
+                ]
+              },
+              "else": {
+                "not": {
+                  "required": [
+                    "categoryKey"
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "scope": {
+                    "const": "local"
+                  }
+                },
+                "required": [
+                  "scope"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "key": {
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "description": "Calcula dois operandos tipados. local só existe nesta execução; os demais escopos gravam número. Sem arredondamento adicional à precisão binária de Number. Zero no divisor e valores inválidos falham com erro visível."
+    },
     "actionVariableSet": {
       "type": "object",
       "additionalProperties": false,
@@ -1163,6 +1335,10 @@
             },
             "forward": {
               "type": "boolean"
+            },
+            "numbered": {
+              "type": "boolean",
+              "description": "Numera os itens exibidos desde 1. Em resposta, cada linha não vazia é um item. No menu, preserva os identificadores dos comandos."
             }
           }
         }
@@ -1244,6 +1420,10 @@
             },
             "buttonTitle": {
               "type": "string"
+            },
+            "numbered": {
+              "type": "boolean",
+              "description": "Numera os itens exibidos desde 1. Em resposta, cada linha não vazia é um item. No menu, preserva os identificadores dos comandos."
             }
           }
         }

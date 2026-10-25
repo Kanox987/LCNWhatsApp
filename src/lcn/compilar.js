@@ -7,10 +7,11 @@
 // sem reabrir a decisão de não executar código de usuário.
 import {
   ACOES, ACOES_DE_GRUPO, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
-  MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, ORIGENS, PRIORIDADES,
+  MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, OPERACOES_ARITMETICAS, ORIGENS, PRIORIDADES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
+import { numeroDeCalculo } from '../engine/server/aritmetica.js'
 
 export class ErroDeSintaxe extends Error {
   constructor (mensagem, linha) {
@@ -131,6 +132,27 @@ function lerDestino (bruto, linha) {
   throw new ErroDeSintaxe(`destino desconhecido: "${texto}"`, linha)
 }
 
+function lerCalculo (texto, linha) {
+  // Operandos tipados, como na condição. O operador fica ENTRE eles, com
+  // espaços: hífen numa chave e sinal num número não viram subtração.
+  const op = '(?:var\\s+\\S+\\s+\\S+|evento\\s+\\S+|"(?:[^"\\\\]|\\\\.)*"|\\{\\{[^{}]+\\}\\}|[^\\s]+)'
+  const m = texto.trim().match(new RegExp(`^(${op})\\s+([+*/×÷-])\\s+(${op})$`))
+  if (!m) throw new ErroDeSintaxe('escreva um cálculo com dois operandos e um operador (+, -, *, /), separados por espaços', linha)
+  const ler = (bruto) => {
+    // O marcador pertence ao formulário do TEMPLATE; no runtime o operando
+    // já está tipado. Não é autorização para expressão dentro de {{...}}.
+    if (/^\{\{params\.[A-Za-z_][A-Za-z0-9_]*\}\}$/.test(bruto)) return { source: 'literal', value: bruto }
+    if (/^(var|evento)\s/.test(bruto)) return lerOperando(bruto, linha)
+    const valor = bruto.startsWith('"') ? descitar(bruto, linha) : bruto
+    try {
+      const numero = numeroDeCalculo(valor)
+      return { source: 'literal', value: bruto.startsWith('"') ? valor : numero }
+    } catch (erro) { throw new ErroDeSintaxe(erro.message, linha) }
+  }
+  const simbolo = m[2] === '×' ? '*' : m[2] === '÷' ? '/' : m[2]
+  return { left: ler(m[1]), operator: inverter(OPERACOES_ARITMETICAS)[simbolo], right: ler(m[3]) }
+}
+
 // Monta um nó de ação a partir da linha e das linhas indentadas sob ela.
 function lerAcao (linha, filhas) {
   const def = acaoPorPalavra(linha.texto)
@@ -144,7 +166,10 @@ function lerAcao (linha, filhas) {
     const { scope, categoryKey } = lerEscopoEChave(mm[1], linha.n)
     const config = { scope, key: mm[2] }
     if (categoryKey) config.categoryKey = categoryKey
-    if (def.palavra === 'soma') {
+    if (def.palavra === 'calcula') {
+      if (filhas.length) throw new ErroDeSintaxe('"calcula" não tem campos indentados; escreva uma operação por linha', filhas[0].n)
+      Object.assign(config, lerCalculo(mm[3], linha.n))
+    } else if (def.palavra === 'soma') {
       const bruto = mm[3].trim()
       // Num TEMPLATE o passo pode ser o buraco que quem instala preenche,
       // igual a qualquer outro campo numérico. Sem esta exceção, `soma chat x
@@ -273,6 +298,9 @@ function lerAcao (linha, filhas) {
       // instalou escolhendo "sim" recebia o contrário sem nada avisando.
       // Apareceu instalando o comando de página: `dentroDoApp: true` saiu
       // `inApp: false`.
+      if (!ehMarcador(valor) && !['sim', 'não', 'nao', 'true', 'false'].includes(valor)) {
+        throw new ErroDeSintaxe(`"${rotulo}" aceita sim ou não; veio "${valor}"`, filha.n)
+      }
       config[campo.chave] = ehMarcador(valor) ? valor : (valor === 'sim' || valor === 'true')
     }
     else if (campo.tipo === 'numero') {

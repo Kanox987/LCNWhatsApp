@@ -9,7 +9,7 @@
 import {
   ACOES, ACOES_DE_GRUPO, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, ORIGENS, OPERADORES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo,
-  PRIORIDADES
+  PRIORIDADES, OPERACOES_ARITMETICAS
 } from './vocabulario.js'
 
 const IDENT = '  '
@@ -44,6 +44,13 @@ function linhaDeAcao (no) {
   // variável seria pior de ler que a linha única que elas pedem.
   if (def.forma === 'variavel') {
     const escopo = cfg.scope + (cfg.categoryKey ? `:${cfg.categoryKey}` : '')
+    if (def.palavra === 'calcula') {
+      const operando = (op) => op?.source === 'literal' && /^\{\{params\.[^{}]+\}\}$/.test(op.value)
+        ? op.value : escreverOperando(op)
+      const simbolo = OPERACOES_ARITMETICAS[cfg.operator]
+      if (!simbolo) throw new Error(`Operação aritmética desconhecida: ${cfg.operator}`)
+      return [`calcula ${escopo} ${cfg.key} = ${operando(cfg.left)} ${simbolo} ${operando(cfg.right)}`]
+    }
     const valor = def.palavra === 'soma' ? String(cfg.by) : citar(cfg.value)
     return [`${def.palavra} ${escopo} ${cfg.key} = ${valor}`]
   }

@@ -102,6 +102,7 @@ export const ACOES = Object.freeze([
     exemplo: '"{{now.greeting}}, {{sender.name}}! Você é admin? {{sender.isAdmin}}"',
     campos: [
       { chave: 'text', rotulo: 'Texto', ajuda: 'Aceita qualquer variável do sistema. Uma variável que não existe aparece do jeito que está, de propósito — é o sinal de que algo está errado.' },
+      { chave: 'numbered', rotulo: 'Numerar a lista', ajuda: 'Numera desde 1 cada linha não vazia depois de substituir as variáveis. Linhas vazias continuam separando os itens. Desligado mantém o texto original.' },
       { chave: 'mentions', rotulo: 'Marcar quem', ajuda: 'A menção de verdade — a que notifica a pessoa e pinta o nome. Ela viaja AO LADO do texto, não dentro dele: escrever "@5511999999999" no texto manda só dígitos, que parecem uma menção e não são. Aceita vários separados por vírgula, e aceita variável: {{sender.id}} marca quem mandou a mensagem.' },
       { chave: 'forward', rotulo: 'Sai como encaminhada', ajuda: 'Põe o selo de "encaminhada" na mensagem. É decoração de contexto; não muda o conteúdo nem quem aparece como autor.' }
     ]
@@ -218,6 +219,22 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.variable.calculate',
+    rotulo: 'Calcular com dois valores',
+    familia: 'variavel',
+    resumo: 'Soma, subtrai, multiplica ou divide dois números, variáveis ou campos do evento. O resultado pode ser só desta execução ou gravado como número.',
+    exemplo: 'calcula local total = var chat preco * var chat quantidade; depois responde "Total: {{local.total}}".',
+    ressalva: { level: 'info', text: 'Usa a precisão binária de Number, sem arredondar para inteiro ou centavos: 5 / 2 = 2.5 e 0.1 + 0.2 = 0.30000000000000004. Não é cálculo monetário exato. Divisão por zero, valores ausentes, booleanos, textos não numéricos, inteiros inseguros e resultados não representáveis interrompem a execução com motivo no histórico.' },
+    campos: [
+      { chave: 'scope', rotulo: 'Onde guardar o resultado', ajuda: 'local mantém só nesta execução, acessível em {{local.nome}} e em outro cálculo com evento local.nome. Os escopos de variável gravam no banco e usam {{var....}}.' },
+      { chave: 'categoryKey', rotulo: 'Qual categoria', ajuda: 'Obrigatório só no escopo category.' },
+      { chave: 'key', rotulo: 'Nome do resultado', ajuda: 'Em local, use letras sem acento, números e _, começando por letra ou _. O prefixo __ é reservado.' },
+      { chave: 'left', rotulo: 'Primeiro valor', ajuda: 'Número decimal com ponto, var chat preco ou evento argumentos.preco. Argumentos numéricos chegam como texto e são conferidos antes da conta.' },
+      { chave: 'operator', rotulo: 'Operação', ajuda: '+ soma; - subtrai; * ou × multiplica; / ou ÷ divide. Uma operação por ação; encadeie ações para calcular em etapas.' },
+      { chave: 'right', rotulo: 'Segundo valor', ajuda: 'Número, variável ou campo do evento, nas mesmas formas do primeiro valor. Não escreva a conta dentro de {{...}}.' }
+    ]
+  },
+  {
     tipo: 'action.variable.set',
     rotulo: 'Gravar uma variável',
     familia: 'variavel',
@@ -305,6 +322,7 @@ export const ACOES = Object.freeze([
     exemplo: 'Alguém digita "/menu" e recebe a lista.',
     ressalva: { level: 'compatibility', text: 'O formato com botões depende do aplicativo de quem recebe. Quando não renderiza, o menu cai para texto sozinho — então ele sempre chega de algum jeito.' },
     campos: [
+      { chave: 'numbered', rotulo: 'Numerar os comandos', ajuda: 'Numera só os comandos visíveis, desde 1, no texto e nos rótulos dos botões. Cabeçalho, rodapé e mensagem de vazio não entram na contagem; os IDs dos comandos continuam iguais.' },
       { chave: 'format', rotulo: 'Formato', ajuda: 'lista de texto, ou mensagem com botões.' },
       { chave: 'header', rotulo: 'Cabeçalho', ajuda: 'A frase que abre o menu.' },
       { chave: 'footer', rotulo: 'Rodapé', ajuda: 'Texto ao final.' },

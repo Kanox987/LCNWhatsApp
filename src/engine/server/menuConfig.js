@@ -41,6 +41,7 @@ function limpar (bruto) {
   if (!bruto) return {}
   const limpo = {}
   if (FORMATOS.includes(bruto.format)) limpo.format = bruto.format
+  if (typeof bruto.numbered === 'boolean') limpo.numbered = bruto.numbered
   for (const campo of ['header', 'footer', 'emptyText', 'buttonTitle']) {
     if (typeof bruto[campo] === 'string') limpo[campo] = bruto[campo]
   }

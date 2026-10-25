@@ -46,6 +46,24 @@ import {
 // quantos é quem declara a conexão, e o padrão é "todos os que vieram".
 export const TRECHOS = Object.freeze([
   {
+    chave: 'calcular-total',
+    rotulo: 'Calcular com duas variáveis',
+    quando: 'O resultado local serve à resposta e às próximas ações sem gravar uma variável de usuário.',
+    onde: 'corpo',
+    texto: [
+      'calcula local total = var chat preco * var chat quantidade',
+      'calcula local metade = evento local.total / 2',
+      'responde "Total: {{local.total}}; metade: {{local.metade}}"'
+    ].join('\n')
+  },
+  {
+    chave: 'lista-numerada',
+    rotulo: 'Numerar uma lista montada pelo comando',
+    quando: 'Cada linha não vazia recebe o próximo número depois da substituição das variáveis.',
+    onde: 'corpo',
+    texto: 'responde "{{var.chat.resultados}}"\n  numeração: sim'
+  },
+  {
     chave: 'comando-texto',
     rotulo: 'Comando que responde um texto',
     quando: 'O menor comando que existe. Bom primeiro arquivo.',

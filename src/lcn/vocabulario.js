@@ -22,6 +22,9 @@ export const ACOES = Object.freeze([
     tipo: 'action.whatsapp.reply',
     campos: [
       { chave: 'text', inline: true, tipo: 'texto' },
+      // Numerar é apresentar a lista já montada, não mudar seus dados nem
+      // ensinar o interpolador a executar um laço escondido dentro do texto.
+      { chave: 'numbered', rotulo: 'numeração', tipo: 'booleano' },
       // METADADOS DA MENSAGEM QUE SAI.
       //
       // `marca` é a menção: o @ que faz o WhatsApp notificar alguém e pintar o
@@ -210,6 +213,7 @@ export const ACOES = Object.freeze([
     palavra: 'mostra menu',
     tipo: 'action.menu.render',
     campos: [
+      { chave: 'numbered', rotulo: 'numeração', tipo: 'booleano' },
       { chave: 'format', rotulo: 'formato', tipo: 'palavra', palavras: { text: 'texto', interactive: 'com botões' } },
       { chave: 'header', rotulo: 'cabeçalho', tipo: 'texto' },
       { chave: 'footer', rotulo: 'rodapé', tipo: 'texto' },
@@ -229,6 +233,19 @@ export const ACOES = Object.freeze([
   // `define` e `soma` têm forma própria no texto (`define chat chave = valor`),
   // porque escrever `define` com quatro linhas indentadas seria pior de ler que
   // a linha única que essas duas pedem.
+  {
+    palavra: 'calcula',
+    tipo: 'action.variable.calculate',
+    forma: 'variavel',
+    campos: [
+      { chave: 'scope', tipo: 'palavra' },
+      { chave: 'categoryKey', tipo: 'palavra' },
+      { chave: 'key', tipo: 'palavra' },
+      { chave: 'left', tipo: 'operando' },
+      { chave: 'operator', tipo: 'palavra' },
+      { chave: 'right', tipo: 'operando' }
+    ]
+  },
   {
     palavra: 'define',
     tipo: 'action.variable.set',
@@ -252,6 +269,10 @@ export const ACOES = Object.freeze([
     ]
   }
 ])
+
+// Uma operação por ação: a ordem fica no fluxo, sem precedência escondida
+// numa string. Os símbolos são sintaxe do compilador, nunca do interpolador.
+export const OPERACOES_ARITMETICAS = Object.freeze({ add: '+', subtract: '-', multiply: '*', divide: '/' })
 
 // --- operadores da condição ----------------------------------------------
 // Os códigos aqui são os do DOCUMENTO, e o nome tem que bater exatamente com

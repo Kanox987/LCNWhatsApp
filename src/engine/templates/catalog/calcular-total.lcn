@@ -1,0 +1,33 @@
+template calcular-total v1
+  nome: Calcular um total
+  descrição: Multiplica dois valores recebidos pelo comando e responde sem gravar uma variável. Exemplo: /total 12.5 / 3 devolve Total: 37.5.
+  categoria: utilitarios
+
+automação
+  nome: Calcular um total
+  tipo: comando
+  dispara com: {{params.command}}
+  argumentos: preco / quantidade
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  calcula local total = evento argumentos.preco * evento argumentos.quantidade
+  responde "Total: {{local.total}}"
+
+configurável
+  command: texto = "/total"
+    rótulo: Comando
+    ajuda: Use o comando seguido de preço / quantidade. Decimais usam ponto.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: external aceita outras pessoas; any também aceita suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responde este comando.
+
+avisa nota
+  Usa a precisão binária de Number, sem arredondamento adicional. Não é cálculo monetário exato. Valor ausente ou inválido interrompe o cálculo e registra o motivo em Execuções.
+
+# nós: gatilho, calcular, responder
