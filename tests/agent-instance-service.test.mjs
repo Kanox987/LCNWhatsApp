@@ -4,7 +4,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { criarInstanceService, InstanciaNaoEncontradaError, validarAlvoGerenciado, lerRssDoPid } from '../src/agent/instanceService.js'
+import { criarInstanceService, InstanciaNaoEncontradaError, validarAlvoGerenciado, lerRssDoPid, lerMemoriaContainer } from '../src/agent/instanceService.js'
 
 let falhas = 0
 const check = (nome, ok) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}`) }
@@ -217,6 +217,10 @@ const serviceBare = criarInstanceService({
   bareArqEstado,
   bareArqConfig,
   arqPidEngine: path.join(pastaTmpBare, 'engine.pid'),
+  arqCgroupV2Usage: path.join(pastaTmpBare, 'cgroup-ausente-v2-usage'),
+  arqCgroupV2Limit: path.join(pastaTmpBare, 'cgroup-ausente-v2-limit'),
+  arqCgroupV1Usage: path.join(pastaTmpBare, 'cgroup-ausente-v1-usage'),
+  arqCgroupV1Limit: path.join(pastaTmpBare, 'cgroup-ausente-v1-limit'),
   bareStatusServico: () => { bareServicoFake.chamadas.push('status'); return 'rodando' },
   bareIniciarBot: () => { bareServicoFake.chamadas.push('iniciar'); return { ok: true, out: 'Bot iniciado (pid 123).' } },
   barePararBot: () => { bareServicoFake.chamadas.push('parar'); return { ok: true, out: 'parado' } },
@@ -431,6 +435,132 @@ check('obterUso gateway ilegível: marca isPartial === true', usoGatewayIlegivel
 check('obterUso gateway ilegível: gateway é null e memoryMB é null',
   usoGatewayIlegivel.memoryTotal?.processes?.gateway === null && usoGatewayIlegivel.memoryMB === null)
 
+// --- Contabilidade honesta de memória do container via cgroup (v2 e v1) ---
+// Caso 1: cgroup v2 com teto definido (usageMB e limitMB preenchidos)
+const arqV2UsageComTeto = path.join(pastaTmpBare, 'cgroup-v2-usage-com-teto')
+const arqV2LimitComTeto = path.join(pastaTmpBare, 'cgroup-v2-limit-com-teto')
+fs.writeFileSync(arqV2UsageComTeto, '149213184\n') // 142 MiB
+fs.writeFileSync(arqV2LimitComTeto, '536870912\n') // 512 MiB
+const serviceV2ComTeto = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25,
+  arqCgroupV2Usage: arqV2UsageComTeto,
+  arqCgroupV2Limit: arqV2LimitComTeto,
+  arqCgroupV1Usage: path.join(pastaTmpBare, 'cgroup-v1-ausente-usage'),
+  arqCgroupV1Limit: path.join(pastaTmpBare, 'cgroup-v1-ausente-limit')
+})
+const usoV2ComTeto = serviceV2ComTeto.obterUso('bare')
+check('obterUso cgroup v2 com teto: usageMB e limitMB preenchidos',
+  usoV2ComTeto.containerMemory?.usageMB === 142 &&
+  usoV2ComTeto.containerMemory?.limitMB === 512 &&
+  usoV2ComTeto.containerMemory?.source === arqV2UsageComTeto)
+check('obterUso cgroup v2 com teto: memoryTotal permanece idêntico',
+  usoV2ComTeto.memoryTotal.totalMB === 107 &&
+  usoV2ComTeto.memoryTotal.processCount === 3 &&
+  usoV2ComTeto.memoryTotal.isPartial === false)
+
+// Caso 2: cgroup v2 sem teto ("max": limitMB null, usageMB preenchido)
+const arqV2LimitSemTeto = path.join(pastaTmpBare, 'cgroup-v2-limit-sem-teto')
+fs.writeFileSync(arqV2LimitSemTeto, 'max\n')
+const serviceV2SemTeto = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25,
+  arqCgroupV2Usage: arqV2UsageComTeto,
+  arqCgroupV2Limit: arqV2LimitSemTeto,
+  arqCgroupV1Usage: path.join(pastaTmpBare, 'cgroup-v1-ausente-usage'),
+  arqCgroupV1Limit: path.join(pastaTmpBare, 'cgroup-v1-ausente-limit')
+})
+const usoV2SemTeto = serviceV2SemTeto.obterUso('bare')
+check('obterUso cgroup v2 sem teto ("max"): limitMB null e usageMB preenchido',
+  usoV2SemTeto.containerMemory?.usageMB === 142 &&
+  usoV2SemTeto.containerMemory?.limitMB === null &&
+  usoV2SemTeto.containerMemory?.source === arqV2UsageComTeto)
+
+// Caso 3: cgroup v1 com valor gigante de "sem teto" (>= 2^53: limitMB null)
+const arqV1Usage = path.join(pastaTmpBare, 'cgroup-v1-usage')
+const arqV1LimitSemTeto = path.join(pastaTmpBare, 'cgroup-v1-limit-sem-teto')
+fs.writeFileSync(arqV1Usage, '149213184\n') // 142 MiB
+fs.writeFileSync(arqV1LimitSemTeto, '9223372036854771712\n') // valor gigante da ordem de 2^63
+const serviceV1SemTeto = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25,
+  arqCgroupV2Usage: path.join(pastaTmpBare, 'cgroup-v2-ausente-usage'),
+  arqCgroupV2Limit: path.join(pastaTmpBare, 'cgroup-v2-ausente-limit'),
+  arqCgroupV1Usage: arqV1Usage,
+  arqCgroupV1Limit: arqV1LimitSemTeto
+})
+const usoV1SemTeto = serviceV1SemTeto.obterUso('bare')
+check('obterUso cgroup v1 com valor gigante de "sem teto": limitMB null e usageMB preenchido',
+  usoV1SemTeto.containerMemory?.usageMB === 142 &&
+  usoV1SemTeto.containerMemory?.limitMB === null &&
+  usoV1SemTeto.containerMemory?.source === arqV1Usage)
+
+// Caso 4: cgroup v1 com teto normal preenchido
+const arqV1LimitComTeto = path.join(pastaTmpBare, 'cgroup-v1-limit-com-teto')
+fs.writeFileSync(arqV1LimitComTeto, '536870912\n') // 512 MiB
+const serviceV1ComTeto = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25,
+  arqCgroupV2Usage: path.join(pastaTmpBare, 'cgroup-v2-ausente-usage'),
+  arqCgroupV2Limit: path.join(pastaTmpBare, 'cgroup-v2-ausente-limit'),
+  arqCgroupV1Usage: arqV1Usage,
+  arqCgroupV1Limit: arqV1LimitComTeto
+})
+const usoV1ComTeto = serviceV1ComTeto.obterUso('bare')
+check('obterUso cgroup v1 com teto normal: usageMB e limitMB preenchidos',
+  usoV1ComTeto.containerMemory?.usageMB === 142 &&
+  usoV1ComTeto.containerMemory?.limitMB === 512 &&
+  usoV1ComTeto.containerMemory?.source === arqV1Usage)
+
+// Caso 5: Arquivos ausentes: os três campos null, sem derrubar a resposta
+const serviceAusente = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25,
+  arqCgroupV2Usage: path.join(pastaTmpBare, 'cgroup-v2-ausente-usage'),
+  arqCgroupV2Limit: path.join(pastaTmpBare, 'cgroup-v2-ausente-limit'),
+  arqCgroupV1Usage: path.join(pastaTmpBare, 'cgroup-v1-ausente-usage'),
+  arqCgroupV1Limit: path.join(pastaTmpBare, 'cgroup-v1-ausente-limit')
+})
+const usoAusente = serviceAusente.obterUso('bare')
+check('obterUso arquivos ausentes: os três null em containerMemory, sem derrubar a resposta',
+  usoAusente.containerMemory?.usageMB === null &&
+  usoAusente.containerMemory?.limitMB === null &&
+  usoAusente.containerMemory?.source === null &&
+  usoAusente.memoryTotal.totalMB === 107)
+
+// Teste direto de lerMemoriaContainer
+const diretoV2 = lerMemoriaContainer({
+  caminhoV2Usage: arqV2UsageComTeto,
+  caminhoV2Limit: arqV2LimitComTeto
+})
+check('lerMemoriaContainer: lê diretamente cgroup v2 com teto',
+  diretoV2.usageMB === 142 && diretoV2.limitMB === 512 && diretoV2.source === arqV2UsageComTeto)
+
 // Teste unitário de lerRssDoPid com o processo Node atual via /proc
 const rssAtual = lerRssDoPid(process.pid)
 check('lerRssDoPid: lê com sucesso RSS do processo atual via /proc/<pid>/statm ou status', typeof rssAtual === 'number' && rssAtual > 0)
@@ -456,6 +586,42 @@ check('obterLogs com "linhas" absurdo é limitado a 1000 (nunca o arquivo inteir
 })())
 
 fs.rmSync(pastaTmpBare, { recursive: true, force: true })
+
+// --- O CACHE DENTRO DO memory.current, com os números da produção ----------
+//
+// `memory.current` INCLUI cache de página, então ele é maior que o que o
+// `docker stats` mostra, e sem dizer isso o número parece alto sem motivo.
+// Medido no container de produção em 25/10 — são estes valores exatos:
+//
+//     memory.current  216035328 B = 206 MiB
+//     inactive_file    65716224 B =  63 MiB
+//     a diferença                   143 MiB
+//     docker stats mostrava         142,3 MiB
+//
+// A checagem fixa a conta com os números medidos, não com números inventados:
+// se alguém trocar a linha lida do memory.stat, isto quebra.
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-cgroup-prod-'))
+  fs.writeFileSync(path.join(dir, 'memory.current'), '216035328')
+  fs.writeFileSync(path.join(dir, 'memory.max'), 'max')
+  fs.writeFileSync(path.join(dir, 'memory.stat'),
+    'anon 132608000\nfile 66998272\ninactive_file 65716224\nactive_file 1282048\nslab 11879272\n')
+  const lido = lerMemoriaContainer({
+    caminhoV2Usage: path.join(dir, 'memory.current'),
+    caminhoV2Limit: path.join(dir, 'memory.max'),
+    caminhoV2Stat: path.join(dir, 'memory.stat'),
+    caminhoV1Usage: path.join(dir, 'nao-existe'),
+    caminhoV1Limit: path.join(dir, 'nao-existe'),
+    caminhoV1Stat: path.join(dir, 'nao-existe')
+  })
+  check('cgroup da produção: usageMB é o memory.current inteiro (206)', lido.usageMB === 206, JSON.stringify(lido))
+  check('cgroup da produção: reclaimableCacheMB é o inactive_file (63)', lido.reclaimableCacheMB === 63)
+  check('cgroup da produção: a diferença dá o conjunto de trabalho do docker stats (143)',
+    lido.usageMB - lido.reclaimableCacheMB === 143)
+  check('cgroup da produção: "max" vira limitMB null, não zero', lido.limitMB === null)
+  fs.rmSync(dir, { recursive: true, force: true })
+}
+
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO INSTANCE SERVICE PASSARAM')
 process.exit(falhas ? 1 : 0)

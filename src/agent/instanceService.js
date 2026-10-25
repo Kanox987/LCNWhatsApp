@@ -221,6 +221,114 @@ export function lerRssDoPid (pid) {
   return null
 }
 
+const LIMIAR_SEM_TETO_CGROUP_BYTES = 2 ** 53
+
+function lerConteudoArquivo (caminho) {
+  try {
+    if (!caminho) return null
+    return fs.readFileSync(caminho, 'utf8').trim()
+  } catch {
+    return null
+  }
+}
+
+function lerNumeroBytes (conteudo) {
+  if (typeof conteudo !== 'string') return null
+  const limpo = conteudo.trim()
+  if (!/^\d+$/.test(limpo)) return null
+  const num = Number(limpo)
+  return Number.isFinite(num) && num >= 0 ? num : null
+}
+
+function interpretarLimiteMB (raw) {
+  if (!raw) return null
+  const limpo = raw.trim()
+  if (limpo === 'max') return null
+  const bytes = lerNumeroBytes(limpo)
+  if (bytes === null || bytes >= LIMIAR_SEM_TETO_CGROUP_BYTES || bytes <= 0) {
+    return null
+  }
+  return Math.round(bytes / 1048576)
+}
+
+// `inactive_file` é o cache que o sistema devolve sob pressão — está dentro do
+// memory.current e não é consumo que aperta. A linha tem o mesmo nome em v1 e
+// em v2, então uma leitura serve para os dois.
+function lerCacheRecuperavelMB (conteudo) {
+  if (typeof conteudo !== 'string') return null
+  const achado = conteudo.match(/^inactive_file\s+(\d+)$/m)
+  if (!achado) return null
+  const bytes = Number(achado[1])
+  return Number.isFinite(bytes) && bytes >= 0 ? Math.round(bytes / 1048576) : null
+}
+
+function interpretarUsoMB (raw) {
+  if (!raw) return null
+  const bytes = lerNumeroBytes(raw)
+  if (bytes === null) return null
+  return Math.round(bytes / 1048576)
+}
+
+// Lê do cgroup qual é o consumo do container. É a medida que responde "quanto
+// este container usa", e é diferente da soma dos RSS dos processos — ver o
+// comentário no retorno de `obterUso`.
+//
+// `usageMB` INCLUI CACHE DE PÁGINA, e isso precisa estar dito, senão o número
+// parece alto sem motivo. Medido na produção em 25/10, neste container:
+//
+//     memory.current ....... 206,0 MiB
+//     inactive_file ........  62,7 MiB   (cache, o sistema devolve sob pressão)
+//     a diferença .......... 143,3 MiB
+//     o que o docker stats mostrava  142,3 MiB
+//
+// Ou seja: `usageMB - reclaimableCacheMB` é o conjunto de trabalho, e é o que
+// o `docker stats` (e o Kubernetes) apresentam. Devolvo os dois crus em vez da
+// subtração pronta, para não haver dois campos dizendo a mesma coisa.
+export function lerMemoriaContainer ({
+  caminhoV2Usage = '/sys/fs/cgroup/memory.current',
+  caminhoV2Limit = '/sys/fs/cgroup/memory.max',
+  caminhoV2Stat = '/sys/fs/cgroup/memory.stat',
+  caminhoV1Usage = '/sys/fs/cgroup/memory/memory.usage_in_bytes',
+  caminhoV1Limit = '/sys/fs/cgroup/memory/memory.limit_in_bytes',
+  caminhoV1Stat = '/sys/fs/cgroup/memory/memory.stat'
+} = {}) {
+  // 1. Cgroup v2
+  const v2UsageRaw = lerConteudoArquivo(caminhoV2Usage)
+  const v2UsageMB = interpretarUsoMB(v2UsageRaw)
+  if (v2UsageMB !== null) {
+    const v2LimitRaw = lerConteudoArquivo(caminhoV2Limit)
+    const limitMB = interpretarLimiteMB(v2LimitRaw)
+    return {
+      usageMB: v2UsageMB,
+      reclaimableCacheMB: lerCacheRecuperavelMB(lerConteudoArquivo(caminhoV2Stat)),
+      limitMB,
+      source: caminhoV2Usage
+    }
+  }
+
+  // 2. Cgroup v1
+  const v1UsageRaw = lerConteudoArquivo(caminhoV1Usage)
+  const v1UsageMB = interpretarUsoMB(v1UsageRaw)
+  if (v1UsageMB !== null) {
+    const v1LimitRaw = lerConteudoArquivo(caminhoV1Limit)
+    const limitMB = interpretarLimiteMB(v1LimitRaw)
+    return {
+      usageMB: v1UsageMB,
+      reclaimableCacheMB: lerCacheRecuperavelMB(lerConteudoArquivo(caminhoV1Stat)),
+      limitMB,
+      source: caminhoV1Usage
+    }
+  }
+
+  // 3. Fora de container ou arquivos ausentes/ilegíveis
+  return {
+    usageMB: null,
+    reclaimableCacheMB: null,
+    limitMB: null,
+    source: null
+  }
+}
+
 // Um processo com este pid está vivo? É como o modo simples sabe se o bot está
 // de pé — cada instância grava o próprio bot.pid na própria pasta.
 function pidVivoDe (arquivo) {
@@ -272,7 +380,19 @@ export function criarInstanceService ({
   arqPidEngine = ARQ_PID_ENGINE,
   lerRssPid = lerRssDoPid,
   obterMemoriaPainel = () => process.memoryUsage(),
-  verificarPidVivo = pidVivo
+  verificarPidVivo = pidVivo,
+  // Um nome por caminho, seguindo a convenção do `arqPidEngine` acima. A
+  // primeira versão aceitava três nomes para cada um destes quatro, com cadeia
+  // de fallback entre eles — doze parâmetros para quatro caminhos. Dois nomes
+  // para a mesma coisa é segunda fonte da verdade, e é o que deixou o escopo
+  // `local` existir em metade das camadas deste projeto.
+  arqCgroupV2Usage = '/sys/fs/cgroup/memory.current',
+  arqCgroupV2Limit = '/sys/fs/cgroup/memory.max',
+  arqCgroupV1Usage = '/sys/fs/cgroup/memory/memory.usage_in_bytes',
+  arqCgroupV1Limit = '/sys/fs/cgroup/memory/memory.limit_in_bytes',
+  arqCgroupV2Stat = '/sys/fs/cgroup/memory.stat',
+  arqCgroupV1Stat = '/sys/fs/cgroup/memory/memory.stat',
+  lerMemoriaContainerFn = lerMemoriaContainer
 } = {}) {
   function caminhoEstado (instancia) {
     // Instância descoberta traz o próprio arquivo; o bare clássico usa o fixo.
@@ -773,6 +893,15 @@ export function criarInstanceService ({
       : null
     const memoryIsPartial = memoryProcessesCount < 3
 
+    const containerMemory = lerMemoriaContainerFn({
+      caminhoV2Usage: arqCgroupV2Usage,
+      caminhoV2Limit: arqCgroupV2Limit,
+      caminhoV2Stat: arqCgroupV2Stat,
+      caminhoV1Usage: arqCgroupV1Usage,
+      caminhoV1Limit: arqCgroupV1Limit,
+      caminhoV1Stat: arqCgroupV1Stat
+    })
+
     return {
       // `memoryMB` continua sendo o gateway e só ele: outras telas já leem este
       // campo, e mudar o que ele significa seria pior que não somar.
@@ -788,6 +917,10 @@ export function criarInstanceService ({
         isPartial: memoryIsPartial,
         processes: { gateway: gatewayMB, engine: engineMB, panel: panelMB }
       },
+      // Duas medidas com propósitos distintos: memoryTotal soma RSS dos processos
+      // para atribuição (saber qual cresce), superestimando páginas compartilhadas;
+      // containerMemory lê a contabilidade real do cgroup (consumo do container).
+      containerMemory,
       uptimeMs: estado.iniciadoEm ? Date.now() - estado.iniciadoEm : null,
       bandwidth: {
         downloadBytesTotal: estado.metricas?.bytesBaixados ?? 0,
