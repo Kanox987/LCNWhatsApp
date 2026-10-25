@@ -69,10 +69,13 @@ export function obterCapacidadesRuntime () {
     comparisonOperators: [...OPERADORES_DE_COMPARACAO],
     maxTriggers: 1,
     // Deixou de ser uma cadeia linear: uma condição bifurca o caminho em
-    // 'true'/'false'. Continua sem ciclo e sem paralelismo — um caminho só é
-    // percorrido por execução, e o publish rejeita ciclo.
+    // 'true'/'false'. Os ramos podem conter condições e voltar à continuação
+    // comum; isso ainda percorre um caminho só, sem ciclo nem paralelismo.
     linearOnly: false,
     flowModel: 'exclusive_branching_dag',
+    // Metadado opcional de blocos, conferido contra as arestas no publish.
+    // Preserva a escrita no editor sem criar outra forma de executar o fluxo.
+    sourceStructure: true,
     edgeOutcomes: { trigger: ['matched'], condition: ['true', 'false'], action: ['success'] },
     supportedPlaceholders: ['{{latencyMs}}'],
     // A POLÍTICA DE FILA, declarada como capacidade e NÃO como ação.

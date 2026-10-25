@@ -133,6 +133,40 @@ número alto.
 A comparação entende número como número: `10` é maior que `3`, e não o
 contrário — o que aconteceria se comparasse como texto.
 
+No `.lcn`, dois espaços formam um nível. Um `se` pode conter outro `se`,
+e condições no mesmo nível executam em sequência. Ao terminar o ramo escolhido,
+o fluxo continua no próximo passo daquele nível:
+
+```text
+  se evento message.text contém "link-proibido.example"
+    apaga mensagem
+    soma group_member avisos = 1
+  se var group_member avisos >= 3
+    remove do grupo
+      quem: quem enviou
+      nunca o dono: sim
+  senão se var group_member avisos >= 1
+    se evento sender.isAdmin == false
+      responde "Você já recebeu aviso neste grupo."
+```
+
+`senão se` testa outra condição apenas quando as anteriores forem falsas.
+Equivale a colocar um `se` dentro do `senão`, com menos indentação. O ramo
+falso pode faltar, e o verdadeiro pode ficar vazio se o falso tiver ação;
+os dois vazios são recusados. Voltar à indentação anterior encerra o ramo.
+
+O padrão é **32 condições aninhadas**. Cada `senão se` conta mais um nível
+lógico; condições em sequência não acumulam profundidade. A instalação pode
+ajustar `LCN_MAX_PROFUNDIDADE_CONDICOES` para qualquer inteiro positivo, e
+uma chamada ao compilador pode usar `compilar(texto, { maxProfundidade: 64 })`.
+O erro informa a linha, a profundidade atingida e o limite configurado.
+
+O grafo continua tendo um único gatilho e nenhum ciclo: os ramos só avançam
+ou reencontram a continuação. A publicação mantém a rejeição de ciclos.
+Os blocos compostos guardam `flow.structure`, metadado opcional validado contra
+as arestas, para preservar a indentação e a escolha entre `senão se` e `senão`
+com `se` dentro. O avaliador executa as arestas; o metadado serve à edição.
+
 ---
 
 ## Consultar um serviço externo (conexões)

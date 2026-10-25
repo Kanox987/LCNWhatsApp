@@ -26,7 +26,8 @@
 import {
   ACOES, ACOES_DE_GRUPO, BLOCOS_DE_TEMPLATE, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES,
   DESTINOS, EXIGENCIAS, MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES,
-  ORIGENS, PALAVRAS_DE_OPERANDO, TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR
+  ORIGENS, PALAVRAS_DE_OPERANDO, TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
+  BLOCOS_DE_CONDICAO, PROFUNDIDADE_CONDICOES_PADRAO
 } from './vocabulario.js'
 
 // --- trechos prontos ------------------------------------------------------
@@ -189,7 +190,7 @@ export const TRECHOS = Object.freeze([
   {
     chave: 'se-com-contador',
     rotulo: 'Contar e agir no limite',
-    quando: 'Uma automação tem UMA condição, no fim do que vem antes dela. Os dois ramos são as linhas indentadas.',
+    quando: 'Cada ramo fica dois espaços adentro. Pode haver outros se dentro dos ramos ou depois deles; pelo menos um ramo precisa ter ação.',
     onde: 'corpo',
     texto: [
       'soma member avisos = 1',
@@ -426,7 +427,7 @@ function palavrasParaRealce () {
     marcas: Object.freeze(MARCAS_DO_CABECALHO.map((m) => m.chave)),
     acoes: Object.freeze(ACOES.map((a) => a.palavra)),
     // `se`, `senão` e `com` ABREM A LINHA, e só valem ali.
-    estrutura: Object.freeze(['se', 'senão', 'com']),
+    estrutura: Object.freeze([...Object.values(BLOCOS_DE_CONDICAO), 'com']),
     // `var` e `evento` abrem o operando DENTRO do `se`, no meio da linha —
     // por isso são um grupo separado. Juntá-los ao de cima faria a palavra
     // "com" acender no meio de um texto livre ("baixa com legenda"), que é
@@ -468,6 +469,7 @@ export function montarReferencia ({ prosa = null } = {}) {
     acoes: Object.freeze(ACOES.map((a) => juntarAcao(a, prosa))),
     condicao: Object.freeze({
       forma: 'se <o que> <operador> <o que>',
+      ajuda: `Use dois espaços por nível. Condições no mesmo nível executam em sequência; condições dentro de um ramo só executam quando ele é escolhido. "senão se" testa outra condição no ramo falso. Um ramo pode ficar vazio, mas pelo menos um precisa ter ação. O limite padrão é ${PROFUNDIDADE_CONDICOES_PADRAO} condições aninhadas (cada "senão se" conta mais um nível), ajustável por LCN_MAX_PROFUNDIDADE_CONDICOES ou pela opção maxProfundidade do compilador.`,
       operadores: Object.freeze(Object.values(OPERADORES)),
       origens: Object.freeze((prosa?.ORIGENS_DE_OPERANDO || []).map((o) => Object.freeze({ ...o })))
     }),

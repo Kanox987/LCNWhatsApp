@@ -265,6 +265,9 @@
               }
             }
           }
+        },
+        "structure": {
+          "$ref": "#/definitions/flowStructure"
         }
       }
     },
@@ -1706,6 +1709,40 @@
             }
           }
         }
+      }
+    },
+    "flowStructure": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "nodeId",
+              "true"
+            ],
+            "properties": {
+              "nodeId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "true": {
+                "$ref": "#/definitions/flowStructure"
+              },
+              "false": {
+                "$ref": "#/definitions/flowStructure"
+              },
+              "elseIf": {
+                "const": true
+              }
+            }
+          }
+        ]
       }
     }
   }

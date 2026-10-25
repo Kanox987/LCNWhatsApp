@@ -6,12 +6,13 @@
 // o mesmo portão do JSON escrito à mão. É isto que deixa a linguagem existir
 // sem reabrir a decisão de não executar código de usuário.
 import {
-  ACOES, ACOES_DE_GRUPO, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
+  ACOES, ACOES_DE_GRUPO, BLOCOS_DE_CONDICAO, PROFUNDIDADE_CONDICOES_PADRAO, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
   MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, OPERACOES_ARITMETICAS, ORIGENS, PRIORIDADES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
 import { numeroDeCalculo } from '../engine/server/aritmetica.js'
+import { arestasDaEstrutura, precisaEstrutura } from './estrutura.js'
 
 export class ErroDeSintaxe extends Error {
   constructor (mensagem, linha) {
@@ -76,9 +77,13 @@ function descitar (bruto, linha) {
   }
 }
 
-function medirIndentacao (linha) {
-  const m = linha.match(/^( *)/)
-  return Math.floor(m[1].length / 2)
+function medirIndentacao (linha, numero) {
+  const prefixo = linha.match(/^\s*/)[0]
+  // Arredondar três espaços para um nível mudava o ramo sem avisar.
+  if (/[^ ]/.test(prefixo) || prefixo.length % 2) {
+    throw new ErroDeSintaxe('a indentação usa dois espaços por nível, sem tabulação', numero)
+  }
+  return prefixo.length / 2
 }
 
 // Ignora linha vazia e comentário, MENOS o rodapé de nomes dos nós, que é dado.
@@ -91,7 +96,7 @@ function tokenizar (texto) {
     const nomeados = semFim.trim().match(/^#\s*nós:\s*(.*)$/)
     if (nomeados) { nomes = nomeados[1].split(',').map((s) => s.trim()).filter(Boolean); return }
     if (semFim.trim().startsWith('#')) return
-    linhas.push({ indent: medirIndentacao(semFim), texto: semFim.trim(), n: i + 1 })
+    linhas.push({ indent: medirIndentacao(semFim, i + 1), texto: semFim.trim(), n: i + 1 })
   })
   return { linhas, nomes }
 }
@@ -434,7 +439,11 @@ function lerBlocosDeTemplate (linhas, inicio, template) {
   return i
 }
 
-export function compilar (texto) {
+export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUNDIDADE_CONDICOES ?? PROFUNDIDADE_CONDICOES_PADRAO } = {}) {
+  const limite = Number(maxProfundidade)
+  if (!['number', 'string'].includes(typeof maxProfundidade) || !Number.isSafeInteger(limite) || limite < 1) {
+    throw new ErroDeSintaxe('maxProfundidade (LCN_MAX_PROFUNDIDADE_CONDICOES) precisa ser um inteiro positivo')
+  }
   const { linhas, nomes } = tokenizar(texto)
   if (!linhas.length) throw new ErroDeSintaxe('arquivo vazio')
 
@@ -530,7 +539,7 @@ export function compilar (texto) {
   for (; i < linhas.length; i++) {
     const l = linhas[i]
     if (l.indent !== 1) break
-    if (acaoPorPalavra(l.texto) || l.texto.startsWith('se ')) break
+    if (acaoPorPalavra(l.texto) || /^(se|senão)(?: |$)/.test(l.texto)) break
 
     if (l.texto === 'só dono') { gatilhoConfig.requireOwner = true; continue }
     if (l.texto === 'com link') {
@@ -818,43 +827,22 @@ export function compilar (texto) {
 
   // --- corpo --------------------------------------------------------------
   const nos = [{ id: null, type: tipoDoGatilho, config: gatilhoConfig }]
-  const arestas = []
+  const ehSe = (texto) => texto.startsWith(`${BLOCOS_DE_CONDICAO.se} `)
+  const ehSenao = (texto) => texto === BLOCOS_DE_CONDICAO.senao || texto.startsWith(`${BLOCOS_DE_CONDICAO.senao} `)
 
-  // Junta cada ação com as linhas indentadas sob ela.
-  function lerBloco (indentAlvo, ate) {
-    const acoes = []
-    while (i < ate) {
-      const l = linhas[i]
-      if (l.indent !== indentAlvo) break
-      if (l.texto.startsWith('se ') || l.texto === 'senão') break
-      i++
-      const filhas = []
-      // Desce MAIS de um nível: a chamada de conexão tem um bloco `com` cujas
-      // entradas ficam dois níveis abaixo da ação. Só uma ação irmã, no nível
-      // logo abaixo, encerra a coleta.
-      while (i < ate && linhas[i].indent > indentAlvo &&
-             !(linhas[i].indent === indentAlvo + 1 && acaoPorPalavra(linhas[i].texto))) {
-        filhas.push(linhas[i]); i++
-      }
-      acoes.push(lerAcao(l, filhas))
+  function lerCondicao (indent, profundidade, encadeada = false) {
+    const l = linhas[i++]
+    if (profundidade > limite) {
+      throw new ErroDeSintaxe(`a condição chegou à profundidade ${profundidade}; o limite é ${limite}. Ajuste maxProfundidade ou LCN_MAX_PROFUNDIDADE_CONDICOES.`, l.n)
     }
-    return acoes
-  }
-
-  const prelude = lerBloco(1, linhas.length)
-  let condicao = null
-  let ramoTrue = []
-  let ramoFalse = []
-
-  if (i < linhas.length && linhas[i].texto.startsWith('se ')) {
-    const l = linhas[i]; i++
-    const corpo = l.texto.slice(3).trim()
+    const prefixo = encadeada ? BLOCOS_DE_CONDICAO.senaoSe : BLOCOS_DE_CONDICAO.se
+    const corpo = l.texto.slice(prefixo.length).trim()
     const simbolo = Object.values(OPERADORES)
       .sort((a, b) => b.length - a.length)
       .find((s) => corpo.includes(` ${s} `))
     if (!simbolo) throw new ErroDeSintaxe('a condição precisa de um operador', l.n)
     const pos = corpo.indexOf(` ${simbolo} `)
-    condicao = {
+    const no = {
       type: 'condition.compare',
       config: {
         left: lerOperando(corpo.slice(0, pos), l.n),
@@ -862,22 +850,61 @@ export function compilar (texto) {
         right: lerOperando(corpo.slice(pos + simbolo.length + 2), l.n)
       }
     }
-    ramoTrue = lerBloco(2, linhas.length)
-    if (i < linhas.length && linhas[i].texto === 'senão') {
-      i++
-      ramoFalse = lerBloco(2, linhas.length)
+    nos.push(no)
+    const item = { no, true: lerBloco(indent + 1, profundidade) }
+    if (i < linhas.length && linhas[i].indent === indent && ehSenao(linhas[i].texto)) {
+      if (linhas[i].texto.startsWith(`${BLOCOS_DE_CONDICAO.senaoSe} `)) {
+        item.elseIf = true
+        item.false = [lerCondicao(indent, profundidade + 1, true)]
+      } else if (linhas[i].texto === BLOCOS_DE_CONDICAO.senao) {
+        i++
+        item.false = lerBloco(indent + 1, profundidade)
+      } else {
+        throw new ErroDeSintaxe('escreva "senão" ou "senão se <condição>"', linhas[i].n)
+      }
     }
+    // O ramo ausente é legítimo; os DOIS vazios escondem uma regra sem efeito.
+    // Conferimos antes de ligar a continuação, que não conta como ramo com ação.
+    if (!item.true.length && !item.false?.length) {
+      throw new ErroDeSintaxe('um "se" precisa de pelo menos um ramo com ação', l.n)
+    }
+    return item
   }
 
-  // --- montar o grafo -----------------------------------------------------
-  const gerados = []
-  const empilhar = (no) => { nos.push(no); gerados.push(no); return no }
-  for (const a of prelude) empilhar(a)
-  if (condicao) {
-    empilhar(condicao)
-    for (const a of ramoTrue) empilhar(a)
-    for (const a of ramoFalse) empilhar(a)
+  function lerBloco (indent, profundidade) {
+    const passos = []
+    while (i < linhas.length && linhas[i].indent >= indent) {
+      const l = linhas[i]
+      if (l.indent !== indent) {
+        throw new ErroDeSintaxe(`indentação inesperada: este bloco usa ${indent * 2} espaços`, l.n)
+      }
+      if (ehSenao(l.texto)) {
+        throw new ErroDeSintaxe('"senão" precisa vir logo após um "se", na mesma indentação', l.n)
+      }
+      if (ehSe(l.texto)) {
+        passos.push(lerCondicao(indent, profundidade + 1))
+        continue
+      }
+      i++
+      const filhas = []
+      while (i < linhas.length && linhas[i].indent > indent) {
+        const filha = linhas[i]
+        // Campos de ação e `com` também têm filhos. Uma condição só pode
+        // morar num ramo, nunca virar campo ignorado de uma ação.
+        if (ehSe(filha.texto) || ehSenao(filha.texto) || acaoPorPalavra(filha.texto)) {
+          throw new ErroDeSintaxe('ação ou condição indentada sob uma ação; alinhe os passos do mesmo bloco', filha.n)
+        }
+        filhas.push(filha)
+        i++
+      }
+      const no = lerAcao(l, filhas)
+      nos.push(no)
+      passos.push({ no })
+    }
+    return passos
   }
+
+  const corpo = lerBloco(1, 0)
 
   // Nomes: o rodapé manda, e o que faltar é gerado. Editar o texto não pode
   // exigir manter uma lista de ids em dia — quem escreve automação não pensa
@@ -895,27 +922,16 @@ export function compilar (texto) {
     no.id = nome
   })
 
-  // Arestas: prelúdio em cadeia a partir do gatilho, condição no fim com os
-  // dois ramos. É a forma que os templates já usavam — validate.js exige
-  // exatamente isso.
-  const gatilho = nos[0]
-  const emCadeia = (primeiro, lista, de, rotulo) => {
-    let anterior = de
-    let label = rotulo
-    for (const no of lista) {
-      arestas.push({ from: anterior, to: no.id, on: label })
-      anterior = no.id
-      label = 'success'
-    }
-    return anterior
-  }
-
-  const fimDoPrelude = emCadeia(null, prelude, gatilho.id, 'matched')
-  if (condicao) {
-    arestas.push({ from: fimDoPrelude, to: condicao.id, on: prelude.length ? 'success' : 'matched' })
-    emCadeia(null, ramoTrue, condicao.id, 'true')
-    emCadeia(null, ramoFalse, condicao.id, 'false')
-  }
+  const descrever = (passos) => passos.map((item) => item.true
+    ? { nodeId: item.no.id, true: descrever(item.true),
+        ...(item.false ? { false: descrever(item.false) } : {}),
+        ...(item.elseIf ? { elseIf: true } : {}) }
+    : item.no.id)
+  const estrutura = descrever(corpo)
+  // As pontas dos dois ramos ficam pendentes até o próximo irmão. Toda
+  // ligação vai para um nó novo, posterior na escrita: não há salto para trás.
+  const arestas = arestasDaEstrutura(estrutura, nos[0].id)
+  if (precisaEstrutura(estrutura)) doc.flow.structure = estrutura
 
   // Bloco de template só faz sentido em arquivo de template. Deixar cair num
   // objeto descartado seria perder a configuração inteira sem avisar — o

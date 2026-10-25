@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import Ajv from 'ajv'
 import { fileURLToPath } from 'url'
+import { conferirEstrutura } from '../../lcn/estrutura.js'
 
 const arquivoSchema = path.join(path.dirname(fileURLToPath(import.meta.url)), 'schema', 'automation.v1.schema.json')
 const schema = JSON.parse(fs.readFileSync(arquivoSchema, 'utf8'))
@@ -81,6 +82,12 @@ export function validarAutomacao (db, documento) {
   })
 
   if (temCiclo(ids, edges)) erros.push({ path: '/flow/edges', message: 'o fluxo não pode conter ciclo' })
+
+  if (documento?.flow?.structure !== undefined && !erros.length) {
+    try { conferirEstrutura(documento.flow) } catch (erro) {
+      erros.push({ path: '/flow/structure', message: erro.message })
+    }
+  }
 
   // maxTriggers:1 era anunciado em runtimeCapabilities mas nunca imposto aqui,
   // e o avaliador usa .find() — com dois gatilhos, o segundo era ignorado em

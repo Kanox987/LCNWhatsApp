@@ -286,6 +286,10 @@ export const ACOES = Object.freeze([
 // numa string. Os símbolos são sintaxe do compilador, nunca do interpolador.
 export const OPERACOES_ARITMETICAS = Object.freeze({ add: '+', subtract: '-', multiply: '*', divide: '/' })
 
+// São formas de organizar o mesmo grafo, não ações novas para o motor.
+export const BLOCOS_DE_CONDICAO = Object.freeze({ se: 'se', senao: 'senão', senaoSe: 'senão se' })
+export const PROFUNDIDADE_CONDICOES_PADRAO = 32
+
 // --- operadores da condição ----------------------------------------------
 // Os códigos aqui são os do DOCUMENTO, e o nome tem que bater exatamente com
 // o que o schema aceita e o motor executa. `ne` não batia: o schema e o

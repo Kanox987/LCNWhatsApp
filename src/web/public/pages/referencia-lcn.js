@@ -192,8 +192,8 @@ export function referenciaLcn ({ inserir }) {
       ]),
       grupo('Ações', ref.acoes.length, ref.acoes.map(acao)),
       grupo('Condição', 1, [
-        dobravel(ref.condicao.forma, 'uma por automação, no fim', [
-          el('p', { text: 'Uma automação tem uma condição, depois do que vem antes dela. Os dois ramos são as linhas indentadas sob "se" e sob "senão".' }),
+        dobravel(ref.condicao.forma, 'em sequência ou dentro de outro ramo', [
+          el('p', { text: ref.condicao.ajuda }),
           listaDePalavras(ref.condicao.operadores),
           ref.condicao.origens?.length
             ? el('ul', { className: 'lcn-ref-campos' }, ref.condicao.origens.map((o) => el('li', {}, [

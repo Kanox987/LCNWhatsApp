@@ -9,30 +9,14 @@
 import {
   ACOES, ACOES_DE_GRUPO, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, ORIGENS, OPERADORES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo,
-  PRIORIDADES, OPERACOES_ARITMETICAS
+  PRIORIDADES, OPERACOES_ARITMETICAS, BLOCOS_DE_CONDICAO
 } from './vocabulario.js'
+import { conferirEstrutura, inferirEstrutura } from './estrutura.js'
 
 const IDENT = '  '
 
 function citar (valor) {
   return JSON.stringify(String(valor ?? ''))
-}
-
-// A ordem em que os nós saem no texto é a ordem do PERCURSO, não a do array —
-// é o percurso que conta a história ("casou -> faz isto -> depois aquilo").
-function seguir (mapa, arestas, de, rotulo) {
-  const aresta = arestas.find((e) => e.from === de && e.on === rotulo)
-  return aresta ? mapa.get(aresta.to) : null
-}
-
-function cadeia (mapa, arestas, primeiro) {
-  const saida = []
-  let atual = primeiro
-  while (atual && atual.type !== 'condition.compare') {
-    saida.push(atual)
-    atual = seguir(mapa, arestas, atual.id, 'success')
-  }
-  return { acoes: saida, condicao: atual || null }
 }
 
 function linhaDeAcao (no) {
@@ -162,7 +146,6 @@ function cabecalhoDoGatilho (gatilho, documento, template) {
 
 export function descompilar (documento, template = null) {
   const nos = documento?.flow?.nodes || []
-  const arestas = documento?.flow?.edges || []
   const mapa = new Map(nos.map((n) => [n.id, n]))
   const gatilho = nos.find((n) => typeof n.type === 'string' && n.type.startsWith('trigger.'))
   if (!gatilho) throw new Error('O documento não tem gatilho.')
@@ -271,19 +254,32 @@ export function descompilar (documento, template = null) {
 
   linhas.push('')
 
-  const primeiro = seguir(mapa, arestas, gatilho.id, 'matched')
-  const { acoes, condicao } = cadeia(mapa, arestas, primeiro)
-  for (const no of acoes) for (const l of linhaDeAcao(no)) linhas.push(`${IDENT}${l}`)
-
-  if (condicao) {
-    const c = condicao.config || {}
-    linhas.push(`${IDENT}se ${escreverOperando(c.left)} ${OPERADORES[c.operator] || c.operator} ${escreverOperando(c.right)}`)
-    for (const rotulo of ['true', 'false']) {
-      const ramo = cadeia(mapa, arestas, seguir(mapa, arestas, condicao.id, rotulo))
-      if (rotulo === 'false') linhas.push(`${IDENT}senão`)
-      for (const no of ramo.acoes) for (const l of linhaDeAcao(no)) linhas.push(`${IDENT}${IDENT}${l}`)
+  conferirEstrutura(documento.flow)
+  const estrutura = documento.flow.structure || inferirEstrutura(documento.flow, gatilho.id)
+  const ordem = [gatilho.id]
+  function escreverCondicao (item, indent, palavra = BLOCOS_DE_CONDICAO.se) {
+    ordem.push(item.nodeId)
+    const c = mapa.get(item.nodeId).config
+    linhas.push(`${IDENT.repeat(indent)}${palavra} ${escreverOperando(c.left)} ${OPERADORES[c.operator] || c.operator} ${escreverOperando(c.right)}`)
+    escreverBloco(item.true, indent + 1)
+    if (item.elseIf) {
+      escreverCondicao(item.false[0], indent, BLOCOS_DE_CONDICAO.senaoSe)
+    } else if (item.false) {
+      linhas.push(`${IDENT.repeat(indent)}${BLOCOS_DE_CONDICAO.senao}`)
+      escreverBloco(item.false, indent + 1)
     }
   }
+  function escreverBloco (itens, indent) {
+    for (const item of itens) {
+      if (typeof item === 'string') {
+        ordem.push(item)
+        for (const l of linhaDeAcao(mapa.get(item))) linhas.push(`${IDENT.repeat(indent)}${l}`)
+      } else {
+        escreverCondicao(item, indent)
+      }
+    }
+  }
+  escreverBloco(estrutura, 1)
 
   // --- blocos de template -------------------------------------------------
   // Um `.lcn` representa tanto uma automação solta quanto um template. O que é
@@ -325,7 +321,7 @@ export function descompilar (documento, template = null) {
   // Quando falta nome para algum nó, o compilador gera — mexer no texto não
   // pode exigir manter esta linha em dia.
   linhas.push('')
-  linhas.push(`# nós: ${nos.map((n) => n.id).join(', ')}`)
+  linhas.push(`# nós: ${ordem.join(', ')}`)
 
   return linhas.join('\n') + '\n'
 }
