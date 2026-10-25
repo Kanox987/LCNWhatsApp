@@ -505,7 +505,8 @@ export const ESCOPOS = Object.freeze([
   { id: 'target', rotulo: 'De quem o comando mira', ajuda: 'O @mencionado, ou o autor da mensagem respondida.', usoNoTexto: '{{var.target.<chave>}}' },
   { id: 'target_group_member', rotulo: 'Do alvo, NESTE grupo', ajuda: 'A combinação que "/adv @fulano" usa.', usoNoTexto: '{{var.targetMember.<chave>}}' },
   { id: 'category', rotulo: 'De uma categoria', ajuda: 'Compartilhado por um grupo de pessoas que você marca na aba Dados.', usoNoTexto: '{{var.category.<categoria>.<chave>}}' },
-  { id: 'global', rotulo: 'Do sistema todo', ajuda: 'Não pertence a ninguém. Serve para totais gerais e para configuração.', usoNoTexto: '{{var.global.<chave>}}' }
+  { id: 'global', rotulo: 'Do sistema todo', ajuda: 'Não pertence a ninguém. Serve para totais gerais e para configuração.', usoNoTexto: '{{var.global.<chave>}}' },
+  { id: 'local', rotulo: 'Desta execução (local)', ajuda: 'Vale só durante a execução deste fluxo e não grava atributo no banco: não persiste para a próxima mensagem.', usoNoTexto: '{{var.local.<chave>}}' }
 ])
 
 // --- DESTINOS: onde a automação pode rodar --------------------------------
