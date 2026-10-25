@@ -16,6 +16,7 @@
 // `action.http` genérico — quem aponta o endereço é o dono, não o comando.
 import { limitesDeMidia } from '../mediaLimits.js'
 import { executoresDeRecursos } from './filasDeRecursos.js'
+import { combinarComEvento, erroDeTimeoutExterno, dormirComSinal, esperarNoEvento } from './cancelamento.js'
 import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, lerBase64DeMidia, descartarResposta } from '../mediaBudget.js'
 import { resolverDestino, TIPOS_DE_ENVIO } from './server/conexoes/declaracao.js'
 
@@ -249,7 +250,7 @@ function porCaminho (objeto, caminho) {
 
 export function criarExecutorDeConexao ({
   buscar = fetch,
-  dormir = (ms) => new Promise((r) => setTimeout(r, ms)),
+  dormir = dormirComSinal,
   agora = () => Date.now(),
   esperaMaximaMs = 300000,
   cfg,
@@ -264,16 +265,20 @@ export function criarExecutorDeConexao ({
     // leitura. Esperar na fila não pode consumir o prazo do serviço externo.
     return rede(async () => {
       const controle = new AbortController()
-      const timer = setTimeout(() => controle.abort(), esperaMs)
+      const signal = combinarComEvento(controle.signal)
+      const timer = setTimeout(() => controle.abort(erroDeTimeoutExterno(esperaMs, 'conexao')), esperaMs)
       try {
+        signal.throwIfAborted()
         let resposta
         try {
-          resposta = await buscar(url, { ...opcoes, signal: controle.signal })
+          resposta = await buscar(url, { ...opcoes, signal })
         } catch (erro) {
           if (erro?.code === 'LCN_SEM_VAGA') throw erro
           throw new ErroDeConexao(`Não consegui falar com o serviço (${url}).`, { paraPessoa: FALHA_NOSSA })
         }
         return await consumir(resposta)
+      } catch (erro) {
+        throw signal.aborted ? signal.reason : erro
       } finally {
         clearTimeout(timer)
       }
@@ -350,14 +355,16 @@ export function criarExecutorDeConexao ({
     while (agora() < limite) {
       // Passados 30s, perguntar de 5 em 5 em vez de 1,5: o pedido curto
       // continua respondendo rápido, e o longo para de encher o log.
-      await dormir(agora() - comeco > 30000 ? ESPERA_MAXIMA_ENTRE_CONSULTAS_MS : ESPERA_ENTRE_CONSULTAS_MS)
+      await esperarNoEvento(agora() - comeco > 30000 ? ESPERA_MAXIMA_ENTRE_CONSULTAS_MS : ESPERA_ENTRE_CONSULTAS_MS, dormir)
       estado = await chamarJson(url, { method: 'GET', headers: cabecalhos }, `acompanhar ${oQueFaz}`, forma.campoDoErro)
       const atual = String(porCaminho(estado, forma.campoDoEstado) ?? '')
       // Estado desconhecido ENCERRA a espera. Girar num estado que esta versão
       // não conhece é pior que parar e dizer o que veio.
       if (!emAndamento.has(atual)) return estado
     }
-    throw new ErroDeConexao(`Passou de ${Math.round(esperaMaximaMs / 1000)}s sem terminar, então parei de esperar. Tente de novo.`)
+    throw Object.assign(new ErroDeConexao(`Passou de ${Math.round(esperaMaximaMs / 1000)}s sem terminar, então parei de esperar. Tente de novo.`), {
+      code: 'LCN_TIMEOUT_EXTERNO', motivo: 'timeout', recurso: 'conexao'
+    })
   }
 
   // `declaracao` é o que a rota interna do motor devolve: endereço,

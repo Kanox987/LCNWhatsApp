@@ -17,6 +17,7 @@ import os from 'os'
 import path from 'path'
 import { limitesDeMidia } from './mediaLimits.js'
 import { executoresDeRecursos } from './engine/filasDeRecursos.js'
+import { comEvento, combinarComEvento, erroDeTimeoutExterno, dormirComSinal, esperarNoEvento } from './engine/cancelamento.js'
 import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, descartarResposta } from './mediaBudget.js'
 
 const ESPERA_ENTRE_CONSULTAS_MS = 1500
@@ -150,7 +151,7 @@ function formatarMB (bytes) {
   return `${(Number(bytes || 0) / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
 }
 
-export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesDeMidia(cfg).orcamento), buscar = fetch, dormir = (ms) => new Promise((r) => setTimeout(r, ms)), agora = () => Date.now() } = {}) {
+export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesDeMidia(cfg).orcamento), buscar = fetch, dormir = dormirComSinal, agora = () => Date.now() } = {}) {
   const conf = configuracaoDeDownload(cfg)
   const { rede } = executoresDeRecursos(cfg)
 
@@ -173,12 +174,14 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
     // arrayBuffer deixaria todos os downloads lerem memória simultaneamente.
     return rede(async () => {
       const controle = new AbortController()
-      const timer = setTimeout(() => controle.abort(), TIMEOUT_REQUISICAO_MS)
+      const signal = combinarComEvento(controle.signal)
+      const timer = setTimeout(() => controle.abort(erroDeTimeoutExterno(TIMEOUT_REQUISICAO_MS, 'download')), TIMEOUT_REQUISICAO_MS)
       try {
+        signal.throwIfAborted()
         let resposta
         try {
           resposta = await buscar(`${conf.api}${caminho}`, {
-            ...opcoes, signal: controle.signal,
+            ...opcoes, signal,
             headers: { Authorization: `Bearer ${conf.token}`, ...(opcoes?.headers || {}) }
           })
         } catch (erro) {
@@ -186,6 +189,10 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
           throw new ErroDeDownload(`Não consegui falar com o serviço de download (${conf.api}).`, { paraPessoa: FALHA_NOSSA })
         }
         return await consumir(resposta)
+      } catch (erro) {
+        // fetch e leitura do corpo podem devolver AbortError genérico. O
+        // motivo do sinal vencedor é o diagnóstico que precisa sobreviver.
+        throw signal.aborted ? signal.reason : erro
       } finally {
         clearTimeout(timer)
       }
@@ -223,7 +230,12 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
   // nosso, para o log.
   async function desistirDoTrabalho (job) {
     try {
-      await chamar(`/jobs/${encodeURIComponent(job)}/cancelar`, { method: 'POST' }, descartarResposta)
+      // O sinal que manda parar não pode impedir o POST que solta a vaga
+      // remota. Só esta limpeza sai do contexto; mantém fila e relógio HTTP.
+      await comEvento(null, () => chamar(`/jobs/${encodeURIComponent(job)}/cancelar`, { method: 'POST' }, async (resposta) => {
+        await descartarResposta(resposta)
+        if (!resposta.ok) throw new Error(`O serviço recusou o cancelamento remoto (HTTP ${resposta.status}).`)
+      }))
     } catch (erro) {
       console.warn(`[download] Não consegui cancelar o trabalho ${job}: ${erro?.message || erro}`)
     }
@@ -236,7 +248,7 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
     while (agora() < limite) {
       // Passados 30s, perguntar de 5 em 5 segundos em vez de 1,5 — o download
       // curto continua respondendo rápido, e o longo para de encher o log.
-      await dormir(agora() - comeco > 30000 ? ESPERA_MAXIMA_ENTRE_CONSULTAS_MS : ESPERA_ENTRE_CONSULTAS_MS)
+      await esperarNoEvento(agora() - comeco > 30000 ? ESPERA_MAXIMA_ENTRE_CONSULTAS_MS : ESPERA_ENTRE_CONSULTAS_MS, dormir)
       estado = await chamarJson(`/jobs/${encodeURIComponent(job)}`, {}, 'acompanhar o download')
       if (!EM_ANDAMENTO.has(estado?.estado)) return estado
     }
@@ -244,10 +256,9 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
     // não tem onde olhar. O prazo continua explícito porque é informação útil
     // (diz que houve espera, não recusa imediata), mas a orientação agora é
     // algo que a pessoa consegue mesmo fazer.
-    await desistirDoTrabalho(job)
-    throw new ErroDeDownload(
+    throw Object.assign(new ErroDeDownload(
       `O download passou de ${Math.round(conf.esperaMaximaMs / 1000)}s sem terminar, então cancelei. Tente de novo ou envie outro link.`
-    )
+    ), { code: 'LCN_TIMEOUT_EXTERNO', motivo: 'timeout', recurso: 'download' })
   }
 
   // TODAS as mídias do trabalho, na ordem em que o serviço as devolveu.
@@ -277,7 +288,23 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
 
     if (!pedido?.job) throw new ErroDeDownload('O serviço aceitou o pedido mas não devolveu um trabalho para acompanhar.', { paraPessoa: FALHA_NOSSA })
 
-    const estado = await esperarTrabalho(pedido.job)
+    let estado
+    try {
+      estado = await esperarTrabalho(pedido.job)
+      return await receberMidias(estado, lote)
+    } catch (erro) {
+      // A limpeza remota pode esperar rede: os bytes parciais já não têm
+      // consumidor e devem voltar ao orçamento antes desse POST. Recusa de
+      // memória após o job pronto não deixa trabalho remoto a interromper.
+      lote.liberar()
+      if (['LCN_CANCELADO', 'LCN_TIMEOUT_EXTERNO'].includes(erro?.code) || (erro?.code === 'LCN_SEM_VAGA' && !estado)) {
+        await desistirDoTrabalho(pedido.job)
+      }
+      throw erro
+    }
+  }
+
+  async function receberMidias (estado, lote) {
     // O serviço cancela sozinho o que travou. Sem este caso, um trabalho
     // cancelado caía no "terminou mas não veio arquivo nenhum", que manda a
     // pessoa procurar defeito no link errado.

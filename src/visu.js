@@ -16,6 +16,7 @@
  */
 import * as bandwidth from './bandwidth.js'
 import * as state from './state.js'
+import { sinalDoEvento } from './engine/cancelamento.js'
 
 /*
  * Tira as "cascas" que o WhatsApp coloca em volta da mensagem real
@@ -170,12 +171,20 @@ export function acharAudioDireto (message) {
 // dentro do próprio download em vez de só como checagem prévia de
 // node.fileLength.
 export async function baixarBuffer (client, node, tipo, maxBytes) {
+  const signal = sinalDoEvento()
+  signal?.throwIfAborted()
   const tamanhoInformado = Number(node?.fileLength?.toString?.() ?? node?.fileLength)
   const estimativa = Number.isFinite(tamanhoInformado) && tamanhoInformado > 0
     ? tamanhoInformado
     : maxBytes
-  await bandwidth.aguardarDownload(estimativa)
-  const bytes = await client.message.downloadBytes({ [`${tipo}Message`]: node }, { maxBytes })
+  await bandwidth.aguardarDownload(estimativa, signal)
+  signal?.throwIfAborted()
+  let bytes
+  try {
+    bytes = await client.message.downloadBytes({ [`${tipo}Message`]: node }, { maxBytes, ...(signal ? { signal } : {}) })
+  } catch (erro) {
+    throw signal?.aborted ? signal.reason : erro
+  }
   state.incr('bytesBaixados', bytes.length)
   return Buffer.from(bytes)
 }

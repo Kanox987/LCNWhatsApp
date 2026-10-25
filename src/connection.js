@@ -24,6 +24,7 @@ import { EXIT_QUARANTINED } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel, construirEventoDeGrupo, chatIdDoEvento } from './engine/zapoAdapter.js'
 import { criarFila } from './engine/fila.js'
+import { comEvento, cancelarTrabalhoExterno, erroDeCancelamento } from './engine/cancelamento.js'
 import { tipoPodeCasar } from './engine/canonicalEvent.js'
 import { fecharOrfaos } from './engine/orfaos.js'
 import { emitirDesconhecidoDebug, emitirEventoDebug } from './engine/eventSink.js'
@@ -104,6 +105,8 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
   let timer = null
   let publicacao = null
   let encerramento = null
+  const eventos = new Set()
+  let cancelandoExternos = false
   const escrever = (texto) => { try { registrar(texto) } catch {} }
   const fila = criarFila({
     recurso: 'admissao',
@@ -138,14 +141,30 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
     admitir (chave, tarefa) {
       // Ainda não existe automação avaliada: toda entrada tem urgência normal
       // e recusa local. Sem promessa para recusada, sem aviso no WhatsApp.
-      const trabalho = fila.tentarExecutar(tarefa, { chave, prioridade: 'normal' })
-      return trabalho?.catch((erro) => {
+      let controle
+      const trabalho = fila.tentarExecutar(() => comEvento(controle, tarefa), { chave, prioridade: 'normal' })
+      if (!trabalho) {
+        // Uma recusa só alcança trabalho já disparado pelo MESMO evento.
+        // As 2.865.000 recusas do soak não devem criar sinais nem promessas.
+        cancelarTrabalhoExterno(cancelandoExternos ? 'desligamento' : 'recusa_admissao', 'admissao')
+        return null
+      }
+      controle = new AbortController()
+      if (cancelandoExternos) controle.abort(erroDeCancelamento('desligamento'))
+      eventos.add(controle)
+      return trabalho.catch((erro) => {
+        if (erro?.code === 'LCN_SEM_VAGA' || erro?.code === 'LCN_TIMEOUT') {
+          controle.abort(erroDeCancelamento('recusa_admissao', erro.recurso || 'admissao'))
+        }
         if (erro?.code !== 'LCN_SEM_VAGA' && erro?.code !== 'LCN_TIMEOUT') {
           escrever(`[engine] evento admitido falhou: ${erro?.message || erro}`)
         }
-      }) || null
+      }).finally(() => eventos.delete(controle))
     },
-    encerrar () {
+    encerrar ({ cancelarExternos = false } = {}) {
+      // Encerrar a fila continua sendo drenar. O desligamento pede também o
+      // aborto das leituras; os envios admitidos conservam suas vagas até o fim.
+      cancelandoExternos ||= cancelarExternos
       if (!encerramento) {
         encerramento = fila.encerrar().then(async () => {
           // O último resumo também precisa sair no desligamento. Esperar o
@@ -153,9 +172,14 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
           if (timer) { timer.ref?.(); await publicacao }
         })
       }
+      // O aborto dispara listeners síncronos. Fechar antes impede que uma
+      // reação ao sinal consiga admitir outro evento durante o desligamento.
+      if (cancelarExternos) {
+        for (const controle of eventos) controle.abort(erroDeCancelamento('desligamento'))
+      }
       return encerramento
     },
-    get estado () { return { ...fila.estado, logJanelaMs: janelaMs } }
+    get estado () { return { ...fila.estado, logJanelaMs: janelaMs, eventosAtivos: eventos.size } }
   }
 }
 
@@ -423,7 +447,7 @@ export async function iniciar () {
     desligamento = (async () => {
       // Recusar primeiro e desconectar por último deixa os admitidos concluírem
       // seus envios; fechar o socket antes transformaria a drenagem em falhas.
-      await admissao.encerrar()
+      await admissao.encerrar({ cancelarExternos: true })
       if (apagarSessao) {
         try { await clienteAtual?.logout() } catch {}
         await sleepMs(800)

@@ -3,6 +3,7 @@ import * as enviadas from '../enviadas.js'
 import { limitesDeMidia } from '../mediaLimits.js'
 import { criarOrcamentoDeMidia } from '../mediaBudget.js'
 import { criarFilasDeRecursos, comContextoDeComando, filasDoComando, prioridadeDoComando } from './filasDeRecursos.js'
+import { sinalDoEvento, cancelarTrabalhoExterno } from './cancelamento.js'
 import { registrarFonteDeRecursos } from '../state.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
@@ -111,7 +112,7 @@ async function confirmarFailOpen (clienteEngine, comando, status, resultado = nu
         status,
         // Resultado alimenta a continuação de uma cadeia; detail é persistido
         // no histórico mesmo quando a execução termina recusada.
-        ...(resultado ? (resultado.code === 'LCN_SEM_VAGA' ? { detail: resultado } : { resultado }) : {})
+        ...(resultado ? (['LCN_SEM_VAGA', 'LCN_CANCELADO', 'LCN_TIMEOUT_EXTERNO'].includes(resultado.code) ? { detail: resultado } : { resultado }) : {})
       }),
       TIMEOUT_CONFIRMACAO_MS,
       `timeout ao confirmar o comando ${comando.id}`
@@ -760,6 +761,9 @@ async function executarRecover (client, comando, deps) {
 // download e a chamada de conexão.
 function criarAvisador (client, comando, { chatId, replyTo, errorText }) {
   return async (motivo) => {
+    // Desligamento e recusa já têm destino no histórico; iniciar um aviso
+    // depois de abandonar o trabalho só acrescentaria envio à drenagem.
+    if (sinalDoEvento()?.aborted) return
     const texto = (errorText || '{{erro}}').replaceAll('{{erro}}', motivo)
     try {
       await comTimeout(
@@ -1074,7 +1078,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
     const arquivo2 = await resolverArquivo(mediaRef2, mediaInput2)
 
     try {
-      const declaracao = await clienteEngine.conexoes.resolvida(conexao)
+      const declaracao = await clienteEngine.conexoes.resolvida(conexao, { signal: sinalDoEvento() })
       resultado = await criarExecutorDeConexao({ limiteBytes, orcamento, cfg }).executar(declaracao, funcao, entradas || {}, arquivo, arquivo2)
     } catch (erro) {
       if (erro?.code === 'LCN_SEM_VAGA') throw erro
@@ -1931,10 +1935,14 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
           status = 'sent'
         } catch (erro) {
           if (erro?.code === 'LCN_SEM_VAGA') {
+            cancelarTrabalhoExterno('recusa_admissao', erro.recurso)
             status = 'failed'
             resultado = await tratarSemVaga(client, comando, erro, filas)
           } else {
             status = (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_RESULTADO_INCERTO') ? 'outcome_unknown' : 'failed'
+            if (erro?.code === 'LCN_CANCELADO' || erro?.code === 'LCN_TIMEOUT_EXTERNO') {
+              resultado = { code: erro.code, motivo: erro.motivo, recurso: erro.recurso, mensagem: mensagemDoErro(erro) }
+            }
             console.warn(`[engine] Falha ao executar o comando ${comando.id} (${comando.commandType}): ${erro?.name || 'Erro'}: ${mensagemDoErro(erro)}`)
             const origem = String(erro?.stack || '').split('\n')[1]
             if (origem) console.warn(`[engine]   origem:${origem.replace(/^\s*at\s*/, ' ')}`)
@@ -1987,4 +1995,3 @@ async function resolverDependencias (deps) {
   }
   return { ...padroesCarregados, ...deps }
 }
-

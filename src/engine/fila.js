@@ -70,7 +70,7 @@ export function criarFila ({
   let resolverDrenagem = null
   const metricas = {
     picoEmCurso: 0, picoPendentes: 0, iniciadas: 0, concluidas: 0,
-    recusas: 0, deslocadas: 0, expiradas: 0,
+    recusas: 0, deslocadas: 0, expiradas: 0, canceladas: 0,
     recusasPorPrioridade: { low: 0, normal: 0, high: 0, very_high: 0 },
     esperaTotalMs: 0, esperaMaximaMs: 0, esperasMedidas: 0
   }
@@ -95,6 +95,7 @@ export function criarFila ({
 
   function recusar (item, motivo, instante) {
     clearTimeout(item.relogio)
+    item.signal?.removeEventListener('abort', item.cancelar)
     metricas.recusas++
     metricas.recusasPorPrioridade[item.prioridade]++
     if (motivo === 'deslocada') metricas.deslocadas++
@@ -117,6 +118,7 @@ export function criarFila ({
 
   function iniciar (item, instante) {
     clearTimeout(item.relogio)
+    item.signal?.removeEventListener('abort', item.cancelar)
     medirEspera(item, instante)
     emCurso++
     if (item.chave != null) chaves.get(item.chave).emCurso = true
@@ -163,11 +165,12 @@ export function criarFila ({
     }
   }
 
-  function admitir (tarefa, { prioridade = 'normal', chave = null } = {}) {
+  function admitir (tarefa, { prioridade = 'normal', chave = null, signal } = {}) {
     if (typeof tarefa !== 'function') throw new TypeError('A fila recebe uma função para iniciar somente depois da admissão.')
+    if (signal?.aborted) return { erro: signal.reason }
     const instante = agora()
     prioridade = normalizarPrioridade(prioridade)
-    const item = { tarefa, chave, prioridade, prioridadeBase: PRIORIDADES[prioridade], entrouEmMs: instante, sequencia: sequencia++, relogio: null }
+    const item = { tarefa, chave, signal, prioridade, prioridadeBase: PRIORIDADES[prioridade], entrouEmMs: instante, sequencia: sequencia++, relogio: null }
     if (encerrada) {
       const erro = recusar(item, 'encerrada', instante)
       avisar()
@@ -206,6 +209,7 @@ export function criarFila ({
         const posicao = esperando.indexOf(item)
         if (posicao === -1) return
         esperando.splice(posicao, 1)
+        item.signal?.removeEventListener('abort', item.cancelar)
         soltarChave(item)
         metricas.expiradas++
         medirEspera(item, agora())
@@ -218,6 +222,23 @@ export function criarFila ({
       }, prazo)
       item.relogio.unref?.()
       esperando.push(item)
+      // Só a fila de leitura recebe sinal da borda. Remover a pendência
+      // devolve sua chave sem esperar outra conversa acabar; depois de iniciar
+      // o listener sai e o transporte passa a ser responsável pelo aborto.
+      item.cancelar = () => {
+        const posicao = esperando.indexOf(item)
+        if (posicao === -1) return
+        esperando.splice(posicao, 1)
+        clearTimeout(item.relogio)
+        soltarChave(item)
+        metricas.canceladas++
+        medirEspera(item, agora())
+        item.rejeitar(signal.reason)
+        seguir()
+        avisar()
+        verificarDrenagem()
+      }
+      signal?.addEventListener('abort', item.cancelar, { once: true })
       metricas.picoPendentes = Math.max(metricas.picoPendentes, esperando.length)
       seguir()
     }

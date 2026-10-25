@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { criarFila, normalizarPrioridade } from './fila.js'
 import { limitesDeMidia } from '../mediaLimits.js'
+import { sinalDoEvento, cancelarTrabalhoExterno } from './cancelamento.js'
 
 // Paralelo ao relógio do envio: o cabeçalho acompanha toda a execução sem
 // acrescentar argumentos aos caminhos de álbum, carrossel e futuras ações.
@@ -37,7 +38,17 @@ export function criarFilasDeRecursos (cfg = {}, { aoMudar, agora } = {}) {
     ...filas,
     executar (recurso, tarefa, { prioridade = prioridadeDoComando() } = {}) {
       if (!Object.hasOwn(filas, recurso)) throw new Error(`Recurso de execução desconhecido: ${recurso}`)
-      return filas[recurso].executar(tarefa, { prioridade })
+      const signal = recurso === 'rede' ? sinalDoEvento() : undefined
+      return filas[recurso].executar(() => {
+        // Esperar vaga não autoriza uma leitura nova depois do desligamento.
+        // Socket e CPU conservam a drenagem, sem preempção de efeitos em curso.
+        signal?.throwIfAborted()
+        return tarefa()
+      }, { prioridade, signal }).catch((erro) => {
+        if (signal?.aborted) throw signal.reason
+        if (erro?.code === 'LCN_SEM_VAGA') cancelarTrabalhoExterno('recusa_admissao', erro.recurso || recurso)
+        throw erro
+      })
     },
     registrarRecusa (erro) {
       const recurso = erro.recurso || 'desconhecido'
