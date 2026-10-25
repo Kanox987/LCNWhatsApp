@@ -29,14 +29,22 @@ passa a valer nos contatos e grupos que você marcar.
 onde vale, o que responde. Por baixo é sempre uma sequência de ações
 auditadas — nunca código solto rodando no seu servidor.
 
-**Regras automáticas.** Nem todo comando precisa de alguém digitar. Uma regra
-pode reagir sozinha a um link, a uma foto ou a uma palavra: apagar a mensagem,
-avisar, contar a infração e, depois de N vezes, remover a pessoa do grupo —
-sendo que esse N é você quem escolhe.
+**Regras automáticas e porteiro.** Nem todo comando precisa de alguém digitar. Uma
+regra pode vigiar mensagens (fotos, links, palavras) ou monitorar a porta do
+grupo (entradas, saídas, promoções e rebaixamentos) — agindo apenas nos grupos
+autorizados pelo dono.
 
-**Memória por pessoa e por grupo.** Contadores e variáveis que você cria e o bot
-atualiza: avisos, nível, saldo, "cliente VIP". Valem por contato, por grupo, por
-pessoa dentro de um grupo específico, por categoria ou para o sistema todo.
+**Memória, contadores e contas.** Variáveis que você cria e o bot atualiza:
+avisos, nível, saldo, "cliente VIP". Além de persistir dados por contato, grupo
+ou categoria, o motor faz cálculos matemáticos na hora com rollback automático
+em caso de erro e suporte ao escopo local transitório.
+
+**Botões, carrossel e mídia.** Responda com botões de escolha rápida (que voltam
+como comandos comuns), carrosséis navegáveis de fotos do acervo e pacotes de
+figurinhas em lote com orçamento seguro de mídia.
+
+**Notas e acervo pelo WhatsApp.** Crie, sobrescreva mantendo referências estáveis
+e apague arquivos de texto ou mídias diretamente pelas conversas.
 
 **Menu diferente em cada conversa.** Cada grupo pode ter o próprio menu, com
 texto próprio, em lista simples ou com botões. E dá para mudar esse texto pelo
@@ -154,7 +162,8 @@ npm test
 ```
 
 Roda a suíte inteira sem depender de WhatsApp real: banco em memória, servidor
-HTTP local e dependências injetadas.
+HTTP local e dependências injetadas. Para testes de resistência sob pressão e
+estabilidade contínua, existem também `npm run carga` e `npm run soak`.
 
 > Não deixe o bot rodando (`node index.js`) enquanto roda os testes — os dois
 > escrevem nos mesmos arquivos em `data/` e atrapalham um ao outro.
