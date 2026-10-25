@@ -1044,7 +1044,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           replyTo: no.config?.quoteFrom === 'mensagem' ? referenciaDaPropria(evento) : referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
           ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
-          ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+          ...(no.config?.errorText ? { errorText: interpolar(no.config.errorText, contexto) } : {})
         }
       })
       return 'success'
@@ -1172,7 +1172,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           replyTo: no.config?.quoteFrom === 'mensagem' ? referenciaDaPropria(evento) : referenciaDoLink(evento),
           ...(no.config?.ackText ? { ackText: interpolar(no.config.ackText, contexto) } : {}),
           ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
-          ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+          ...(no.config?.errorText ? { errorText: interpolar(no.config.errorText, contexto) } : {})
         }
       })
       // O FLUXO DORME AQUI quando há passo depois.

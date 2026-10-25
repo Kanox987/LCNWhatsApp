@@ -324,6 +324,67 @@ let lancouComandoInexistente = false
 try { registrarResultadoExecucao(db, 'nao-existe', { status: 'sent' }) } catch { lancouComandoInexistente = true }
 check('confirmar comando inexistente lança erro (404)', lancouComandoInexistente)
 
+// --- interpolação de errorText em action.media.download e action.connection.call ---
+// {{sender.name}} deve ser resolvido pelo motor com base no contexto do evento,
+// e {{erro}} deve permanecer intacto para o gateway preencher com o motivo real da falha.
+const scopeDownload = '5511101@s.whatsapp.net'
+criarAutomacaoComFluxo({
+  id: 'download-error-text',
+  scopeId: scopeDownload,
+  nodes: [
+    { id: 'trigger', type: 'trigger.command', config: { command: '/baixar', match: 'exact_or_args', allowFrom: 'external' } },
+    {
+      id: 'download',
+      type: 'action.media.download',
+      config: {
+        url: 'https://exemplo.com/video.mp4',
+        errorText: 'Falhou para {{sender.name}}: {{erro}}'
+      }
+    }
+  ],
+  edges: [{ from: 'trigger', to: 'download', on: 'matched' }]
+})
+definirModo('download-error-text', 'live')
+const rDownload = avaliarEvento(db, eventoBase({
+  msgId: 'ERR-DL-1',
+  chat: { id: scopeDownload, kind: 'direct' },
+  sender: { id: scopeDownload, authoredBySelf: false, name: 'Alice' },
+  message: { kind: 'text', text: '/baixar https://exemplo.com/video.mp4' }
+}))
+const cmdDownload = rDownload.results.find((r) => r.automationId === 'download-error-text')?.commands[0]
+check('action.media.download interpola {{sender.name}} no errorText', cmdDownload?.payload?.errorText === 'Falhou para Alice: {{erro}}')
+check('action.media.download preserva {{erro}} intacto no errorText', cmdDownload?.payload?.errorText?.includes('{{erro}}'))
+
+const scopeCall = '5511102@s.whatsapp.net'
+criarAutomacaoComFluxo({
+  id: 'call-error-text',
+  scopeId: scopeCall,
+  nodes: [
+    { id: 'trigger', type: 'trigger.command', config: { command: '/chamar', match: 'exact_or_args', allowFrom: 'external' } },
+    {
+      id: 'call',
+      type: 'action.connection.call',
+      config: {
+        connectionRef: 'midia',
+        function: 'baixar',
+        inputs: { url: 'https://exemplo.com/audio.mp3' },
+        errorText: 'Falhou para {{sender.name}}: {{erro}}'
+      }
+    }
+  ],
+  edges: [{ from: 'trigger', to: 'call', on: 'matched' }]
+})
+definirModo('call-error-text', 'live')
+const rCall = avaliarEvento(db, eventoBase({
+  msgId: 'ERR-CALL-1',
+  chat: { id: scopeCall, kind: 'direct' },
+  sender: { id: scopeCall, authoredBySelf: false, name: 'Bob' },
+  message: { kind: 'text', text: '/chamar https://exemplo.com/audio.mp3' }
+}))
+const cmdCall = rCall.results.find((r) => r.automationId === 'call-error-text')?.commands[0]
+check('action.connection.call interpola {{sender.name}} no errorText', cmdCall?.payload?.errorText === 'Falhou para Bob: {{erro}}')
+check('action.connection.call preserva {{erro}} intacto no errorText', cmdCall?.payload?.errorText?.includes('{{erro}}'))
+
 db.close()
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO AVALIADOR PASSARAM')
