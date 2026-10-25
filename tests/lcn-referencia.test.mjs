@@ -22,7 +22,8 @@ import fs from 'node:fs'
 import { compilar } from '../src/lcn/compilar.js'
 import { exemploDeChamada, montarReferencia, trechoCompilavel, TRECHOS } from '../src/lcn/referencia.js'
 import {
-  ACOES, BLOCOS_DE_TEMPLATE, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, MARCAS_DO_CABECALHO
+  ACOES, BLOCOS_DE_TEMPLATE, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, MARCAS_DO_CABECALHO,
+  PRIORIDADES, RECUSAS_SEM_VAGA
 } from '../src/lcn/vocabulario.js'
 import * as glossario from '../src/web/public/logic/acoes.js'
 
@@ -107,6 +108,17 @@ for (const grupo of ['blocos', 'campos', 'marcas', 'acoes', 'estrutura', 'arquiv
 check(
   'as palavras de ação são exatamente as 13 da tabela',
   ref.palavras.acoes.join('|') === ACOES.map((a) => a.palavra).join('|')
+)
+
+// --- prioridades e recusas no realce e nos enums -------------------------
+check(
+  'as palavras de prioridade e recusa aparecem no realce e nos enums',
+  Object.values(PRIORIDADES).every((p) => ref.palavras.valores.includes(p)) &&
+  Object.values(RECUSAS_SEM_VAGA).every((r) => ref.palavras.valores.includes(r)) &&
+  JSON.stringify(ref.enums?.prioridades) === JSON.stringify(Object.values(PRIORIDADES)) &&
+  JSON.stringify(ref.enums?.recusasSemVaga) === JSON.stringify(Object.values(RECUSAS_SEM_VAGA)) &&
+  !ref.palavras.valores.includes('tenta de novo') &&
+  !(ref.enums?.recusasSemVaga || []).includes('tenta de novo')
 )
 
 // --- 3. todo trecho compila ----------------------------------------------
