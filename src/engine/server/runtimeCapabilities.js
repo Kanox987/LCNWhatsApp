@@ -41,7 +41,9 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // diz o que uma automação pode DECLARAR — um tipo de nó fora dela é recusado
   // na publicação, e seria recusado depois de alguém escrever o comando.
   'action.whatsapp.metadata',
-  'action.whatsapp.webview'
+  'action.whatsapp.webview',
+  'action.whatsapp.buttons',
+  'action.whatsapp.carousel'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([

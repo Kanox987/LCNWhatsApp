@@ -342,10 +342,14 @@ export const FORMAS_DE_ESCOLHA = Object.freeze(['botoes', 'menu'])
 const MAXIMO_DE_BOTOES = 3
 
 export function montarBotoesDeEscolha (itens, { texto = null, rodape = null } = {}) {
-  const botoes = itens.slice(0, MAXIMO_DE_BOTOES).filter((i) => i.botao?.texto && i.botao?.comando).map((i) => ({
-    name: 'quick_reply',
-    buttonParamsJson: JSON.stringify({ display_text: i.botao.texto, id: i.botao.comando })
-  }))
+  const botoes = (itens || []).slice(0, MAXIMO_DE_BOTOES).filter((i) => (i.botao?.texto && i.botao?.comando) || (i.text && (i.id || i.command))).map((i) => {
+    const rotulo = i.botao?.texto || i.text
+    const comando = i.botao?.comando || i.id || i.command
+    return {
+      name: 'quick_reply',
+      buttonParamsJson: JSON.stringify({ display_text: rotulo, id: comando })
+    }
+  })
   return {
     viewOnceMessageV2: {
       message: {

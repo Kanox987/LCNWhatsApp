@@ -1,0 +1,71 @@
+template botoes-escolha v1
+  nome: Botões de escolha
+  descrição: Responde a uma mensagem com até 3 botões de resposta rápida. Ao tocar em um botão, o WhatsApp envia o comando correspondente de volta como uma mensagem de texto comum, acionando o comando seguinte do fluxo.
+  categoria: utilitarios
+
+automação
+  nome: Botões de escolha
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Envia botões de escolha
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  responde com botões "{{params.texto}}"
+    botão "{{params.botao1}}": "{{params.comando1}}"
+    botão "{{params.botao2}}": "{{params.comando2}}"
+    botão "{{params.botao3}}": "{{params.comando3}}"
+    rodapé: "{{params.rodape}}"
+    senão: "{{params.fallback}}"
+
+configurável
+  command: texto = "/opcoes"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para acionar os botões.
+  texto: texto = "Escolha uma das opções abaixo:"
+    rótulo: Mensagem
+    ajuda: O texto que aparece acima dos botões.
+  botao1: texto = "Opção 1"
+    rótulo: Rótulo do botão 1
+    ajuda: O texto visível no primeiro botão.
+  comando1: texto = "/opcao1"
+    rótulo: Comando do botão 1
+    ajuda: O texto que volta para o bot quando o botão 1 é tocado.
+  botao2: texto = "Opção 2"
+    rótulo: Rótulo do botão 2
+    ajuda: O texto visível no segundo botão.
+  comando2: texto = "/opcao2"
+    rótulo: Comando do botão 2
+    ajuda: O texto que volta para o bot quando o botão 2 é tocado.
+  botao3: texto = "Opção 3"
+    rótulo: Rótulo do botão 3
+    ajuda: O texto visível no terceiro botão (máximo de 3 no WhatsApp).
+  comando3: texto = "/opcao3"
+    rótulo: Comando do botão 3
+    ajuda: O texto que volta para o bot quando o botão 3 é tocado.
+  rodape: texto = "Toque em uma opção"
+    rótulo: Rodapé
+    ajuda: Texto pequeno exibido abaixo dos botões.
+  fallback: texto = "Escolha: 1. Opção 1 (/opcao1), 2. Opção 2 (/opcao2), 3. Opção 3 (/opcao3)"
+    rótulo: Texto alternativo
+    ajuda: Enviado se o aplicativo de quem recebe rejeitar a mensagem interativa.
+  familia: texto = "utilitarios"
+    rótulo: Família
+    ajuda: Grupo a que este comando pertence para ativação em lote.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde ao próprio número do bot; external apenas a contatos externos.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool que vai responder este comando.
+
+avisa nota
+  O BOTÃO VOLTA COMO MENSAGEM DE TEXTO COMUM. Quem toca no botão não executa uma ação mágica interna: o aplicativo do usuário envia uma mensagem de texto comum para o bot contendo o comando associado ao botão (o id do quick_reply). O bot recebe essa mensagem exatamente como se o usuário tivesse digitado aquele comando e dispara a automação cujo gatilho case com ele. Crie os comandos de destino antes de montar o fluxo.
+
+avisa compatibilidade
+  HONESTIDADE SOBRE O QUE NÃO DESENHA: Mensagem com botões depende do suporte e da versão do aplicativo de quem recebe. Se o envio interativo falhar na rede, o bot cai automaticamente para o texto alternativo. No entanto, se o servidor do WhatsApp aceitar a mensagem mas o aplicativo do destinatário descartar calado sem renderizar, NENHUM ERRO é reportado em lugar nenhum: o envio consta como sucesso e a conversa fica vazia. Nunca prometa que o botão aparecerá em 100% dos celulares.
+
+# nós: gatilho-comando, botoes-resposta

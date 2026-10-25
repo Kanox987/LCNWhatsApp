@@ -231,6 +231,12 @@
               },
               {
                 "$ref": "#/definitions/actionAcervoSave"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappButtons"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappCarousel"
               }
             ]
           }
@@ -1703,6 +1709,182 @@
                 "janela",
                 "diagnóstico"
               ]
+            }
+          }
+        }
+      }
+    },
+    "actionWhatsappButtons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.buttons"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "buttons"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Texto exibido acima dos botões."
+            },
+            "buttons": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "items": {
+                "type": "object",
+                "required": [
+                  "text",
+                  "command"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Rótulo que a pessoa lê no botão."
+                  },
+                  "command": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Comando enviado de volta ao bot quando a pessoa toca no botão."
+                  }
+                }
+              },
+              "description": "Até 3 botões de resposta rápida (quick_reply). Cada toque volta ao bot como mensagem com o comando especificado."
+            },
+            "footer": {
+              "type": "string",
+              "description": "Rodapé curto exibido abaixo dos botões."
+            },
+            "fallbackText": {
+              "type": "string",
+              "description": "Texto de reserva quando o cliente não desenhar botões."
+            }
+          }
+        }
+      }
+    },
+    "actionWhatsappCarousel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.carousel"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Texto de abertura do carrossel."
+            },
+            "folder": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Pasta do acervo onde estão as imagens dos cards."
+            },
+            "cards": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Caminho do arquivo de imagem no acervo."
+                  },
+                  "fileId": {
+                    "type": "string",
+                    "description": "ID do arquivo no acervo."
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "Título exibido no cabeçalho do card."
+                  },
+                  "body": {
+                    "type": "string",
+                    "description": "Texto ou legenda do card."
+                  },
+                  "footer": {
+                    "type": "string",
+                    "description": "Rodapé do card."
+                  },
+                  "buttonText": {
+                    "type": "string",
+                    "description": "Rótulo do botão do card."
+                  },
+                  "buttonCommand": {
+                    "type": "string",
+                    "description": "Comando enviado de volta ao bot ao tocar no botão (quick_reply)."
+                  },
+                  "buttonUrl": {
+                    "type": "string",
+                    "description": "Endereço aberto pelo botão (cta_url)."
+                  }
+                }
+              },
+              "description": "Lista de cards declarados diretamente no comando."
+            },
+            "buttonText": {
+              "type": "string",
+              "description": "Rótulo padrão do botão nos cards da pasta do acervo."
+            },
+            "buttonCommand": {
+              "type": "string",
+              "description": "Comando enviado ao tocar no botão para cards da pasta do acervo."
+            },
+            "footer": {
+              "type": "string",
+              "description": "Rodapé geral da mensagem de carrossel."
+            },
+            "estilo": {
+              "enum": [
+                "completo",
+                "simples",
+                "semEmbrulho",
+                "bizNoStanza",
+                "fluxoNoTopo",
+                "diagnóstico",
+                "botoes",
+                "menu"
+              ],
+              "description": "Forma de envio da mensagem interativa de carrossel."
+            },
+            "fallbackText": {
+              "type": "string",
+              "description": "Texto de reserva quando o cliente recusar a mensagem interativa."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Texto avisando que a pasta do acervo está vazia ou o arquivo não foi encontrado."
             }
           }
         }

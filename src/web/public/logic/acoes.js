@@ -342,6 +342,45 @@ export const ACOES = Object.freeze([
       { chave: 'usageText', rotulo: 'Se vier sem texto', ajuda: 'Explica como usar quando alguém manda o comando sozinho.' },
       { chave: 'confirmText', rotulo: 'Confirmação', ajuda: 'Resposta depois de gravar.' }
     ]
+  },
+  {
+    tipo: 'action.whatsapp.buttons',
+    rotulo: 'Responder com botões',
+    familia: 'resposta',
+    resumo: 'Manda uma mensagem de texto com até 3 botões de resposta rápida (quick_reply). Cada toque volta para o bot como uma mensagem de texto comum que dispara outro comando.',
+    exemplo: 'Alguém digita "/escolha" e recebe uma pergunta com botões "Opção 1" e "Opção 2".',
+    ressalva: {
+      level: 'compatibility',
+      text: 'O botão volta para o bot como uma mensagem de texto comum contendo o comando configurado — é assim que o fluxo continua. Mensagem com botão depende do aplicativo de quem recebe: versões antigas ou WhatsApp Web/Business podem não renderizar. Quando o aplicativo aceita mas não desenha, não há erro em lugar nenhum (a conversa fica vazia); quando o envio falha de verdade, cai para texto comum com as opções listadas.'
+    },
+    campos: [
+      { chave: 'text', rotulo: 'Texto da mensagem', ajuda: 'O texto que aparece acima dos botões. Aceita variáveis.' },
+      { chave: 'buttons', rotulo: 'Botões', ajuda: 'Até 3 botões de resposta rápida. Cada botão tem um rótulo que a pessoa lê e o comando/texto que volta para o bot quando tocado.' },
+      { chave: 'footer', rotulo: 'Rodapé', ajuda: 'Opcional, texto curto exibido abaixo dos botões.' },
+      { chave: 'fallbackText', rotulo: 'Texto de reserva', ajuda: 'Enviado como texto simples quando a mensagem interativa for recusada.' }
+    ]
+  },
+  {
+    tipo: 'action.whatsapp.carousel',
+    rotulo: 'Mostrar carrossel de fotos',
+    familia: 'midia',
+    resumo: 'Envia uma mensagem interativa com cards deslizáveis a partir de uma pasta do acervo ou de cards declarados diretamente, com título, imagem, descrição e botão.',
+    exemplo: 'Alguém digita "/catalogo" e recebe um carrossel com fotos de produtos e botões para pedir.',
+    ressalva: {
+      level: 'compatibility',
+      text: 'Carrossel de cards é mensagem interativa e depende do aplicativo de quem recebe. Se o aplicativo não renderizar mas aceitar, não há erro visível; se o envio falhar, o bot envia a lista descrita em texto. Os arquivos passam pelo carregador tardio e orçamento de bytes sob demanda.'
+    },
+    campos: [
+      { chave: 'text', rotulo: 'Texto de abertura', ajuda: 'Texto exibido antes ou no cabeçalho do carrossel. Aceita variáveis.' },
+      { chave: 'folder', rotulo: 'Pasta do acervo', ajuda: 'Nome da pasta no Acervo com as fotos para montar os cards. Aceita variáveis.' },
+      { chave: 'cards', rotulo: 'Cards declarados', ajuda: 'Lista de cards configurados diretamente no comando, cada um com sua imagem do acervo, título, corpo e botão.' },
+      { chave: 'buttonText', rotulo: 'Texto do botão padrão', ajuda: 'Rótulo padrão dos botões nos cards da pasta do acervo. Aceita variáveis como {{nome}}.' },
+      { chave: 'buttonCommand', rotulo: 'Comando do botão padrão', ajuda: 'Texto que volta ao tocar no botão para cards da pasta. Aceita {{nome}}, {{id}}, {{caminho}} e {{n}}.' },
+      { chave: 'footer', rotulo: 'Rodapé', ajuda: 'Opcional, texto curto exibido no rodapé do carrossel.' },
+      { chave: 'estilo', rotulo: 'Estilo do carrossel', ajuda: 'Forma da mensagem interativa: completo, simples, semEmbrulho, bizNoStanza, fluxoNoTopo, diagnóstico, botoes ou menu.' },
+      { chave: 'fallbackText', rotulo: 'Texto de reserva', ajuda: 'Texto enviado quando o carrossel interativo for recusado pelo aplicativo.' },
+      { chave: 'notFoundText', rotulo: 'Se a pasta estiver vazia', ajuda: 'Mensagem enviada quando a pasta do acervo não tiver fotos ou o arquivo não existir.' }
+    ]
   }
 ])
 

@@ -1,0 +1,70 @@
+template carrossel-fotos v1
+  nome: Carrossel de fotos
+  descrição: Mostra um carrossel de fotos do acervo com botões de ação interativos, sem depender de serviço HTTP externo. Os cards respeitam o carregamento sob demanda e o orçamento de memória.
+  categoria: utilitarios
+
+automação
+  nome: Carrossel de fotos
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Exibe carrossel de fotos
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  mostra carrossel "{{params.texto}}"
+    pasta: "{{params.pasta}}"
+    botão: "{{params.botao}}"
+    comando: "{{params.comando}}"
+    rodapé: "{{params.rodape}}"
+    estilo: {{params.estilo}}
+    sem arquivo: "{{params.semArquivo}}"
+    senão: "{{params.fallback}}"
+
+configurável
+  command: texto = "/fotos"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para abrir o carrossel.
+  texto: texto = "Confira nossas fotos:"
+    rótulo: Texto de abertura
+    ajuda: O texto de cabeçalho exibido acima dos cards do carrossel.
+  pasta: texto = "fotos"
+    rótulo: Pasta do acervo
+    ajuda: Nome da pasta no acervo de mídia de onde os cards serão carregados.
+  botao: texto = "Ver detalhes"
+    rótulo: Rótulo do botão
+    ajuda: O texto exibido no botão de cada card do carrossel.
+  comando: texto = "/detalhes {{nome}}"
+    rótulo: Comando do botão
+    ajuda: O comando executado ao tocar no botão (aceita {{nome}}, {{id}}, {{caminho}}).
+  rodape: texto = "Deslize para ver mais"
+    rótulo: Rodapé
+    ajuda: Rodapé exibido no carrossel.
+  estilo: opção (completo, simples, semEmbrulho, bizNoStanza, fluxoNoTopo, diagnóstico, botoes, menu) = "completo"
+    rótulo: Estilo de exibição
+    ajuda: Formato do carrossel no WhatsApp. "completo" inclui embrulho e cabeçalho; "simples" manda apenas os cards; "bizNoStanza" inclui tag biz para native flow; "diagnóstico" testa as variações.
+  semArquivo: texto = "Nenhuma foto encontrada na pasta."
+    rótulo: Aviso de pasta vazia
+    ajuda: Mensagem enviada se a pasta estiver vazia ou não existir no acervo.
+  fallback: texto = "Não foi possível carregar o carrossel interativo no seu aplicativo."
+    rótulo: Texto alternativo
+    ajuda: Mensagem de reserva caso o envio interativo seja rejeitado pelo WhatsApp.
+  familia: texto = "midia"
+    rótulo: Família
+    ajuda: Grupo a que este comando pertence.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde a qualquer mensagem; external apenas a contatos externos.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool que responderá ao comando.
+
+avisa nota
+  CARREGAMENTO TARDIO E ORÇAMENTO DE BYTES: As imagens do carrossel são lidas sob demanda uma a uma, reservando cota no orçamento de mídia antes de alocar memória e liberando os bytes imediatamente após o upload para o servidor do WhatsApp. Nenhuma pasta inteira é mantida na memória RAM ao mesmo tempo.
+
+avisa compatibilidade
+  HONESTIDADE SOBRE O QUE NÃO DESENHA: Carrosséis interativos dependem diretamente do suporte da versão do WhatsApp do destinatário. Em caso de recusa de protocolo, o bot rebaixa a entrega automaticamente para texto ou sequência. Se o aplicativo aceitar o pacote mas não renderizar na tela, a falha é silenciosa e sem erros.
+
+# nós: gatilho-comando, carrossel-midia
