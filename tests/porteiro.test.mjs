@@ -232,6 +232,67 @@ for (const [nome, texto, regex] of errosTestados) {
   check(`recusa ${nome} com ErroDeSintaxe explicativo`, err instanceof ErroDeSintaxe && regex.test(err.message), err?.message)
 }
 
+// 5b. Recusa estrita independente da ordem (campos incompatíveis ANTES de tipo: porteiro)
+// A validação de incompatibilidade não pode depender de `tipo:` vir na primeira linha.
+const errosOrdemInvertida = [
+  ['precisa de um link antes do tipo', 'automação inv1\n  precisa de um link: na mensagem\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /não se aplica a porteiro/, 2],
+  ['acessa antes do tipo', 'automação inv2\n  acessa: texto\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"acessa" não se aplica a porteiro/, 2],
+  ['argumentos antes do tipo', 'automação inv3\n  argumentos: x / y\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"argumentos" não se aplica a porteiro/, 2],
+  ['precisa de uma mídia antes do tipo', 'automação inv4\n  precisa de uma mídia: na mensagem\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /não se aplica a porteiro/, 2],
+  ['sem ele antes do tipo', 'automação inv5\n  sem ele: "falta"\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /não se aplica a porteiro/, 2],
+  ['sem ela antes do tipo', 'automação inv6\n  sem ela: "falta"\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /não se aplica a porteiro/, 2],
+  ['dispara com antes do tipo', 'automação inv7\n  dispara com: /ban\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /não usa "dispara com"/, 2],
+  ['com link antes do tipo', 'automação inv8\n  com link\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"com link" não se aplica a porteiro/, 2],
+  ['só link de mídia antes do tipo', 'automação inv9\n  só link de mídia\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"só link de mídia" não se aplica a porteiro/, 2],
+  ['também em comandos antes do tipo', 'automação inv10\n  também em comandos\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"também em comandos" não se aplica a porteiro/, 2],
+  ['casa antes do tipo', 'automação inv11\n  casa: exato\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"casa" não se aplica a porteiro/, 2],
+  ['palavras antes do tipo', 'automação inv12\n  palavras: "teste"\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"palavras" não se aplica a porteiro/, 2],
+  ['menu antes do tipo', 'automação inv13\n  menu: Entrou — aviso\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"menu" não se aplica a porteiro/, 2],
+  ['histórico antes do tipo', 'automação inv14\n  histórico: all\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"histórico" não se aplica a porteiro/, 2],
+  ['quem antes do tipo', 'automação inv15\n  quem: qualquer um\n  tipo: porteiro\n  quando for: entrou\n  pool: p1\n', /"quem" não se aplica a porteiro/, 2]
+]
+
+for (const [nome, texto, regex, linhaEsperada] of errosOrdemInvertida) {
+  const err = recusa(texto)
+  check(`ordem invertida: recusa ${nome} apontando a linha do campo`,
+    err instanceof ErroDeSintaxe && regex.test(err.message) && err.linha === linhaEsperada,
+    `linha: ${err?.linha}, msg: ${err?.message}`
+  )
+}
+
+// Ordem invertida em declaração válida: "quando for" antes de "tipo" compila sem erro
+const lcnPorteiroOrdemValida = `automação port_ordem
+  quando for: entrou
+  tipo: porteiro
+  pool: pool-padrao
+
+  se var target_group_member autorizado != "sim"
+    remove do grupo
+      quem: quem foi marcado
+`
+const docOrdemValida = compilar(lcnPorteiroOrdemValida)
+check('ordem invertida válida: "quando for" antes de "tipo" compila trigger.group',
+  docOrdemValida.flow.nodes[0].type === 'trigger.group' &&
+  JSON.stringify(docOrdemValida.flow.nodes[0].config.actions) === '["add"]'
+)
+
+// 5c. A mesma conferência, para o VIGIA — e ela existe porque quase se perdeu.
+// Ao mover a validação de "dispara com" para depois do cabeçalho, o ramo do
+// vigia foi escrito com uma classe que não existe ("trigger.watcher"), virando
+// código morto: um vigia com "dispara com: /qualquer-coisa" passou a compilar
+// calado. Nenhum teste da bateria pegou. Estas três checagens pegam.
+const vigiaOrdens = [
+  ['dispara com inválido, ordem normal', 'automação vig1\n  tipo: vigia\n  dispara com: /lixo\n  pool: p1\n'],
+  ['dispara com inválido, ordem invertida', 'automação vig2\n  dispara com: /lixo\n  tipo: vigia\n  pool: p1\n']
+]
+for (const [nome, texto] of vigiaOrdens) {
+  const err = recusa(texto)
+  check(`vigia: recusa ${nome}`, err instanceof ErroDeSintaxe && /um vigia dispara com "qualquer mensagem"/.test(err.message), err?.message)
+}
+const vigiaAntes = compilar('automação vig3\n  dispara com: qualquer mensagem\n  tipo: vigia\n  pool: p1\n\n  responde "oi"\n')
+const vigiaDepois = compilar('automação vig3\n  tipo: vigia\n  dispara com: qualquer mensagem\n  pool: p1\n\n  responde "oi"\n')
+check('vigia: as duas ordens produzem o MESMO documento', JSON.stringify(vigiaAntes) === JSON.stringify(vigiaDepois))
+
 // --- 6. Ida e Volta (Descompilação -> Compilação) -------------------------
 const lcnMultiacao = `automação port2
   nome: Monitor Geral

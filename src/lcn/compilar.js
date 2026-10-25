@@ -32,6 +32,24 @@ const CONFIG_POR_PALAVRA = inverter(TIPOS_DE_CONFIG)
 const AVISO_POR_PALAVRA = inverter(NIVEIS_DE_AVISO)
 const VALOR_POR_PALAVRA = inverter(TIPOS_DE_VALOR)
 
+const INCOMPATIVEIS_COM_PORTEIRO = Object.freeze({
+  'com link': '"com link" não se aplica a porteiro: eventos de grupo não contêm links.',
+  'só link de mídia': '"só link de mídia" não se aplica a porteiro: eventos de grupo não contêm links.',
+  'também em comandos': '"também em comandos" não se aplica a porteiro: eventos de grupo não são comandos.',
+  'dispara com': 'um porteiro não usa "dispara com": ele monitora a porta do grupo, use "quando for: entrou | saiu | promoveu | rebaixou | mudou o nome"',
+  'acessa': '"acessa" não se aplica a porteiro: um porteiro observa eventos de entrada, saída e moderação de grupo, não mensagens.',
+  'argumentos': '"argumentos" não se aplica a porteiro: um porteiro não tem texto nem parâmetros após comando.',
+  'precisa de um link': '"precisa de um link" não se aplica a porteiro: eventos de grupo não trazem mensagens para exigir link ou arquivo.',
+  'precisa de uma mídia': '"precisa de uma mídia" não se aplica a porteiro: eventos de grupo não trazem mensagens para exigir link ou arquivo.',
+  'sem ele': '"sem ele" não se aplica a porteiro: eventos de grupo não trazem mensagens.',
+  'sem ela': '"sem ela" não se aplica a porteiro: eventos de grupo não trazem mensagens.',
+  'menu': '"menu" não se aplica a porteiro: eventos de grupo não aparecem no menu de comandos.',
+  'histórico': '"histórico" não se aplica a porteiro: eventos de grupo ocorrem sempre em tempo real.',
+  'casa': '"casa" não se aplica a porteiro: modo de casamento é exclusivo de comandos digitados.',
+  'quem': '"quem" não se aplica a porteiro: eventos de grupo ocorrem sempre dentro do grupo.',
+  'palavras': '"palavras" não se aplica a porteiro: eventos de grupo não contêm texto de conversa.'
+})
+
 // Num TEMPLATE, onde a automação teria um valor fechado há um marcador
 // (`{{params.allowFrom}}`) — quem instala é que escolhe. Validar o enum aqui
 // recusaria todo template parametrizado; deixar passar qualquer coisa
@@ -694,35 +712,43 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   if (idDaAbertura) doc.id = idDaAbertura
 
   // --- cabeçalho ----------------------------------------------------------
+  const entradasCabecalho = []
+  let entradaDisparaCom = null
+  let entradaArgumentos = null
+  let entradaQuandoFor = null
+  const entradasSem = []
+
   let i = 1
   for (; i < linhas.length; i++) {
     const l = linhas[i]
     if (l.indent !== 1) break
     if (acaoPorPalavra(l.texto) || /^(se|senão)(?: |$)/.test(l.texto)) break
 
-    if (l.texto === 'só dono') { gatilhoConfig.requireOwner = true; continue }
+    if (l.texto === 'só dono') {
+      entradasCabecalho.push({ campo: l.texto, linha: l.n })
+      gatilhoConfig.requireOwner = true
+      continue
+    }
     if (l.texto === 'com link') {
-      if (tipoDoGatilho === 'trigger.group') {
-        throw new ErroDeSintaxe('"com link" não se aplica a porteiro: eventos de grupo não contêm links.', l.n)
-      }
+      entradasCabecalho.push({ campo: l.texto, linha: l.n })
       gatilhoConfig.containsLink = true
       continue
     }
     if (l.texto === 'só link de mídia') {
-      if (tipoDoGatilho === 'trigger.group') {
-        throw new ErroDeSintaxe('"só link de mídia" não se aplica a porteiro: eventos de grupo não contêm links.', l.n)
-      }
+      entradasCabecalho.push({ campo: l.texto, linha: l.n })
       gatilhoConfig.mediaLinkOnly = true
       continue
     }
     if (l.texto === 'também em comandos') {
-      if (tipoDoGatilho === 'trigger.group') {
-        throw new ErroDeSintaxe('"também em comandos" não se aplica a porteiro: eventos de grupo não são comandos.', l.n)
-      }
+      entradasCabecalho.push({ campo: l.texto, linha: l.n })
       gatilhoConfig.alsoOnCommands = true
       continue
     }
-    if (l.texto === 'desligada') { doc.enabled = false; continue }
+    if (l.texto === 'desligada') {
+      entradasCabecalho.push({ campo: l.texto, linha: l.n })
+      doc.enabled = false
+      continue
+    }
 
     const sep = l.texto.indexOf(':')
     // Sem dois-pontos, a linha estava querendo ser uma AÇÃO — e é isso que a
@@ -733,6 +759,7 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
     }
     const chave = l.texto.slice(0, sep).trim()
     const valor = l.texto.slice(sep + 1).trim()
+    entradasCabecalho.push({ campo: chave, valor, linha: l.n })
 
     switch (chave) {
       // A CLASSE, e ela é obrigatória — ver a conferência depois do laço.
@@ -748,24 +775,7 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       // é "qualquer mensagem", e os filtros (com link, palavras, quando for)
       // refinam em linhas próprias.
       case 'dispara com': {
-        if (!tipoDoGatilho) throw new ErroDeSintaxe('"dispara com" precisa vir depois de "tipo:"', l.n)
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe(
-            'um porteiro não usa "dispara com": ele monitora a porta do grupo, use "quando for: entrou | saiu | promoveu | rebaixou | mudou o nome"',
-            l.n
-          )
-        }
-        if (tipoDoGatilho === 'trigger.command') {
-          if (!valor || /\s/.test(valor)) {
-            throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, l.n)
-          }
-          gatilhoConfig.command = valor
-        } else if (valor !== 'qualquer mensagem') {
-          throw new ErroDeSintaxe(
-            `um vigia dispara com "qualquer mensagem" — o que ele observa se diz nas linhas seguintes (com link, palavras, quando for). Veio "${valor}"`,
-            l.n
-          )
-        }
+        entradaDisparaCom = { valor, linha: l.n }
         break
       }
       // "precisa de um link: na mensagem ou na citada"
@@ -775,9 +785,6 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       // para por que isto existe.
       case 'precisa de um link':
       case 'precisa de uma mídia': {
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe(`"${chave}" não se aplica a porteiro: eventos de grupo não trazem mensagens para exigir link ou arquivo.`, l.n)
-        }
         const oQue = chave.slice('precisa de '.length)
         const kind = Object.keys(EXIGENCIAS).find((k) => EXIGENCIAS[k] === oQue)
         const onde = valor.split(/\s+ou\s+|,/).map((parte) => {
@@ -799,13 +806,7 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       // que é onde o `sem mídia`/`sem dados` morava.
       case 'sem ele':
       case 'sem ela': {
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe(`"${chave}" não se aplica a porteiro: eventos de grupo não trazem mensagens.`, l.n)
-        }
-        if (!doc.inputPolicy.requires) {
-          throw new ErroDeSintaxe(`"${chave}" precisa vir depois de "precisa de ..."`, l.n)
-        }
-        doc.inputPolicy.requires.missingText = descitar(valor, l.n)
+        entradasSem.push({ chave, valor, linha: l.n })
         break
       }
       case 'id': doc.id = valor; break
@@ -820,33 +821,10 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       // e o separador é o que estiver escrito ENTRE os nomes — o que a linha
       // mostra é o que a pessoa vai digitar.
       case 'argumentos': {
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe('"argumentos" não se aplica a porteiro: um porteiro não tem texto nem parâmetros após comando.', l.n)
-        }
-        if (tipoDoGatilho !== 'trigger.command') {
-          throw new ErroDeSintaxe('"argumentos" é só de comando — um vigia não tem o que vem depois da palavra digitada.', l.n)
-        }
-        const partes = valor.split(/\s*([^\s\w\u00c0-\u017f])\s*/).filter((x) => x !== '')
-        const nomes = partes.filter((_, i) => i % 2 === 0)
-        const separadores = [...new Set(partes.filter((_, i) => i % 2 === 1))]
-        if (nomes.length < 2 || separadores.length !== 1) {
-          throw new ErroDeSintaxe('escreva os nomes separados por um símbolo só, como "argumentos: pacote / autor"', l.n)
-        }
-        for (const nome of nomes) {
-          if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(nome)) {
-            throw new ErroDeSintaxe(`nome de argumento inválido: "${nome}" — comece por letra, use letras, números e _`, l.n)
-          }
-        }
-        if (new Set(nomes).size !== nomes.length) {
-          throw new ErroDeSintaxe('dois argumentos com o mesmo nome: o segundo apagaria o primeiro', l.n)
-        }
-        gatilhoConfig.args = { separator: separadores[0], names: nomes }
+        entradaArgumentos = { valor, linha: l.n }
         break
       }
       case 'menu': {
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe('"menu" não se aplica a porteiro: eventos de grupo não aparecem no menu de comandos.', l.n)
-        }
         const [rotulo, ...resto] = valor.split('—')
         display.menuLabel = rotulo.trim()
         if (resto.length) display.menuDescription = resto.join('—').trim()
@@ -865,10 +843,8 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       case 'menos': doc.scope.exclude.push(lerDestino(valor, l.n)); break
       case 'pool': doc.responder.poolId = valor; break
       case 'histórico':
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe('"histórico" não se aplica a porteiro: eventos de grupo ocorrem sempre em tempo real.', l.n)
-        }
-        doc.inputPolicy.historyPolicy = valor; break
+        doc.inputPolicy.historyPolicy = valor
+        break
       // A URGÊNCIA, e ela vale para a automação INTEIRA.
       //
       // Um cabeçalho só não consegue dizer "a confirmação é alta e o download é
@@ -924,34 +900,18 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       // só texto NUNCA vê a mensagem de voz — e falha calado. A palavra antiga
       // lia como se fosse preferência.
       case 'acessa':
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe('"acessa" não se aplica a porteiro: um porteiro observa eventos de entrada, saída e moderação de grupo, não mensagens.', l.n)
-        }
         doc.inputPolicy.acceptedMessageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
         break
       case 'casa':
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe('"casa" não se aplica a porteiro: modo de casamento é exclusivo de comandos digitados.', l.n)
-        }
         gatilhoConfig.match = traduzir(CASAMENTO_POR_PALAVRA, valor, 'modo de casamento', l.n)
         break
       case 'quem':
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe('"quem" não se aplica a porteiro: eventos de grupo ocorrem sempre dentro do grupo.', l.n)
-        }
         gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'quem pode acionar', l.n)
         break
       case 'quando for':
-        if (tipoDoGatilho === 'trigger.group') {
-          gatilhoConfig.actions = valor.split(',').map((t) => traduzir(ACAO_DE_GRUPO_POR_PALAVRA, t, 'ação de grupo', l.n))
-        } else {
-          gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
-        }
+        entradaQuandoFor = { valor, linha: l.n }
         break
       case 'palavras':
-        if (tipoDoGatilho === 'trigger.group') {
-          throw new ErroDeSintaxe('"palavras" não se aplica a porteiro: eventos de grupo não contêm texto de conversa.', l.n)
-        }
         gatilhoConfig.keywords = valor.split(',').map((p) => descitar(p, l.n))
         break
       // Recusar sem dizer o que existe manda a pessoa procurar a palavra certa
@@ -970,16 +930,84 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   if (!tipoDoGatilho) {
     throw new ErroDeSintaxe(`falta "tipo:" — ${Object.values(CLASSES).join(' ou ')}`, cabeca.n)
   }
-  if (tipoDoGatilho === 'trigger.command' && !gatilhoConfig.command) {
-    throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
-  }
+
+  // A ORDEM DAS LINHAS NÃO PODE MUDAR O QUE O TIPO RECUSA.
+  //
+  // Exigir que "tipo:" venha na primeira linha seria teto no código: o cabeçalho
+  // é declarativo, e a linguagem não deve obrigar uma ordem arbitrária para
+  // quem escreve. Se a conferência de incompatibilidades rodar durante a leitura
+  // linha a linha, qualquer campo escrito antes de "tipo:" enxerga tipoDoGatilho
+  // ainda nulo — e ou passa calado (como "precisa de um link" num porteiro,
+  // produzindo inputPolicy sem sentido num evento de grupo), ou acusa o erro
+  // errado (como "argumentos" reclamar de vigia antes mesmo de saber a classe).
+  //
+  // A checagem fica aqui, no fim do cabeçalho, onde a classe já é conhecida com
+  // certeza. Cada recusa aponta a linha DO CAMPO que não se aplica, e não a linha
+  // do fim do cabeçalho, para a pessoa saber exatamente onde corrigir.
   if (tipoDoGatilho === 'trigger.group') {
-    if (!gatilhoConfig.actions || !gatilhoConfig.actions.length) {
+    for (const entrada of entradasCabecalho) {
+      const msg = INCOMPATIVEIS_COM_PORTEIRO[entrada.campo]
+      if (msg) throw new ErroDeSintaxe(msg, entrada.linha)
+    }
+  }
+
+  if (tipoDoGatilho === 'trigger.command') {
+    if (!entradaDisparaCom) {
+      throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
+    }
+    const { valor, linha } = entradaDisparaCom
+    if (!valor || /\s/.test(valor)) {
+      throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, linha)
+    }
+    gatilhoConfig.command = valor
+  } else if (tipoDoGatilho === 'trigger.message') {
+    if (entradaDisparaCom && entradaDisparaCom.valor !== 'qualquer mensagem') {
+      throw new ErroDeSintaxe(
+        `um vigia dispara com "qualquer mensagem" — o que ele observa se diz nas linhas seguintes (com link, palavras, quando for). Veio "${entradaDisparaCom.valor}"`,
+        entradaDisparaCom.linha
+      )
+    }
+  }
+
+  if (entradaArgumentos) {
+    if (tipoDoGatilho !== 'trigger.command') {
+      throw new ErroDeSintaxe('"argumentos" é só de comando — um vigia não tem o que vem depois da palavra digitada.', entradaArgumentos.linha)
+    }
+    const { valor, linha } = entradaArgumentos
+    const partes = valor.split(/\s*([^\s\w\u00c0-\u017f])\s*/).filter((x) => x !== '')
+    const nomes = partes.filter((_, i) => i % 2 === 0)
+    const separadores = [...new Set(partes.filter((_, i) => i % 2 === 1))]
+    if (nomes.length < 2 || separadores.length !== 1) {
+      throw new ErroDeSintaxe('escreva os nomes separados por um símbolo só, como "argumentos: pacote / autor"', linha)
+    }
+    for (const nome of nomes) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(nome)) {
+        throw new ErroDeSintaxe(`nome de argumento inválido: "${nome}" — comece por letra, use letras, números e _`, linha)
+      }
+    }
+    if (new Set(nomes).size !== nomes.length) {
+      throw new ErroDeSintaxe('dois argumentos com o mesmo nome: o segundo apagaria o primeiro', linha)
+    }
+    gatilhoConfig.args = { separator: separadores[0], names: nomes }
+  }
+
+  for (const sem of entradasSem) {
+    if (!doc.inputPolicy.requires) {
+      throw new ErroDeSintaxe(`"${sem.chave}" precisa vir depois de "precisa de ..."`, sem.linha)
+    }
+    doc.inputPolicy.requires.missingText = descitar(sem.valor, sem.linha)
+  }
+
+  if (tipoDoGatilho === 'trigger.group') {
+    if (!entradaQuandoFor || !entradaQuandoFor.valor) {
       throw new ErroDeSintaxe('falta "quando for:" — um porteiro precisa dizer quais ações observa: entrou, saiu, promoveu, rebaixou ou mudou o nome', cabeca.n)
     }
+    gatilhoConfig.actions = entradaQuandoFor.valor.split(',').map((t) => traduzir(ACAO_DE_GRUPO_POR_PALAVRA, t, 'ação de grupo', entradaQuandoFor.linha))
     // O porteiro observa a porta do grupo, recebendo eventos canônicos de grupo
     // em vez de mensagens normais de conversa.
     doc.inputPolicy.acceptedMessageKinds = ['group']
+  } else if (entradaQuandoFor) {
+    gatilhoConfig.messageKinds = entradaQuandoFor.valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', entradaQuandoFor.linha))
   }
 
   if (Object.keys(display).length) doc.display = display
