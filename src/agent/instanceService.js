@@ -23,6 +23,7 @@ import QRCode from 'qrcode'
 import { lerRegistro, buscarPorId, listarInstancias as listarInstanciasRegistro } from '../instances/registry.js'
 import { caminhoInstancia, nomeContainer } from '../instances/paths.js'
 import { ARQ_ESTADO as ARQ_ESTADO_BARE, ARQ_CONFIG as ARQ_CONFIG_BARE, RAIZ } from '../paths.js'
+import { ARQ_PID_ENGINE } from '../engine/paths.js'
 import * as processoDaInstancia from './processoDaInstancia.js'
 import { statusServico as statusServicoBare, iniciarBot as iniciarBotBare, pararBot as pararBotBare, reiniciarBot as reiniciarBotBare, logsServico as logsServicoBare } from '../runtime.js'
 
@@ -170,6 +171,56 @@ export function instanciasSimplesDescobertas (raizDados) {
     }))
 }
 
+function pidVivo (pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e.code === 'EPERM'
+  }
+}
+
+function pidDe (arquivo) {
+  try {
+    if (!arquivo) return null
+    const pid = parseInt(fs.readFileSync(arquivo, 'utf8').trim(), 10)
+    return Number.isInteger(pid) && pid > 0 ? pid : null
+  } catch {
+    return null
+  }
+}
+
+// Leitura do RSS de um processo Linux em MB via /proc.
+// /proc/<pid>/statm: o 2º número é o RSS em páginas (4096 bytes por página).
+// /proc/<pid>/status: fallback pela linha VmRSS (em kB).
+export function lerRssDoPid (pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return null
+  try {
+    const statm = fs.readFileSync(`/proc/${pid}/statm`, 'utf8').trim()
+    const partes = statm.split(/\s+/)
+    if (partes.length >= 2) {
+      const paginas = parseInt(partes[1], 10)
+      if (Number.isFinite(paginas) && paginas >= 0) {
+        return Math.round((paginas * 4096) / 1048576)
+      }
+    }
+  } catch {}
+
+  try {
+    const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8')
+    const match = status.match(/^VmRSS:\s*(\d+)\s*kB/im)
+    if (match) {
+      const kb = parseInt(match[1], 10)
+      if (Number.isFinite(kb) && kb >= 0) {
+        return Math.round((kb * 1024) / 1048576)
+      }
+    }
+  } catch {}
+
+  return null
+}
+
 // Um processo com este pid está vivo? É como o modo simples sabe se o bot está
 // de pé — cada instância grava o próprio bot.pid na própria pasta.
 function pidVivoDe (arquivo) {
@@ -217,7 +268,11 @@ export function criarInstanceService ({
   barePararBot = pararBotBare,
   bareReiniciarBot = reiniciarBotBare,
   bareLogsServico = logsServicoBare,
-  gerarQrDataUrl = (texto) => QRCode.toDataURL(texto)
+  gerarQrDataUrl = (texto) => QRCode.toDataURL(texto),
+  arqPidEngine = ARQ_PID_ENGINE,
+  lerRssPid = lerRssDoPid,
+  obterMemoriaPainel = () => process.memoryUsage(),
+  verificarPidVivo = pidVivo
 } = {}) {
   function caminhoEstado (instancia) {
     // Instância descoberta traz o próprio arquivo; o bare clássico usa o fixo.
@@ -656,6 +711,12 @@ export function criarInstanceService ({
   // `visu.js` nos mesmos pontos que já chamam
   // `bandwidth.aguardarDownload/aguardarUpload`).
   //
+  // Conforme o contrato em src/state.js:92-98, o container roda três
+  // processos: gateway (bot), motor (engine) e painel. Somar os três é
+  // responsabilidade de quem lê, declarando explicitamente a contagem de
+  // processos medidos e se a soma é parcial (já que páginas compartilhadas
+  // podem ser contadas mais de uma vez).
+  //
   // Instância da Parte A (Podman): DELIBERADAMENTE não implementado ainda
   // — `podman stats --format json` tem um formato de saída que eu não
   // consigo validar neste ambiente (nunca houve Podman real disponível
@@ -671,8 +732,62 @@ export function criarInstanceService ({
     const estado = estadoDa(instancia) || {}
     const config = lerJson(caminhoConfig(instancia)) || {}
     const limite = { ...BANDWIDTH_PADRAO, ...(config.hardware?.bandwidthLimit || {}) }
+
+    // 1. Gateway: lido do state.json (bloco memoria gravado por state.js, com fallback para memoriaMB)
+    let gatewayMB = null
+    if (Number.isFinite(estado.memoria?.rssMB)) {
+      gatewayMB = estado.memoria.rssMB
+    } else if (Number.isFinite(estado.memoriaMB)) {
+      gatewayMB = estado.memoriaMB
+    }
+
+    // 2. Motor: lido do PID em arqPidEngine via /proc/<pid>/statm ou status
+    let engineMB = null
+    const enginePid = pidDe(arqPidEngine)
+    if (enginePid && verificarPidVivo(enginePid)) {
+      const rss = lerRssPid(enginePid)
+      if (Number.isFinite(rss) && rss >= 0) {
+        engineMB = rss
+      }
+    }
+
+    // 3. Painel: processo atual (process.memoryUsage)
+    let panelMB = null
+    try {
+      const memPainel = obterMemoriaPainel()
+      if (Number.isFinite(memPainel?.rss) && memPainel.rss >= 0) {
+        panelMB = Math.round(memPainel.rss / 1048576)
+      } else if (Number.isFinite(memPainel) && memPainel >= 0) {
+        panelMB = memPainel > 100000 ? Math.round(memPainel / 1048576) : Math.round(memPainel)
+      }
+    } catch {}
+
+    const processosContados = []
+    if (gatewayMB !== null) processosContados.push({ nome: 'gateway', rssMB: gatewayMB })
+    if (engineMB !== null) processosContados.push({ nome: 'motor', rssMB: engineMB })
+    if (panelMB !== null) processosContados.push({ nome: 'painel', rssMB: panelMB })
+
+    const memoryProcessesCount = processosContados.length
+    const memoryTotalMB = memoryProcessesCount > 0
+      ? processosContados.reduce((soma, p) => soma + p.rssMB, 0)
+      : null
+    const memoryIsPartial = memoryProcessesCount < 3
+
     return {
+      // `memoryMB` continua sendo o gateway e só ele: outras telas já leem este
+      // campo, e mudar o que ele significa seria pior que não somar.
       memoryMB: estado.memoriaMB ?? null,
+      // A soma vai num campo só, e não espalhada em campos chatos que repetem
+      // o que ele já diz — dois nomes para o mesmo número é a segunda fonte da
+      // verdade nascendo, e foi ela que deixou o escopo `local` existir em
+      // metade das camadas deste projeto.
+      memoryTotal: {
+        totalMB: memoryTotalMB,
+        processCount: memoryProcessesCount,
+        expectedProcesses: 3,
+        isPartial: memoryIsPartial,
+        processes: { gateway: gatewayMB, engine: engineMB, panel: panelMB }
+      },
       uptimeMs: estado.iniciadoEm ? Date.now() - estado.iniciadoEm : null,
       bandwidth: {
         downloadBytesTotal: estado.metricas?.bytesBaixados ?? 0,
