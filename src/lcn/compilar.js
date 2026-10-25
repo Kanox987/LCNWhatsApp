@@ -712,51 +712,93 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   if (idDaAbertura) doc.id = idDaAbertura
 
   // --- cabeçalho ----------------------------------------------------------
-  const entradasCabecalho = []
-  // CAMPO REPETIDO TEM DE SER CONFERIDO EM TODA OCORRÊNCIA, não só na última.
-  // Guardar uma entrada só fazia a primeira escapar da validação: com
-  // "dispara com: /a b c" seguido de "dispara com: /ok", o valor inválido
-  // deixava de ser olhado e a automação compilava. Então são listas, cada uma
-  // validada, e o EFEITO continua sendo o da última — que é o que valia antes.
-  const entradasDisparaCom = []
-  const entradasArgumentos = []
-  const entradasQuandoFor = []
-  const entradasSem = []
-  // Qual "precisa de ..." estava em vigor quando cada "sem ele"/"sem ela" foi
-  // escrito. Um "precisa de" posterior SUBSTITUI o anterior, e antes deste
-  // refator o texto preso ao substituído ia embora com ele. Sem esta conta, o
-  // texto escrito debaixo de um "precisa de um link" acabava grudado numa
-  // exigência de mídia declarada depois — avisando a coisa errada.
-  let versaoRequires = 0
-
+  // Delimita as linhas do cabeçalho (indentação 1 até a primeira ação ou condição).
+  const linhasCabecalho = []
   let i = 1
   for (; i < linhas.length; i++) {
     const l = linhas[i]
     if (l.indent !== 1) break
     if (acaoPorPalavra(l.texto) || /^(se|senão)(?: |$)/.test(l.texto)) break
+    linhasCabecalho.push(l)
+  }
 
+  // A POLÍTICA DE PRECEDÊNCIA DO CABEÇALHO:
+  // 1. Identificar a classe (tipo:) — ela já é única, repetição já é recusada.
+  for (const l of linhasCabecalho) {
+    const sep = l.texto.indexOf(':')
+    if (sep < 0) continue
+    const chave = l.texto.slice(0, sep).trim()
+    const valor = l.texto.slice(sep + 1).trim()
+    if (chave === 'tipo') {
+      const achado = Object.keys(CLASSES).find((k) => CLASSES[k] === valor)
+      if (!achado) {
+        throw new ErroDeSintaxe(`tipo desconhecido: "${valor}". Use: ${Object.values(CLASSES).join(' ou ')}.`, l.n)
+      }
+      if (tipoDoGatilho) {
+        throw new ErroDeSintaxe(
+          `"tipo:" aparece duas vezes, dizendo ${CLASSES[tipoDoGatilho]} e depois ${valor}. A classe decide o que todas as outras linhas significam, então escolha uma.`,
+          l.n
+        )
+      }
+      tipoDoGatilho = achado
+    }
+  }
+
+  // Sem tipo não há automação: é a diferença entre algo que alguém digita e algo
+  // que fica ligado o tempo todo olhando a conversa.
+  //
+  // Mas ANTES de cobrar o tipo, um campo que não existe para classe NENHUMA é
+  // recusado na linha dele. Sem isto, quem escreve "nomee: errado" e esquece o
+  // tipo ouve "falta tipo:" apontando a primeira linha — verdade inútil, porque
+  // o erro de verdade é o nome do campo, duas linhas abaixo. Campo inexistente
+  // não depende de classe para ser inexistente, então não espera a classe.
+  if (!tipoDoGatilho) {
+    const conhecidos = new Set(CAMPOS_DO_CABECALHO.map((c) => c.chave))
+    const marcas = new Set(MARCAS_DO_CABECALHO.map((m) => m.chave))
+    for (const l of linhasCabecalho) {
+      if (marcas.has(l.texto)) continue
+      const sep = l.texto.indexOf(':')
+      if (sep < 0) continue
+      const chave = l.texto.slice(0, sep).trim()
+      if (!conhecidos.has(chave)) {
+        throw new ErroDeSintaxe(`não conheço o campo "${chave}". ${camposQueValem(null)}`, l.n)
+      }
+    }
+    throw new ErroDeSintaxe(`falta "tipo:" — ${Object.values(CLASSES).join(' ou ')}`, cabeca.n)
+  }
+
+  let versaoRequires = 0
+  let temDisparaCom = false
+  let temQuandoFor = false
+
+  // 2. Percorrer os campos NA ORDEM DO ARQUIVO.
+  for (const l of linhasCabecalho) {
     if (l.texto === 'só dono') {
-      entradasCabecalho.push({ campo: l.texto, linha: l.n })
       gatilhoConfig.requireOwner = true
       continue
     }
     if (l.texto === 'com link') {
-      entradasCabecalho.push({ campo: l.texto, linha: l.n })
+      if (tipoDoGatilho === 'trigger.group') {
+        throw new ErroDeSintaxe(INCOMPATIVEIS_COM_PORTEIRO['com link'], l.n)
+      }
       gatilhoConfig.containsLink = true
       continue
     }
     if (l.texto === 'só link de mídia') {
-      entradasCabecalho.push({ campo: l.texto, linha: l.n })
+      if (tipoDoGatilho === 'trigger.group') {
+        throw new ErroDeSintaxe(INCOMPATIVEIS_COM_PORTEIRO['só link de mídia'], l.n)
+      }
       gatilhoConfig.mediaLinkOnly = true
       continue
     }
     if (l.texto === 'também em comandos') {
-      entradasCabecalho.push({ campo: l.texto, linha: l.n })
+      if (tipoDoGatilho === 'trigger.group') {
+        throw new ErroDeSintaxe(INCOMPATIVEIS_COM_PORTEIRO['também em comandos'], l.n)
+      }
       gatilhoConfig.alsoOnCommands = true
       continue
     }
     if (l.texto === 'desligada') {
-      entradasCabecalho.push({ campo: l.texto, linha: l.n })
       doc.enabled = false
       continue
     }
@@ -770,43 +812,36 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
     }
     const chave = l.texto.slice(0, sep).trim()
     const valor = l.texto.slice(sep + 1).trim()
-    entradasCabecalho.push({ campo: chave, valor, linha: l.n })
 
+    // 3. Para cada campo: conferir PRIMEIRO se ele pertence à classe.
+    if (tipoDoGatilho === 'trigger.group') {
+      const msg = INCOMPATIVEIS_COM_PORTEIRO[chave]
+      if (msg) throw new ErroDeSintaxe(msg, l.n)
+    }
+
+    // 4. Só se pertencer, validar o CONTEÚDO.
     switch (chave) {
-      // A CLASSE, e ela é obrigatória — ver a conferência depois do laço.
-      //
-      // E ela é ÚNICA, porque é o discriminador: o significado de todas as
-      // outras linhas do cabeçalho depende dela. Com a conferência rodando no
-      // fim, um segundo "tipo:" tornaria válida retroativamente uma linha que
-      // a classe anterior recusava — "tipo: vigia", "dispara com: /oi",
-      // "tipo: comando" passaria, e a pessoa teria escrito duas intenções
-      // contrárias sem ouvir uma palavra. Repetir não é refinar: é contradizer.
       case 'tipo': {
-        const achado = Object.keys(CLASSES).find((k) => CLASSES[k] === valor)
-        if (!achado) {
-          throw new ErroDeSintaxe(`tipo desconhecido: "${valor}". Use: ${Object.values(CLASSES).join(' ou ')}.`, l.n)
-        }
-        if (tipoDoGatilho) {
-          throw new ErroDeSintaxe(
-            `"tipo:" aparece duas vezes, dizendo ${CLASSES[tipoDoGatilho]} e depois ${valor}. A classe decide o que todas as outras linhas significam, então escolha uma.`,
-            l.n
-          )
-        }
-        tipoDoGatilho = achado
+        // A classe já foi identificada e sua unicidade conferida no passo 1.
         break
       }
-      // O que acorda a automação. Para comando é a palavra digitada; para vigia
-      // é "qualquer mensagem", e os filtros (com link, palavras, quando for)
-      // refinam em linhas próprias.
       case 'dispara com': {
-        entradasDisparaCom.push({ valor, linha: l.n })
+        temDisparaCom = true
+        if (tipoDoGatilho === 'trigger.command') {
+          if (!valor || /\s/.test(valor)) {
+            throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, l.n)
+          }
+          gatilhoConfig.command = valor
+        } else if (tipoDoGatilho === 'trigger.message') {
+          if (valor !== 'qualquer mensagem') {
+            throw new ErroDeSintaxe(
+              `um vigia dispara com "qualquer mensagem" — o que ele observa se diz nas linhas seguintes (com link, palavras, quando for). Veio "${valor}"`,
+              l.n
+            )
+          }
+        }
         break
       }
-      // "precisa de um link: na mensagem ou na citada"
-      //
-      // A chave chega aqui já partida em "precisa de X" + o valor, porque o
-      // formato do cabeçalho é "campo: valor". Ver EXIGENCIAS no vocabulário
-      // para por que isto existe.
       case 'precisa de um link':
       case 'precisa de uma mídia': {
         const oQue = chave.slice('precisa de '.length)
@@ -821,54 +856,55 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
           }
           return achado
         })
-        // A ordem escrita é a ordem de procura: "na citada ou na mensagem"
-        // olha primeiro a mensagem marcada.
         doc.inputPolicy.requires = { kind, from: onde }
         versaoRequires++
         break
       }
-      // Fica junto do que ele guarda — e não perdido entre os textos da ação,
-      // que é onde o `sem mídia`/`sem dados` morava.
       case 'sem ele':
       case 'sem ela': {
-        entradasSem.push({ chave, valor, linha: l.n, versaoRequires })
+        if (!doc.inputPolicy.requires || versaoRequires === 0) {
+          throw new ErroDeSintaxe(`"${chave}" precisa vir depois de "precisa de ..."`, l.n)
+        }
+        // O `descitar` vem ANTES de decidir se o texto será usado, e a ordem é o
+        // conserto de um defeito: pular a entrada descartada pulava também a
+        // conferência das aspas, e "sem ele: sem aspas" passava calado quando uma
+        // exigência posterior substituía a dele. Texto malformado é erro de escrita
+        // em qualquer posição — descartar não é desculpa para não olhar.
+        const texto = descitar(valor, l.n)
+        doc.inputPolicy.requires.missingText = texto
         break
       }
       case 'id': doc.id = valor; break
       case 'revisão': doc.revision = Number(valor); break
       case 'nome': doc.name = valor; break
-      // Dividir o que vem depois do comando, com nome para cada parte.
-      //
-      // "/rename Pacote do Zé / Zé" precisa virar duas coisas, e a divisão NÃO
-      // pode morar dentro do texto: interpolação é troca de texto pura, e
-      // enfiar um separador ali seria a mesma string que esconde um algoritmo
-      // que o `precisa de um link` acabou de matar. Então ela vira declaração,
-      // e o separador é o que estiver escrito ENTRE os nomes — o que a linha
-      // mostra é o que a pessoa vai digitar.
       case 'argumentos': {
-        entradasArgumentos.push({ valor, linha: l.n })
+        if (tipoDoGatilho !== 'trigger.command') {
+          throw new ErroDeSintaxe('"argumentos" é só de comando — um vigia não tem o que vem depois da palavra digitada.', l.n)
+        }
+        const partes = valor.split(/\s*([^\s\w\u00c0-\u017f])\s*/).filter((x) => x !== '')
+        const nomes = partes.filter((_, i) => i % 2 === 0)
+        const separadores = [...new Set(partes.filter((_, i) => i % 2 === 1))]
+        if (nomes.length < 2 || separadores.length !== 1) {
+          throw new ErroDeSintaxe('escreva os nomes separados por um símbolo só, como "argumentos: pacote / autor"', l.n)
+        }
+        for (const nome of nomes) {
+          if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(nome)) {
+            throw new ErroDeSintaxe(`nome de argumento inválido: "${nome}" — comece por letra, use letras, números e _`, l.n)
+          }
+        }
+        if (new Set(nomes).size !== nomes.length) {
+          throw new ErroDeSintaxe('dois argumentos com o mesmo nome: o segundo apagaria o primeiro', l.n)
+        }
+        gatilhoConfig.args = { separator: separadores[0], names: nomes }
         break
       }
       case 'menu': {
         const [rotulo, ...resto] = valor.split('—')
         display.menuLabel = rotulo.trim()
-        // Repetir "menu:" substitui o PAR INTEIRO. Antes só o rótulo era
-        // reescrito e a descrição da linha anterior ficava: "menu: Antigo —
-        // Descrição antiga" seguido de "menu: Novo" dava rótulo "Novo" com a
-        // descrição do antigo pendurada, metade de cada declaração. Se a
-        // política é valer a última, a última tem de valer inteira.
         if (resto.length) display.menuDescription = resto.join('—').trim()
         else delete display.menuDescription
         break
       }
-      // A FAMÍLIA do comando: "download", "figurinha", "compra e venda".
-      //
-      // Texto livre de propósito. O catálogo tem uma lista fechada de
-      // categorias no schema dele, e ela serve para agrupar a VITRINE — mas
-      // obrigar o comando instalado a caber nessas quatro seria teto no
-      // código: quem usa o sistema tem famílias que eu não tenho como
-      // adivinhar. A categoria do template entra como valor inicial; daí em
-      // diante quem manda é esta linha.
       case 'família': display.family = valor; break
       case 'onde': doc.scope.include.push(lerDestino(valor, l.n)); break
       case 'menos': doc.scope.exclude.push(lerDestino(valor, l.n)); break
@@ -876,20 +912,9 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       case 'histórico':
         doc.inputPolicy.historyPolicy = valor
         break
-      // A URGÊNCIA, e ela vale para a automação INTEIRA.
-      //
-      // Um cabeçalho só não consegue dizer "a confirmação é alta e o download é
-      // baixo" — e uma automação faz as duas coisas no mesmo documento. Entre
-      // declarar uma vez e deixar o compilador adivinhar por tipo de ação, a
-      // escolha foi declarar: inferência escondida erra exatamente nas
-      // automações mistas, que são as que mais importam.
       case 'prioridade': {
-        // Marcador de template passa inteiro: num `.lcn` do catálogo a linha é
-        // `prioridade: {{params.prioridade}}`, e quem instala escolhe.
         if (ehMarcador(valor)) { doc.scheduling.priority = valor; break }
         const codigo = PRIORIDADE_POR_PALAVRA[valor]
-        // Dizer o que vale junto da recusa: sem isso a pessoa vai procurar a
-        // palavra certa num catálogo que ela não tem na mão.
         if (!codigo) {
           throw new ErroDeSintaxe(
             `"prioridade" aceita: ${Object.values(PRIORIDADES).join(', ')} — veio "${valor}"`, l.n
@@ -898,24 +923,12 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
         doc.scheduling.priority = codigo
         break
       }
-      // A RECUSA, quando a fila está cheia.
-      //
-      // Aspas separam a forma reservada do texto livre, que é a mesma regra que
-      // `sem ele` e `palavras` já seguem — então "como escrevo literalmente a
-      // palavra reservada" se responde sozinho: com aspas.
       case 'sem vaga': {
         if (valor.startsWith('"')) {
           doc.scheduling.onNoSlot = { kind: 'notify', text: descitar(valor, l.n) }
           break
         }
         if (valor === 'descarta') { doc.scheduling.onNoSlot = { kind: 'discard' }; break }
-        // RECUSADO DE PROPÓSITO, e não por falta de vontade: não existe estado
-        // "agendado" no protocolo — uma execução termina em enviado, falhou ou
-        // resultado incerto, e nada mais. Reexecutar com um relógio aqui
-        // trocaria dez mil itens esperando na fila por dez mil relógios vivos,
-        // que é o MESMO problema com outro nome, e ainda perderia a tentativa
-        // em qualquer reinício. Primeiro o agendamento que sobrevive a
-        // reinício; a palavra depois.
         if (valor === 'tenta de novo') {
           throw new ErroDeSintaxe(
             'ainda não sei "tenta de novo": reexecutar depende de um agendamento que sobreviva a reinício, e ele não existe. Use "descarta" ou um texto entre aspas para avisar.',
@@ -926,10 +939,6 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
           `"sem vaga" aceita descarta, ou um texto entre aspas para avisar — veio "${valor}"`, l.n
         )
       }
-      // "acessa" e não "tipos": é EXIGÊNCIA, não filtro. O motor não avalia a
-      // automação para tipo que não esteja aqui, então um contador que declara
-      // só texto NUNCA vê a mensagem de voz — e falha calado. A palavra antiga
-      // lia como se fosse preferência.
       case 'acessa':
         doc.inputPolicy.acceptedMessageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
         break
@@ -939,124 +948,40 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       case 'quem':
         gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'quem pode acionar', l.n)
         break
-      case 'quando for':
-        entradasQuandoFor.push({ valor, linha: l.n })
+      case 'quando for': {
+        if (tipoDoGatilho === 'trigger.group') {
+          if (!valor.trim()) {
+            throw new ErroDeSintaxe('falta "quando for:" — um porteiro precisa dizer quais ações observa: entrou, saiu, promoveu, rebaixou ou mudou o nome', cabeca.n)
+          }
+          gatilhoConfig.actions = valor.split(',').map((t) => traduzir(ACAO_DE_GRUPO_POR_PALAVRA, t, 'ação de grupo', l.n))
+          temQuandoFor = true
+        } else {
+          gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', l.n))
+          temQuandoFor = true
+        }
         break
+      }
       case 'palavras':
         gatilhoConfig.keywords = valor.split(',').map((p) => descitar(p, l.n))
         break
-      // Recusar sem dizer o que existe manda a pessoa procurar a palavra certa
-      // num catálogo que ela não tem — era o caso enquanto a linguagem não
-      // tinha documentação nenhuma. A lista sai da tabela, filtrada pela classe
-      // que esta automação declarou: num vigia não adianta oferecer "casa".
       default: throw new ErroDeSintaxe(
         `não conheço o campo "${chave}". ${camposQueValem(tipoDoGatilho)}`, l.n
       )
     }
   }
 
-  // Sem tipo não há automação: é a diferença entre algo que alguém digita e algo
-  // que fica ligado o tempo todo olhando a conversa. Deixar isso implícito foi o
-  // que fez a classe virar detalhe de gatilho.
-  if (!tipoDoGatilho) {
-    throw new ErroDeSintaxe(`falta "tipo:" — ${Object.values(CLASSES).join(' ou ')}`, cabeca.n)
-  }
-
-  // A ORDEM DAS LINHAS NÃO PODE MUDAR O QUE O TIPO RECUSA.
-  //
-  // Exigir que "tipo:" venha na primeira linha seria teto no código: o cabeçalho
-  // é declarativo, e a linguagem não deve obrigar uma ordem arbitrária para
-  // quem escreve. Se a conferência de incompatibilidades rodar durante a leitura
-  // linha a linha, qualquer campo escrito antes de "tipo:" enxerga tipoDoGatilho
-  // ainda nulo — e ou passa calado (como "precisa de um link" num porteiro,
-  // produzindo inputPolicy sem sentido num evento de grupo), ou acusa o erro
-  // errado (como "argumentos" reclamar de vigia antes mesmo de saber a classe).
-  //
-  // A checagem fica aqui, no fim do cabeçalho, onde a classe já é conhecida com
-  // certeza. Cada recusa aponta a linha DO CAMPO que não se aplica, e não a linha
-  // do fim do cabeçalho, para a pessoa saber exatamente onde corrigir.
-  if (tipoDoGatilho === 'trigger.group') {
-    for (const entrada of entradasCabecalho) {
-      const msg = INCOMPATIVEIS_COM_PORTEIRO[entrada.campo]
-      if (msg) throw new ErroDeSintaxe(msg, entrada.linha)
-    }
-  }
-
+  // Conferência de campos obrigatórios
   if (tipoDoGatilho === 'trigger.command') {
-    if (!entradasDisparaCom.length) {
+    if (!temDisparaCom) {
       throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
     }
-    for (const { valor, linha } of entradasDisparaCom) {
-      if (!valor || /\s/.test(valor)) {
-        throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, linha)
-      }
-      gatilhoConfig.command = valor
-    }
-  } else if (tipoDoGatilho === 'trigger.message') {
-    for (const { valor, linha } of entradasDisparaCom) {
-      if (valor !== 'qualquer mensagem') {
-        throw new ErroDeSintaxe(
-          `um vigia dispara com "qualquer mensagem" — o que ele observa se diz nas linhas seguintes (com link, palavras, quando for). Veio "${valor}"`,
-          linha
-        )
-      }
-    }
-  }
-
-  for (const entradaArgumentos of entradasArgumentos) {
-    if (tipoDoGatilho !== 'trigger.command') {
-      throw new ErroDeSintaxe('"argumentos" é só de comando — um vigia não tem o que vem depois da palavra digitada.', entradaArgumentos.linha)
-    }
-    const { valor, linha } = entradaArgumentos
-    const partes = valor.split(/\s*([^\s\w\u00c0-\u017f])\s*/).filter((x) => x !== '')
-    const nomes = partes.filter((_, i) => i % 2 === 0)
-    const separadores = [...new Set(partes.filter((_, i) => i % 2 === 1))]
-    if (nomes.length < 2 || separadores.length !== 1) {
-      throw new ErroDeSintaxe('escreva os nomes separados por um símbolo só, como "argumentos: pacote / autor"', linha)
-    }
-    for (const nome of nomes) {
-      if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(nome)) {
-        throw new ErroDeSintaxe(`nome de argumento inválido: "${nome}" — comece por letra, use letras, números e _`, linha)
-      }
-    }
-    if (new Set(nomes).size !== nomes.length) {
-      throw new ErroDeSintaxe('dois argumentos com o mesmo nome: o segundo apagaria o primeiro', linha)
-    }
-    gatilhoConfig.args = { separator: separadores[0], names: nomes }
-  }
-
-  for (const sem of entradasSem) {
-    if (!doc.inputPolicy.requires || sem.versaoRequires === 0) {
-      throw new ErroDeSintaxe(`"${sem.chave}" precisa vir depois de "precisa de ..."`, sem.linha)
-    }
-    // O `descitar` vem ANTES de decidir se o texto será usado, e a ordem é o
-    // conserto de um defeito: pular a entrada descartada pulava também a
-    // conferência das aspas, e "sem ele: sem aspas" passava calado quando uma
-    // exigência posterior substituía a dele. Texto malformado é erro de escrita
-    // em qualquer posição — descartar não é desculpa para não olhar.
-    const texto = descitar(sem.valor, sem.linha)
-    // O texto vale para a exigência que estava escrita ACIMA dele. Se um
-    // "precisa de" posterior substituiu aquela, o aviso não é mais sobre esta
-    // exigência e não pode ser pendurado nela: diria a coisa errada. Some
-    // junto com a exigência que descrevia, como já acontecia antes.
-    if (sem.versaoRequires !== versaoRequires) continue
-    doc.inputPolicy.requires.missingText = texto
-  }
-
-  if (tipoDoGatilho === 'trigger.group') {
-    if (!entradasQuandoFor.length || !entradasQuandoFor.some((e) => e.valor)) {
+  } else if (tipoDoGatilho === 'trigger.group') {
+    if (!temQuandoFor) {
       throw new ErroDeSintaxe('falta "quando for:" — um porteiro precisa dizer quais ações observa: entrou, saiu, promoveu, rebaixou ou mudou o nome', cabeca.n)
-    }
-    for (const { valor, linha } of entradasQuandoFor) {
-      gatilhoConfig.actions = valor.split(',').map((t) => traduzir(ACAO_DE_GRUPO_POR_PALAVRA, t, 'ação de grupo', linha))
     }
     // O porteiro observa a porta do grupo, recebendo eventos canônicos de grupo
     // em vez de mensagens normais de conversa.
     doc.inputPolicy.acceptedMessageKinds = ['group']
-  } else {
-    for (const { valor, linha } of entradasQuandoFor) {
-      gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', linha))
-    }
   }
 
   if (Object.keys(display).length) doc.display = display
