@@ -87,6 +87,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
+          "description": "Quais tipos de evento ou mensagem acordam a automação. 'group' só faz sentido para porteiro (trigger.group): eventos de grupo não trazem mensagem para o motor comparar, então declarar 'group' num comando digitado (trigger.command) é estado morto e é proibido pelo schema.",
           "items": {
             "enum": [
               "text",
@@ -358,6 +359,52 @@
       }
     }
   },
+  "allOf": [
+    {
+      "description": "Comandos digitados (trigger.command) nunca disparam com eventos de grupo ('group'), pois estes não trazem mensagem para teste de prefixo. Portanto, documentos com trigger.command não podem declarar 'group' em acceptedMessageKinds.",
+      "if": {
+        "properties": {
+          "flow": {
+            "properties": {
+              "nodes": {
+                "contains": {
+                  "properties": {
+                    "type": {
+                      "const": "trigger.command"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "nodes"
+            ]
+          }
+        },
+        "required": [
+          "flow"
+        ]
+      },
+      "then": {
+        "properties": {
+          "inputPolicy": {
+            "properties": {
+              "acceptedMessageKinds": {
+                "items": {
+                  "not": {
+                    "const": "group"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "definitions": {
     "scopeRef": {
       "description": "Um destino da automação. 'contact'/'group' endereçam UMA conversa. 'all_contacts', 'all_groups' e 'everywhere' são os destinos abrangentes — existem para a pessoa poder escolher 'todos' de propósito, já que lista vazia nunca significa todos. 'tagged' casa com as conversas marcadas com uma variável (a mesma que {{var.chat.<chave>}} lê).",
@@ -445,7 +492,9 @@
           "properties": {
             "command": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "pattern": "^\\S+$",
+              "description": "O prefixo que dispara o comando, como \"/menu\" ou \"!ajuda\". Um comando é definido pelo prefixo: ele não pode conter espaço, porque o que vem depois do prefixo são os argumentos, não parte do nome. Uma automação que precisa reagir sem prefixo é vigia, não comando."
             },
             "match": {
               "enum": [
@@ -477,8 +526,8 @@
                 "separator": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 3,
-                  "description": "O que separa as partes. A última parte leva o resto, então o separador pode aparecer dentro dela."
+                  "maxLength": 1,
+                  "description": "O que separa as partes. O compilador divide por um único caractere ou símbolo (como / ou |), então o separador deve ter tamanho máximo 1 para garantir ida e volta perfeita na metalinguagem .lcn. A última parte leva o resto, então o separador pode aparecer dentro dela."
                 },
                 "names": {
                   "type": "array",

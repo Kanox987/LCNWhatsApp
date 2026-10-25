@@ -139,6 +139,99 @@ const r12 = validarAutomacao(db, docBase({
 check('duas arestas success saindo do mesmo nó são rejeitadas', r12.length > 0)
 check('erro de ramificação aponta o on da segunda aresta conflitante', r12.some((e) => e.path === '/flow/edges/2/on' && e.message.includes('mais de uma aresta de saída')))
 
+// --- comando com espaço em branco é barrado pelo schema ---
+const docComandoEspaco = docBase({
+  flow: {
+    ...docBase().flow,
+    nodes: [
+      { id: 'trigger', type: 'trigger.command', config: { command: '/clima sp', match: 'exact_or_args', allowFrom: 'external' } },
+      docBase().flow.nodes[1],
+      docBase().flow.nodes[2]
+    ]
+  }
+})
+const rComandoEspaco = validarAutomacao(db, docComandoEspaco)
+check('comando com espaço em branco é rejeitado', rComandoEspaco.length > 0)
+
+const docComandoValido = docBase({
+  flow: {
+    ...docBase().flow,
+    nodes: [
+      { id: 'trigger', type: 'trigger.command', config: { command: '!ajuda', match: 'exact_or_args', allowFrom: 'external' } },
+      docBase().flow.nodes[1],
+      docBase().flow.nodes[2]
+    ]
+  }
+})
+const rComandoValido = validarAutomacao(db, docComandoValido)
+check('comando sem espaço continua aceito', rComandoValido.length === 0)
+
+// --- separador de argumentos com 2+ caracteres é barrado pelo schema ---
+const docSeparadorComposto = docBase({
+  flow: {
+    ...docBase().flow,
+    nodes: [
+      {
+        id: 'trigger',
+        type: 'trigger.command',
+        config: {
+          command: '/clima',
+          match: 'exact_or_args',
+          allowFrom: 'external',
+          args: { separator: '||', names: ['cidade', 'estado'] }
+        }
+      },
+      docBase().flow.nodes[1],
+      docBase().flow.nodes[2]
+    ]
+  }
+})
+const rSeparadorComposto = validarAutomacao(db, docSeparadorComposto)
+check('separador de argumentos com 2+ caracteres é rejeitado', rSeparadorComposto.length > 0)
+
+const docSeparadorValido = docBase({
+  flow: {
+    ...docBase().flow,
+    nodes: [
+      {
+        id: 'trigger',
+        type: 'trigger.command',
+        config: {
+          command: '/clima',
+          match: 'exact_or_args',
+          allowFrom: 'external',
+          args: { separator: '/', names: ['cidade', 'estado'] }
+        }
+      },
+      docBase().flow.nodes[1],
+      docBase().flow.nodes[2]
+    ]
+  }
+})
+const rSeparadorValido = validarAutomacao(db, docSeparadorValido)
+check('separador de argumentos de 1 caractere continua aceito', rSeparadorValido.length === 0)
+
+// --- "group" em acceptedMessageKinds com trigger.command é barrado pelo schema ---
+const docComandoComGroup = docBase({
+  inputPolicy: { acceptedMessageKinds: ['text', 'group'], historyPolicy: 'live_only' }
+})
+const rComandoComGroup = validarAutomacao(db, docComandoComGroup)
+check('"group" em acceptedMessageKinds de trigger.command é rejeitado', rComandoComGroup.length > 0)
+
+const docPorteiroComGroup = docBase({
+  id: 'porteiro-do-grupo',
+  inputPolicy: { acceptedMessageKinds: ['group'], historyPolicy: 'live_only' },
+  flow: {
+    nodes: [
+      { id: 'trigger', type: 'trigger.group', config: { actions: ['add'] } },
+      { id: 'reply', type: 'action.whatsapp.reply', config: { text: 'bem-vindo' } }
+    ],
+    edges: [{ from: 'trigger', to: 'reply', on: 'matched' }]
+  }
+})
+const rPorteiroComGroup = validarAutomacao(db, docPorteiroComGroup)
+check('"group" em acceptedMessageKinds de trigger.group continua aceito', rPorteiroComGroup.length === 0)
+
 // --- validador nunca lança, mesmo com entrada absurda ---
 let lancou = false
 try { validarAutomacao(db, null) } catch { lancou = true }
