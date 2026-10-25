@@ -26,7 +26,7 @@
 import {
   ACOES, ACOES_DE_GRUPO, BLOCOS_DE_TEMPLATE, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES,
   DESTINOS, EXIGENCIAS, MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES,
-  ORIGENS, PALAVRAS_DE_OPERANDO, TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
+  ORIGENS, PALAVRAS_DE_OPERANDO, PRIORIDADES, RECUSAS_SEM_VAGA, TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   BLOCOS_DE_CONDICAO, PROFUNDIDADE_CONDICOES_PADRAO
 } from './vocabulario.js'
 
@@ -413,7 +413,7 @@ function juntarAcao (acao, prosa) {
 function palavrasParaRealce () {
   const enums = [
     CLASSES, CASAMENTOS, ORIGENS, TIPOS_DE_MENSAGEM, ACOES_DE_GRUPO, EXIGENCIAS, ONDE_PROCURAR,
-    DESTINOS, TIPOS_DE_CONFIG, TIPOS_DE_VALOR, NIVEIS_DE_AVISO
+    DESTINOS, TIPOS_DE_CONFIG, TIPOS_DE_VALOR, NIVEIS_DE_AVISO, PRIORIDADES, RECUSAS_SEM_VAGA
   ]
   return Object.freeze({
     blocos: Object.freeze(['template', 'automação', 'configurável', 'declara', 'avisa']),
@@ -484,7 +484,9 @@ export function montarReferencia ({ prosa = null } = {}) {
       destinos: Object.freeze(Object.values(DESTINOS)),
       tiposDeConfig: Object.freeze(Object.values(TIPOS_DE_CONFIG)),
       tiposDeValor: Object.freeze(Object.values(TIPOS_DE_VALOR)),
-      niveisDeAviso: Object.freeze(Object.values(NIVEIS_DE_AVISO))
+      niveisDeAviso: Object.freeze(Object.values(NIVEIS_DE_AVISO)),
+      prioridades: Object.freeze(Object.values(PRIORIDADES)),
+      recusasSemVaga: Object.freeze(Object.values(RECUSAS_SEM_VAGA))
     }),
     trechos: TRECHOS,
     palavras: palavrasParaRealce()

@@ -218,6 +218,15 @@ check('acoes.js cataloga action.acervo.rewrite', telaRewrite?.rotulo === 'Sobres
     }
   })
 
+  publicarComando('guarda', {
+    type: 'action.acervo.save',
+    config: {
+      name: 'foto-{{sender.name}}.jpg',
+      okText: 'Salvo por {{sender.name}} com nome {{nome}}',
+      errorText: 'Erro para {{sender.name}}: {{erro}}'
+    }
+  })
+
   const eventoBase = (texto) => ({
     provider: 'zapo', accountId: 'acc-1', eventId: `e-${Date.now()}`,
     occurredAt: agora, replay: false,
@@ -241,6 +250,26 @@ check('acoes.js cataloga action.acervo.rewrite', telaRewrite?.rotulo === 'Sobres
   const cmdSobrescreve = resSobrescreve.results.find((r) => r.automationId === 'sobrescreve')?.commands?.[0]
   check('evaluator emite commandType acervo.rewrite', cmdSobrescreve?.commandType === 'acervo.rewrite')
   check('interpola texto da reescrita com argumentos', cmdSobrescreve?.payload?.text === 'Dados novos: novidades' && cmdSobrescreve?.payload?.notFoundText === 'Arquivo notas/relatorio.txt sumiu!')
+
+  const resGuarda = avaliarEvento(db, {
+    ...eventoBase('/guarda'),
+    message: { kind: 'image', text: '/guarda', mediaRef: 'token-midia-save-1' }
+  })
+  const cmdGuarda = resGuarda.results.find((r) => r.automationId === 'guarda')?.commands?.[0]
+  check('evaluator emite commandType acervo.save', cmdGuarda?.commandType === 'acervo.save')
+  // O save resolve as variáveis do EVENTO e NÃO toca em {{nome}}, {{caminho}}
+  // nem {{id}}: o arquivo ainda não existe, e quem sabe esses três é o gateway
+  // depois de guardar (gatewayExecutor.js:1287-1291). Consumi-los aqui faria o
+  // gateway não ter mais o que trocar, e a confirmação sairia sem o nome real.
+  check('save interpola as variáveis do evento no okText e errorText',
+    cmdGuarda?.payload?.okText === 'Salvo por Alice com nome {{nome}}' &&
+    cmdGuarda?.payload?.errorText === 'Erro para Alice: {{erro}}' &&
+    cmdGuarda?.payload?.nome === 'foto-Alice.jpg'
+  )
+  check('save PRESERVA os marcadores que só o gateway sabe preencher',
+    cmdGuarda?.payload?.okText.includes('{{nome}}') &&
+    !cmdGuarda?.payload?.okText.includes('{{sender.name}}')
+  )
 
   db.close()
 }
