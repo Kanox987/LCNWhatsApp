@@ -1014,6 +1014,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           ...(no.config.folder ? { pasta: interpolar(no.config.folder, contexto) } : {}),
           ...(no.config.delivery ? { entrega: no.config.delivery } : {}),
           ...(no.config.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
+          ...(no.config.viewOnce ? { viewOnce: true } : {}),
           ...(no.config.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {})
         }
       })

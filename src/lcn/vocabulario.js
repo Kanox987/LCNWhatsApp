@@ -142,6 +142,18 @@ export const ACOES = Object.freeze([
       { chave: 'folder', rotulo: 'pasta', tipo: 'texto' },
       { chave: 'delivery', rotulo: 'entrega', tipo: 'palavra', palavras: { carrossel: 'carrossel', album: 'álbum', separate: 'separado' } },
       { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
+      // MÍDIA DE VISUALIZAÇÃO ÚNICA (imagem, vídeo ou áudio).
+      //
+      // Não confundir com o embrulho `viewOnceMessageV2` de `carrossel.js`:
+      // lá ele é truque de transporte para o WhatsApp renderizar botões
+      // interativos; aqui é o pedido real de mídia efêmera que expira após
+      // visualizada.
+      //
+      // LIMITE HONESTO: é um pedido ao aplicativo de quem recebe, não uma
+      // garantia absoluta. Aplicativos modificados salvam a mídia de qualquer
+      // jeito, e este próprio sistema tem comandos (como /x9 e /recover)
+      // que recuperam mídias enviadas assim.
+      { chave: 'viewOnce', rotulo: 'visualização única', tipo: 'booleano' },
       { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' }
     ]
   },

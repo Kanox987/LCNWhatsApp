@@ -220,10 +220,15 @@ function opcoesDeCitacao (replyTo) {
 // Menção e selo de encaminhada viajam no CONTEXTO da mensagem, ao lado do
 // texto — não dentro dele. Quem monta o contexto é o zapo-js, a partir destas
 // chaves; aqui só se repassa o que o motor resolveu, já em forma de JID.
+//
+// Visualização única viaja nas opções de envio (options.viewOnce do zapo-js).
+// Ela instrui o despachante a embrulhar a mensagem de mídia com viewOnce: true
+// e a emitir o atributo <meta view_once="true"/> na stanza.
 function opcoesDeEnvio (payload) {
   const opcoes = opcoesDeCitacao(payload?.replyTo) || {}
   if (Array.isArray(payload?.mentions) && payload.mentions.length) opcoes.mentions = payload.mentions
   if (payload?.forward === true) opcoes.forward = true
+  if (payload?.viewOnce === true) opcoes.viewOnce = true
   return Object.keys(opcoes).length ? opcoes : undefined
 }
 
@@ -1239,7 +1244,26 @@ async function executarEnvioDeArquivo (client, comando, deps) {
         : { type: registro.kind, media: buffer, mimetype: registro.mimetype }
       if (conteudo.type !== 'text' && payload.caption) conteudo.caption = payload.caption
       if (conteudo.type === 'document') conteudo.fileName = registro.name
-      return enviarERegistrar(client, payload.chatId, conteudo)
+
+      // VISUALIZAÇÃO ÚNICA REAL:
+      //
+      // Só existe no WhatsApp para imagem, vídeo e áudio (VIEW_ONCE_MEDIA_FIELDS
+      // no zapo-js). Em texto e documento o protocolo não tem visualização única
+      // e o envio sai como conteúdo comum.
+      //
+      // NÃO CONFUNDIR COM O EMBRULHO DE TRANSPORTE (carrossel.js):
+      // No carrossel e menu interativo, `viewOnceMessageV2` é truque de
+      // transporte para o WhatsApp desenhar botões interativos; aqui,
+      // `viewOnce: true` é o pedido real de mídia efêmera que expira após
+      // ser visualizada.
+      //
+      // LIMITE HONESTO: é apenas um pedido ao aplicativo de quem recebe.
+      // Modificações de WhatsApp e comandos de recuperação (como o nosso /x9)
+      // capturam a mídia antes de expirar. Não garante privacidade absoluta.
+      if (payload.viewOnce && (conteudo.type === 'image' || conteudo.type === 'video' || conteudo.type === 'audio')) {
+        conteudo.viewOnce = true
+      }
+      return enviarERegistrar(client, payload.chatId, conteudo, opcoesDeEnvio(payload))
     }),
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar o arquivo do comando ${comando.id}`

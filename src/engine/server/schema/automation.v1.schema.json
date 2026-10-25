@@ -653,6 +653,10 @@
             "caption": {
               "type": "string"
             },
+            "viewOnce": {
+              "type": "boolean",
+              "description": "Envia a mídia (imagem, vídeo ou áudio) como visualização única. É um pedido ao aplicativo de quem recebe, não uma garantia: aplicativos modificados salvam a mídia de qualquer jeito, e o próprio sistema tem comandos (como o /x9) que recuperam o que outros mandam assim."
+            },
             "notFoundText": {
               "type": "string"
             }
