@@ -4,7 +4,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { criarInstanceService, InstanciaNaoEncontradaError, validarAlvoGerenciado } from '../src/agent/instanceService.js'
+import { criarInstanceService, InstanciaNaoEncontradaError, validarAlvoGerenciado, lerRssDoPid } from '../src/agent/instanceService.js'
 
 let falhas = 0
 const check = (nome, ok) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}`) }
@@ -216,6 +216,7 @@ const serviceBare = criarInstanceService({
   obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
   bareArqEstado,
   bareArqConfig,
+  arqPidEngine: path.join(pastaTmpBare, 'engine.pid'),
   bareStatusServico: () => { bareServicoFake.chamadas.push('status'); return 'rodando' },
   bareIniciarBot: () => { bareServicoFake.chamadas.push('iniciar'); return { ok: true, out: 'Bot iniciado (pid 123).' } },
   barePararBot: () => { bareServicoFake.chamadas.push('parar'); return { ok: true, out: 'parado' } },
@@ -345,6 +346,95 @@ check('obterUso("bare"): lê memoriaMB de state.json (o painel roda num processo
 check('obterUso("bare"): calcula uptime a partir de iniciadoEm', usoBare.uptimeMs >= 119000 && usoBare.uptimeMs < 200000)
 check('obterUso("bare"): lê os contadores acumulados de banda de state.json', usoBare.bandwidth.downloadBytesTotal === 2048 && usoBare.bandwidth.uploadBytesTotal === 1024)
 check('obterUso("bare"): lê o limite configurado de config.json', usoBare.bandwidth.downloadLimitBytesPerSecond === 0)
+
+// --- Soma de memória dos processos do container (gateway, motor, painel) ---
+// Quando o motor não tem pid-file (arquivo ausente), soma honesta dos processos lidos:
+check('obterUso("bare"): traz soma parcial honesta quando motor não tem pid-file', typeof usoBare.memoryTotal.totalMB === 'number' && usoBare.memoryTotal.totalMB >= 47)
+check('obterUso("bare"): contagem indica 2 processos lidos (gateway e painel)', usoBare.memoryTotal.processCount === 2)
+check('obterUso("bare"): indica que a soma é parcial (isPartial === true)', usoBare.memoryTotal.isPartial === true)
+check('obterUso("bare"): não inventa zero para o motor ausente', usoBare.memoryTotal?.processes?.engine === null)
+
+// Caso 1: Três processos legíveis
+const arqPidEngineTres = path.join(pastaTmpBare, 'engine-tres.pid')
+fs.writeFileSync(arqPidEngineTres, String(process.pid))
+const serviceTres = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25
+})
+const usoTres = serviceTres.obterUso('bare')
+check('obterUso três legíveis: soma dos 3 processos (47 + 35 + 25 = 107)', usoTres.memoryTotal.totalMB === 107)
+check('obterUso três legíveis: contagem de processos é 3', usoTres.memoryTotal.processCount === 3)
+check('obterUso três legíveis: soma completa não é parcial (isPartial === false)', usoTres.memoryTotal.isPartial === false)
+check('obterUso três legíveis: memoryMB existente permanece inalterado (47)', usoTres.memoryMB === 47)
+check('obterUso três legíveis: processos detalhados no bloco memoryTotal',
+  usoTres.memoryTotal?.processes?.gateway === 47 &&
+  usoTres.memoryTotal?.processes?.engine === 35 &&
+  usoTres.memoryTotal?.processes?.panel === 25)
+
+// Caso 2: Um processo ilegível (motor morto)
+const arqPidEngineMorto = path.join(pastaTmpBare, 'engine-morto.pid')
+fs.writeFileSync(arqPidEngineMorto, '99999999')
+const serviceMotorMorto = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineMorto,
+  obterMemoriaPainel: () => 25
+})
+const usoMotorMorto = serviceMotorMorto.obterUso('bare')
+check('obterUso um ilegível (motor morto): soma parcial honesta (47 + 25 = 72)', usoMotorMorto.memoryTotal.totalMB === 72)
+check('obterUso um ilegível (motor morto): contagem de processos é 2', usoMotorMorto.memoryTotal.processCount === 2)
+check('obterUso um ilegível (motor morto): marca isPartial === true', usoMotorMorto.memoryTotal.isPartial === true)
+check('obterUso um ilegível (motor morto): não inventa zero nem derruba resposta', usoMotorMorto.memoryTotal?.processes?.engine === null)
+
+// Caso 3: Gateway usando bloco memoria de state.js (linhas 85-99)
+const bareArqEstadoBloco = path.join(pastaTmpBare, 'state-bloco.json')
+fs.writeFileSync(bareArqEstadoBloco, JSON.stringify({
+  memoriaMB: 50,
+  memoria: { rssMB: 50, heapUsadoMB: 20, externaMB: 5, buffersMB: 2, processo: 'gateway' }
+}))
+const serviceComBloco = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado: bareArqEstadoBloco,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25
+})
+const usoComBloco = serviceComBloco.obterUso('bare')
+check('obterUso com bloco memoria: lê rssMB do bloco gateway', usoComBloco.memoryTotal?.processes?.gateway === 50)
+check('obterUso com bloco memoria: soma 50 + 35 + 25 = 110', usoComBloco.memoryTotal.totalMB === 110)
+
+// Caso 4: Gateway ilegível (sem bloco memoria nem memoriaMB)
+const bareArqEstadoSemMem = path.join(pastaTmpBare, 'state-sem-mem.json')
+fs.writeFileSync(bareArqEstadoSemMem, JSON.stringify({ conectado: true }))
+const serviceGatewayIlegivel = criarInstanceService({
+  exec,
+  obterRegistro: () => ({ version: 1, nextSeq: 1, instances: {} }),
+  bareArqEstado: bareArqEstadoSemMem,
+  bareArqConfig,
+  arqPidEngine: arqPidEngineTres,
+  lerRssPid: () => 35,
+  obterMemoriaPainel: () => 25
+})
+const usoGatewayIlegivel = serviceGatewayIlegivel.obterUso('bare')
+check('obterUso gateway ilegível: soma parcial honesta (35 + 25 = 60)', usoGatewayIlegivel.memoryTotal.totalMB === 60)
+check('obterUso gateway ilegível: contagem de processos é 2', usoGatewayIlegivel.memoryTotal.processCount === 2)
+check('obterUso gateway ilegível: marca isPartial === true', usoGatewayIlegivel.memoryTotal.isPartial === true)
+check('obterUso gateway ilegível: gateway é null e memoryMB é null',
+  usoGatewayIlegivel.memoryTotal?.processes?.gateway === null && usoGatewayIlegivel.memoryMB === null)
+
+// Teste unitário de lerRssDoPid com o processo Node atual via /proc
+const rssAtual = lerRssDoPid(process.pid)
+check('lerRssDoPid: lê com sucesso RSS do processo atual via /proc/<pid>/statm ou status', typeof rssAtual === 'number' && rssAtual > 0)
+check('lerRssDoPid: retorna null para pid inválido ou morto', lerRssDoPid(99999999) === null && lerRssDoPid(-1) === null)
 
 let lancouUsoInstanciaParteA = false
 try { service.obterUso('wa-000001') } catch { lancouUsoInstanciaParteA = true }
