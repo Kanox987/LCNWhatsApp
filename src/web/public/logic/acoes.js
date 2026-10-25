@@ -119,6 +119,7 @@ export const ACOES = Object.freeze([
       { chave: 'folder', rotulo: 'Uma pasta inteira', ajuda: 'Em vez de um arquivo, manda tudo que está na pasta, em ordem de nome. É assim que um comando monta o próprio carrossel — ou entrega um conjunto, como um pacote de figurinhas. Aceita variáveis, então a pasta pode vir do que a pessoa escreveu.' },
       { chave: 'delivery', rotulo: 'Como entregar a pasta', ajuda: 'Só vale com a pasta, e só quando ela tem mais de uma mídia. Carrossel manda UMA mensagem com cards que a pessoa desliza; álbum deixa o aplicativo agrupar; separado manda uma por arquivo. O carrossel cai para álbum e o álbum para sequência quando não são aceitos.' },
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Texto que acompanha o arquivo. Aceita variáveis. Arquivo de texto é enviado como mensagem, então não leva legenda.' },
+      { chave: 'viewOnce', rotulo: 'Visualização única', ajuda: 'Pede ao WhatsApp para a mídia (imagem, vídeo ou áudio) desaparecer após aberta. Atenção: é apenas um pedido ao aplicativo de quem recebe, não uma garantia — aplicativos modificados salvam a mídia de qualquer jeito, e o próprio sistema tem comandos (como /x9) que a recuperam.' },
       { chave: 'notFoundText', rotulo: 'Se o arquivo sumiu', ajuda: 'Enviado quando o arquivo foi apagado do acervo depois de o comando ser publicado — melhor avisar que ficar mudo.' }
     ]
   },
