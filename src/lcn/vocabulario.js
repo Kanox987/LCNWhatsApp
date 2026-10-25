@@ -172,6 +172,63 @@ export const ACOES = Object.freeze([
       { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
     ]
   },
+  // APAGAR UM ARQUIVO DO ACERVO.
+  //
+  // Fecha o ciclo de vida junto de "guarda no acervo": antes, um arquivo só
+  // podia ser apagado manualmente pelo painel web. Aceita caminho ou id —
+  // caminho é o natural que uma pessoa escreve, e id é a referência estável.
+  //
+  // Não há remoção silenciosa: se o arquivo não existir, o comando avisa via
+  // `notFoundText` (se configurado) e encerra com erro, pois silêncio num
+  // arquivo que não foi apagado é o pior modo de falha.
+  {
+    palavra: 'apaga do acervo',
+    tipo: 'action.acervo.delete',
+    campos: [
+      { chave: 'path', inline: true, tipo: 'texto' },
+      { chave: 'fileId', rotulo: 'id', tipo: 'texto' },
+      { chave: 'okText', rotulo: 'confirma', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' },
+      { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
+    ]
+  },
+  // CRIAR UM ARQUIVO DE TEXTO NO ACERVO A PARTIR DE VALORES CONHECIDOS.
+  //
+  // Permite montar listas, recibos ou relatórios a partir de variáveis de
+  // conversa e gravá-los no acervo. Arquivos de texto têm tratamento especial:
+  // no acervo têm `kind: 'text'` e, ao serem enviados com `envia arquivo`, são
+  // entregues como MENSAGEM de texto normal no WhatsApp, não como anexo.
+  {
+    palavra: 'cria texto no acervo',
+    tipo: 'action.acervo.createText',
+    campos: [
+      { chave: 'path', inline: true, tipo: 'texto' },
+      { chave: 'text', rotulo: 'conteúdo', tipo: 'texto' },
+      { chave: 'name', rotulo: 'nome', tipo: 'texto' },
+      { chave: 'folder', rotulo: 'pasta', tipo: 'texto' },
+      { chave: 'description', rotulo: 'descrição', tipo: 'texto' },
+      { chave: 'okText', rotulo: 'confirma', tipo: 'texto' },
+      { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
+    ]
+  },
+  // SOBRESCREVER UM ARQUIVO EXISTENTE MANTENDO O ID.
+  //
+  // O id é o ponto central: outros comandos referenciam o arquivo por ele, e
+  // recriar geraria um id novo, quebrando essas referências em silêncio.
+  // Aceita texto novo (para notas/arquivos de texto) ou nova mídia recebida
+  // na mensagem (para atualizar fotos ou PDFs de catálogo).
+  {
+    palavra: 'sobrescreve no acervo',
+    tipo: 'action.acervo.rewrite',
+    campos: [
+      { chave: 'path', inline: true, tipo: 'texto' },
+      { chave: 'fileId', rotulo: 'id', tipo: 'texto' },
+      { chave: 'text', rotulo: 'conteúdo', tipo: 'texto' },
+      { chave: 'okText', rotulo: 'confirma', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' },
+      { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
+    ]
+  },
   // Mostrar o que de fato chegou na mensagem: id, quem mandou, o que ela
   // responde, e o toque no botão por inteiro. Não tem campo nenhum — o que ele
   // mostra é o evento, e o evento não se configura.

@@ -143,6 +143,63 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.acervo.delete',
+    rotulo: 'Apagar do acervo',
+    familia: 'midia',
+    resumo: 'Remove um arquivo do acervo pelo caminho ou pelo identificador, liberando espaço na cota.',
+    exemplo: 'apaga do acervo "produtos/cardapio.pdf"',
+    ressalva: {
+      level: 'note',
+      text: 'Apagar é definitivo e irreversível. O id deixa de existir no acervo e qualquer comando que aponte para ele deixará de encontrá-lo.'
+    },
+    campos: [
+      { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Como "produtos/cardapio.pdf". Aceita variáveis como {{message.args}}.' },
+      { chave: 'fileId', rotulo: 'Arquivo (por identificador)', ajuda: 'O identificador único do arquivo no acervo.' },
+      { chave: 'okText', rotulo: 'Confirmação', ajuda: 'Resposta enviada após apagar. {{caminho}} vira o caminho do arquivo, {{id}} o identificador e {{nome}} o nome.' },
+      { chave: 'notFoundText', rotulo: 'Se o arquivo não existir', ajuda: 'Resposta enviada se o arquivo procurado não for encontrado no acervo.' },
+      { chave: 'errorText', rotulo: 'Se falhar', ajuda: 'Resposta enviada se a remoção falhar. {{erro}} vira o motivo.' }
+    ]
+  },
+  {
+    tipo: 'action.acervo.createText',
+    rotulo: 'Criar texto no acervo',
+    familia: 'midia',
+    resumo: 'Cria um arquivo de texto no acervo a partir de variáveis ou texto montado pelo comando (como recibos ou relatórios).',
+    exemplo: 'cria texto no acervo "relatorios/recibo.txt", com conteúdo "Recibo de {{sender.name}}"',
+    ressalva: {
+      level: 'note',
+      text: 'Texto no acervo tem kind "text": ao ser enviado por comando, é entregue como mensagem de texto comum, e não como documento anexado.'
+    },
+    campos: [
+      { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Caminho completo com pasta e nome (ex: "relatorios/recibo.txt").' },
+      { chave: 'text', rotulo: 'Conteúdo do texto', ajuda: 'O texto a gravar no arquivo. Aceita variáveis do sistema como {{var.chat.total}} e {{sender.name}}.' },
+      { chave: 'name', rotulo: 'Nome do arquivo', ajuda: 'Nome do arquivo no acervo (ex: "recibo.txt"). Se não informado, deduz do caminho.' },
+      { chave: 'folder', rotulo: 'Pasta', ajuda: 'Pasta onde organizar o arquivo (até três níveis). Se não informada, deduz do caminho.' },
+      { chave: 'description', rotulo: 'Descrição', ajuda: 'Descrição para identificar o arquivo na listagem do acervo.' },
+      { chave: 'okText', rotulo: 'Confirmação', ajuda: 'Resposta enviada após criar o arquivo. Aceita {{caminho}}, {{id}} e {{nome}}.' },
+      { chave: 'errorText', rotulo: 'Se falhar', ajuda: 'Resposta enviada se a gravação falhar (ex: falta de espaço na cota ou limite de tamanho). {{erro}} vira o motivo.' }
+    ]
+  },
+  {
+    tipo: 'action.acervo.rewrite',
+    rotulo: 'Sobrescrever no acervo',
+    familia: 'midia',
+    resumo: 'Substitui o conteúdo de um arquivo existente mantendo o mesmo identificador, preservando referências de outros comandos.',
+    exemplo: 'sobrescreve no acervo "produtos/cardapio.txt", com o novo texto ou mídia recebida.',
+    ressalva: {
+      level: 'note',
+      text: 'O identificador (id) e o tipo do arquivo original são preservados intactos. Se não houver campo de texto, o comando usa a mídia enviada na mensagem.'
+    },
+    campos: [
+      { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Caminho do arquivo a ser sobrescrito (ex: "cardapio.txt").' },
+      { chave: 'fileId', rotulo: 'Arquivo (por identificador)', ajuda: 'O identificador estável do arquivo que será reescrito.' },
+      { chave: 'text', rotulo: 'Novo conteúdo de texto', ajuda: 'Novo texto para o arquivo. Se deixado vazio, o comando usa a mídia recebida na mensagem do WhatsApp.' },
+      { chave: 'okText', rotulo: 'Confirmação', ajuda: 'Resposta enviada após a reescrita. Aceita {{caminho}}, {{id}} e {{nome}}.' },
+      { chave: 'notFoundText', rotulo: 'Se o arquivo não existir', ajuda: 'Resposta enviada se o arquivo procurado não for encontrado ou se faltar a mídia nova.' },
+      { chave: 'errorText', rotulo: 'Se falhar', ajuda: 'Resposta enviada se a sobrescrita falhar (ex: estouro de cota). {{erro}} vira o motivo.' }
+    ]
+  },
+  {
     tipo: 'action.connection.call',
     rotulo: 'Consultar um serviço externo',
     familia: 'midia',

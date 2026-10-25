@@ -1293,6 +1293,208 @@ async function executarGuardarNoAcervo (client, comando, deps) {
   }
 }
 
+// Apagar um arquivo do acervo pelo id ou pelo caminho.
+//
+// O projeto prefere erro claro a falha calada: se o arquivo não existir, o
+// comando avisa via `notFoundText` (se configurado) e lança erro, para que a
+// execução registre falha e não finja que apagou o que não existia.
+async function executarApagarDoAcervo (client, comando, deps) {
+  const { acervo } = deps
+  const payload = comando.payload
+  const avisar = criarAvisador(client, comando, { chatId: payload.chatId, replyTo: payload.replyTo, errorText: payload.errorText })
+
+  const registro = (payload.fileId ? acervo.obter(payload.fileId) : null) ||
+                   (payload.caminho ? (acervo.porCaminho(payload.caminho) || (/^[0-9a-f]{24}$/i.test(payload.caminho) ? acervo.obter(payload.caminho) : null)) : null)
+
+  if (!registro) {
+    if (payload.notFoundText) {
+      try {
+        await comTimeout(
+          () => enviarERegistrar(client, payload.chatId, { type: 'text', text: payload.notFoundText }, opcoesDeCitacao(payload.replyTo)),
+          TIMEOUT_ENVIO_MS,
+          `timeout ao avisar do arquivo ausente no comando ${comando.id}`
+        )
+      } catch (erroAviso) {
+        if (erroAviso?.code === 'LCN_SEM_VAGA') throw erroAviso
+        console.warn(`[engine] Não consegui avisar arquivo ausente no comando ${comando.id}: ${mensagemDoErro(erroAviso)}`)
+      }
+    }
+    throw new Error(`arquivo não encontrado no acervo: ${payload.fileId || payload.caminho}`)
+  }
+
+  try {
+    const removido = acervo.remover(registro.id)
+    if (!removido) throw new Error(`não foi possível remover o arquivo: ${registro.id}`)
+  } catch (erro) {
+    await avisar(erro?.message || 'não consegui apagar o arquivo')
+    throw erro
+  }
+
+  if (payload.okText) {
+    const confirmacao = payload.okText
+      .replaceAll('{{caminho}}', registro.path)
+      .replaceAll('{{id}}', registro.id)
+      .replaceAll('{{nome}}', registro.name)
+    await comTimeout(
+      () => enviarERegistrar(client, payload.chatId, { type: 'text', text: confirmacao }, opcoesDeCitacao(payload.replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao confirmar a remoção do comando ${comando.id}`
+    )
+  }
+}
+
+// Criar um arquivo de texto no acervo a partir de variáveis ou valores conhecidos.
+//
+// O acervo trata `kind: 'text'` de forma especial: o texto guardado é enviado
+// como mensagem de texto comum, e não como documento anexado.
+//
+// Passa obrigatoriamente pela reserva de orçamento de bytes e confere a cota do
+// acervo e o teto por arquivo antes de gravar no disco.
+async function executarCriarTextoNoAcervo (client, comando, deps) {
+  const { acervo, limiteBytes, orcamento } = deps
+  const payload = comando.payload
+  const avisar = criarAvisador(client, comando, { chatId: payload.chatId, replyTo: payload.replyTo, errorText: payload.errorText })
+
+  const texto = typeof payload.text === 'string' ? payload.text : ''
+  const tamanho = Buffer.byteLength(texto, 'utf8')
+  if (!tamanho) {
+    await avisar('conteúdo de texto vazio para criar no acervo')
+    throw new Error('conteúdo de texto vazio para criar no acervo')
+  }
+  if (tamanho > limiteBytes) {
+    await avisar(`o texto excede o limite geral de mídia configurado (${formatarMB(tamanho)})`)
+    throw new Error('o texto excede o limite geral de mídia configurado')
+  }
+
+  orcamento?.adquirir?.(tamanho)
+  let guardado
+  try {
+    const buffer = Buffer.from(texto, 'utf8')
+    let pasta = payload.pasta || null
+    let nome = payload.nome || null
+    if (payload.caminho && !nome) {
+      const partes = payload.caminho.split('/')
+      nome = partes.pop()
+      if (partes.length && !pasta) pasta = partes.join('/')
+    }
+    if (nome && !nome.includes('.')) nome = `${nome}.txt`
+
+    guardado = acervo.guardar(buffer, {
+      mimetype: 'text/plain',
+      name: nome || 'texto.txt',
+      description: payload.descricao || null,
+      folder: pasta || null
+    })
+  } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
+    await avisar(erro?.message || 'não consegui criar o arquivo de texto')
+    throw erro
+  } finally {
+    orcamento?.liberar?.(tamanho)
+  }
+
+  if (payload.okText) {
+    const confirmacao = payload.okText
+      .replaceAll('{{caminho}}', guardado.path)
+      .replaceAll('{{id}}', guardado.id)
+      .replaceAll('{{nome}}', guardado.name)
+    await comTimeout(
+      () => enviarERegistrar(client, payload.chatId, { type: 'text', text: confirmacao }, opcoesDeCitacao(payload.replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao confirmar o arquivo criado do comando ${comando.id}`
+    )
+  }
+  return guardado
+}
+
+// Sobrescrever o conteúdo de um arquivo mantendo o seu id estável.
+//
+// O id é o identificador por onde outros comandos referenciam o arquivo:
+// substituí-lo quebraria automações existentes em silêncio. A reescrita
+// atualiza os bytes no disco e atualiza a data de modificação sem gerar id novo.
+//
+// Aceita tanto texto direto quanto mídia que acabou de chegar pelo WhatsApp.
+async function executarSobrescreverNoAcervo (client, comando, deps) {
+  const { acervo, limiteBytes, orcamento, mediaRefCache, baixarBuffer } = deps
+  const payload = comando.payload
+  const avisar = criarAvisador(client, comando, { chatId: payload.chatId, replyTo: payload.replyTo, errorText: payload.errorText })
+
+  const registro = (payload.fileId ? acervo.obter(payload.fileId) : null) ||
+                   (payload.caminho ? (acervo.porCaminho(payload.caminho) || (/^[0-9a-f]{24}$/i.test(payload.caminho) ? acervo.obter(payload.caminho) : null)) : null)
+
+  if (!registro) {
+    if (payload.notFoundText) {
+      try {
+        await comTimeout(
+          () => enviarERegistrar(client, payload.chatId, { type: 'text', text: payload.notFoundText }, opcoesDeCitacao(payload.replyTo)),
+          TIMEOUT_ENVIO_MS,
+          `timeout ao avisar do arquivo ausente no comando ${comando.id}`
+        )
+      } catch (erroAviso) {
+        if (erroAviso?.code === 'LCN_SEM_VAGA') throw erroAviso
+        console.warn(`[engine] Não consegui avisar arquivo ausente no comando ${comando.id}: ${mensagemDoErro(erroAviso)}`)
+      }
+    }
+    throw new Error(`arquivo não encontrado no acervo: ${payload.fileId || payload.caminho}`)
+  }
+
+  let buffer
+  let tamanho
+  if (typeof payload.text === 'string') {
+    tamanho = Buffer.byteLength(payload.text, 'utf8')
+    if (!tamanho) {
+      await avisar('conteúdo de texto vazio para sobrescrever no acervo')
+      throw new Error('conteúdo de texto vazio para sobrescrever no acervo')
+    }
+    if (tamanho > limiteBytes) throw new Error('O conteúdo excede o limite geral de mídia configurado.')
+    orcamento?.adquirir?.(tamanho)
+    buffer = Buffer.from(payload.text, 'utf8')
+  } else if (payload.mediaRef) {
+    const entrada = mediaRefCache?.resolver(payload.mediaRef)
+    if (!entrada) {
+      await avisar('a mídia expirou antes do comando voltar do motor')
+      throw new Error('a mídia deste arquivo expirou antes do comando voltar do motor')
+    }
+    buffer = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
+    tamanho = buffer.length
+    if (tamanho > limiteBytes) throw new Error('A mídia excede o limite geral configurado.')
+    orcamento?.adquirir?.(tamanho)
+  } else {
+    if (payload.notFoundText) {
+      await comTimeout(
+        () => enviarERegistrar(client, payload.chatId, { type: 'text', text: payload.notFoundText }, opcoesDeCitacao(payload.replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar de falta de conteúdo no comando ${comando.id}`
+      )
+    }
+    throw new Error('nenhum conteúdo fornecido para sobrescrever o arquivo')
+  }
+
+  let atualizado
+  try {
+    atualizado = acervo.reescrever(registro.id, buffer)
+  } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
+    await avisar(erro?.message || 'não consegui sobrescrever o arquivo')
+    throw erro
+  } finally {
+    orcamento?.liberar?.(tamanho)
+  }
+
+  if (payload.okText) {
+    const confirmacao = payload.okText
+      .replaceAll('{{caminho}}', atualizado.path)
+      .replaceAll('{{id}}', atualizado.id)
+      .replaceAll('{{nome}}', atualizado.name)
+    await comTimeout(
+      () => enviarERegistrar(client, payload.chatId, { type: 'text', text: confirmacao }, opcoesDeCitacao(payload.replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao confirmar o arquivo sobrescrito do comando ${comando.id}`
+    )
+  }
+  return atualizado
+}
+
 // A entrega de mídias, compartilhada pelo download e pela chamada de conexão.
 //
 // Estava embutida no download; virou função porque agora são dois caminhos que
@@ -1710,6 +1912,9 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'media.download': executarDownload,
         'connection.call': executarChamadaDeConexao,
         'acervo.save': executarGuardarNoAcervo,
+        'acervo.delete': executarApagarDoAcervo,
+        'acervo.createText': executarCriarTextoNoAcervo,
+        'acervo.rewrite': executarSobrescreverNoAcervo,
         'whatsapp.stickerPack': executarPacoteDeFigurinhas
       }[comando?.commandType]
       let resultado = null
@@ -1782,3 +1987,4 @@ async function resolverDependencias (deps) {
   }
   return { ...padroesCarregados, ...deps }
 }
+

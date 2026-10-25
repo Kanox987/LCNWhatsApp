@@ -233,6 +233,15 @@
                 "$ref": "#/definitions/actionAcervoSave"
               },
               {
+                "$ref": "#/definitions/actionAcervoDelete"
+              },
+              {
+                "$ref": "#/definitions/actionAcervoCreateText"
+              },
+              {
+                "$ref": "#/definitions/actionAcervoRewrite"
+              },
+              {
                 "$ref": "#/definitions/actionWhatsappButtons"
               },
               {
@@ -1488,6 +1497,150 @@
             "errorText": {
               "type": "string",
               "description": "Resposta quando não deu para guardar (tipo não aceito, arquivo grande demais, acervo cheio). {{erro}} vira o motivo."
+            }
+          }
+        }
+      }
+    },
+    "actionAcervoDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.acervo.delete"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Caminho do arquivo no acervo a ser apagado."
+            },
+            "fileId": {
+              "type": "string",
+              "description": "Identificador único do arquivo no acervo."
+            },
+            "okText": {
+              "type": "string",
+              "description": "Confirmação enviada após apagar o arquivo. Aceita {{caminho}}, {{id}} e {{nome}}."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Mensagem enviada se o arquivo não for encontrado no acervo."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "Mensagem enviada se a remoção falhar."
+            }
+          }
+        }
+      }
+    },
+    "actionAcervoCreateText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.acervo.createText"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Caminho do arquivo de texto a ser criado no acervo."
+            },
+            "text": {
+              "type": "string",
+              "description": "Conteúdo de texto a ser gravado no arquivo. Aceita variáveis."
+            },
+            "name": {
+              "type": "string",
+              "description": "Nome do arquivo no acervo (ex: relatorio.txt)."
+            },
+            "folder": {
+              "type": "string",
+              "description": "Pasta do acervo onde o arquivo será organizado."
+            },
+            "description": {
+              "type": "string",
+              "description": "Descrição do arquivo no acervo."
+            },
+            "okText": {
+              "type": "string",
+              "description": "Confirmação enviada após criar o arquivo. Aceita {{caminho}}, {{id}} e {{nome}}."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "Mensagem enviada se a criação falhar (ex: falta de espaço na cota)."
+            }
+          }
+        }
+      }
+    },
+    "actionAcervoRewrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.acervo.rewrite"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Caminho do arquivo no acervo a ser sobrescrito."
+            },
+            "fileId": {
+              "type": "string",
+              "description": "Identificador único do arquivo no acervo a ser sobrescrito."
+            },
+            "text": {
+              "type": "string",
+              "description": "Novo conteúdo de texto para sobrescrever o arquivo, preservando o id. Aceita variáveis."
+            },
+            "okText": {
+              "type": "string",
+              "description": "Confirmação enviada após sobrescrever. Aceita {{caminho}}, {{id}} e {{nome}}."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Mensagem enviada se o arquivo não existir ou se faltar o conteúdo novo."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "Mensagem enviada se a reescrita falhar."
             }
           }
         }

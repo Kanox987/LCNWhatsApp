@@ -23,6 +23,7 @@ import {
   resolverAlvo,
   resolverEscopo
 } from './attributeScopes.js'
+import { usosDoArquivo } from './usosDeArquivo.js'
 
 // Fluxo malformado que passou pela validação de publish (documento adulterado
 // no banco, revisão antiga de antes de uma regra nova). Vira status 'error' no
@@ -591,6 +592,18 @@ function compararValores (esquerda, operador, direita) {
   }
 }
 
+// Interpola textos de ações do acervo. Além das variáveis comuns do contexto
+// (com ponto, ex: {{sender.name}}), resolve os marcadores de arquivo (sem ponto:
+// {{caminho}}, {{id}}, {{nome}}) no avaliador, onde o contexto da ação existe.
+function interpolarTextoAcervo (texto, contexto, { caminho, fileId, nome } = {}) {
+  if (typeof texto !== 'string' || !texto) return texto
+  const resolvido = interpolar(texto, contexto)
+  return resolvido
+    .replaceAll('{{caminho}}', caminho || '')
+    .replaceAll('{{id}}', fileId || '')
+    .replaceAll('{{nome}}', nome || caminho || fileId || '')
+}
+
 // Executa UM nó e devolve por qual aresta seguir ('success' para ação,
 // 'true'/'false' para condição). Só roda no caminho ao vivo — em sombra
 // nada aqui é chamado, então nenhum efeito é persistido.
@@ -816,6 +829,157 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           ...(no.config?.description ? { descricao: interpolar(no.config.description, contexto) } : {}),
           ...(no.config?.okText ? { okText: no.config.okText } : {}),
           ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+        }
+      })
+      return 'success'
+    }
+
+    // APAGAR UM ARQUIVO DO ACERVO.
+    //
+    // O motor não acessa o disco nem toca em bytes: resolve as variáveis do
+    // caminho ou id e despacha o comando para o gateway executar no acervo.
+    //
+    // AVISO SOBRE QUEM USA: consultamos `usosDoArquivo` antes da emissão.
+    // Se automações publicadas dependerem deste arquivo, registramos um aviso
+    // em log para o operador — sem bloquear a execução em runtime, porque
+    // bloquear um comando legítimo de limpeza seria transformar ajuda em trava.
+    case 'action.acervo.delete': {
+      const caminho = no.config?.path ? interpolar(no.config.path, contexto) : null
+      const fileId = no.config?.fileId ? interpolar(no.config.fileId, contexto) : null
+      if (!caminho && !fileId) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto), replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há arquivo indicado para apagar: informe o caminho ou o identificador.')
+      }
+
+      if (db) {
+        try {
+          const linhas = db.prepare(`
+            SELECT a.id AS automation_id, r.doc_json
+            FROM automations a
+            JOIN automation_revisions r ON r.id = a.active_revision_id
+            WHERE a.active_revision_id IS NOT NULL AND a.native = 0
+          `).all()
+          const automacoes = linhas.map((linha) => {
+            let doc = null
+            try { doc = JSON.parse(linha.doc_json) } catch {}
+            return { id: linha.automation_id, nome: doc?.name || linha.automation_id, documento: doc }
+          })
+          const usos = usosDoArquivo({ id: fileId, path: caminho }, automacoes)
+          if (usos.certos.length > 0) {
+            const nomes = usos.certos.map((u) => u.nome).join(', ')
+            console.warn(`[engine] Arquivo ${fileId || caminho} sendo apagado por automação, mas usado por: ${nomes}`)
+          }
+        } catch {}
+      }
+
+      comandos.push({
+        commandType: 'acervo.delete',
+        payload: {
+          chatId: evento.chat.id,
+          replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento),
+          ...(caminho ? { caminho } : {}),
+          ...(fileId ? { fileId } : {}),
+          ...(no.config?.okText ? { okText: interpolarTextoAcervo(no.config.okText, contexto, { caminho, fileId }) } : {}),
+          ...(no.config?.notFoundText ? { notFoundText: interpolarTextoAcervo(no.config.notFoundText, contexto, { caminho, fileId }) } : {}),
+          ...(no.config?.errorText ? { errorText: interpolarTextoAcervo(no.config.errorText, contexto, { caminho, fileId }) } : {})
+        }
+      })
+      return 'success'
+    }
+
+    // CRIAR UM ARQUIVO DE TEXTO NO ACERVO.
+    //
+    // Monta o texto a partir das variáveis resolvidas no contexto e encaminha
+    // ao gateway. O motor não monta buffers — é o gateway que aloca e grava,
+    // garantindo que os limites de memória e a cota do acervo sejam respeitados.
+    case 'action.acervo.createText': {
+      const texto = typeof no.config?.text === 'string' ? interpolar(no.config.text, contexto) : ''
+      if (!texto) {
+        if (typeof no.config?.errorText === 'string' && no.config.errorText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolarTextoAcervo(no.config.errorText, contexto).replaceAll('{{erro}}', 'conteúdo vazio'), replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Conteúdo de texto vazio para criar no acervo.')
+      }
+
+      const caminho = no.config?.path ? interpolar(no.config.path, contexto) : null
+      const nome = no.config?.name ? interpolar(no.config.name, contexto) : null
+      const pasta = no.config?.folder ? interpolar(no.config.folder, contexto) : null
+      const descricao = no.config?.description ? interpolar(no.config.description, contexto) : null
+
+      comandos.push({
+        commandType: 'acervo.createText',
+        payload: {
+          chatId: evento.chat.id,
+          text: texto,
+          replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento),
+          ...(caminho ? { caminho } : {}),
+          ...(nome ? { nome } : {}),
+          ...(pasta ? { pasta } : {}),
+          ...(descricao ? { descricao } : {}),
+          ...(no.config?.okText ? { okText: interpolarTextoAcervo(no.config.okText, contexto, { caminho, nome }) } : {}),
+          ...(no.config?.errorText ? { errorText: interpolarTextoAcervo(no.config.errorText, contexto, { caminho, nome }) } : {})
+        }
+      })
+      return 'success'
+    }
+
+    // SOBRESCREVER UM ARQUIVO PRESERVANDO O ID.
+    //
+    // O id é a chave de sobrevivência das automações que já apontam para este
+    // arquivo. Pode receber novo texto pelo comando ou nova mídia pelo WhatsApp
+    // (anexada ou citada).
+    case 'action.acervo.rewrite': {
+      const caminho = no.config?.path ? interpolar(no.config.path, contexto) : null
+      const fileId = no.config?.fileId ? interpolar(no.config.fileId, contexto) : null
+      if (!caminho && !fileId) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolarTextoAcervo(no.config.notFoundText, contexto, { caminho, fileId }), replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há arquivo indicado para sobrescrever: informe o caminho ou o identificador.')
+      }
+
+      const temTexto = typeof no.config?.text === 'string'
+      const texto = temTexto ? interpolar(no.config.text, contexto) : null
+      const citada = evento.message?.quotedMediaRef
+      const mediaRef = temTexto ? null : (evento.message?.mediaRef || citada?.token || null)
+
+      if (!temTexto && !mediaRef) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolarTextoAcervo(no.config.notFoundText, contexto, { caminho, fileId }), replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Nenhum conteúdo fornecido para sobrescrever o arquivo.')
+      }
+
+      comandos.push({
+        commandType: 'acervo.rewrite',
+        payload: {
+          chatId: evento.chat.id,
+          replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento),
+          ...(caminho ? { caminho } : {}),
+          ...(fileId ? { fileId } : {}),
+          ...(temTexto ? { text: texto } : {}),
+          ...(mediaRef ? { mediaRef } : {}),
+          ...(no.config?.okText ? { okText: interpolarTextoAcervo(no.config.okText, contexto, { caminho, fileId }) } : {}),
+          ...(no.config?.notFoundText ? { notFoundText: interpolarTextoAcervo(no.config.notFoundText, contexto, { caminho, fileId }) } : {}),
+          ...(no.config?.errorText ? { errorText: interpolarTextoAcervo(no.config.errorText, contexto, { caminho, fileId }) } : {})
         }
       })
       return 'success'

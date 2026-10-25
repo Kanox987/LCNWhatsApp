@@ -1,0 +1,34 @@
+template apagar-arquivo v1
+  nome: Apagar arquivo do acervo
+  descrição: Remove definitivamente um arquivo do acervo pelo caminho ou nome, liberando espaço em disco.
+  categoria: utilitarios
+
+automação
+  nome: Apagar arquivo do acervo
+  tipo: comando
+  dispara com: {{params.command}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  apaga do acervo "{{params.caminho}}"
+    confirma: "Arquivo {{caminho}} apagado do acervo com sucesso!"
+    sem arquivo: "O arquivo {{caminho}} não existe no acervo."
+    erro: "Não foi possível apagar o arquivo: {{erro}}"
+
+configurável
+  command: texto = "/apagararquivo"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para apagar o arquivo.
+  caminho: texto = "notas/anotacao.txt"
+    rótulo: Caminho do arquivo
+    ajuda: Caminho do arquivo no acervo a ser removido.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens; "external" ignora o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responderá a este comando.
+
+# nós: gatilho-comando, apaga-arquivo

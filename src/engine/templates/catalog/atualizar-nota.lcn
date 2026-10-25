@@ -1,0 +1,35 @@
+template atualizar-nota v1
+  nome: Atualizar nota no acervo
+  descrição: Sobrescreve o conteúdo de uma nota de texto ou arquivo existente no acervo mantendo o mesmo identificador estável.
+  categoria: utilitarios
+
+automação
+  nome: Atualizar nota no acervo
+  tipo: comando
+  dispara com: {{params.command}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  sobrescreve no acervo "{{params.caminho}}"
+    conteúdo: "{{message.args}}"
+    confirma: "Arquivo {{caminho}} atualizado com sucesso!"
+    sem arquivo: "Arquivo {{caminho}} não foi encontrado para atualizar."
+    erro: "Falha ao atualizar o arquivo: {{erro}}"
+
+configurável
+  command: texto = "/editarnota"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para atualizar a nota.
+  caminho: texto = "notas/anotacao.txt"
+    rótulo: Caminho do arquivo
+    ajuda: Caminho do arquivo no acervo a ser sobrescrito mantendo o identificador.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens; "external" ignora o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responderá a este comando.
+
+# nós: gatilho-comando, atualiza-nota

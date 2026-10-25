@@ -1,0 +1,35 @@
+template criar-nota v1
+  nome: Criar nota no acervo
+  descrição: Cria um arquivo de texto no acervo a partir do que a pessoa digita ou de variáveis do sistema.
+  categoria: utilitarios
+
+automação
+  nome: Criar nota no acervo
+  tipo: comando
+  dispara com: {{params.command}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  cria texto no acervo "{{params.caminho}}"
+    conteúdo: "{{message.args}}"
+    descrição: "Nota criada por {{sender.name}}"
+    confirma: "Nota gravada com sucesso em {{caminho}}!"
+    erro: "Não foi possível criar a nota: {{erro}}"
+
+configurável
+  command: texto = "/nota"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita antes do texto da nota.
+  caminho: texto = "notas/anotacao.txt"
+    rótulo: Caminho do arquivo
+    ajuda: Onde a nota será salva dentro do acervo.
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens; "external" ignora o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responderá a este comando.
+
+# nós: gatilho-comando, cria-nota

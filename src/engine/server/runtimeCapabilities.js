@@ -35,6 +35,9 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // Guardar no acervo a mídia que chegou pelo WhatsApp. O par de
   // `action.whatsapp.sendFile`, que só sabia tirar de lá.
   'action.acervo.save',
+  'action.acervo.delete',
+  'action.acervo.createText',
+  'action.acervo.rewrite',
   // Mostrar os metadados da mensagem. Ele não tem executor próprio no gateway:
   // o motor o transforma numa resposta de texto comum, pelo mesmo caminho de
   // `whatsapp.reply`. Entra nesta lista mesmo assim, porque é esta lista que
