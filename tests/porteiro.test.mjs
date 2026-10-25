@@ -293,6 +293,64 @@ const vigiaAntes = compilar('automação vig3\n  dispara com: qualquer mensagem\
 const vigiaDepois = compilar('automação vig3\n  tipo: vigia\n  dispara com: qualquer mensagem\n  pool: p1\n\n  responde "oi"\n')
 check('vigia: as duas ordens produzem o MESMO documento', JSON.stringify(vigiaAntes) === JSON.stringify(vigiaDepois))
 
+// 5d. CAMPO REPETIDO: toda ocorrência é conferida, não só a última.
+// Ao acumular as entradas do cabeçalho para conferir depois, guardar UMA
+// entrada por campo fez a primeira ocorrência escapar da validação: um valor
+// inválido seguido de um válido passava a compilar. Era recusado antes do
+// refator, e a bateria inteira ficou verde mesmo assim. Estas checagens pegam.
+const repetidosInvalidos = [
+  ['dispara com inválido seguido de válido', 'automação rep1\n  tipo: comando\n  dispara com: /a b c\n  dispara com: /ok\n  pool: p1\n\n  responde "oi"\n', /uma palavra só/, 3],
+  ['quando for inválido seguido de válido', 'automação rep2\n  tipo: porteiro\n  quando for: lixo-que-nao-existe\n  quando for: entrou\n  pool: p1\n\n  responde "oi"\n', /ação de grupo desconhecida/, 3],
+  ['argumentos inválido seguido de válido', 'automação rep3\n  tipo: comando\n  dispara com: /x\n  argumentos: so_um\n  argumentos: a / b\n  pool: p1\n\n  responde "oi"\n', /separados por um símbolo só/, 4],
+  ['dispara com inválido num vigia, seguido do válido', 'automação rep4\n  tipo: vigia\n  dispara com: /lixo\n  dispara com: qualquer mensagem\n  pool: p1\n\n  responde "oi"\n', /um vigia dispara com "qualquer mensagem"/, 3]
+]
+for (const [nome, texto, regex, linhaEsperada] of repetidosInvalidos) {
+  const err = recusa(texto)
+  check(`campo repetido: recusa ${nome} na linha do valor errado`,
+    err instanceof ErroDeSintaxe && regex.test(err.message) && err.linha === linhaEsperada,
+    `linha: ${err?.linha}, msg: ${err?.message}`)
+}
+
+// E o campo repetido VÁLIDO continua valendo o último, como antes.
+const repetidoValido = compilar('automação rep5\n  tipo: comando\n  dispara com: /primeiro\n  dispara com: /ultimo\n  pool: p1\n\n  responde "oi"\n')
+check('campo repetido válido: vale o último', repetidoValido.flow.nodes[0].config.command === '/ultimo')
+
+// 5e. "sem ele"/"sem ela" avisa sobre a exigência que está ESCRITA ACIMA dele.
+// Um "precisa de" posterior SUBSTITUI o anterior. O texto preso ao substituído
+// descrevia outra coisa — pendurá-lo na exigência nova faz o bot avisar "falta
+// o link" quando o que falta é uma mídia.
+const semTextoOrfao = compilar(`automação sem1
+  tipo: comando
+  dispara com: /x
+  precisa de um link: na mensagem
+  sem ele: "FALTA O LINK"
+  precisa de uma mídia: na mensagem
+  pool: p1
+
+  responde "oi"
+`)
+check('"sem ele" órfão não é pendurado na exigência que veio depois',
+  semTextoOrfao.inputPolicy.requires.kind === 'media' &&
+  semTextoOrfao.inputPolicy.requires.missingText === undefined,
+  JSON.stringify(semTextoOrfao.inputPolicy.requires))
+
+const semTextoCerto = compilar(`automação sem2
+  tipo: comando
+  dispara com: /x
+  precisa de um link: na mensagem
+  sem ele: "FALTA O LINK"
+  pool: p1
+
+  responde "oi"
+`)
+check('"sem ele" sob a própria exigência continua valendo',
+  semTextoCerto.inputPolicy.requires.missingText === 'FALTA O LINK')
+
+const errSemAntes = recusa('automação sem3\n  tipo: comando\n  dispara com: /x\n  sem ele: "falta"\n  precisa de um link: na mensagem\n  pool: p1\n\n  responde "oi"\n')
+check('"sem ele" escrito ANTES do "precisa de" continua recusado',
+  errSemAntes instanceof ErroDeSintaxe && /precisa vir depois de/.test(errSemAntes.message) && errSemAntes.linha === 4,
+  `linha: ${errSemAntes?.linha}, msg: ${errSemAntes?.message}`)
+
 // --- 6. Ida e Volta (Descompilação -> Compilação) -------------------------
 const lcnMultiacao = `automação port2
   nome: Monitor Geral

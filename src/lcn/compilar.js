@@ -713,10 +713,21 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
 
   // --- cabeçalho ----------------------------------------------------------
   const entradasCabecalho = []
-  let entradaDisparaCom = null
-  let entradaArgumentos = null
-  let entradaQuandoFor = null
+  // CAMPO REPETIDO TEM DE SER CONFERIDO EM TODA OCORRÊNCIA, não só na última.
+  // Guardar uma entrada só fazia a primeira escapar da validação: com
+  // "dispara com: /a b c" seguido de "dispara com: /ok", o valor inválido
+  // deixava de ser olhado e a automação compilava. Então são listas, cada uma
+  // validada, e o EFEITO continua sendo o da última — que é o que valia antes.
+  const entradasDisparaCom = []
+  const entradasArgumentos = []
+  const entradasQuandoFor = []
   const entradasSem = []
+  // Qual "precisa de ..." estava em vigor quando cada "sem ele"/"sem ela" foi
+  // escrito. Um "precisa de" posterior SUBSTITUI o anterior, e antes deste
+  // refator o texto preso ao substituído ia embora com ele. Sem esta conta, o
+  // texto escrito debaixo de um "precisa de um link" acabava grudado numa
+  // exigência de mídia declarada depois — avisando a coisa errada.
+  let versaoRequires = 0
 
   let i = 1
   for (; i < linhas.length; i++) {
@@ -775,7 +786,7 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       // é "qualquer mensagem", e os filtros (com link, palavras, quando for)
       // refinam em linhas próprias.
       case 'dispara com': {
-        entradaDisparaCom = { valor, linha: l.n }
+        entradasDisparaCom.push({ valor, linha: l.n })
         break
       }
       // "precisa de um link: na mensagem ou na citada"
@@ -800,13 +811,14 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
         // A ordem escrita é a ordem de procura: "na citada ou na mensagem"
         // olha primeiro a mensagem marcada.
         doc.inputPolicy.requires = { kind, from: onde }
+        versaoRequires++
         break
       }
       // Fica junto do que ele guarda — e não perdido entre os textos da ação,
       // que é onde o `sem mídia`/`sem dados` morava.
       case 'sem ele':
       case 'sem ela': {
-        entradasSem.push({ chave, valor, linha: l.n })
+        entradasSem.push({ chave, valor, linha: l.n, versaoRequires })
         break
       }
       case 'id': doc.id = valor; break
@@ -821,7 +833,7 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       // e o separador é o que estiver escrito ENTRE os nomes — o que a linha
       // mostra é o que a pessoa vai digitar.
       case 'argumentos': {
-        entradaArgumentos = { valor, linha: l.n }
+        entradasArgumentos.push({ valor, linha: l.n })
         break
       }
       case 'menu': {
@@ -909,7 +921,7 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
         gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'quem pode acionar', l.n)
         break
       case 'quando for':
-        entradaQuandoFor = { valor, linha: l.n }
+        entradasQuandoFor.push({ valor, linha: l.n })
         break
       case 'palavras':
         gatilhoConfig.keywords = valor.split(',').map((p) => descitar(p, l.n))
@@ -952,24 +964,27 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   }
 
   if (tipoDoGatilho === 'trigger.command') {
-    if (!entradaDisparaCom) {
+    if (!entradasDisparaCom.length) {
       throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
     }
-    const { valor, linha } = entradaDisparaCom
-    if (!valor || /\s/.test(valor)) {
-      throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, linha)
+    for (const { valor, linha } of entradasDisparaCom) {
+      if (!valor || /\s/.test(valor)) {
+        throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, linha)
+      }
+      gatilhoConfig.command = valor
     }
-    gatilhoConfig.command = valor
   } else if (tipoDoGatilho === 'trigger.message') {
-    if (entradaDisparaCom && entradaDisparaCom.valor !== 'qualquer mensagem') {
-      throw new ErroDeSintaxe(
-        `um vigia dispara com "qualquer mensagem" — o que ele observa se diz nas linhas seguintes (com link, palavras, quando for). Veio "${entradaDisparaCom.valor}"`,
-        entradaDisparaCom.linha
-      )
+    for (const { valor, linha } of entradasDisparaCom) {
+      if (valor !== 'qualquer mensagem') {
+        throw new ErroDeSintaxe(
+          `um vigia dispara com "qualquer mensagem" — o que ele observa se diz nas linhas seguintes (com link, palavras, quando for). Veio "${valor}"`,
+          linha
+        )
+      }
     }
   }
 
-  if (entradaArgumentos) {
+  for (const entradaArgumentos of entradasArgumentos) {
     if (tipoDoGatilho !== 'trigger.command') {
       throw new ErroDeSintaxe('"argumentos" é só de comando — um vigia não tem o que vem depois da palavra digitada.', entradaArgumentos.linha)
     }
@@ -992,22 +1007,31 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   }
 
   for (const sem of entradasSem) {
-    if (!doc.inputPolicy.requires) {
+    if (!doc.inputPolicy.requires || sem.versaoRequires === 0) {
       throw new ErroDeSintaxe(`"${sem.chave}" precisa vir depois de "precisa de ..."`, sem.linha)
     }
+    // O texto vale para a exigência que estava escrita ACIMA dele. Se um
+    // "precisa de" posterior substituiu aquela, o aviso não é mais sobre esta
+    // exigência e não pode ser pendurado nela: diria a coisa errada. Some
+    // junto com a exigência que descrevia, como já acontecia antes.
+    if (sem.versaoRequires !== versaoRequires) continue
     doc.inputPolicy.requires.missingText = descitar(sem.valor, sem.linha)
   }
 
   if (tipoDoGatilho === 'trigger.group') {
-    if (!entradaQuandoFor || !entradaQuandoFor.valor) {
+    if (!entradasQuandoFor.length || !entradasQuandoFor.some((e) => e.valor)) {
       throw new ErroDeSintaxe('falta "quando for:" — um porteiro precisa dizer quais ações observa: entrou, saiu, promoveu, rebaixou ou mudou o nome', cabeca.n)
     }
-    gatilhoConfig.actions = entradaQuandoFor.valor.split(',').map((t) => traduzir(ACAO_DE_GRUPO_POR_PALAVRA, t, 'ação de grupo', entradaQuandoFor.linha))
+    for (const { valor, linha } of entradasQuandoFor) {
+      gatilhoConfig.actions = valor.split(',').map((t) => traduzir(ACAO_DE_GRUPO_POR_PALAVRA, t, 'ação de grupo', linha))
+    }
     // O porteiro observa a porta do grupo, recebendo eventos canônicos de grupo
     // em vez de mensagens normais de conversa.
     doc.inputPolicy.acceptedMessageKinds = ['group']
-  } else if (entradaQuandoFor) {
-    gatilhoConfig.messageKinds = entradaQuandoFor.valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', entradaQuandoFor.linha))
+  } else {
+    for (const { valor, linha } of entradasQuandoFor) {
+      gatilhoConfig.messageKinds = valor.split(',').map((t) => traduzir(TIPO_POR_PALAVRA, t, 'tipo de mensagem', linha))
+    }
   }
 
   if (Object.keys(display).length) doc.display = display
