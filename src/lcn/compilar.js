@@ -877,6 +877,23 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
         // o descompilador não escreve a linha, e a recompilação perdia a
         // propriedade. Nada observável muda.
         if (!texto) break
+        // O PAR É CONTRATO, e ele mora no vocabulário: cada campo declara de
+        // qual exigência depende (`depende`), e a regra sai de lá em vez de um
+        // mapa escrito aqui — segunda fonte da verdade é o defeito que este
+        // projeto mais sofre.
+        //
+        // Recusar sem dizer a palavra certa manda a pessoa adivinhar qual das
+        // duas é a dela, então a mensagem nomeia a que serve. "ele" para link,
+        // "ela" para mídia: a linguagem é em português e o par é concordância.
+        const campo = CAMPOS_DO_CABECALHO.find((c) => c.chave === chave)
+        const exigenciaDeclarada = `precisa de ${EXIGENCIAS[doc.inputPolicy.requires.kind] || doc.inputPolicy.requires.kind}`
+        if (campo?.depende && campo.depende !== exigenciaDeclarada) {
+          const certo = CAMPOS_DO_CABECALHO.find((c) => c.depende === exigenciaDeclarada)
+          throw new ErroDeSintaxe(
+            `"${chave}" é de "${campo.depende}", e aqui está declarado "${exigenciaDeclarada}"${certo ? ` — escreva "${certo.chave}"` : ''}`,
+            l.n
+          )
+        }
         doc.inputPolicy.requires.missingText = texto
         break
       }

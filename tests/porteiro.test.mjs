@@ -351,6 +351,80 @@ check('"sem ele" escrito ANTES do "precisa de" continua recusado',
   errSemAntes instanceof ErroDeSintaxe && /precisa vir depois de/.test(errSemAntes.message) && errSemAntes.linha === 4,
   `linha: ${errSemAntes?.linha}, msg: ${errSemAntes?.message}`)
 
+// 5e bis. contrato de "depende" do vocabulário: "sem ele" é para link e "sem ela" para mídia.
+const errSemElaLink = recusa(`automação sem_err_link
+  tipo: comando
+  dispara com: /x
+  precisa de um link: na mensagem
+  sem ela: "falta link"
+  pool: p1
+
+  responde "oi"
+`)
+check('"sem ela" debaixo de "precisa de um link" é recusado',
+  errSemElaLink instanceof ErroDeSintaxe &&
+  errSemElaLink.linha === 5 &&
+  errSemElaLink.message.includes('"sem ela" é de "precisa de uma mídia", e aqui está declarado "precisa de um link"') &&
+  // A mensagem NOMEIA a palavra certa: recusar sem dizer qual serve manda a
+  // pessoa adivinhar entre duas que diferem por uma letra.
+  errSemElaLink.message.includes('escreva "sem ele"'),
+  `linha: ${errSemElaLink?.linha}, msg: ${errSemElaLink?.message}`)
+
+const errSemEleMidia = recusa(`automação sem_err_midia
+  tipo: comando
+  dispara com: /x
+  precisa de uma mídia: na mensagem
+  sem ele: "falta mídia"
+  pool: p1
+
+  responde "oi"
+`)
+check('"sem ele" debaixo de "precisa de uma mídia" é recusado',
+  errSemEleMidia instanceof ErroDeSintaxe &&
+  errSemEleMidia.linha === 5 &&
+  errSemEleMidia.message.includes('"sem ele" é de "precisa de um link", e aqui está declarado "precisa de uma mídia"') &&
+  errSemEleMidia.message.includes('escreva "sem ela"'),
+  `linha: ${errSemEleMidia?.linha}, msg: ${errSemEleMidia?.message}`)
+
+const parCertoLink = compilar(`automação sem_ok_link
+  tipo: comando
+  dispara com: /x
+  precisa de um link: na mensagem
+  sem ele: "falta link"
+  pool: p1
+
+  responde "oi"
+`)
+check('par certo: "sem ele" debaixo de "precisa de um link" compila',
+  parCertoLink.inputPolicy.requires.kind === 'link' &&
+  parCertoLink.inputPolicy.requires.missingText === 'falta link')
+
+const parCertoMidia = compilar(`automação sem_ok_midia
+  tipo: comando
+  dispara com: /x
+  precisa de uma mídia: na mensagem
+  sem ela: "falta mídia"
+  pool: p1
+
+  responde "oi"
+`)
+check('par certo: "sem ela" debaixo de "precisa de uma mídia" compila',
+  parCertoMidia.inputPolicy.requires.kind === 'media' &&
+  parCertoMidia.inputPolicy.requires.missingText === 'falta mídia')
+
+const semElaVazioSobLink = compilar(`automação sem_vazio
+  tipo: comando
+  dispara com: /x
+  precisa de um link: na mensagem
+  sem ela: ""
+  pool: p1
+
+  responde "oi"
+`)
+check('"sem ela" com texto vazio debaixo de "precisa de um link" é ignorado em silêncio',
+  semElaVazioSobLink.inputPolicy.requires.kind === 'link' &&
+  semElaVazioSobLink.inputPolicy.requires.missingText === undefined)
+
 // 5f. "tipo:" é único, porque é o DISCRIMINADOR.
 // Com a conferência rodando no fim do cabeçalho, um segundo "tipo:" tornava
 // válida retroativamente uma linha que a classe anterior recusava: "tipo:
