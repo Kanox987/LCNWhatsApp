@@ -43,7 +43,8 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.whatsapp.metadata',
   'action.whatsapp.webview',
   'action.whatsapp.buttons',
-  'action.whatsapp.carousel'
+  'action.whatsapp.carousel',
+  'action.whatsapp.stickerPack'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([

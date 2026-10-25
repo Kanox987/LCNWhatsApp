@@ -237,6 +237,9 @@
               },
               {
                 "$ref": "#/definitions/actionWhatsappCarousel"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappStickerPack"
               }
             ]
           }
@@ -1888,6 +1891,63 @@
             "notFoundText": {
               "type": "string",
               "description": "Texto avisando que a pasta do acervo está vazia ou o arquivo não foi encontrado."
+            }
+          }
+        }
+      }
+    },
+    "actionWhatsappStickerPack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.stickerPack"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Nome ou título do pacote de figurinhas."
+            },
+            "folder": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Pasta do acervo onde estão as figurinhas."
+            },
+            "author": {
+              "type": "string",
+              "description": "Autor ou criador do pacote de figurinhas."
+            },
+            "forma": {
+              "enum": [
+                "pacote",
+                "arquivo",
+                "diagnóstico"
+              ],
+              "description": "Forma de entrega: pacote nativo via protocolo, arquivo .wastickers como documento, ou diagnóstico mandando as duas numeradas."
+            },
+            "caption": {
+              "type": "string",
+              "description": "Legenda acompanhando o pacote ou documento."
+            },
+            "fallbackText": {
+              "type": "string",
+              "description": "Texto de reserva quando o envio do pacote falhar."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Texto avisando que a pasta do acervo está vazia ou não contém figurinhas."
             }
           }
         }

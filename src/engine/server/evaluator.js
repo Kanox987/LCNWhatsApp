@@ -760,6 +760,30 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    // PACOTE DE FIGURINHAS do acervo.
+    //
+    // Pode ser entregue de três formas:
+    //   - 'pacote': envio nativo via protocolo do WhatsApp (stickerPackMessage)
+    //   - 'arquivo': documento no formato .wastickers para abrir em app de terceiro
+    //   - 'diagnóstico': envia as duas formas numeradas de uma vez para medição
+    case 'action.whatsapp.stickerPack': {
+      comandos.push({
+        commandType: 'whatsapp.stickerPack',
+        payload: {
+          chatId: evento.chat.id,
+          name: interpolar(no.config?.name || 'Pacote', contexto),
+          folder: interpolar(no.config?.folder || '', contexto),
+          author: interpolar(no.config?.author || 'LCN', contexto),
+          forma: ['arquivo', 'diagnóstico'].includes(no.config?.forma) ? no.config.forma : 'pacote',
+          ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
+          ...(no.config?.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {}),
+          ...(no.config?.fallbackText ? { fallbackText: interpolar(no.config.fallbackText, contexto) } : {}),
+          ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
+        }
+      })
+      return 'success'
+    }
+
     // Guardar no acervo a mídia que chegou pelo WhatsApp.
     //
     // Mesma fronteira da figurinha: o motor NUNCA vê a mídia. Ele repassa o

@@ -8,6 +8,7 @@ import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
 import {
   ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
   montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel, montarBotaoDePagina, VARIACOES_DE_PAGINA } from './carrossel.js'
+import { montarWastickersZip } from './wastickers.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -518,6 +519,188 @@ async function executarCarrossel (client, comando, deps) {
       TIMEOUT_ENVIO_MS,
       `timeout ao mandar a lista alternativa do carrossel do comando ${comando.id}`
     )
+  }
+}
+
+// PACOTE DE FIGURINHAS (.wastickers ou nativo).
+//
+// O protocolo WhatsApp Web implementado pelo zapo-js expõe `type: 'sticker-pack'`,
+// com upload de zip em `/mms/sticker-pack`, thumbnail em `/mms/thumbnail-sticker-pack`
+// e o proto `stickerPackMessage` com `stickerPackOrigin: USER_CREATED`.
+//
+// HONESTIDADE SOBRE O QUE NÃO FOI MEDIDO:
+// O caminho de envio existe na biblioteca. O que NÃO foi medido num aparelho
+// real é se o aplicativo oficial de quem recebe desenha o pacote e permite
+// a instalação em conversas normais (1:1 e grupo) — como aconteceu com o botão
+// de página, mensagem interativa que o servidor aceita e o aplicativo não
+// desenha não deixa rastro de erro: o envio é confirmado e a conversa fica vazia.
+//
+// DUAS FORMAS DE ENVIO:
+//   - pacote: tenta o envio nativo pelo protocolo (stickerPackMessage). Se o
+//             servidor recusar o envio, cai para o documento .wastickers.
+//   - arquivo: monta um arquivo .wastickers (ZIP contendo title.txt, author.txt
+//              e as figurinhas WebP) e entrega como documento. A pessoa abre
+//              no celular em apps como o Sticker Maker para importar no WhatsApp.
+//   - diagnóstico: manda as duas formas numeradas de uma vez, para medir qual
+//                  aparece naquele aparelho sem precisar de tentativas isoladas.
+//
+// CONTRATO DE CARREGADOR TARDIO E ORÇAMENTO:
+// As figurinhas da pasta têm o tamanho verificado contra o limite geral e
+// o orçamento é reservado ANTES de alocar memória do disco. Os buffers são
+// carregados sob demanda e liberados no finally, zerando o saldo.
+async function executarPacoteDeFigurinhas (client, comando, deps) {
+  const p = comando.payload
+  const { acervo, limiteBytes, orcamento } = deps
+  const chatId = p.chatId
+  const replyTo = p.replyTo
+
+  const avisarFalta = async (msg) => {
+    if (p.notFoundText) {
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, { type: 'text', text: p.notFoundText }, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar falta de figurinhas do pacote ${comando.id}`
+      )
+    }
+    throw new Error(msg)
+  }
+
+  const arquivos = acervo.listarDaPasta(p.folder)
+  if (!arquivos || !arquivos.length) {
+    return avisarFalta(`pasta vazia ou inexistente no acervo: ${p.folder}`)
+  }
+
+  // Figurinhas ou imagens estáticas/animadas (máximo de 30 por pacote no WhatsApp)
+  const MAX_FIGURINHAS = 30
+  const validos = arquivos.filter((r) => r.kind === 'sticker' || r.kind === 'image').slice(0, MAX_FIGURINHAS)
+  if (!validos.length) {
+    return avisarFalta(`a pasta "${p.folder}" não contém figurinhas ou imagens válidas para o pacote`)
+  }
+
+  const bytesTotais = validos.reduce((acc, r) => acc + (r.sizeBytes || 0), 0)
+  if (bytesTotais > limiteBytes) {
+    throw new Error('O conjunto de figurinhas do pacote excede o limite geral de mídia configurado.')
+  }
+
+  orcamento.adquirir(bytesTotais)
+  let figurinhasCarregadas = []
+
+  try {
+    for (const r of validos) {
+      const buffer = r.carregar ? await r.carregar() : await acervo.lerConteudoAsync(r.id, limiteBytes)
+      figurinhasCarregadas.push({
+        id: r.id,
+        nome: r.name,
+        buffer,
+        mimetype: r.mimetype || 'image/webp'
+      })
+    }
+
+    const nomePacote = p.name || 'Pacote de Figurinhas'
+    const autorPacote = p.author || 'LCN'
+
+    const enviarPacoteNativo = async (prefixoLegenda = '') => {
+      const stickers = figurinhasCarregadas.map((f, i) => ({
+        media: f.buffer,
+        fileName: f.nome.endsWith('.webp') ? f.nome : `sticker_${i + 1}.webp`,
+        emojis: ['✨'],
+        mimetype: f.mimetype
+      }))
+      const capa = figurinhasCarregadas[0].buffer
+      const legendaFinal = [prefixoLegenda, p.caption].filter(Boolean).join(' ') || undefined
+
+      const conteudo = {
+        type: 'sticker-pack',
+        stickerPackId: `pack-${comando.id}-${Date.now()}`,
+        name: nomePacote,
+        publisher: autorPacote,
+        stickers,
+        trayIcon: {
+          media: capa,
+          fileName: 'tray_icon.png'
+        },
+        coverThumbnail: capa,
+        ...(legendaFinal ? { caption: legendaFinal } : {})
+      }
+
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, conteudo, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS * 4,
+        `timeout ao enviar pacote nativo do comando ${comando.id}`
+      )
+      console.log(`[engine] pacote nativo ${comando.id}: "${nomePacote}" com ${stickers.length} figurinha(s)`)
+    }
+
+    const enviarArquivoWastickers = async (prefixoLegenda = '') => {
+      const zipBuffer = montarWastickersZip({
+        titulo: nomePacote,
+        autor: autorPacote,
+        figurinhas: figurinhasCarregadas,
+        cover: figurinhasCarregadas[0]?.buffer
+      })
+      const nomeArquivo = `${nomePacote.replace(/[^a-zA-Z0-9_\-]/g, '_') || 'pacote'}.wastickers`
+      const legendaFinal = [prefixoLegenda, p.caption].filter(Boolean).join(' ') || undefined
+
+      const conteudo = {
+        type: 'document',
+        media: zipBuffer,
+        fileName: nomeArquivo,
+        mimetype: 'application/octet-stream',
+        ...(legendaFinal ? { caption: legendaFinal } : {})
+      }
+
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, conteudo, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS * 4,
+        `timeout ao enviar documento .wastickers do comando ${comando.id}`
+      )
+      console.log(`[engine] documento .wastickers ${comando.id}: "${nomeArquivo}" com ${figurinhasCarregadas.length} figurinha(s)`)
+    }
+
+    if (p.forma === 'diagnóstico') {
+      // Diagnóstico: envia as duas variações numeradas de uma vez para medição real
+      await enviarPacoteNativo('[1/2] Pacote nativo (stickerPackMessage):')
+      await enviarArquivoWastickers('[2/2] Documento (.wastickers):')
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, {
+          type: 'text',
+          text: 'Foram enviadas as 2 variações do pacote de figurinhas (1: pacote nativo pelo protocolo; 2: documento .wastickers para app terceiro). Verifique qual o seu aparelho recebeu e desenhou.'
+        }, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao enviar fechamento de diagnóstico do comando ${comando.id}`
+      )
+      return
+    }
+
+    if (p.forma === 'arquivo') {
+      await enviarArquivoWastickers()
+      return
+    }
+
+    // Padrão: forma "pacote" (envio nativo pelo protocolo)
+    try {
+      await enviarPacoteNativo()
+    } catch (erro) {
+      if (erro?.code === 'LCN_SEM_VAGA' || erro?.code === 'LCN_TIMEOUT') throw erro
+      console.warn(`[engine] Envio de pacote nativo recusado (${mensagemDoErro(erro)}) — caindo para documento .wastickers.`)
+      try {
+        await enviarArquivoWastickers('📦 [Pacote alternativo em .wastickers]')
+      } catch (erroArquivo) {
+        if (erroArquivo?.code === 'LCN_SEM_VAGA' || erroArquivo?.code === 'LCN_TIMEOUT') throw erroArquivo
+        if (p.fallbackText) {
+          await comTimeout(
+            () => enviarERegistrar(client, chatId, { type: 'text', text: p.fallbackText }, opcoesDeCitacao(replyTo)),
+            TIMEOUT_ENVIO_MS,
+            `timeout ao enviar texto de reserva do pacote ${comando.id}`
+          )
+          return
+        }
+        throw erroArquivo
+      }
+    }
+  } finally {
+    orcamento.liberar(bytesTotais)
+    figurinhasCarregadas = null
   }
 }
 
@@ -1526,7 +1709,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'whatsapp.sendFile': executarEnvioDeArquivo,
         'media.download': executarDownload,
         'connection.call': executarChamadaDeConexao,
-        'acervo.save': executarGuardarNoAcervo
+        'acervo.save': executarGuardarNoAcervo,
+        'whatsapp.stickerPack': executarPacoteDeFigurinhas
       }[comando?.commandType]
       let resultado = null
       if (!executor) {

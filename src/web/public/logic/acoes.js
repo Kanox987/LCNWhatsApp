@@ -381,6 +381,26 @@ export const ACOES = Object.freeze([
       { chave: 'fallbackText', rotulo: 'Texto de reserva', ajuda: 'Texto enviado quando o carrossel interativo for recusado pelo aplicativo.' },
       { chave: 'notFoundText', rotulo: 'Se a pasta estiver vazia', ajuda: 'Mensagem enviada quando a pasta do acervo não tiver fotos ou o arquivo não existir.' }
     ]
+  },
+  {
+    tipo: 'action.whatsapp.stickerPack',
+    rotulo: 'Enviar pacote de figurinhas',
+    familia: 'midia',
+    resumo: 'Envia um conjunto de figurinhas do acervo como pacote nativo do WhatsApp ou como arquivo .wastickers para importar em aplicativo de figurinhas.',
+    exemplo: 'Alguém digita "/pacote" e recebe as figurinhas da pasta em um pacote só.',
+    ressalva: {
+      level: 'compatibility',
+      text: 'O envio nativo de pacote via protocolo usa o campo da biblioteca (stickerPackMessage), mas ainda NÃO foi medido em número real neste aparelho: se o aplicativo recusar, não há erro em lugar nenhum (o envio é confirmado e a conversa fica vazia). A forma "arquivo" entrega o pacote em formato .wastickers como documento, que pode ser aberto em apps de figurinhas (como o Sticker Maker). A forma "diagnóstico" manda as duas formas numeradas de uma vez para medição.'
+    },
+    campos: [
+      { chave: 'name', rotulo: 'Nome do pacote', ajuda: 'Título do pacote de figurinhas. Aceita variáveis.' },
+      { chave: 'folder', rotulo: 'Pasta do acervo', ajuda: 'Nome da pasta no Acervo com as figurinhas. Aceita variáveis.' },
+      { chave: 'author', rotulo: 'Autor do pacote', ajuda: 'Nome do criador ou autor do pacote. Aceita variáveis.' },
+      { chave: 'forma', rotulo: 'Forma de envio', ajuda: 'pacote = envio nativo pelo protocolo do WhatsApp · arquivo = documento .wastickers para abrir em app terceiro · diagnóstico = manda as duas formas numeradas de uma vez para medir qual chega.' },
+      { chave: 'caption', rotulo: 'Legenda', ajuda: 'Texto que acompanha o pacote ou documento. Aceita variáveis.' },
+      { chave: 'notFoundText', rotulo: 'Se a pasta estiver vazia', ajuda: 'Mensagem enviada quando a pasta não tiver figurinhas ou o arquivo não existir.' },
+      { chave: 'fallbackText', rotulo: 'Texto de reserva', ajuda: 'Texto enviado quando o envio do pacote for recusado.' }
+    ]
   }
 ])
 

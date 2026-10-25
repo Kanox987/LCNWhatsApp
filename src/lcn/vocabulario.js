@@ -231,6 +231,19 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    palavra: 'envia pacote',
+    tipo: 'action.whatsapp.stickerPack',
+    campos: [
+      { chave: 'name', inline: true, tipo: 'texto' },
+      { chave: 'folder', rotulo: 'pasta', tipo: 'texto' },
+      { chave: 'author', rotulo: 'autor', tipo: 'texto' },
+      { chave: 'forma', rotulo: 'forma', tipo: 'palavra', palavras: { pacote: 'pacote', arquivo: 'arquivo', 'diagnóstico': 'diagnóstico' } },
+      { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' },
+      { chave: 'fallbackText', rotulo: 'senão', tipo: 'texto' }
+    ]
+  },
+  {
     palavra: 'apaga mensagem',
     tipo: 'action.whatsapp.delete',
     campos: []

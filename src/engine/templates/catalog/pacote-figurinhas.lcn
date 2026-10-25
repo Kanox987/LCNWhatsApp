@@ -1,0 +1,72 @@
+template pacote-figurinhas v1
+  nome: Pacote de figurinhas
+  descrição: Envia um conjunto de figurinhas do acervo como pacote nativo do WhatsApp ou como arquivo .wastickers para importar em aplicativo de figurinhas (como o Sticker Maker). Suporta envio nativo via protocolo, documento de terceiro e diagnóstico das duas formas.
+  categoria: utilitarios
+
+automação
+  nome: Pacote de figurinhas
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Envia pacote de figurinhas
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  envia pacote "{{params.nome}}"
+    pasta: "{{params.pasta}}"
+    autor: "{{params.autor}}"
+    forma: {{params.forma}}
+    legenda: "{{params.legenda}}"
+    sem arquivo: "{{params.semArquivo}}"
+    senão: "{{params.fallback}}"
+
+configurável
+  command: texto = "/pacote"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para receber o pacote.
+  nome: texto = "Meu Pacote"
+    rótulo: Nome do pacote
+    ajuda: O título exibido no pacote de figurinhas.
+  pasta: texto = "figurinhas"
+    rótulo: Pasta do acervo
+    ajuda: Nome da pasta no acervo onde estão as figurinhas WebP ou imagens a empacotar.
+  autor: texto = "LCN Bot"
+    rótulo: Autor do pacote
+    ajuda: Nome do criador ou autor que assina o pacote.
+  forma: opção (pacote, arquivo, diagnóstico) = "pacote"
+    rótulo: Forma de envio
+    ajuda: "pacote" envia pelo caminho nativo da biblioteca (stickerPackMessage); "arquivo" entrega como documento .wastickers para abrir no aplicativo de figurinhas no celular; "diagnóstico" manda as duas formas numeradas de uma vez para medir qual o aparelho recebe.
+  legenda: texto = "Aqui está seu pacote de figurinhas!"
+    rótulo: Legenda
+    ajuda: Texto que acompanha a entrega do pacote ou documento.
+  semArquivo: texto = "Nenhuma figurinha encontrada na pasta."
+    rótulo: Aviso de pasta vazia
+    ajuda: Mensagem enviada se a pasta estiver vazia ou não contiver figurinhas válidas.
+  fallback: texto = "Não foi possível entregar o pacote de figurinhas no momento."
+    rótulo: Texto alternativo
+    ajuda: Mensagem de reserva caso o envio seja rejeitado pelo WhatsApp.
+  familia: texto = "utilitarios"
+    rótulo: Família
+    ajuda: Grupo a que este comando pertence para ligar e desligar na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde a qualquer mensagem; external apenas a contatos externos.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responderá a este comando.
+
+avisa nota
+  FORMATO .wastickers E APPS DE TERCEIROS: O formato .wastickers não faz parte do protocolo nativo do WhatsApp. Ele é um arquivo ZIP adotado por aplicativos de terceiros (como o Sticker Maker Studio) para instalar pacotes no WhatsApp através do Android/iOS. Quando enviado na forma "arquivo", a pessoa recebe um documento e precisa tocar nele para abrir no aplicativo de figurinhas instalado no aparelho dela.
+
+avisa compatibilidade
+  O ENVIO NATIVO NÃO FOI MEDIDO: O protocolo de aparelho conectado na biblioteca zapo-js expõe o tipo sticker-pack com envio de stickerPackMessage e upload em /mms/sticker-pack. Esse caminho existe no código da biblioteca, mas NÃO foi medido num aparelho real neste projeto para confirmar se o aplicativo oficial de quem recebe desenha o pacote e permite instalá-lo diretamente a partir de conversas normais. Quando o aplicativo recusa uma mensagem que não desenha, não aparece erro em lugar nenhum — o envio é confirmado pelo servidor e a conversa fica vazia.
+
+avisa não oficial
+  DUAS FORMAS E QUEDA AUTOMÁTICA: Exatamente porque o comportamento do aplicativo móvel para o pacote nativo ainda não foi medido, o comando oferece as duas alternativas: "pacote" tenta o envio nativo e cai automaticamente para o documento .wastickers se o envio for recusado; "arquivo" entrega diretamente o documento .wastickers; e "diagnóstico" envia as duas variações numeradas de uma vez para medição em número real.
+
+avisa nota
+  ORÇAMENTO DE MEMÓRIA E LIMITE DE 30 FIGURINHAS: O WhatsApp aceita no máximo 30 figurinhas por pacote. As imagens são lidas sob demanda, reservando o orçamento de bytes antes do carregamento do disco e liberando a memória imediatamente após o envio, sem reter arquivos na memória RAM.
+
+# nós: gatilho-comando, pacote-figurinhas
