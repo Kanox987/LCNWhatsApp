@@ -211,7 +211,7 @@ async function renderList ({ navigate, refresh }) {
     actions: [button('Nova automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }), button('Atualizar', { onClick: refresh })]
   })
   if (!automations.length) {
-    return emptyState('Nenhuma automação ainda', 'O assistente conduz do comando até a resposta sem exigir edição de JSON.', button('Criar primeira automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }))
+    return emptyState('Nenhuma automação ainda', 'Você escreve a regra em português na linguagem do projeto, com a referência ao lado e o erro apontando a linha.', button('Criar primeira automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }))
   }
   const pendentePorId = new Map((atualizacoes || []).map((a) => [a.automationId, a]))
   // DOIS COMANDOS COM A MESMA PALAVRA: os dois respondem, e quem digita recebe
@@ -746,8 +746,9 @@ export async function renderAutomations (context) {
   return renderList(context)
 }
 
-// Editar uma automação existente: texto sempre; o assistente fica oferecido
-// quando ele consegue representar aquela automação sem perder nada.
+// Editar uma automação existente: sempre no editor de texto. O assistente de
+// seis passos que ficava oferecido aqui foi removido — a tela de edição é uma
+// só, e é por isso que esta função não escolhe mais entre duas.
 async function renderEdicao ({ query, navigate, refresh }) {
   const atual = await api.automations.get(query.get('edit'))
   return renderEditorDeTexto({ atual, motivo: null, navigate, refresh })

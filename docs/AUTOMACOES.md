@@ -58,14 +58,15 @@ Quando estiver certo, use **Promover para ao vivo** na aba Automações.
 
 ## Criar um comando do zero
 
-Na aba **Automações**, o assistente pergunta:
+Na aba **Automações**, o botão **Nova automação** abre a oficina de escrita com um esqueleto funcional na linguagem `.lcn`.
 
-1. **Identidade** — nome e como aparece no `/menu`
-2. **Quando executa** — a palavra digitada, e se precisa ser exata
-3. **Onde vale** — contatos e grupos (obrigatório)
-4. **Quem responde** — qual número
-5. **O que responde** — o texto, com variáveis se quiser
-6. **Revisar** — em português, antes de publicar
+A tela é composta por:
+
+- **Editor com esqueleto inicial** — começa com um comando pronto (`/meucomando`) preenchido com o pool disponível, para você editar a partir dele em vez de uma tela em branco.
+- **Referência da linguagem** — painel ao lado do editor com as ações, campos e palavras aceitas, permitindo consultar e inserir direto no texto.
+- **O essencial** — resumo abaixo do editor explicando os campos obrigatórios do cabeçalho (`automação`, `tipo`, `acessa`, `onde`, `pool`).
+
+Ao clicar em **Criar automação**, o texto é compilado. Se houver erro de sintaxe, o painel marca a linha exata para correção. Uma vez criada com sucesso, a automação nasce como rascunho e a tela segue direto para a edição, onde o próximo passo é clicar em **Publicar** para colocar no ar.
 
 ---
 
