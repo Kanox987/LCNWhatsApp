@@ -193,9 +193,168 @@ function lerAcao (linha, filhas) {
     return { type: def.tipo, config }
   }
 
+  const sobra = linha.texto.slice(def.palavra.length).trim()
+
+  if (def.tipo === 'action.whatsapp.buttons') {
+    const config = {}
+    if (sobra) config.text = descitar(sobra, linha.n)
+    const buttons = []
+    for (const filha of filhas) {
+      if (filha.texto.startsWith('botão ') || filha.texto.startsWith('botao ')) {
+        const resto = filha.texto.slice(filha.texto.indexOf(' ') + 1).trim()
+        let rotulo, comando
+        if (resto.startsWith('"')) {
+          let fim = -1
+          let esc = false
+          for (let i = 1; i < resto.length; i++) {
+            if (esc) { esc = false; continue }
+            if (resto[i] === '\\') { esc = true; continue }
+            if (resto[i] === '"') { fim = i; break }
+          }
+          if (fim < 0) throw new ErroDeSintaxe('esperava texto entre aspas no botão', filha.n)
+          rotulo = JSON.parse(resto.slice(0, fim + 1))
+          const depois = resto.slice(fim + 1).trim()
+          if (depois.startsWith(':')) {
+            const cmd = depois.slice(1).trim()
+            comando = cmd.startsWith('"') ? descitar(cmd, filha.n) : cmd
+          } else {
+            comando = rotulo
+          }
+        } else {
+          const sep = resto.indexOf(':')
+          if (sep >= 0) {
+            rotulo = resto.slice(0, sep).trim()
+            const cmd = resto.slice(sep + 1).trim()
+            comando = cmd.startsWith('"') ? descitar(cmd, filha.n) : cmd
+          } else {
+            rotulo = resto
+            comando = resto
+          }
+        }
+        if (buttons.length >= 3) {
+          throw new ErroDeSintaxe('o WhatsApp aceita no máximo 3 botões de resposta rápida', filha.n)
+        }
+        buttons.push({ text: rotulo, command: comando })
+        continue
+      }
+      const sep = filha.texto.indexOf(':')
+      if (sep < 0) throw new ErroDeSintaxe(`esperava "campo: valor", veio "${filha.texto}"`, filha.n)
+      const rotulo = filha.texto.slice(0, sep).trim()
+      const valor = filha.texto.slice(sep + 1).trim()
+      if (rotulo === 'rodapé' || rotulo === 'rodape') {
+        config.footer = descitar(valor, filha.n)
+      } else if (rotulo === 'senão' || rotulo === 'senao') {
+        config.fallbackText = descitar(valor, filha.n)
+      } else {
+        throw new ErroDeSintaxe(`"${def.palavra}" não tem campo "${rotulo}"`, filha.n)
+      }
+    }
+    if (!buttons.length) {
+      throw new ErroDeSintaxe('"responde com botões" precisa de pelo menos um botão declarado', linha.n)
+    }
+    config.buttons = buttons
+    return { type: def.tipo, config }
+  }
+
+  if (def.tipo === 'action.whatsapp.carousel') {
+    const config = {}
+    if (sobra) config.text = descitar(sobra, linha.n)
+    const cards = []
+    let cardAtual = null
+    const baseIndent = filhas[0]?.indent ?? (linha.indent + 1)
+    for (let i = 0; i < filhas.length; i++) {
+      const filha = filhas[i]
+      if (filha.texto === 'card' && filha.indent === baseIndent) {
+        cardAtual = {}
+        cards.push(cardAtual)
+        continue
+      }
+      if (cardAtual && filha.indent > baseIndent) {
+        if (filha.texto.startsWith('botão ') || filha.texto.startsWith('botao ') || filha.texto.startsWith('botão:') || filha.texto.startsWith('botao:')) {
+          let resto = filha.texto.replace(/^(botão|botao)[: ]\s*/, '')
+          let rotulo, comando
+          if (resto.startsWith('"')) {
+            let fim = -1
+            let esc = false
+            for (let k = 1; k < resto.length; k++) {
+              if (esc) { esc = false; continue }
+              if (resto[k] === '\\') { esc = true; continue }
+              if (resto[k] === '"') { fim = k; break }
+            }
+            if (fim > 0) {
+              rotulo = descitar(resto.slice(0, fim + 1), filha.n)
+              const depois = resto.slice(fim + 1).trim()
+              if (depois.startsWith(':')) {
+                const cmd = depois.slice(1).trim()
+                comando = cmd.startsWith('"') ? descitar(cmd, filha.n) : cmd
+              } else {
+                comando = rotulo
+              }
+            } else {
+              rotulo = descitar(resto, filha.n)
+              comando = rotulo
+            }
+          } else {
+            const sep = resto.indexOf(':')
+            if (sep >= 0) {
+              rotulo = resto.slice(0, sep).trim()
+              const cmd = resto.slice(sep + 1).trim()
+              comando = cmd.startsWith('"') ? descitar(cmd, filha.n) : cmd
+            } else {
+              rotulo = resto
+              comando = resto
+            }
+          }
+          cardAtual.buttonText = rotulo
+          if (/^https?:\/\//i.test(comando)) cardAtual.buttonUrl = comando
+          else cardAtual.buttonCommand = comando
+          continue
+        }
+        const sep = filha.texto.indexOf(':')
+        if (sep < 0) throw new ErroDeSintaxe(`esperava "campo: valor", veio "${filha.texto}"`, filha.n)
+        const chave = filha.texto.slice(0, sep).trim()
+        const valor = filha.texto.slice(sep + 1).trim()
+        if (chave === 'arquivo') {
+          const val = descitar(valor, filha.n)
+          if (/^[0-9a-f]{24}$/.test(val)) cardAtual.fileId = val
+          else cardAtual.path = val
+        } else if (chave === 'título' || chave === 'titulo') {
+          cardAtual.title = descitar(valor, filha.n)
+        } else if (chave === 'corpo') {
+          cardAtual.body = descitar(valor, filha.n)
+        } else if (chave === 'rodapé' || chave === 'rodape') {
+          cardAtual.footer = descitar(valor, filha.n)
+        } else {
+          throw new ErroDeSintaxe(`card não tem campo "${chave}"`, filha.n)
+        }
+        continue
+      }
+      cardAtual = null
+      const sep = filha.texto.indexOf(':')
+      if (sep < 0) throw new ErroDeSintaxe(`esperava "campo: valor", veio "${filha.texto}"`, filha.n)
+      const rotulo = filha.texto.slice(0, sep).trim()
+      const valor = filha.texto.slice(sep + 1).trim()
+      if (rotulo === 'pasta') config.folder = descitar(valor, filha.n)
+      else if (rotulo === 'botão' || rotulo === 'botao') config.buttonText = descitar(valor, filha.n)
+      else if (rotulo === 'comando') config.buttonCommand = descitar(valor, filha.n)
+      else if (rotulo === 'rodapé' || rotulo === 'rodape') config.footer = descitar(valor, filha.n)
+      else if (rotulo === 'estilo') {
+        const est = ehMarcador(valor) ? valor : valor.trim()
+        config.estilo = est
+      }
+      else if (rotulo === 'sem arquivo') config.notFoundText = descitar(valor, filha.n)
+      else if (rotulo === 'senão' || rotulo === 'senao') config.fallbackText = descitar(valor, filha.n)
+      else throw new ErroDeSintaxe(`campo desconhecido em "mostra carrossel": "${rotulo}"`, filha.n)
+    }
+    if (cards.length) config.cards = cards
+    if (!config.folder && !cards.length) {
+      throw new ErroDeSintaxe('"mostra carrossel" precisa de uma pasta do acervo ou de pelo menos um card', linha.n)
+    }
+    return { type: def.tipo, config }
+  }
+
   const config = {}
   const inline = def.campos.find((c) => c.inline)
-  const sobra = linha.texto.slice(def.palavra.length).trim()
   if (sobra) {
     // `chama midia.baixar` — a conexão e a função na mesma linha. Ler as duas
     // juntas é o que faz a leitura dizer de cara de QUEM o comando depende, que

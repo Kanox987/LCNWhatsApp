@@ -699,6 +699,67 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    // BOTÕES DE ESCOLHA declarados no próprio comando.
+    //
+    // Cada botão é um quick_reply que, ao ser tocado, volta para o bot como uma
+    // mensagem de texto comum contendo o `command` (ou o próprio texto do botão).
+    // O motor avalia essa resposta contra as automações instaladas como qualquer
+    // outra mensagem recebida.
+    case 'action.whatsapp.buttons': {
+      const texto = interpolar(no.config.text || '', contexto)
+      const buttons = (no.config.buttons || []).map((b) => ({
+        id: interpolar(b.command || b.id || b.text || '', contexto),
+        text: interpolar(b.text || '', contexto)
+      }))
+      comandos.push({
+        commandType: 'whatsapp.buttons',
+        payload: {
+          chatId: evento.chat.id,
+          text: texto,
+          buttons,
+          ...(no.config.footer ? { footer: interpolar(no.config.footer, contexto) } : {}),
+          ...(no.config.fallbackText ? { fallbackText: interpolar(no.config.fallbackText, contexto) } : {}),
+          ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
+        }
+      })
+      return 'success'
+    }
+
+    // CARROSSEL DE VALORES PRÓPRIOS ou de pasta do acervo.
+    //
+    // Pode vir de uma lista de cards declarados no próprio comando (com foto,
+    // título, corpo e botão) ou de uma pasta do acervo local.
+    case 'action.whatsapp.carousel': {
+      const texto = no.config.text ? interpolar(no.config.text, contexto) : ''
+      const cards = (no.config.cards || []).map((c) => ({
+        ...(c.fileId ? { fileId: interpolar(c.fileId, contexto) } : {}),
+        ...(c.path ? { path: interpolar(c.path, contexto) } : {}),
+        ...(c.title ? { title: interpolar(c.title, contexto) } : {}),
+        ...(c.body ? { body: interpolar(c.body, contexto) } : {}),
+        ...(c.footer ? { footer: interpolar(c.footer, contexto) } : {}),
+        ...(c.buttonText ? { buttonText: interpolar(c.buttonText, contexto) } : {}),
+        ...(c.buttonCommand ? { buttonCommand: interpolar(c.buttonCommand, contexto) } : {}),
+        ...(c.buttonUrl ? { buttonUrl: interpolar(c.buttonUrl, contexto) } : {})
+      }))
+      comandos.push({
+        commandType: 'whatsapp.carousel',
+        payload: {
+          chatId: evento.chat.id,
+          text: texto,
+          ...(no.config.folder ? { folder: interpolar(no.config.folder, contexto) } : {}),
+          ...(cards.length ? { cards } : {}),
+          ...(no.config.buttonText ? { buttonText: interpolar(no.config.buttonText, contexto) } : {}),
+          ...(no.config.buttonCommand ? { buttonCommand: interpolar(no.config.buttonCommand, contexto) } : {}),
+          ...(no.config.footer ? { footer: interpolar(no.config.footer, contexto) } : {}),
+          ...(no.config.estilo ? { estilo: no.config.estilo } : {}),
+          ...(no.config.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {}),
+          ...(no.config.fallbackText ? { fallbackText: interpolar(no.config.fallbackText, contexto) } : {}),
+          ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
+        }
+      })
+      return 'success'
+    }
+
     // Guardar no acervo a mídia que chegou pelo WhatsApp.
     //
     // Mesma fronteira da figurinha: o motor NUNCA vê a mídia. Ele repassa o

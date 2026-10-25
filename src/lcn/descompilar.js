@@ -39,6 +39,55 @@ function linhaDeAcao (no) {
     return [`${def.palavra} ${escopo} ${cfg.key} = ${valor}`]
   }
 
+  if (def.tipo === 'action.whatsapp.buttons') {
+    const texto = cfg.text !== undefined && cfg.text !== null ? ` ${citar(cfg.text)}` : ''
+    const out = [`${def.palavra}${texto}`]
+    for (const b of cfg.buttons || []) {
+      const rotulo = citar(b.text ?? '')
+      const cmd = b.command ?? b.id
+      if (cmd && cmd !== b.text) {
+        out.push(`${IDENT}botão ${rotulo}: ${citar(cmd)}`)
+      } else {
+        out.push(`${IDENT}botão ${rotulo}`)
+      }
+    }
+    if (cfg.footer) out.push(`${IDENT}rodapé: ${citar(cfg.footer)}`)
+    if (cfg.fallbackText) out.push(`${IDENT}senão: ${citar(cfg.fallbackText)}`)
+    return out
+  }
+
+  if (def.tipo === 'action.whatsapp.carousel') {
+    const texto = cfg.text !== undefined && cfg.text !== null ? ` ${citar(cfg.text)}` : ''
+    const out = [`${def.palavra}${texto}`]
+    if (cfg.folder) out.push(`${IDENT}pasta: ${citar(cfg.folder)}`)
+    if (cfg.buttonText) out.push(`${IDENT}botão: ${citar(cfg.buttonText)}`)
+    if (cfg.buttonCommand) out.push(`${IDENT}comando: ${citar(cfg.buttonCommand)}`)
+    for (const c of cfg.cards || []) {
+      out.push(`${IDENT}card`)
+      if (c.path) out.push(`${IDENT}${IDENT}arquivo: ${citar(c.path)}`)
+      else if (c.fileId) out.push(`${IDENT}${IDENT}arquivo: ${citar(c.fileId)}`)
+      if (c.title) out.push(`${IDENT}${IDENT}título: ${citar(c.title)}`)
+      if (c.body) out.push(`${IDENT}${IDENT}corpo: ${citar(c.body)}`)
+      if (c.footer) out.push(`${IDENT}${IDENT}rodapé: ${citar(c.footer)}`)
+      if (c.buttonText) {
+        const cmd = c.buttonUrl || c.buttonCommand
+        if (cmd && cmd !== c.buttonText) {
+          out.push(`${IDENT}${IDENT}botão: ${citar(c.buttonText)}: ${citar(cmd)}`)
+        } else {
+          out.push(`${IDENT}${IDENT}botão: ${citar(c.buttonText)}`)
+        }
+      }
+    }
+    if (cfg.footer) out.push(`${IDENT}rodapé: ${citar(cfg.footer)}`)
+    if (cfg.estilo) {
+      const palavra = def.campos.find((c) => c.chave === 'estilo')?.palavras?.[cfg.estilo] ?? cfg.estilo
+      out.push(`${IDENT}estilo: ${palavra}`)
+    }
+    if (cfg.notFoundText) out.push(`${IDENT}sem arquivo: ${citar(cfg.notFoundText)}`)
+    if (cfg.fallbackText) out.push(`${IDENT}senão: ${citar(cfg.fallbackText)}`)
+    return out
+  }
+
   const inline = def.campos.find((c) => c.inline)
   // `chama midia.baixar`: a conexão e a função voltam juntas na primeira linha,
   // que é onde elas dizem de quem o comando depende.

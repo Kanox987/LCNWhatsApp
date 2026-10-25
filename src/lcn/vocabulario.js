@@ -208,6 +208,29 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    palavra: 'responde com botões',
+    tipo: 'action.whatsapp.buttons',
+    campos: [
+      { chave: 'text', inline: true, tipo: 'texto' },
+      { chave: 'footer', rotulo: 'rodapé', tipo: 'texto' },
+      { chave: 'fallbackText', rotulo: 'senão', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'mostra carrossel',
+    tipo: 'action.whatsapp.carousel',
+    campos: [
+      { chave: 'text', inline: true, tipo: 'texto' },
+      { chave: 'folder', rotulo: 'pasta', tipo: 'texto' },
+      { chave: 'buttonText', rotulo: 'botão', tipo: 'texto' },
+      { chave: 'buttonCommand', rotulo: 'comando', tipo: 'texto' },
+      { chave: 'footer', rotulo: 'rodapé', tipo: 'texto' },
+      { chave: 'estilo', rotulo: 'estilo', tipo: 'palavra', palavras: { completo: 'completo', simples: 'simples', semEmbrulho: 'semEmbrulho', bizNoStanza: 'bizNoStanza', fluxoNoTopo: 'fluxoNoTopo', diagnóstico: 'diagnóstico', botoes: 'botoes', menu: 'menu' } },
+      { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' },
+      { chave: 'fallbackText', rotulo: 'senão', tipo: 'texto' }
+    ]
+  },
+  {
     palavra: 'apaga mensagem',
     tipo: 'action.whatsapp.delete',
     campos: []

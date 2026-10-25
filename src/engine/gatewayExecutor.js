@@ -321,6 +321,206 @@ async function executarResposta (client, comando) {
   )
 }
 
+// MANDAR BOTÕES DE ESCOLHA declarados no próprio comando.
+//
+// Três botões de resposta rápida (quick_reply). Ao serem tocados, o WhatsApp
+// envia o `id` (ou comando configurado) de volta como mensagem de texto comum,
+// que aciona outra automação que case com aquele gatilho.
+//
+// Honestidade sobre o que não desenha: mensagem com botões interativos depende
+// do suporte do aplicativo de quem recebe. Se o envio interativo falhar, cai
+// para texto. Porém, se o aplicativo aceitar mas descartar calado sem renderizar,
+// não há erro reportado — a conversa simplesmente não mostra os botões.
+async function executarBotoes (client, comando) {
+  const p = comando.payload
+  const botoes = (p.buttons || []).map((b) => ({ text: b.text, id: b.id || b.command || b.text }))
+  const comoTexto = p.fallbackText || [
+    p.text,
+    p.footer ? `_${p.footer}_` : null,
+    ...(p.buttons || []).map((b, i) => `${i + 1}. ${b.text}`)
+  ].filter(Boolean).join('\n')
+
+  try {
+    await comTimeout(
+      () => enviarERegistrar(client, p.chatId, montarBotoesDeEscolha(botoes, { texto: p.text, rodape: p.footer }), opcoesDeCitacao(p.replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao mandar os botões do comando ${comando.id}`
+    )
+    console.log(`[engine] botões ${comando.id}: ${botoes.length} botão(ões) enviados`)
+  } catch (erro) {
+    if (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_SEM_VAGA') throw erro
+    console.warn(`[engine] Botões de resposta recusados (${mensagemDoErro(erro)}) — mandando como texto.`)
+    await comTimeout(
+      () => enviarERegistrar(client, p.chatId, { type: 'text', text: comoTexto }, opcoesDeCitacao(p.replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao mandar o texto de reserva dos botões do comando ${comando.id}`
+    )
+  }
+}
+
+// CARROSSEL DE VALORES PRÓPRIOS ou de pasta do acervo.
+//
+// Cards com imagem/vídeo, título, texto e botão, vindos de valores declarados
+// ou de uma pasta do acervo (sem depender de conexão externa).
+//
+// CONTRATO DE CARREGADOR TARDIO E ORÇAMENTO:
+// Cada foto ou vídeo de card passa por `referenciaDoAcervo` e `usarMidia`,
+// alocando reserva no orçamento de bytes antes de carregar o buffer e
+// liberando a memória imediatamente após o upload para o servidor do WhatsApp.
+// Nunca se carregam os buffers de todos os cards juntos na memória.
+async function executarCarrossel (client, comando, deps) {
+  const { acervo } = deps
+  const p = comando.payload
+  const chatId = p.chatId
+  const replyTo = p.replyTo
+
+  const avisarFalta = async (msg) => {
+    if (p.notFoundText) {
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, { type: 'text', text: p.notFoundText }, opcoesDeCitacao(replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar falta de mídia do carrossel do comando ${comando.id}`
+      )
+    }
+    throw new Error(msg)
+  }
+
+  const cardsParaMontar = []
+
+  if (p.folder) {
+    const arquivos = acervo.listarDaPasta(p.folder)
+    if (!arquivos.length) {
+      return avisarFalta(`pasta vazia ou inexistente no acervo: ${p.folder}`)
+    }
+    const validos = arquivos.filter((r) => r.kind === 'image' || r.kind === 'video')
+    if (!validos.length) {
+      return avisarFalta(`a pasta "${p.folder}" não contém imagens ou vídeos para o carrossel`)
+    }
+    for (const r of validos) {
+      const midia = referenciaDoAcervo(r, deps)
+      let botao = null
+      if (p.buttonText) {
+        const cmd = (p.buttonCommand || p.buttonText)
+          .replaceAll('{{nome}}', r.name)
+          .replaceAll('{{id}}', r.id)
+          .replaceAll('{{caminho}}', r.path || '')
+        botao = { texto: p.buttonText, comando: cmd }
+      }
+      cardsParaMontar.push({
+        midia,
+        titulo: r.name,
+        corpo: r.description || '',
+        rodape: '',
+        botao
+      })
+    }
+  } else if (Array.isArray(p.cards) && p.cards.length) {
+    for (const c of p.cards) {
+      const registro = c.fileId ? acervo.obter(c.fileId) : acervo.porCaminho(c.path)
+      if (!registro) {
+        return avisarFalta(`arquivo não encontrado no acervo para o card: ${c.fileId || c.path}`)
+      }
+      if (registro.kind !== 'image' && registro.kind !== 'video') {
+        return avisarFalta(`o arquivo "${registro.name}" não é imagem nem vídeo e não pode entrar em carrossel`)
+      }
+      const midia = referenciaDoAcervo(registro, deps)
+      let botao = null
+      if (c.buttonText) {
+        const url = c.buttonUrl
+        const cmd = c.buttonCommand || c.buttonText
+        botao = url ? { texto: c.buttonText, url } : { texto: c.buttonText, comando: cmd }
+      }
+      cardsParaMontar.push({
+        midia,
+        titulo: c.title || '',
+        corpo: c.body || '',
+        rodape: c.footer || '',
+        botao
+      })
+    }
+  } else {
+    return avisarFalta('carrossel precisa de uma pasta do acervo ou de uma lista de cards')
+  }
+
+  if (!cardsParaMontar.length) {
+    return avisarFalta('nenhum card válido encontrado para montar o carrossel')
+  }
+
+  const cards = []
+  const itensDeEscolha = []
+  for (const item of cardsParaMontar) {
+    const upload = await usarMidia(item.midia, (buffer) => subirMidia(client, buffer, {
+      type: item.midia.tipo === 'video' ? 'video' : 'image',
+      mimetype: item.midia.mime
+    }))
+    cards.push(montarCard(item.midia, upload, {
+      titulo: item.titulo,
+      legenda: item.corpo,
+      rodape: item.rodape,
+      botao: item.botao
+    }))
+    itensDeEscolha.push({
+      titulo: item.titulo,
+      corpo: item.corpo,
+      rodape: item.rodape,
+      botao: item.botao
+    })
+  }
+
+  const abertura = p.text || null
+  const estilos = p.estilo === 'diagnóstico'
+    ? [...ESTILOS_DE_CARROSSEL, ...FORMAS_DE_ESCOLHA]
+    : [p.estilo || 'completo']
+
+  try {
+    for (const estilo of estilos) {
+      const texto = estilos.length > 1 ? `[${estilo}] ${abertura || ''}`.trim() : abertura
+      if (FORMAS_DE_ESCOLHA.includes(estilo)) {
+        await comTimeout(
+          () => enviarERegistrar(client, chatId, montarCarrossel(cards.map((c) => ({ ...c, nativeFlowMessage: { buttons: [] } })), { estilo: 'simples' })),
+          TIMEOUT_ENVIO_MS * 4,
+          `timeout ao enviar os cards do carrossel do comando ${comando.id}`
+        )
+        const escolha = estilo === 'botoes'
+          ? montarBotoesDeEscolha(itensDeEscolha, { texto, rodape: p.footer })
+          : montarMenuDeEscolha(itensDeEscolha, { texto, rodape: p.footer })
+        await comTimeout(
+          () => enviarERegistrar(client, chatId, escolha),
+          TIMEOUT_ENVIO_MS,
+          `timeout ao enviar a escolha do carrossel do comando ${comando.id}`
+        )
+        console.log(`[engine] escolha do carrossel ${comando.id}: forma "${estilo}", ${itensDeEscolha.length} opções`)
+        continue
+      }
+
+      if (estilo === 'simples' && texto) {
+        await comTimeout(
+          () => enviarERegistrar(client, chatId, { type: 'text', text: texto }),
+          TIMEOUT_ENVIO_MS,
+          `timeout ao abrir o carrossel do comando ${comando.id}`
+        )
+      }
+
+      await comTimeout(
+        () => enviarERegistrar(client, chatId, montarCarrossel(cards, { texto, rodape: p.footer, estilo }), opcoesDoCarrossel(estilo)),
+        TIMEOUT_ENVIO_MS * 4,
+        `timeout ao enviar o carrossel do comando ${comando.id}`
+      )
+      console.log(`[engine] carrossel ${comando.id}: forma "${estilo}", ${cards.length} card(s)`)
+    }
+  } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA' || erro?.code === 'LCN_TIMEOUT') throw erro
+    console.warn(`[engine] Carrossel próprio recusado (${mensagemDoErro(erro)}) — mandando como texto.`)
+    const linhas = itensDeEscolha.map((c, i) => `*${i + 1}.* ${c.titulo || ''}\n${c.corpo}${c.rodape ? `\n_${c.rodape}_` : ''}`)
+    const textoFinal = p.fallbackText || [abertura, ...linhas, p.footer ? `_${p.footer}_` : null].filter(Boolean).join('\n\n')
+    await comTimeout(
+      () => enviarERegistrar(client, chatId, { type: 'text', text: textoFinal }, opcoesDeCitacao(replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao mandar a lista alternativa do carrossel do comando ${comando.id}`
+    )
+  }
+}
+
 // Recuperação de visualização única — o comando que deu origem ao projeto.
 // O motor decidiu que era pra recuperar; aqui a mídia é de fato baixada (o
 // token só resolve neste processo) e reenviada como mídia normal.
@@ -1315,6 +1515,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       }
       const executor = {
         'whatsapp.reply': executarResposta,
+        'whatsapp.buttons': executarBotoes,
+        'whatsapp.carousel': executarCarrossel,
         'whatsapp.webview': executarPagina,
         'whatsapp.recover': executarRecover,
         'whatsapp.menu': executarMenu,
