@@ -1,7 +1,8 @@
 # Automações
 
 Como criar comandos e regras no LCNWhatsApp. Tudo aqui é feito pelo painel web
-(`lcn web start`, em `http://127.0.0.1:4780`) — não é preciso escrever código.
+(`lcn web start`, em `http://127.0.0.1:4780`) — você escreve a regra em português,
+na linguagem do projeto, com a referência ao lado e o erro apontando a linha.
 
 ## Antes de começar
 
