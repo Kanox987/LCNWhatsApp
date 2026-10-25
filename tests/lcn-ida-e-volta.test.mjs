@@ -330,5 +330,48 @@ ${extra}
 }
 
 
+// --- DOCUMENTO GUARDADO ANTES DE EXISTIR `scheduling` --------------------
+//
+// O teste de ida e volta acima percorre o catálogo, e todo documento do
+// catálogo é produzido pelo compilador ATUAL — então todos já nascem com
+// `scheduling`. Documento guardado por uma versão anterior não tem o campo, e
+// esse caso nunca passava por aqui.
+//
+// Medido em 25/10 contra o servidor (33 automações em 350a7c0): NENHUMA tem
+// `scheduling`, e por isso as 33 "falhavam" a ida e volta quando medidas com o
+// compilador novo. Não é defeito, é defasagem: com o padrão presente, as 33
+// fecham. Esta checagem fixa a diferença como ESPERADA e delimitada — ao
+// recompilar, o documento antigo ganha o padrão e NADA MAIS muda.
+//
+// A decisão de que automação antiga recebe `normal` em vez de ter a urgência
+// inferida está congelada em CONTRATOS.md, e é o que torna esta normalização
+// correta em vez de perda.
+{
+  const antigo = compilar(`automação legado
+  revisão: 1
+  nome: Legado
+  tipo: comando
+  dispara com: /legado
+  acessa: texto
+  quem: qualquer um
+  onde: em qualquer lugar
+  pool: pool-local
+  casa: exato
+
+  responde "oi"
+`)
+  // simula o documento gravado por uma versão sem fila: tira o campo
+  const semFila = { ...antigo }
+  delete semFila.scheduling
+  const voltou = compilar(descompilar(semFila))
+  check('documento sem `scheduling` recompila ganhando exatamente o padrão',
+    JSON.stringify(canon(voltou.scheduling)) === JSON.stringify(canon({ priority: 'normal', onNoSlot: { kind: 'discard' } })),
+    JSON.stringify(voltou.scheduling))
+  check('e NADA mais muda no documento antigo ao recompilar',
+    mesmo({ ...voltou, scheduling: undefined }, { ...semFila, scheduling: undefined }),
+    JSON.stringify({ antes: semFila, depois: voltou }).slice(0, 200))
+}
+
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LINGUAGEM PASSARAM')
 process.exit(falhas ? 1 : 0)
