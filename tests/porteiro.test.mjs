@@ -415,6 +415,33 @@ const menuComDescricao = compilar(`automação mr2
 check('"menu:" com descrição continua guardando as duas partes',
   menuComDescricao.display.menuLabel === '/x' && menuComDescricao.display.menuDescription === 'faz coisa')
 
+// 5i. Precedência unificada: pertinência à classe antes de validar conteúdo, em ordem do arquivo.
+const errPrecedenciaMenu = recusa(`automação x
+  tipo: porteiro
+  menu: Entradas
+  acessa: inexistente
+  quando for: entrou
+`)
+check('precedência: recusa menu na linha 3 antes de validar acessa na linha 4',
+  errPrecedenciaMenu instanceof ErroDeSintaxe &&
+  errPrecedenciaMenu.linha === 3 &&
+  /"menu" não se aplica a porteiro/.test(errPrecedenciaMenu.message),
+  `linha: ${errPrecedenciaMenu?.linha}, msg: ${errPrecedenciaMenu?.message}`
+)
+
+const errPrecedenciaPrioridade = recusa(`automação x
+  tipo: porteiro
+  prioridade: gigantesca
+  menu: Entradas
+  quando for: entrou
+`)
+check('precedência: prioridade inválida acusa na linha 3 antes do menu incompatível',
+  errPrecedenciaPrioridade instanceof ErroDeSintaxe &&
+  errPrecedenciaPrioridade.linha === 3 &&
+  /"prioridade" aceita/.test(errPrecedenciaPrioridade.message),
+  `linha: ${errPrecedenciaPrioridade?.linha}, msg: ${errPrecedenciaPrioridade?.message}`
+)
+
 // --- 6. Ida e Volta (Descompilação -> Compilação) -------------------------
 const lcnMultiacao = `automação port2
   nome: Monitor Geral
