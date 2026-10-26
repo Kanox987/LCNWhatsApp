@@ -1,0 +1,61 @@
+template audio-do-video v1
+  nome: Áudio do vídeo
+  descrição: Responda a um vídeo com o comando e receba apenas a faixa de áudio dele em formato de áudio. Serve para salvar músicas, falas ou efeitos sonoros de vídeos enviados na conversa sem precisar converter pelo computador.
+  categoria: utilitarios
+
+automação
+  nome: Áudio do vídeo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Extrai o áudio de um vídeo
+  pool: {{params.poolId}}
+  acessa: texto, vídeo
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na citada ou na mensagem
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.converter
+    com
+      arquivo: a mídia
+      formato: "{{params.formato}}"
+      limite_bytes: {{params.pesoMaximoBytes}}
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/audio"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Funciona respondendo a um vídeo já enviado na conversa ou mandando um vídeo com o comando na legenda.
+  conexao: texto = "imagem"
+    rótulo: Serviço que converte
+    ajuda: O identificador da conexão configurada na aba Conexões. É esse serviço que processa a mídia e faz a conversão.
+  formato: opção (mp3, ogg, m4a) = "mp3"
+    rótulo: Formato do áudio
+    ajuda: O formato para o qual o áudio será convertido. mp3 é o padrão universal compatível com praticamente qualquer reprodutor.
+  pesoMaximoBytes: número = 16000000
+    rótulo: Peso máximo (bytes)
+    ajuda: 16000000 equivale a aproximadamente 16 MB, o limite comum aceito para envio de mídia no WhatsApp.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às mensagens enviadas do próprio número onde o bot roda; external faz o bot ignorar comandos enviados por ele mesmo.
+  semMidiaText: texto = "Responda a um vídeo com este comando, ou mande o vídeo com ele na legenda."
+    rótulo: Aviso quando não vier vídeo
+    ajuda: Resposta enviada quando o comando é acionado sem nenhum vídeo anexado nem citado.
+  ackText: texto = "🎵 Extraindo áudio do vídeo…"
+    rótulo: Aviso ao começar
+    ajuda: A extração e conversão leva alguns segundos dependendo do tamanho do vídeo. Este aviso dá retorno imediato a quem pediu.
+  errorText: texto = "Não consegui extrair o áudio: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem de resposta se a conversão falhar. Escreva {{erro}} onde quiser que apareça o motivo retornado pelo serviço.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem/mídia configurado na aba Conexões com suporte à conversão de formato.
+
+avisa nota
+  O vídeo precisa conter uma faixa de áudio audível. Vídeos mudos são rejeitados pelo serviço de conversão com mensagem de erro explicativa.
+
+# nós: gatilho-comando, converter-audio

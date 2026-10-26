@@ -1,0 +1,49 @@
+template regras-do-grupo v1
+  nome: Regras do grupo
+  descrição: Mostra as regras atuais do grupo para quem digitar o comando. Administradores podem definir ou atualizar as regras enviando o texto logo após o comando. O texto fica salvo na memória da conversa e pode ser consultado a qualquer momento por qualquer participante.
+  categoria: utilitarios
+
+automação
+  nome: Regras do grupo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Exibe ou atualiza as regras do grupo
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args != ""
+    se evento sender.isAdmin == true
+      define chat regras = "{{message.args}}"
+      responde "{{params.salvoText}}"
+    senão
+      responde "{{params.negadoText}}"
+  senão
+    responde "{{var.chat.regras}}"
+
+configurável
+  command: texto = "/regras"
+    rótulo: Comando
+    ajuda: A palavra digitada para ver as regras (comando sozinho) ou para gravar novas regras (seguida do texto das regras, exclusivo para administradores).
+  salvoText: texto = "Regras do grupo atualizadas com sucesso!"
+    rótulo: Confirmação de gravação
+    ajuda: Mensagem enviada quando um administrador define ou altera as regras do grupo.
+  negadoText: texto = "Só administradores do grupo podem definir ou alterar as regras."
+    rótulo: Resposta para não administradores
+    ajuda: Mensagem enviada quando um membro comum tenta definir ou atualizar as regras do grupo.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às mensagens enviadas do próprio número onde o bot roda; external faz o bot ignorar comandos enviados por ele mesmo.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  chat regras: texto
+    Regras definidas para esta conversa ou grupo.
+
+avisa nota
+  Comando compartilhado: qualquer membro do grupo pode consultar as regras guardadas enviando apenas o comando. Gravar ou atualizar o texto é protegido e restrito aos administradores do grupo.
+
+# nós: gatilho-comando, tem-argumentos, e-admin, gravar-regras, confirmar-gravacao, negar-permissao, mostrar-regras
