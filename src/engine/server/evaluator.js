@@ -1363,6 +1363,63 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.whatsapp.react': {
+      // Reagir NÃO exige grupo: funciona em conversa de uma pessoa também. Por
+      // isso não tem a trava de só-grupo que as ações de administração têm.
+      //
+      // O alvo é a mensagem CITADA, e a referência vem de `referenciaDoLink`,
+      // que já existe e já resolve a armadilha do LID contra telefone. Escrever
+      // um jeito novo de apontar para a citada criaria um segundo lugar para a
+      // mesma ambiguidade voltar.
+      const alvo = referenciaDoLink(evento)
+      if (!alvo) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há o que reagir: o comando não respondeu nenhuma mensagem.')
+      }
+      // Emoji VAZIO é legítimo: é como o WhatsApp revoga uma reação que já
+      // estava lá. Então string vazia passa, e só `undefined` virava nada.
+      const emoji = typeof no.config?.emoji === 'string' ? interpolar(no.config.emoji, contexto).trim() : ''
+      comandos.push({
+        commandType: 'whatsapp.react',
+        payload: { chatId: evento.chat.id, emoji, target: alvo }
+      })
+      return 'success'
+    }
+
+    case 'action.whatsapp.profilePicture': {
+      const dono = no.config?.who === 'target' ? resolverAlvo(evento) : evento.sender?.id
+      if (!dono) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há de quem pegar a foto: o comando não indicou ninguém.')
+      }
+      comandos.push({
+        commandType: 'whatsapp.profilePicture',
+        payload: {
+          chatId: evento.chat.id,
+          jid: dono,
+          ...(no.config?.caption ? { caption: interpolar(no.config.caption, contexto) } : {}),
+          // QUEM NÃO TEM FOTO É CASO NORMAL, não erro: a consulta volta sem
+          // endereço, e é o gateway que responde este texto. Sem ele o comando
+          // ficaria mudo justamente no caso mais comum depois do sucesso.
+          ...(no.config?.noPhotoText ? { noPhotoText: interpolar(no.config.noPhotoText, contexto) } : {}),
+          replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento)
+        }
+      })
+      return 'success'
+    }
+
     case 'action.group.promote': {
       // Promover é a irmã de `action.group.remove`, e por isso repete as travas
       // que fazem sentido e NÃO repete a que não faz. Só em grupo, nunca sem

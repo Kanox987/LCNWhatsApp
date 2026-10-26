@@ -1,0 +1,47 @@
+template foto-de-perfil v1
+  nome: Foto de perfil
+  descrição: Manda na conversa a foto de perfil de quem foi marcado com @ ou de quem escreveu a mensagem respondida. Pede a foto em tamanho cheio, não a miniatura. Quem não tem foto, ou escondeu pela privacidade, é caso normal e o comando responde dizendo isso.
+  categoria: utilitarios
+
+automação
+  nome: Foto de perfil
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra a foto de perfil de quem você marcar
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  pega a foto de perfil
+    quem: quem foi marcado
+    legenda: "{{params.legenda}}"
+    sem foto: "{{params.semFotoText}}"
+    sem alvo: "{{params.semAlvoText}}"
+
+configurável
+  command: texto = "/perfil"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Funciona marcando com @ ou respondendo a mensagem de quem você quer ver.
+  legenda: texto = ""
+    rótulo: Legenda
+    ajuda: Texto que vai junto com a foto. Deixe vazio para mandar só a imagem.
+  semFotoText: texto = "Essa pessoa não tem foto de perfil, ou escondeu a foto na privacidade dela."
+    rótulo: Quando a pessoa não tem foto
+    ajuda: Não ter foto NÃO é erro — é o caso mais comum depois do sucesso. A privacidade do WhatsApp também esconde a foto de quem não é contato, e o resultado é o mesmo. Sem este texto o comando fica mudo nesses casos.
+  semAlvoText: texto = "Marque quem você quer ver, ou responda a mensagem dessa pessoa."
+    rótulo: Quando ninguém foi marcado
+    ajuda: Resposta para quem digitou o comando sozinho.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  A foto é entregue pelo endereço que o WhatsApp devolve. Esse endereço aponta para a foto de uma pessoa, então ele serve para entregar a imagem e não aparece em registro nem em mensagem de erro.

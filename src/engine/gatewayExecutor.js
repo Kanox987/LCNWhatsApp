@@ -1741,6 +1741,57 @@ async function executarOperacaoDeParticipante (client, comando, { operacao, verb
   throw erroIncerto(`o WhatsApp respondeu ${verbo} ${participantId} num formato que não sei ler (status ${item.status}, código ${item.code}) — não dá para afirmar que aconteceu`)
 }
 
+// Reagir. Sai pelo caminho de mensagem, não pelo de grupo.
+//
+// Emoji VAZIO não é falta de emoji: é como o WhatsApp REVOGA uma reação que já
+// estava lá. Então não há conferência de "veio vazio" aqui — conferir
+// derrubaria o único jeito de desfazer.
+async function executarReagir (client, comando) {
+  const { chatId, emoji, target } = comando.payload
+  await comTimeout(
+    () => client.message.send(chatId, { type: 'reaction', emoji, target }),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao reagir na mensagem do comando ${comando.id}`
+  )
+}
+
+// Pegar a foto de perfil e entregar na conversa.
+//
+// `getProfilePicture` devolve um envelope em que TODOS os campos são opcionais
+// (`{ url?, directPath?, id?, type? }`). Voltar sem `url` é exatamente como se
+// sabe que a pessoa NÃO TEM foto, e isso é caso normal: responde o texto
+// configurado em vez de virar erro no histórico.
+//
+// Pede `'image'` e não `'preview'`: quem pede a foto de alguém quer a foto, não
+// a miniatura.
+async function executarFotoDePerfil (client, comando) {
+  const { chatId, jid, caption, noPhotoText, replyTo } = comando.payload
+  const envelope = await comTimeout(
+    () => client.profile.getProfilePicture(jid, 'image'),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao buscar a foto de perfil do comando ${comando.id}`
+  )
+
+  const endereco = envelope?.url
+  if (!endereco) {
+    if (!noPhotoText) return
+    await comTimeout(
+      () => enviarERegistrar(client, chatId, { type: 'text', text: noPhotoText }, opcoesDeCitacao(replyTo)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao avisar que não há foto, do comando ${comando.id}`
+    )
+    return
+  }
+
+  // O endereço é de CDN e aponta para a foto de uma pessoa: ele vai para a
+  // entrega e NÃO para log nem para texto de erro.
+  await comTimeout(
+    () => enviarERegistrar(client, chatId, { type: 'image', url: endereco, ...(caption ? { caption } : {}) }, opcoesDeCitacao(replyTo)),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao enviar a foto de perfil do comando ${comando.id}`
+  )
+}
+
 async function executarPromoverNoGrupo (client, comando) {
   return executarOperacaoDeParticipante(client, comando, {
     operacao: (chatId, ids) => client.group.promoteParticipants(chatId, ids),
@@ -2048,6 +2099,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'whatsapp.recover': executarRecover,
         'whatsapp.menu': executarMenu,
         'whatsapp.delete': executarApagar,
+        'whatsapp.react': executarReagir,
+        'whatsapp.profilePicture': executarFotoDePerfil,
         'group.remove': executarRemoverDoGrupo,
         'group.promote': executarPromoverNoGrupo,
         'group.demote': executarRebaixarNoGrupo,

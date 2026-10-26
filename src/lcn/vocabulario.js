@@ -306,6 +306,24 @@ export const ACOES = Object.freeze([
     campos: []
   },
   {
+    palavra: 'reage',
+    tipo: 'action.whatsapp.react',
+    campos: [
+      { chave: 'emoji', inline: true, rotulo: 'emoji', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'pega a foto de perfil',
+    tipo: 'action.whatsapp.profilePicture',
+    campos: [
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
+      { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
+      { chave: 'noPhotoText', rotulo: 'sem foto', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
+    ]
+  },
+  {
     palavra: 'remove do grupo',
     tipo: 'action.group.remove',
     campos: [
