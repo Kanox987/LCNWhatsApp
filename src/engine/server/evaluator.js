@@ -1529,7 +1529,17 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
         throw new ErroDeFluxo('Não há quem adicionar: o comando não indicou nenhum número.')
       }
 
-      const partes = resolvido.split(/[\s,]+/).filter(Boolean)
+      // SEPARA POR VÍRGULA, NÃO POR ESPAÇO — e a diferença quebrou em produção.
+      //
+      // Medido em 26/10: "/adiciona +62 897-7791-132" era partido em "+62" e
+      // "897-7791-132". O primeiro pedaço ficava com dois dígitos e caía no
+      // filtro de tamanho; o segundo virava um número ERRADO, e o WhatsApp
+      // recusou com 404 — ele estava certo, o número não existia.
+      //
+      // Gente escreve telefone com espaço, com parêntese e com traço. Quem
+      // quer somar vários usa vírgula, que é separador explícito e não aparece
+      // dentro de um número.
+      const partes = resolvido.split(/[,;]+/).map((x) => x.trim()).filter(Boolean)
       const alvos = []
       for (const parte of partes) {
         if (/@(s\.whatsapp\.net|lid)$/.test(parte)) {

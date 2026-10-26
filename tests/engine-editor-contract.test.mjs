@@ -80,5 +80,21 @@ check('publish habilita automação com action.variable.set', variableSetPublica
 
 db.close()
 
+// NÚMERO COM ESPAÇO, medido na produção em 26/10 e quebrado.
+// "/adiciona +62 897-7791-132" era partido por espaço: "+62" caía no filtro de
+// tamanho e "897-7791-132" virava um número ERRADO — o WhatsApp recusou com
+// 404 e estava certo. Gente escreve telefone com espaço, parêntese e traço;
+// quem quer vários usa vírgula.
+{
+  const alvosDe = (texto) => texto.split(/[,;]+/).map((x) => x.trim()).filter(Boolean)
+    .map((parte) => /@(s\.whatsapp\.net|lid)$/.test(parte) ? parte : parte.replace(/\D/g, ''))
+    .filter((d) => d.includes('@') || d.length >= 8)
+  check('número com espaço e traço vira UM número, com o prefixo inteiro',
+    alvosDe('+62 897-7791-132').join() === '628977791132', alvosDe('+62 897-7791-132').join())
+  check('formato brasileiro com parêntese também', alvosDe('+55 (22) 98119-7896').join() === '5522981197896')
+  check('vírgula continua separando vários', alvosDe('628977791132, 5522981197896').length === 2)
+}
+
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO CONTRATO DO EDITOR PASSARAM')
 process.exit(falhas ? 1 : 0)
