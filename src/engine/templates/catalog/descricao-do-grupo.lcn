@@ -1,0 +1,42 @@
+template descricao-do-grupo v1
+  nome: Mudar a descrição do grupo
+  descrição: Altera a descrição do grupo no WhatsApp. Digitar o comando sem argumentos limpa a descrição atual. Só administradores podem usar e o bot precisa ser administrador do grupo.
+  categoria: modulos-especializados
+
+automação
+  nome: Mudar a descrição do grupo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Altera a descrição do grupo
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  onde: todos os grupos
+
+  se evento sender.isAdmin == true
+    muda a descrição do grupo
+      descrição: "{{message.args}}"
+  senão
+    responde "{{params.soAdminText}}"
+
+configurável
+  command: texto = "/descricao"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita seguida da nova descrição. Deixar vazio limpa a descrição.
+  soAdminText: texto = "Só administrador do grupo pode mudar a descrição."
+    rótulo: Quando quem pediu não é admin
+    ajuda: Resposta enviada quando um membro comum tenta usar o comando.
+  familia: texto = "moderacao"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às suas próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  O número do bot precisa ser ADMINISTRADOR do grupo. Sem isso o WhatsApp recusa, e o comando responde dizendo que a alteração não aconteceu por falta de admin — em vez de falhar em silêncio.

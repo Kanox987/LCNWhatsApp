@@ -410,6 +410,52 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.group.setSubject',
+    rotulo: 'Mudar o nome do grupo',
+    familia: 'moderacao',
+    resumo: 'Altera o título ou nome exibido do grupo no WhatsApp.',
+    exemplo: 'muda o nome do grupo, definindo o novo nome recebido.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    campos: [
+      { chave: 'subject', rotulo: 'Novo nome', ajuda: 'O novo nome do grupo. Aceita variáveis como {{message.args}}.' },
+      { chave: 'notFoundText', rotulo: 'Quando o nome estiver vazio', ajuda: 'Resposta para quem usou o comando sem informar o novo nome. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada.' }
+    ]
+  },
+  {
+    tipo: 'action.group.setDescription',
+    rotulo: 'Mudar a descrição do grupo',
+    familia: 'moderacao',
+    resumo: 'Atualiza o texto da descrição do grupo. Enviar texto vazio limpa a descrição existente.',
+    exemplo: 'muda a descrição do grupo com as novas regras.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    campos: [
+      { chave: 'description', rotulo: 'Nova descrição', ajuda: 'O novo texto descritivo do grupo. Deixar vazio limpa a descrição. Aceita variáveis.' }
+    ]
+  },
+  {
+    tipo: 'action.group.setAnnounce',
+    rotulo: 'Fechar ou abrir o grupo',
+    familia: 'moderacao',
+    resumo: 'Configura o grupo para apenas administradores enviarem mensagens (fechado) ou permite que todos enviem (aberto).',
+    exemplo: 'fecha o grupo para manter o chat organizado à noite.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    campos: [
+      { chave: 'close', rotulo: 'Fechar o grupo', ajuda: 'sim para fechar o grupo (somente administradores escrevem), não para abrir o grupo a todos os participantes.' }
+    ]
+  },
+  {
+    tipo: 'action.group.inviteCode',
+    rotulo: 'Mostrar o link do grupo',
+    familia: 'moderacao',
+    resumo: 'Consulta o link de convite do grupo e responde na conversa, podendo renovar o convite antes.',
+    exemplo: 'mostra o link do grupo com o endereço de convite atual.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    campos: [
+      { chave: 'text', rotulo: 'Mensagem', ajuda: 'Texto que acompanha o link enviado na conversa. Use {{link}} onde o link deve entrar e {{codigo}} para o código cru.' },
+      { chave: 'renova', rotulo: 'Renovar link', ajuda: 'sim para revogar o convite atual e gerar um novo link antes de responder; não para manter o link existente.' }
+    ]
+  },
+  {
     tipo: 'action.menu.render',
     rotulo: 'Mostrar o menu de comandos',
     familia: 'resposta',

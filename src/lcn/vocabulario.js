@@ -351,6 +351,36 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    palavra: 'muda o nome do grupo',
+    tipo: 'action.group.setSubject',
+    campos: [
+      { chave: 'subject', rotulo: 'nome', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem nome', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'muda a descrição do grupo',
+    tipo: 'action.group.setDescription',
+    campos: [
+      { chave: 'description', rotulo: 'descrição', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'fecha o grupo',
+    tipo: 'action.group.setAnnounce',
+    campos: [
+      { chave: 'close', rotulo: 'fechar', tipo: 'booleano' }
+    ]
+  },
+  {
+    palavra: 'mostra o link do grupo',
+    tipo: 'action.group.inviteCode',
+    campos: [
+      { chave: 'text', rotulo: 'mensagem', tipo: 'texto' },
+      { chave: 'renova', rotulo: 'renova', tipo: 'booleano' }
+    ]
+  },
+  {
     palavra: 'mostra menu',
     tipo: 'action.menu.render',
     campos: [

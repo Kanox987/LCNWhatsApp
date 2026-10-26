@@ -231,6 +231,18 @@
                 "$ref": "#/definitions/actionGroupAdd"
               },
               {
+                "$ref": "#/definitions/actionGroupSetSubject"
+              },
+              {
+                "$ref": "#/definitions/actionGroupSetDescription"
+              },
+              {
+                "$ref": "#/definitions/actionGroupSetAnnounce"
+              },
+              {
+                "$ref": "#/definitions/actionGroupInviteCode"
+              },
+              {
                 "$ref": "#/definitions/conditionCompare"
               },
               {
@@ -959,6 +971,126 @@
             "notFoundText": {
               "type": "string",
               "description": "Resposta quando o comando não indicou nenhum número. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupSetSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.group.setSubject"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "subject": {
+              "type": "string",
+              "description": "Novo nome (assunto) do grupo. Aceita variáveis."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando nenhum nome foi informado. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupSetDescription": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.group.setDescription"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "Nova descrição do grupo. String vazia limpa a descrição. Aceita variáveis."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupSetAnnounce": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.group.setAnnounce"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "close": {
+              "type": "boolean",
+              "description": "true para fechar o grupo (apenas administradores podem enviar mensagens), false para abrir o grupo para todos."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupInviteCode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.group.inviteCode"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Mensagem enviada com o link do grupo. Use {{link}} onde o link deve entrar e {{codigo}} para o código cru."
+            },
+            "renova": {
+              "type": "boolean",
+              "description": "Se verdadeiro, revoga o link anterior e gera um novo convite antes de enviar."
             }
           }
         }

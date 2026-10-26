@@ -1762,6 +1762,86 @@ async function executarAdicionarNoGrupo (client, comando) {
   })
 }
 
+function tratarErroDeConfiguracaoDeGrupo (erro, verbo) {
+  if (erro?.code === 'LCN_TIMEOUT' || erro?.code === 'LCN_SEM_VAGA' || erro?.code === 'LCN_RESULTADO_INCERTO') {
+    throw erro
+  }
+  const codigo = Number(erro?.code || erro?.status || erro?.statusCode || erro?.data?.status || erro?.output?.statusCode)
+  const codigoConhecido = Number.isFinite(codigo)
+  const msg = mensagemDoErro(erro)
+  const eh403 = codigo === 403 || msg.includes('403') || msg.toLowerCase().includes('admin') || msg.toLowerCase().includes('forbidden')
+  const motivo = eh403 ? 'o bot não é admin do grupo' : 'o WhatsApp recusou'
+  const codStr = codigoConhecido ? ` (código ${codigo})` : (eh403 ? ' (código 403)' : ` (${msg})`)
+  throw new Error(`${verbo} não aconteceu: ${motivo}${codStr}`)
+}
+
+async function executarMudarNomeDoGrupo (client, comando) {
+  const { chatId, subject } = comando.payload
+  try {
+    await comTimeout(
+      () => client.group.setSubject(chatId, subject),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao mudar o nome do grupo do comando ${comando.id}`
+    )
+  } catch (erro) {
+    tratarErroDeConfiguracaoDeGrupo(erro, 'mudar o nome do grupo')
+  }
+}
+
+async function executarMudarDescricaoDoGrupo (client, comando) {
+  const { chatId, description } = comando.payload
+  try {
+    await comTimeout(
+      () => client.group.setDescription(chatId, description || null),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao mudar a descrição do grupo do comando ${comando.id}`
+    )
+  } catch (erro) {
+    tratarErroDeConfiguracaoDeGrupo(erro, 'mudar a descrição do grupo')
+  }
+}
+
+async function executarConfigurarAnuncioDoGrupo (client, comando) {
+  const { chatId, close } = comando.payload
+  const fechar = close !== false
+  const verbo = fechar ? 'fechar o grupo' : 'abrir o grupo'
+  try {
+    await comTimeout(
+      () => client.group.setSetting(chatId, 'announcement', fechar),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao ${verbo} do comando ${comando.id}`
+    )
+  } catch (erro) {
+    tratarErroDeConfiguracaoDeGrupo(erro, verbo)
+  }
+}
+
+async function executarLinkDoGrupo (client, comando) {
+  const { chatId, renova, text } = comando.payload
+  const verbo = renova ? 'renovar o link do grupo' : 'obter o link do grupo'
+  let codigo
+  try {
+    codigo = await comTimeout(
+      () => (renova ? client.group.revokeInvite(chatId) : client.group.queryInviteCode(chatId)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao ${verbo} do comando ${comando.id}`
+    )
+  } catch (erro) {
+    tratarErroDeConfiguracaoDeGrupo(erro, verbo)
+  }
+
+  const link = `https://chat.whatsapp.com/${codigo}`
+  const textoFinal = text
+    ? text.replaceAll('{{link}}', link).replaceAll('{{codigo}}', String(codigo))
+    : link
+
+  await comTimeout(
+    () => enviarERegistrar(client, chatId, { type: 'text', text: textoFinal }, opcoesDeEnvio(comando.payload)),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao enviar o link do grupo do comando ${comando.id}`
+  )
+}
+
 // ⚠️ CAMINHO NÃO OFICIAL DO WHATSAPP — leia antes de mexer.
 //
 // Não existe API de "mensagem formatada" para bots comuns. O que existe é o
@@ -1972,6 +2052,10 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'group.promote': executarPromoverNoGrupo,
         'group.demote': executarRebaixarNoGrupo,
         'group.add': executarAdicionarNoGrupo,
+        'group.setSubject': executarMudarNomeDoGrupo,
+        'group.setDescription': executarMudarDescricaoDoGrupo,
+        'group.setAnnounce': executarConfigurarAnuncioDoGrupo,
+        'group.inviteCode': executarLinkDoGrupo,
         'whatsapp.rich': executarMensagemRica,
         'whatsapp.sendFile': executarEnvioDeArquivo,
         'media.download': executarDownload,

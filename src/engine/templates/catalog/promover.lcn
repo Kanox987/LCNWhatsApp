@@ -13,7 +13,6 @@ automação
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
-  onde: todos os grupos
 
   se evento sender.isAdmin == true
     promove no grupo

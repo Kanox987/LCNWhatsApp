@@ -1503,6 +1503,73 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.group.setSubject': {
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para mudar o nome do grupo dentro de um grupo.')
+      }
+      const valorBruto = no.config?.subject
+      const resolvido = typeof valorBruto === 'string' ? interpolar(valorBruto, contexto).trim() : ''
+      if (!resolvido || resolvido.includes('{{')) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há como mudar o nome do grupo: o nome não pode ser vazio.')
+      }
+      comandos.push({
+        commandType: 'group.setSubject',
+        payload: { chatId: evento.chat.id, subject: resolvido }
+      })
+      return 'success'
+    }
+
+    case 'action.group.setDescription': {
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para mudar a descrição do grupo dentro de um grupo.')
+      }
+      const valorBruto = no.config?.description ?? ''
+      const resolvido = typeof valorBruto === 'string' ? interpolar(valorBruto, contexto).trim() : ''
+      const textoFinal = (!resolvido || resolvido.includes('{{')) ? null : resolvido
+      comandos.push({
+        commandType: 'group.setDescription',
+        payload: { chatId: evento.chat.id, description: textoFinal }
+      })
+      return 'success'
+    }
+
+    case 'action.group.setAnnounce': {
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para fechar ou abrir o grupo dentro de um grupo.')
+      }
+      const fechar = no.config?.close !== false
+      comandos.push({
+        commandType: 'group.setAnnounce',
+        payload: { chatId: evento.chat.id, close: fechar }
+      })
+      return 'success'
+    }
+
+    case 'action.group.inviteCode': {
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para mostrar o link do grupo dentro de um grupo.')
+      }
+      const renova = no.config?.renova === true
+      const texto = typeof no.config?.text === 'string' ? interpolar(no.config.text, contexto) : null
+      comandos.push({
+        commandType: 'group.inviteCode',
+        payload: {
+          chatId: evento.chat.id,
+          renova,
+          ...(texto ? { text: texto } : {}),
+          ...(referenciaDaPropria(evento) ? { replyTo: referenciaDaPropria(evento) } : {})
+        }
+      })
+      return 'success'
+    }
+
     case 'action.menu.config': {
       // Configura o menu DESTA conversa pelo próprio WhatsApp. O valor vem do
       // que a pessoa escreveu depois do comando. Restrição de quem pode fazer
