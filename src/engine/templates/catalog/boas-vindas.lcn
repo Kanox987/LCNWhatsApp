@@ -1,0 +1,26 @@
+template boas-vindas v1
+  nome: Boas-vindas
+  descrição: Envia uma mensagem acolhedora de boas-vindas no grupo sempre que um participante entra, mencionando a pessoa diretamente. O porteiro observa a porta do grupo em tempo real.
+  categoria: modulos-especializados
+
+automação
+  nome: Boas-vindas
+  tipo: porteiro
+  pool: {{params.poolId}}
+  quando for: entrou
+
+  responde "{{params.mensagem}}"
+    marca: "{{target.id}}"
+
+configurável
+  mensagem: texto = "Olá, @{{target.number}}! Seja muito bem-vindo(a) ao grupo!"
+    rótulo: Mensagem de boas-vindas
+    ajuda: Texto da saudação enviada quando alguém entra no grupo. Use @{{target.number}} para marcar a pessoa com menção.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa este porteiro. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  O porteiro só atua em grupos autorizados (onde grupo_ativo está ativado). Certifique-se de ativar o grupo pelo painel ou com um comando de ativação do dono antes de ligar a portaria.
+
+# nós: detectar-entrada, saudar
