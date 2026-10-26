@@ -1,0 +1,66 @@
+template download-pesado v1
+  nome: Download pesado
+  descrição: Baixa a mídia de um link da internet na fila de baixa prioridade do sistema. Ideal para vídeos longos e downloads pesados que podem esperar momentos de menor movimento sem disputar recursos com comandos urgentes em tempo real.
+  categoria: utilitarios
+
+automação
+  nome: Download pesado
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Baixa mídia de link em fila de baixa prioridade
+  pool: {{params.poolId}}
+  acessa: texto
+  prioridade: baixa
+  sem vaga: "{{params.semVagaText}}"
+  precisa de um link: na citada ou na mensagem
+  sem ele: "{{params.notFoundText}}"
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  chama {{params.conexao}}.baixar
+    com
+      url: o link
+      modo: "{{params.modo}}"
+    avisa: "{{params.ackText}}"
+    legenda: "{{params.caption}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/baixarpesado"
+    rótulo: Comando
+    ajuda: A palavra digitada para acionar o download. Use respondendo a uma mensagem com link ou enviando o link logo após o comando.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às mensagens enviadas do próprio número onde o bot roda; external faz o bot ignorar comandos enviados por ele mesmo.
+  modo: opção (auto, video, audio, thumbnail) = "auto"
+    rótulo: O que baixar
+    ajuda: auto deixa o serviço escolher o melhor formato · video traz imagem e som · audio traz só a faixa sonora · thumbnail traz a imagem de capa.
+  ackText: texto = "⏳ Entrando na fila de download de baixa prioridade…"
+    rótulo: Aviso ao começar
+    ajuda: Enviado imediatamente após o pedido. Downloads pesados aguardam a vez na fila e este aviso informa ao usuário que o pedido foi aceito.
+  caption: texto = ""
+    rótulo: Legenda da mídia
+    ajuda: Texto anexado à mídia baixada. Deixe vazio para usar a descrição original fornecida pela plataforma.
+  notFoundText: texto = "Responda a uma mensagem que tenha link, ou envie o link junto com o comando."
+    rótulo: Se não houver link
+    ajuda: Mensagem de resposta quando não há link detectado na mensagem nem na mensagem citada.
+  semVagaText: texto = "A fila de downloads está cheia no momento. Seu pedido não pôde ser agendado, tente novamente mais tarde."
+    rótulo: Se a fila estiver cheia
+    ajuda: Mensagem enviada a quem pediu quando o limite de capacidade da fila do sistema for atingido, evitando que a requisição seja descartada em silêncio.
+  errorText: texto = "Não consegui baixar essa mídia: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem exibida caso o download falhe. Escreva {{erro}} onde deseja que apareça a explicação retornada pelo serviço.
+  conexao: texto = "midia"
+    rótulo: Serviço que baixa
+    ajuda: O identificador da conexão na aba Conexões onde estão configurados o endereço e as credenciais do serviço de download.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Precisa da conexão de download configurada na aba Conexões, com endereço e credenciais válidos.
+
+avisa nota
+  A prioridade baixa significa que este comando espera a sua vez quando o sistema está cheio, em vez de competir com comandos urgentes e mensagens em tempo real. Downloads de arquivos volumosos são executados sem prejudicar a agilidade do bot.
+
+# nós: gatilho-comando, baixar-midia
