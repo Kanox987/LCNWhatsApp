@@ -1,0 +1,47 @@
+template confidencial v1
+  nome: Mídia confidencial
+  descrição: Envia um arquivo do acervo como mensagem de visualização única, que expira e some após ser aberta pelo destinatário. Ideal para senhas, credenciais, contratos ou mídias sensíveis que não devem ficar salvas na conversa.
+  categoria: utilitarios
+
+automação
+  nome: Mídia confidencial
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Envia arquivo do acervo com visualização única
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  envia arquivo "{{params.caminho}}"
+    legenda: "{{params.legenda}}"
+    visualização única: true
+    sem arquivo: "{{params.semArquivoText}}"
+
+configurável
+  command: texto = "/confidencial"
+    rótulo: Comando
+    ajuda: A palavra digitada para receber o arquivo com visualização única.
+  caminho: texto = "segredos/credenciais.jpg"
+    rótulo: Caminho do arquivo no acervo
+    ajuda: O caminho do arquivo guardado no acervo (imagem, vídeo ou áudio). Ao ser enviado, ele expira após visualizado.
+  legenda: texto = "Este arquivo é confidencial e expira após visualizado."
+    rótulo: Legenda da mídia
+    ajuda: Texto enviado junto da mídia como instrução ou aviso para quem recebe.
+  semArquivoText: texto = "Arquivo confidencial não encontrado no acervo. Contate o administrador."
+    rótulo: Aviso se não encontrar o arquivo
+    ajuda: Mensagem de aviso enviada caso o arquivo indicado no caminho não exista no acervo.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às mensagens do próprio número do bot; external restringe a outras pessoas.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  O arquivo de mídia precisa estar previamente cadastrado na aba Acervo no caminho configurado antes de acionar este comando.
+
+avisa nota
+  A visualização única é uma instrução para o aplicativo oficial do destinatário ocultar o arquivo após visualização. Versões modificadas do aplicativo podem salvar a mídia mesmo com este pedido ativado.
+
+# nós: gatilho, enviar-confidencial

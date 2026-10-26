@@ -1,0 +1,42 @@
+template anti-visualizacao-unica v1
+  nome: Anti-visualização única
+  descrição: Apaga automaticamente toda mensagem de visualização única enviada no grupo, sem precisar de comando. Você escolhe quantos avisos a pessoa recebe antes de ser removida. O contador é por pessoa e por grupo, e o dono do bot nunca é removido.
+  categoria: modulos-especializados
+
+automação
+  nome: Anti-visualização única
+  tipo: vigia
+  dispara com: qualquer mensagem
+  pool: {{params.poolId}}
+  acessa: visualização única
+  quando for: visualização única
+  quem: só externos
+
+  apaga mensagem
+  soma group_member anti-visualizacao-unica_apagados = 1
+  se var group_member anti-visualizacao-unica_apagados >= "{{params.limite}}"
+    remove do grupo
+      quem: quem enviou
+      nunca o dono: true
+  senão
+    responde "{{params.aviso}}"
+
+configurável
+  limite: número = 3
+    rótulo: Avisos antes de remover
+    ajuda: Use um número alto (ex: 999) se quiser só apagar e avisar, sem nunca remover ninguém.
+  aviso: texto = "Mensagens de visualização única não são permitidas neste grupo."
+    rótulo: Texto do aviso
+    ajuda: Enviado toda vez que uma mensagem é apagada, antes de a pessoa atingir o limite.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa esta regra.
+
+declara
+  member anti-visualizacao-unica_apagados: número
+    Quantas mensagens de visualização única desta pessoa já foram apagadas NESTE grupo.
+
+avisa exige
+  Para apagar mensagens e remover pessoas, o número precisa ser ADMINISTRADOR do grupo.
+
+# nós: detectar, apagar, contar, passou, remover, avisar

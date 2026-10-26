@@ -1,0 +1,40 @@
+template ausente v1
+  nome: Marcar ausente
+  descrição: Registra que a pessoa está fora e guarda o recado digitado junto do comando, permitindo avisar aos demais contatos sobre a ausência temporária.
+  categoria: utilitarios
+
+automação
+  nome: Marcar ausente
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Marca ausência e anota seu recado
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  define sender ausente = "sim"
+  define sender recado = "{{message.args}}"
+  responde "{{params.confirmacao}}"
+
+configurável
+  command: texto = "/ausente"
+    rótulo: Comando
+    ajuda: A palavra digitada para marcar ausência, seguida opcionalmente de um recado.
+  confirmacao: texto = "Modo ausente ativado. Seu recado foi registrado: {{message.args}}"
+    rótulo: Mensagem de confirmação
+    ajuda: Resposta enviada confirmando que o status de ausência e o recado foram gravados. O marcador {{message.args}} exibe o texto digitado após o comando.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às mensagens do próprio número do bot; external restringe a outras pessoas.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+declara
+  sender ausente: texto
+    Marca se o contato está ausente ("sim" ou vazio).
+  sender recado: texto
+    O recado deixado pelo contato ao marcar ausência.
+
+# nós: gatilho, gravar-ausente, gravar-recado, confirmar

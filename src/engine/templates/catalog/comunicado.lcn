@@ -1,0 +1,43 @@
+template comunicado v1
+  nome: Comunicado numerado
+  descrição: Envia um comunicado oficial em formato de mensagem encaminhada com os itens numerados automaticamente linha a linha. Apenas administradores do grupo conseguem acionar o comando.
+  categoria: utilitarios
+
+automação
+  nome: Comunicado numerado
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Envia comunicado com itens numerados
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: só externos
+
+  se evento sender.isAdmin == true
+    responde "{{params.mensagem}}"
+      numeração: true
+      encaminhada: true
+  senão
+    responde "{{params.negadoText}}"
+
+configurável
+  command: texto = "/comunicado"
+    rótulo: Comando
+    ajuda: A palavra digitada pelo administrador para acionar o envio do comunicado.
+  mensagem: texto = "Aviso aos membros do grupo\nRespeite todos os participantes\nEvite mensagens repetitivas ou de spam\nEm caso de dúvidas contate um administrador"
+    rótulo: Mensagem do comunicado
+    ajuda: O texto do comunicado, com cada item em uma linha separada. A numeração é adicionada automaticamente no início de cada linha.
+  negadoText: texto = "Apenas administradores do grupo podem enviar comunicados oficiais."
+    rótulo: Resposta para quem não é administrador
+    ajuda: Enviado quando um participante comum tenta usar o comando de comunicado.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa nota
+  A mensagem é enviada com o selo de encaminhada e cada linha de texto ganha uma numeração sequencial automática.
+
+avisa nota
+  A conferência de administrador usa a lista de participantes que o bot carrega do grupo. Enquanto essa lista não chegar, o comando responde como se quem digitou não fosse administrador — é recusa visível, nunca envio indevido.
+
+# nós: gatilho, e-admin, enviar-comunicado, negar

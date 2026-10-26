@@ -1,0 +1,46 @@
+template antipalavrao v1
+  nome: Anti-palavrão
+  descrição: Apaga automaticamente mensagens que contenham a palavra proibida configurada e conta avisos por pessoa antes de removê-la do grupo. O contador é por pessoa e por grupo: avisos num grupo não somam com os de outro. O dono do bot nunca é removido.
+  categoria: modulos-especializados
+
+automação
+  nome: Anti-palavrão
+  tipo: vigia
+  dispara com: qualquer mensagem
+  pool: {{params.poolId}}
+  acessa: texto
+  quando for: texto
+  quem: só externos
+
+  se evento message.text contém "{{params.palavra}}"
+    apaga mensagem
+    soma group_member antipalavrao_apagados = 1
+    se var group_member antipalavrao_apagados >= "{{params.limite}}"
+      remove do grupo
+        quem: quem enviou
+        nunca o dono: true
+    senão
+      responde "{{params.aviso}} (aviso {{var.member.antipalavrao_apagados}})"
+
+configurável
+  palavra: texto = "palavrão"
+    rótulo: Palavra proibida
+    ajuda: A palavra ou termo proibido. Mensagens que contenham esse texto exato serão apagadas automaticamente.
+  limite: número = 3
+    rótulo: Avisos antes de remover
+    ajuda: Quantas vezes a pessoa pode enviar a palavra proibida antes de ser removida do grupo. Use um número alto (ex: 999) se quiser só apagar e avisar, sem nunca remover.
+  aviso: texto = "Mensagens com termos ofensivos ou proibidos não são permitidas neste grupo."
+    rótulo: Texto do aviso
+    ajuda: Enviado toda vez que uma mensagem com a palavra proibida é apagada, antes de a pessoa atingir o limite.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa esta regra.
+
+declara
+  member antipalavrao_apagados: número
+    Quantas mensagens com a palavra proibida desta pessoa já foram apagadas NESTE grupo. Zere para perdoar alguém.
+
+avisa exige
+  Para apagar mensagens e remover pessoas, o número precisa ser ADMINISTRADOR do grupo. Sem isso o WhatsApp recusa a ação e ela aparece como falha no histórico.
+
+# nós: gatilho, detectar-palavra, apagar, contar, passou-do-limite, remover, avisar
