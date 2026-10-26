@@ -373,6 +373,31 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.whatsapp.react',
+    rotulo: 'Reagir com emoji',
+    familia: 'resposta',
+    resumo: 'Põe uma reação na mensagem respondida.',
+    exemplo: 'Marcar com ✅ o pedido que já foi atendido.',
+    campos: [
+      { chave: 'emoji', rotulo: 'Emoji', ajuda: 'O emoji da reação. DEIXAR VAZIO REVOGA a reação que já estava lá — é assim que o WhatsApp desfaz, e não com um comando separado.' },
+      { chave: 'notFoundText', rotulo: 'Quando nada foi respondido', ajuda: 'Reagir precisa de uma mensagem respondida. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+    ]
+  },
+  {
+    tipo: 'action.whatsapp.profilePicture',
+    rotulo: 'Pegar a foto de perfil',
+    familia: 'midia',
+    resumo: 'Manda na conversa a foto de perfil de quem você marcar.',
+    exemplo: 'Ver a foto de quem entrou no grupo.',
+    ressalva: { level: 'note', text: 'Quem não tem foto é caso NORMAL, não erro: a consulta volta vazia e o comando responde o texto que você escrever. Sem esse texto ele fica mudo justamente no caso mais comum depois do sucesso.' },
+    campos: [
+      { chave: 'who', rotulo: 'De quem', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida).' },
+      { chave: 'caption', rotulo: 'Legenda', ajuda: 'Texto que vai junto com a foto.' },
+      { chave: 'noPhotoText', rotulo: 'Quando a pessoa não tem foto', ajuda: 'Resposta para o caso de a pessoa não ter foto de perfil, ou de ela estar escondida pela privacidade dela.' },
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém.' }
+    ]
+  },
+  {
     tipo: 'action.group.promote',
     rotulo: 'Promover a administrador',
     familia: 'moderacao',

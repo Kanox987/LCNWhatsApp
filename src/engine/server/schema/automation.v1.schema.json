@@ -225,6 +225,12 @@
                 "$ref": "#/definitions/actionGroupPromote"
               },
               {
+                "$ref": "#/definitions/actionWhatsappReact"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappProfilePicture"
+              },
+              {
                 "$ref": "#/definitions/actionGroupDemote"
               },
               {
@@ -903,6 +909,51 @@
               "type": "string",
               "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
             }
+          }
+        }
+      }
+    },
+    "actionWhatsappReact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.react" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "emoji": {
+              "type": "string",
+              "description": "O emoji da reação. VAZIO REVOGA a reação que já estava lá — é assim que o WhatsApp desfaz, e não com uma ação separada."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando não há mensagem citada. Reagir precisa de um alvo, e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            }
+          }
+        }
+      }
+    },
+    "actionWhatsappProfilePicture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.profilePicture" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "who": { "enum": ["sender", "target"] },
+            "caption": { "type": "string", "description": "Legenda da mensagem que leva a foto." },
+            "noPhotoText": {
+              "type": "string",
+              "description": "Resposta quando a pessoa NÃO TEM foto de perfil. Isso é caso normal e não erro: a consulta volta sem endereço, e quem não declarar este texto deixa o comando sem resposta."
+            },
+            "notFoundText": { "type": "string", "description": "Resposta quando o comando não indicou ninguém." }
           }
         }
       }

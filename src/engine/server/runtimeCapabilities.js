@@ -19,6 +19,12 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.menu.render',
   'action.menu.config',
   'action.whatsapp.delete',
+  // Reagir com emoji, e pegar a foto de perfil. As duas saem pelo caminho de
+  // mensagem da biblioteca, não pelo de grupo: reagir funciona em conversa de
+  // uma pessoa também, e por isso NÃO tem a trava de só-grupo que as ações de
+  // administração têm.
+  'action.whatsapp.react',
+  'action.whatsapp.profilePicture',
   'action.group.remove',
   // Administração do grupo. Nascem acompanhadas do executor no gateway, não
   // antes dele: declarar aqui sem o executor deixa publicar automação que casa,
