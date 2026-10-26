@@ -222,6 +222,9 @@
                 "$ref": "#/definitions/actionGroupRemove"
               },
               {
+                "$ref": "#/definitions/actionGroupPromote"
+              },
+              {
                 "$ref": "#/definitions/conditionCompare"
               },
               {
@@ -858,6 +861,26 @@
             "neverRemoveOwner": {
               "type": "boolean"
             },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupPromote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.group.promote" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "who": { "enum": ["sender", "target"] },
             "notFoundText": {
               "type": "string",
               "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."

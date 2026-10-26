@@ -373,6 +373,18 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.group.promote',
+    rotulo: 'Promover a administrador',
+    familia: 'moderacao',
+    resumo: 'Dá admin a alguém no grupo.',
+    exemplo: 'Quem entra pela lista branca já sai administrador.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise, em vez de tentar e falhar na frente de todo mundo.' },
+    campos: [
+      { chave: 'who', rotulo: 'Quem promover', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida). Marcando vários de uma vez, todos são promovidos.' },
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+    ]
+  },
+  {
     tipo: 'action.menu.render',
     rotulo: 'Mostrar o menu de comandos',
     familia: 'resposta',

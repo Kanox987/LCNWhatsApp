@@ -1704,6 +1704,50 @@ async function executarRemoverDoGrupo (client, comando) {
   throw erroIncerto(`o WhatsApp respondeu a remoção de ${participantId} num formato que não sei ler (status ${item.status}, código ${item.code}) — não dá para afirmar que aconteceu`)
 }
 
+// As operações de participante que NÃO são remoção. O contrato de resposta da
+// lib é o mesmo (`{ jid, status, code }` por participante), então a leitura é a
+// mesma — inclusive a exigência das DUAS confirmações, que existe porque ler só
+// metade do contrato gravava remoção bem-sucedida como falha.
+//
+// Fica num executor genérico em vez de três copiados: o que muda entre promover,
+// rebaixar e adicionar é a chamada da lib e o verbo da mensagem de erro. Copiar
+// o corpo três vezes criaria três lugares para o mesmo defeito voltar.
+async function executarOperacaoDeParticipante (client, comando, { operacao, verbo }) {
+  const { chatId, participantId } = comando.payload
+  const resultado = await comTimeout(
+    () => operacao(chatId, [participantId]),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao ${verbo} ${participantId} do comando ${comando.id}`
+  )
+
+  const item = acharResultadoDoParticipante(resultado, participantId)
+  if (!item) {
+    throw erroIncerto(`o WhatsApp não confirmou ${verbo} ${participantId}: a resposta não trouxe o participante pedido`)
+  }
+
+  const codigo = Number(item.code)
+  const codigoConhecido = Number.isFinite(codigo)
+  const codigoOk = codigoConhecido && codigo >= 200 && codigo < 300
+
+  if (item.status === 'ok' && codigoOk) return
+
+  if (item.status === 'error' || (codigoConhecido && !codigoOk)) {
+    const motivo = codigo === 403
+      ? 'o bot não é admin do grupo'
+      : 'o WhatsApp recusou'
+    throw new Error(`${verbo} ${participantId} não aconteceu: ${motivo} (código ${codigoConhecido ? codigo : item.status})`)
+  }
+
+  throw erroIncerto(`o WhatsApp respondeu ${verbo} ${participantId} num formato que não sei ler (status ${item.status}, código ${item.code}) — não dá para afirmar que aconteceu`)
+}
+
+async function executarPromoverNoGrupo (client, comando) {
+  return executarOperacaoDeParticipante(client, comando, {
+    operacao: (chatId, ids) => client.group.promoteParticipants(chatId, ids),
+    verbo: 'promover'
+  })
+}
+
 // ⚠️ CAMINHO NÃO OFICIAL DO WHATSAPP — leia antes de mexer.
 //
 // Não existe API de "mensagem formatada" para bots comuns. O que existe é o
@@ -1911,6 +1955,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'whatsapp.menu': executarMenu,
         'whatsapp.delete': executarApagar,
         'group.remove': executarRemoverDoGrupo,
+        'group.promote': executarPromoverNoGrupo,
         'whatsapp.rich': executarMensagemRica,
         'whatsapp.sendFile': executarEnvioDeArquivo,
         'media.download': executarDownload,

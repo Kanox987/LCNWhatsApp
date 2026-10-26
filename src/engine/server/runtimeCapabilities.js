@@ -20,6 +20,11 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.menu.config',
   'action.whatsapp.delete',
   'action.group.remove',
+  // Administração do grupo. Nascem acompanhadas do executor no gateway, não
+  // antes dele: declarar aqui sem o executor deixa publicar automação que casa,
+  // gera comando e morre na entrega — foi por isso que `connection.call` ficou
+  // fora desta lista de propósito enquanto só o motor existia.
+  'action.group.promote',
   'action.whatsapp.rich',
   'action.whatsapp.sendFile',
   'action.media.download',

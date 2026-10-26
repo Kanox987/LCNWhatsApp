@@ -314,6 +314,25 @@ export const ACOES = Object.freeze([
       { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
     ]
   },
+  // AS AÇÕES DE ADMINISTRAÇÃO DO GRUPO.
+  //
+  // Elas nascem juntas por uma razão que o porteiro já mostrava: `ACOES_DE_GRUPO`
+  // deixa uma automação OBSERVAR `promoveu` e `rebaixou` desde que o porteiro
+  // existe, e não havia como executar nenhum dos dois. O motor sabia ler o
+  // evento e não sabia escrevê-lo.
+  //
+  // Todas dependem de o bot ser ADMIN do grupo, e isso NÃO é conferido aqui: o
+  // compilador não sabe quem é admin de onde, e fingir que sabe seria recusar
+  // automação correta. Quem recusa é o WhatsApp, e o executor traduz a recusa
+  // em mensagem legível.
+  {
+    palavra: 'promove no grupo',
+    tipo: 'action.group.promote',
+    campos: [
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
+    ]
+  },
   {
     palavra: 'mostra menu',
     tipo: 'action.menu.render',

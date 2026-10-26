@@ -1363,6 +1363,51 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.group.promote': {
+      // Promover é a irmã de `action.group.remove`, e por isso repete as travas
+      // que fazem sentido e NÃO repete a que não faz. Só em grupo, nunca sem
+      // alvo resolvido — mas sem proteção de dono: promover não é destrutivo,
+      // e dono já promovido continua promovido.
+      //
+      // Depende de o bot ser admin. Não é conferido aqui: quem recusa é o
+      // WhatsApp, e o executor traduz a recusa.
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para promover participante dentro de um grupo.')
+      }
+      // Vários marcados de uma vez: o mesmo caminho que a remoção já abriu,
+      // porque "/promove @a @b" é uso normal e tratar só o primeiro seria
+      // obedecer metade do comando em silêncio.
+      if (no.config?.who === 'target' && Array.isArray(evento.group?.participants) && evento.group.participants.length > 1) {
+        for (const p of evento.group.participants) {
+          const alvo = typeof p === 'string' ? p : (p.id || p.phoneJid || p.jid)
+          if (!alvo) continue
+          comandos.push({
+            commandType: 'group.promote',
+            payload: { chatId: evento.chat.id, participantId: alvo }
+          })
+        }
+        return 'success'
+      }
+      const aPromover = no.config?.who === 'target' ? resolverAlvo(evento) : evento.sender?.id
+      if (!aPromover) {
+        // Mesma forma de "sem alvo" das outras ações: quem declara o aviso
+        // recebe resposta, quem não declara cai no erro registrado.
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há quem promover: o comando não indicou ninguém.')
+      }
+      comandos.push({
+        commandType: 'group.promote',
+        payload: { chatId: evento.chat.id, participantId: aPromover }
+      })
+      return 'success'
+    }
+
     case 'action.menu.config': {
       // Configura o menu DESTA conversa pelo próprio WhatsApp. O valor vem do
       // que a pessoa escreveu depois do comando. Restrição de quem pode fazer
