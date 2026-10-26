@@ -1,0 +1,65 @@
+template figurinha-sem-fundo v1
+  nome: Figurinha sem fundo
+  descrição: Recorta o fundo de uma foto com inteligência artificial e a transforma em figurinha num único comando, sem precisar salvar arquivos intermediários nem digitar dois comandos seguidos. O processamento é realizado pelo serviço de imagem configurado na aba Conexões.
+  categoria: utilitarios
+
+automação
+  nome: Figurinha sem fundo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Recorta o fundo da foto e cria figurinha
+  pool: {{params.poolId}}
+  acessa: texto, foto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.remover_fundo
+    com
+      arquivo: a mídia
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+  chama {{params.conexao}}.figurinha
+    com
+      arquivo: o resultado
+      pacote: {{params.pacote}}
+      autor: {{params.autor}}
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/figsemfundo"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Funciona enviando uma foto com o comando na legenda ou respondendo a uma foto já enviada na conversa.
+  conexao: texto = "imagem"
+    rótulo: Serviço que converte
+    ajuda: O identificador da conexão configurada na aba Conexões. O comando chama o serviço duas vezes em sequência: primeiro para recortar o fundo e depois para converter em figurinha.
+  pacote: texto = "LCN Figurinhas"
+    rótulo: Nome do pacote
+    ajuda: O nome do pacote exibido ao abrir a figurinha no WhatsApp. Figurinhas com o mesmo pacote e autor ficam agrupadas no aplicativo.
+  autor: texto = "LCN"
+    rótulo: Autor do pacote
+    ajuda: O autor exibido junto do pacote no WhatsApp.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às mensagens enviadas do próprio número onde o bot roda; external faz o bot ignorar comandos enviados por ele mesmo.
+  semMidiaText: texto = "Responde uma foto com este comando, ou manda a foto com ele na legenda."
+    rótulo: Aviso quando não vier foto
+    ajuda: Mensagem de resposta quando o comando é enviado sem nenhuma foto anexada nem citada. Vídeos e áudios não são aceitos para recorte de fundo.
+  ackText: texto = "✂️ Recortando fundo e gerando figurinha… isso leva alguns segundos."
+    rótulo: Aviso ao começar
+    ajuda: Como a operação executa duas chamadas em sequência (recorte com IA e conversão em figurinha), o processamento leva alguns segundos. Este aviso dá feedback imediato ao usuário.
+  errorText: texto = "Não consegui fazer a figurinha sem fundo: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem enviada se alguma das etapas falhar. Escreva {{erro}} onde deseja que apareça o motivo retornado pelo serviço.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai executar este comando.
+
+avisa exige
+  Exige o serviço de imagem configurado na aba Conexões, com o endereço e a chave. Sem isso o comando responde que o serviço está fora do ar.
+
+avisa nota
+  Executa duas operações em sequência: primeiro remove o fundo com inteligência artificial e depois converte o resultado em figurinha. O tempo de resposta soma as duas chamadas.
+
+# nós: gatilho-comando, recortar-fundo, criar-figurinha

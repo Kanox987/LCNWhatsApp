@@ -1,0 +1,26 @@
+template despedida v1
+  nome: Despedida
+  descrição: Envia uma mensagem no grupo sempre que um participante sai ou é removido, mencionando quem saiu. O porteiro observa as saídas do grupo em tempo real.
+  categoria: modulos-especializados
+
+automação
+  nome: Despedida
+  tipo: porteiro
+  pool: {{params.poolId}}
+  quando for: saiu
+
+  responde "{{params.mensagem}}"
+    marca: "{{target.id}}"
+
+configurável
+  mensagem: texto = "Até mais, @{{target.number}}! Sentiremos sua falta no grupo."
+    rótulo: Mensagem de despedida
+    ajuda: Texto enviado quando alguém sai ou é removido do grupo. Use @{{target.number}} para marcar a pessoa que saiu.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa este porteiro. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  O porteiro só atua em grupos autorizados (onde grupo_ativo está ativado). Certifique-se de ativar o grupo pelo painel ou com um comando de ativação do dono antes de ligar a portaria.
+
+# nós: detectar-saida, despedir
