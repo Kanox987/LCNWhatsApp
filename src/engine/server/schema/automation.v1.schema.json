@@ -225,6 +225,12 @@
                 "$ref": "#/definitions/actionGroupPromote"
               },
               {
+                "$ref": "#/definitions/actionGroupDemote"
+              },
+              {
+                "$ref": "#/definitions/actionGroupAdd"
+              },
+              {
                 "$ref": "#/definitions/conditionCompare"
               },
               {
@@ -884,6 +890,75 @@
             "notFoundText": {
               "type": "string",
               "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupDemote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.group.demote"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "who": {
+              "enum": [
+                "sender",
+                "target"
+              ]
+            },
+            "neverRemoveOwner": {
+              "type": "boolean"
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupAdd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.group.add"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "phone": {
+              "type": "string",
+              "description": "Número de telefone ou JID de quem adicionar ao grupo. Aceita variáveis como {{message.args}}."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando o comando não indicou nenhum número. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
             }
           }
         }

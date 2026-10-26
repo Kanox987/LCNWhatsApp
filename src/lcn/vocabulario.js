@@ -334,6 +334,23 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    palavra: 'rebaixa no grupo',
+    tipo: 'action.group.demote',
+    campos: [
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
+      { chave: 'neverRemoveOwner', rotulo: 'nunca o dono', tipo: 'booleano' },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'adiciona no grupo',
+    tipo: 'action.group.add',
+    campos: [
+      { chave: 'phone', rotulo: 'número', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
+    ]
+  },
+  {
     palavra: 'mostra menu',
     tipo: 'action.menu.render',
     campos: [

@@ -1408,6 +1408,101 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.group.demote': {
+      // Rebaixar tira os privilégios de administrador de alguém.
+      // Três travas, espelhando remover: só em grupo, nunca sem alvo resolvido,
+      // e (por padrão) nunca um dono.
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para rebaixar participante dentro de um grupo.')
+      }
+      if (no.config?.who === 'target' && Array.isArray(evento.group?.participants) && evento.group.participants.length > 1) {
+        for (const p of evento.group.participants) {
+          const alvo = typeof p === 'string' ? p : (p.id || p.phoneJid || p.jid)
+          if (!alvo) continue
+          if (no.config?.neverRemoveOwner !== false && ehDono(db, alvo)) continue
+          comandos.push({
+            commandType: 'group.demote',
+            payload: { chatId: evento.chat.id, participantId: alvo }
+          })
+        }
+        return 'success'
+      }
+      const quem = no.config?.who === 'target' ? resolverAlvo(evento) : evento.sender?.id
+      if (!quem) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há quem rebaixar: o comando não indicou ninguém.')
+      }
+      if (no.config?.neverRemoveOwner !== false && ehDono(db, quem)) {
+        return 'success'
+      }
+      comandos.push({
+        commandType: 'group.demote',
+        payload: { chatId: evento.chat.id, participantId: quem }
+      })
+      return 'success'
+    }
+
+    case 'action.group.add': {
+      // Adicionar participante ao grupo pelo número informado no comando.
+      // Só funciona dentro de grupo.
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para adicionar participante dentro de um grupo.')
+      }
+      // UM nome de campo, que é o que o vocabulário declara (`chave: 'phone'`,
+      // rótulo `número`) e o único que o schema admite — ele tem
+      // `additionalProperties: false`, então `participant` ou `number` seriam
+      // recusados na validação. Aceitar três nomes aqui era código morto que
+      // fingia suportar o que não passa, e é a segunda fonte da verdade de novo.
+      const valorBruto = no.config?.phone
+      const resolvido = typeof valorBruto === 'string' ? interpolar(valorBruto, contexto).trim() : ''
+      if (!resolvido || resolvido.includes('{{')) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há quem adicionar: o comando não indicou nenhum número.')
+      }
+
+      const partes = resolvido.split(/[\s,]+/).filter(Boolean)
+      const alvos = []
+      for (const parte of partes) {
+        if (/@(s\.whatsapp\.net|lid)$/.test(parte)) {
+          alvos.push(parte)
+        } else {
+          const digitos = parte.replace(/\D/g, '')
+          if (digitos.length >= 8) alvos.push(`${digitos}@s.whatsapp.net`)
+        }
+      }
+
+      if (alvos.length === 0) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há quem adicionar: o comando não indicou nenhum número válido.')
+      }
+
+      for (const alvo of alvos) {
+        comandos.push({
+          commandType: 'group.add',
+          payload: { chatId: evento.chat.id, participantId: alvo }
+        })
+      }
+      return 'success'
+    }
+
     case 'action.menu.config': {
       // Configura o menu DESTA conversa pelo próprio WhatsApp. O valor vem do
       // que a pessoa escreveu depois do comando. Restrição de quem pode fazer

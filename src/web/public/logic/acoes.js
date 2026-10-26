@@ -385,6 +385,31 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.group.demote',
+    rotulo: 'Rebaixar de administrador',
+    familia: 'moderacao',
+    resumo: 'Tira os privilégios de administrador de alguém no grupo.',
+    exemplo: 'Rebaixar quem violou as regras de moderação.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise, em vez de tentar e falhar na frente de todo mundo.' },
+    campos: [
+      { chave: 'who', rotulo: 'Quem rebaixar', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida). Marcando vários de uma vez, todos são rebaixados.' },
+      { chave: 'neverRemoveOwner', rotulo: 'Nunca rebaixar um dono', ajuda: 'Ligado por padrão. Desligue só se você quiser de propósito uma regra que vale para todos, dono incluído.' },
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+    ]
+  },
+  {
+    tipo: 'action.group.add',
+    rotulo: 'Adicionar ao grupo',
+    familia: 'moderacao',
+    resumo: 'Coloca alguém no grupo pelo número de telefone.',
+    exemplo: 'adiciona no grupo, com o número digitado.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. O WhatsApp recusa se a pessoa tiver restringido nas configurações de privacidade quem pode adicioná-la a grupos.' },
+    campos: [
+      { chave: 'phone', rotulo: 'Número a adicionar', ajuda: 'Número de telefone com código do país e DDD (ex: 5511999999999) ou identificador completo. Aceita variáveis como {{message.args}}.' },
+      { chave: 'notFoundText', rotulo: 'Quando nenhum número foi informado', ajuda: 'Resposta para quem usou o comando sem digitar o número. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+    ]
+  },
+  {
     tipo: 'action.menu.render',
     rotulo: 'Mostrar o menu de comandos',
     familia: 'resposta',

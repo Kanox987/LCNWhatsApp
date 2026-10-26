@@ -1733,7 +1733,7 @@ async function executarOperacaoDeParticipante (client, comando, { operacao, verb
 
   if (item.status === 'error' || (codigoConhecido && !codigoOk)) {
     const motivo = codigo === 403
-      ? 'o bot não é admin do grupo'
+      ? (verbo === 'adicionar' ? 'a pessoa não pode ser adicionada (privacidade) ou o bot não é admin' : 'o bot não é admin do grupo')
       : 'o WhatsApp recusou'
     throw new Error(`${verbo} ${participantId} não aconteceu: ${motivo} (código ${codigoConhecido ? codigo : item.status})`)
   }
@@ -1745,6 +1745,20 @@ async function executarPromoverNoGrupo (client, comando) {
   return executarOperacaoDeParticipante(client, comando, {
     operacao: (chatId, ids) => client.group.promoteParticipants(chatId, ids),
     verbo: 'promover'
+  })
+}
+
+async function executarRebaixarNoGrupo (client, comando) {
+  return executarOperacaoDeParticipante(client, comando, {
+    operacao: (chatId, ids) => client.group.demoteParticipants(chatId, ids),
+    verbo: 'rebaixar'
+  })
+}
+
+async function executarAdicionarNoGrupo (client, comando) {
+  return executarOperacaoDeParticipante(client, comando, {
+    operacao: (chatId, ids) => client.group.addParticipants(chatId, ids),
+    verbo: 'adicionar'
   })
 }
 
@@ -1956,6 +1970,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'whatsapp.delete': executarApagar,
         'group.remove': executarRemoverDoGrupo,
         'group.promote': executarPromoverNoGrupo,
+        'group.demote': executarRebaixarNoGrupo,
+        'group.add': executarAdicionarNoGrupo,
         'whatsapp.rich': executarMensagemRica,
         'whatsapp.sendFile': executarEnvioDeArquivo,
         'media.download': executarDownload,

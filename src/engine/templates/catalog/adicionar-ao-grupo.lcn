@@ -1,0 +1,49 @@
+template adicionar-ao-grupo v1
+  nome: Adicionar participante ao grupo
+  descrição: Adiciona uma pessoa ao grupo pelo número de telefone informado após o comando. Só admin usa, e o número do bot precisa ser administrador do grupo. Se a pessoa tiver restrição de privacidade no WhatsApp para adição em grupos, o WhatsApp recusa.
+  categoria: modulos-especializados
+
+automação
+  nome: Adicionar ao grupo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Adiciona uma pessoa ao grupo pelo número
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  onde: todos os grupos
+
+  se evento sender.isAdmin == true
+    adiciona no grupo
+      número: "{{message.args}}"
+      sem alvo: "{{params.semAlvoText}}"
+  senão
+    responde "{{params.soAdminText}}"
+
+configurável
+  command: texto = "/adiciona"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita seguida do número com DDD (ex: /adiciona 5511999999999).
+  semAlvoText: texto = "Digite o número de telefone com DDD após o comando (ex: /adiciona 5511999999999)."
+    rótulo: Quando nenhum número foi informado
+    ajuda: Resposta para quem digitou o comando sem informar o número. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.
+  soAdminText: texto = "Só administrador do grupo pode adicionar alguém."
+    rótulo: Quando quem pediu não é admin
+    ajuda: A conferência é feita aqui, no comando, e não pelo WhatsApp — assim quem não é admin recebe uma resposta em vez de ver o comando falhar calado.
+  familia: texto = "moderacao"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  O número do bot precisa ser ADMINISTRADOR do grupo. Sem isso o WhatsApp recusa a adição por falta de permissão administrativa.
+
+avisa nota
+  O WhatsApp pode responder que a pessoa não pode ser adicionada por configurações de privacidade dela — isso é recusa de privacidade do WhatsApp, não erro nosso.

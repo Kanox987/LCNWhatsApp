@@ -25,6 +25,8 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // gera comando e morre na entrega — foi por isso que `connection.call` ficou
   // fora desta lista de propósito enquanto só o motor existia.
   'action.group.promote',
+  'action.group.demote',
+  'action.group.add',
   'action.whatsapp.rich',
   'action.whatsapp.sendFile',
   'action.media.download',
