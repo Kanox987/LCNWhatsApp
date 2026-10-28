@@ -75,6 +75,13 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
     meta: {
       obterVariaveis: () => requisitar('GET', '/meta/variables')
     },
+    // O gateway RELATA enquete e voto; quem grava é o motor, que tem banco.
+    // A fronteira é de propósito: a alternativa era dar um SQLite próprio ao
+    // gateway, com dois bancos para manter, migrar e sincronizar.
+    enquetes: {
+      anotar: (pollId, chatId, opcoes) => requisitar('POST', '/enquetes', { pollId, chatId, opcoes }),
+      votar: (pollId, eleitor, hashes) => requisitar('POST', `/enquetes/${encodeURIComponent(pollId)}/votos`, { eleitor, hashes })
+    },
     retencao: {
       obter: () => requisitar('GET', '/retencao'),
       salvar: (horas) => requisitar('PUT', '/retencao', { horas }),
@@ -164,6 +171,7 @@ export const eventos = clientePadrao.eventos
 export const execucoes = clientePadrao.execucoes
 export const meta = clientePadrao.meta
 export const retencao = clientePadrao.retencao
+export const enquetes = clientePadrao.enquetes
 export const entidades = clientePadrao.entidades
 export const automacoes = clientePadrao.automacoes
 export const templates = clientePadrao.templates

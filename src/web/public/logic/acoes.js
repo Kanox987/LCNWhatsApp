@@ -448,7 +448,7 @@ export const ACOES = Object.freeze([
     familia: 'resposta',
     resumo: 'Escreve quantos votos cada opção recebeu.',
     exemplo: 'Depois de perguntar o dia da reunião, mostrar qual ganhou.',
-    ressalva: { level: 'note', text: 'Conta qualquer enquete que o bot viu NASCER na conversa, inclusive as criadas por outras pessoas — é na criação que os nomes das opções passam em claro, e é esse mapa que traduz os votos depois. A contagem vive na memória e recomeça do zero quando o bot reinicia.' },
+    ressalva: { level: 'note', text: 'Conta qualquer enquete que o bot viu NASCER na conversa, inclusive as criadas por outras pessoas — é na criação que os nomes das opções passam em claro, e é esse mapa que traduz os votos depois. A contagem é guardada e sobrevive a reinício.' },
     campos: [
       { chave: 'headerText', rotulo: 'Título', ajuda: 'A primeira linha, antes dos totais.' },
       { chave: 'lineFormat', rotulo: 'Como escrever cada linha', ajuda: 'Use {{opcao}} e {{votos}}. O padrão é "• opção: votos".' },

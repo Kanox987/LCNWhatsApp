@@ -11,6 +11,7 @@ import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
 import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
+import { criarServicoDeEnquetes } from './enquetesService.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
 import {
@@ -1687,18 +1688,42 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
     }
 
     case 'action.whatsapp.pollResults': {
-      // Quem conta é o gateway: a urna de votos vive lá, porque é lá que os
-      // votos chegam. O motor só pede e manda escrever.
+      // A contagem SAI DAQUI, do banco, e não mais de uma urna em memória do
+      // gateway. O gateway relata o que vê; o motor guarda e soma. Assim o
+      // resultado sobrevive a um reinício — uma enquete de reunião aberta à
+      // noite não pode perder os votos porque o bot subiu de manhã.
+      //
+      // Sem id, usa a última enquete desta conversa: ninguém copia id de
+      // mensagem no WhatsApp, e um comando que exigisse isso não seria usado.
+      const enquetes = criarServicoDeEnquetes(db)
+      const alvoEnquete = evento.message?.quotedRef?.id || enquetes.ultimaDaConversa(evento.chat.id)
+      const apurado = alvoEnquete ? enquetes.apurar(alvoEnquete) : null
+
+      if (!apurado) {
+        // "Não conheço esta enquete" é diferente de "ninguém votou", e o texto
+        // padrão do template diz isso — o bot conta a partir das que vê
+        // nascer, então uma aberta antes de ele entrar no grupo fica de fora.
+        if (typeof no.config?.emptyText === 'string' && no.config.emptyText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.emptyText, contexto), replyTo: referenciaDoLink(evento) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há enquete conhecida nesta conversa para apurar.')
+      }
+
+      const molde = no.config?.lineFormat || '• {{opcao}}: {{votos}}'
+      const linhas = apurado.opcoes.map((o) => molde
+        .replaceAll('{{opcao}}', o.opcao)
+        .replaceAll('{{votos}}', String(o.votos)))
+      const cabecalho = no.config?.headerText ? interpolar(no.config.headerText, contexto) : ''
+      const rodape = `${apurado.votantes} ${apurado.votantes === 1 ? 'pessoa votou' : 'pessoas votaram'}.`
       comandos.push({
-        commandType: 'whatsapp.pollResults',
+        commandType: 'whatsapp.reply',
         payload: {
           chatId: evento.chat.id,
-          // Sem id, o gateway usa a última enquete desta conversa — ninguém
-          // copia id de mensagem no WhatsApp.
-          ...(evento.message?.quotedRef?.id ? { pollId: evento.message.quotedRef.id } : {}),
-          ...(no.config?.headerText ? { headerText: interpolar(no.config.headerText, contexto) } : {}),
-          ...(no.config?.lineFormat ? { lineFormat: no.config.lineFormat } : {}),
-          ...(no.config?.emptyText ? { emptyText: interpolar(no.config.emptyText, contexto) } : {}),
+          text: [cabecalho, ...linhas, '', rodape].filter((l) => l !== '').join('\n'),
           replyTo: referenciaDoLink(evento)
         }
       })

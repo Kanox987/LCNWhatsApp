@@ -33,7 +33,7 @@ import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
 import { executarComandos } from './engine/gatewayExecutor.js'
 import { APARELHOS, resolverAparelho } from './aparelho.js'
-import * as urnaDeEnquetes from './engine/urnaDeEnquetes.js'
+import * as lidMap from './lidMap.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -214,7 +214,7 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
         // Foi a terceira saída, que nenhuma das duas primeiras revisões viu:
         // uma propunha um banco novo no gateway, a outra limitava a contagem
         // às enquetes do bot. Esta não precisa de nenhum dos dois.
-        anotarEnqueteCriada(event)
+        anotarEnqueteCriada(event, clienteEngine)
         eventoCanonico = construirEventoDeMensagem(event, opcoes)
         if (eventoCanonico?.message?.kind === 'unknown') emitirDesconhecidoDebug(event, cfg, registrar)
       }
@@ -244,7 +244,18 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
       const alvo = event?.targetMessageId
       const escolhidas = event?.decrypted?.pollVote?.selectedOptions
       if (!quem || !alvo) return
-      urnaDeEnquetes.registrarVotoPorHash({ pollId: alvo, quem, hashes: escolhidas || [] })
+      const hashes = (escolhidas || [])
+        .map((b) => (Buffer.isBuffer(b) || b instanceof Uint8Array ? Buffer.from(b).toString('hex') : String(b || '')))
+        .filter(Boolean)
+      // A mesma pessoa chega ora como @lid, ora como telefone. Sem normalizar,
+      // quem vota como LID e TROCA o voto chegando como telefone vira dois
+      // eleitores: o antigo nunca é substituído e o total passa do tamanho do
+      // grupo. O mapa que resolve já existia, usado pelo porteiro.
+      let eleitor = quem
+      try { eleitor = lidMap.paraTelefone(quem) || quem } catch {}
+      clienteEngine.enquetes.votar(alvo, eleitor, hashes).catch(() => {
+        // Voto perdido é um voto a menos no resultado, nunca uma queda.
+      })
     } catch {
       // Um voto perdido não pode derrubar o emissor de eventos: o resultado
       // sai com um voto a menos, e isso é muito melhor que o bot cair.
@@ -265,7 +276,7 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
 // Os nomes das opções só existem em claro AQUI, na criação. O voto que chegar
 // depois traz o SHA-256 de um deles, e sem este mapa não haveria como dizer em
 // que opção alguém votou — apenas um hash, que não serve para ninguém.
-function anotarEnqueteCriada (event) {
+function anotarEnqueteCriada (event, clienteEngine) {
   try {
     const bruto = event?.message
     const criacao = bruto?.pollCreationMessage || bruto?.pollCreationMessageV2 ||
@@ -278,7 +289,9 @@ function anotarEnqueteCriada (event) {
     const pollId = event?.key?.id
     const chatId = event?.key?.remoteJid
     if (!pollId) return
-    urnaDeEnquetes.registrarEnquete({ pollId, chatId, opcoes })
+    clienteEngine.enquetes.anotar(pollId, chatId, opcoes).catch(() => {
+      // Enquete não anotada significa resultado indisponível para ela, e só.
+    })
   } catch {
     // Enquete não anotada significa resultado indisponível para ela, e só.
     // Nunca pode atrapalhar a entrega da mensagem em si.

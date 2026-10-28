@@ -29,7 +29,7 @@ configurável
   molde: texto = "• {{opcao}}: {{votos}}"
     rótulo: Como escrever cada linha
     ajuda: Use {{opcao}} e {{votos}}. As opções saem ordenadas da mais votada para a menos.
-  semVotosText: texto = "Ainda não tenho contagem para esta conversa. Eu conto a partir das enquetes que vejo nascer, então uma enquete aberta antes de eu entrar aqui ou antes do meu último reinício fica de fora."
+  semVotosText: texto = "Ainda não tenho contagem para esta conversa. Eu conto a partir das enquetes que vejo nascer, então uma enquete aberta antes de eu entrar aqui fica de fora."
     rótulo: Quando não há contagem
     ajuda: Diga "não tenho contagem" e não "ninguém votou" — são coisas diferentes. Depois de um reinício a segunda frase seria mentira.
   familia: texto = "utils"
@@ -46,4 +46,4 @@ avisa exige
   Conta qualquer enquete aberta NA CONVERSA enquanto o bot estava de pé — a do próprio bot e a que um membro criou. O que o bot precisa é ter visto a enquete NASCER: é só na criação que os nomes das opções passam em claro. O voto que chega depois traz um código no lugar do nome, e o mapa feito na criação é o que traduz. Enquete aberta antes de o bot entrar no grupo, ou antes do último reinício, não tem como ser contada.
 
 avisa nota
-  A contagem vive na MEMÓRIA do bot e recomeça do zero quando ele reinicia. É limitação de verdade, não descuido: guardar em banco exigiria o gateway escrever onde ele não escreve hoje, e a fronteira entre os dois vale mais do que o histórico de uma enquete.
+  A contagem é GUARDADA e sobrevive a reinício do bot. Ela já viveu em memória e se perdia — uma revisão chamou isso de defeito de confiabilidade, com razão: enquete de reunião aberta à noite não pode zerar porque o bot subiu de manhã. A fronteira entre as duas metades do sistema continua de pé: quem vê os votos chegarem RELATA, e quem tem banco GRAVA.
