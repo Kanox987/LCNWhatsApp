@@ -1,6 +1,6 @@
 template calculadora v1
   nome: Calculadora
-  descrição: Realiza cálculos aritméticos básicos entre dois números (soma, subtração, multiplicação e divisão). Recebe os valores separados por barra e responde com o resultado da operação.
+  descrição: Conta livre com os quatro operadores, escolhidos pela pessoa no próprio comando: /calc 10 / vezes / 3. Diferente do Calcular um total, que só multiplica preço por quantidade e serve para orçamento.
   categoria: utilitarios
 
 automação
@@ -8,7 +8,7 @@ automação
   tipo: comando
   dispara com: {{params.command}}
   argumentos: num1 / op / num2
-  menu: {{params.command}} — Calcula operações básicas (+, -, *, /)
+  menu: {{params.command}} — Conta livre que a pessoa digita: /calc 10 / vezes / 3
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto

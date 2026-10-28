@@ -7,7 +7,7 @@ automação
   nome: Quem sou eu
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Mostra o que o bot sabe sobre você
+  menu: {{params.command}} — Mostra o que o bot sabe sobre VOCÊ MESMO
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto

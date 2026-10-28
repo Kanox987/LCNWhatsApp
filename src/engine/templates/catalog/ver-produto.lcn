@@ -7,7 +7,7 @@ automação
   nome: Ver produto
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Mostra o que é e quanto custa um produto
+  menu: {{params.command}} — MOSTRA preço e descrição de um produto, sem entregar o arquivo
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto

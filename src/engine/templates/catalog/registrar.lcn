@@ -7,7 +7,7 @@ automação
   nome: Registrar membro
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Cadastra seu nome e idade
+  menu: {{params.command}} — A PESSOA se cadastra sozinha, com nome e idade
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto

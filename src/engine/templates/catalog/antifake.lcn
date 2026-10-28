@@ -1,6 +1,6 @@
 template antifake v1
   nome: Anti-fake (número estrangeiro)
-  descrição: Monitora a entrada no grupo e detecta participantes com número de fora do país. Pode avisar o grupo ou remover o intruso automaticamente.
+  descrição: Olha o CÓDIGO DO PAÍS de quem entra e avisa quando é de fora. Não confunda com o Porteiro: aquele decide pela LISTA DE AUTORIZADOS, pessoa por pessoa, e remove quem não está nela; este olha só o prefixo do número e, de fábrica, apenas AVISA. Use os dois juntos se quiser lista branca E alerta de estrangeiro.
   categoria: modulos-especializados
 
 automação

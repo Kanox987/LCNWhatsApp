@@ -1,6 +1,6 @@
 template calcular-total v1
   nome: Calcular um total
-  descrição: Multiplica dois valores recebidos pelo comando e responde sem gravar uma variável. Exemplo: /total 12.5 / 3 devolve Total: 37.5.
+  descrição: MULTIPLICA preço por quantidade e responde o total. É só essa conta — para soma, subtração e divisão livres existe a Calculadora, que aceita o operador no próprio comando. Exemplo: /total 12.5 / 3 devolve Total: 37.5.
   categoria: utilitarios
 
 automação

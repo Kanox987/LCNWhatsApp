@@ -7,7 +7,7 @@ automação
   nome: Ficha da pessoa
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Mostra anotações da pessoa marcada
+  menu: {{params.command}} — LÊ o que já foi anotado sobre quem você marcar
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto

@@ -8,7 +8,7 @@ automação
   tipo: comando
   dispara com: {{params.command}}
   argumentos: alvo / valor
-  menu: {{params.command}} — Grava uma anotação sobre a pessoa marcada
+  menu: {{params.command}} — O ADMIN grava uma anotação sobre quem ele marcar
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto

@@ -1,6 +1,6 @@
 template porteiro v1
   nome: Porteiro
-  descrição: Monitora a entrada de novos participantes no grupo e remove automaticamente quem não estiver na lista de autorizados. O dono do bot nunca é removido.
+  descrição: Remove automaticamente quem entra no grupo e NÃO está na lista de autorizados, pessoa por pessoa. O dono do bot nunca é removido. Diferente do Anti-fake, que olha só o código do país de quem chega e de fábrica apenas avisa.
   categoria: modulos-especializados
 
 automação

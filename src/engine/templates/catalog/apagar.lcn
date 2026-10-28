@@ -7,7 +7,7 @@ automação
   nome: Apagar mensagem
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Apaga a mensagem respondida
+  menu: {{params.command}} — Apaga a MENSAGEM respondida, e não a pessoa
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto
