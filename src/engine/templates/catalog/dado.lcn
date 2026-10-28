@@ -1,53 +1,32 @@
 template dado v1
   nome: Dado
-  descrição: Rola um dado com o número de faces configurado ou informado na mensagem. Se a pessoa digitar apenas o comando, o sorteio usa as faces padrão; se informar um número depois do comando, esse número vira o limite do sorteio.
+  descrição: Rola um dado e responde o número que saiu. O número de faces é configurável — troque para 20 se o seu grupo joga RPG. O sorteio acontece dentro do próprio bot, sem depender de serviço nenhum.
   categoria: utilitarios
 
 automação
   nome: Dado
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Rola um dado com o número de faces que você escolher
+  menu: {{params.command}} — Rola um dado
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto
-  casa: exato ou com argumentos
+  casa: exato
   quem: {{params.allowFrom}}
 
-  se evento message.args == ""
-    chama {{params.conexao}}.sorteia
-      com
-        minimo: 1
-        maximo: {{params.faces}}
-      erro: "{{params.errorText}}"
-    responde "{{params.textoDoResultado}}"
-  senão
-    chama {{params.conexao}}.sorteia
-      com
-        minimo: 1
-        maximo: {{message.args}}
-      erro: "{{params.errorText}}"
-    responde "{{params.textoDoResultadoCustom}}"
+  sorteia local resultado = 1 até {{params.faces}}
+  responde "{{params.formato}}"
 
 configurável
   command: texto = "/dado"
     rótulo: Comando
     ajuda: A palavra que a pessoa digita para rolar o dado.
-  conexao: texto = "sorteio"
-    rótulo: Serviço de sorteio
-    ajuda: Identificador da conexão externa configurada na aba Conexões.
   faces: número = 6
-    rótulo: Faces padrão do dado
-    ajuda: Quantidade de faces usada quando o comando for enviado sozinho.
-  textoDoResultado: texto = "🎲 Você rolou o dado e tirou: {{o resultado}}"
-    rótulo: Mensagem do resultado padrão
-    ajuda: Texto enviado de volta quando a pessoa rolar o dado padrão.
-  textoDoResultadoCustom: texto = "🎲 Você rolou um dado de {{message.args}} faces e tirou: {{o resultado}}"
-    rótulo: Mensagem do resultado customizado
-    ajuda: Texto enviado de volta quando a pessoa informar a quantidade de faces.
-  errorText: texto = "Não foi possível rolar o dado. Verifique a conexão com o serviço de sorteio."
-    rótulo: Se falhar
-    ajuda: Resposta enviada se a chamada ao serviço de sorteio falhar.
+    rótulo: Quantas faces
+    ajuda: O maior número que pode sair, e ele PODE sair — um dado de 6 precisa poder tirar 6. Troque para 20 se o seu grupo joga RPG.
+  formato: texto = "🎲 Saiu *{{local.resultado}}*"
+    rótulo: Como responder
+    ajuda: O texto da resposta. Use {{local.resultado}} onde o número deve aparecer.
   familia: texto = "utils"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -58,5 +37,5 @@ configurável
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
 
-avisa exige
-  Exige uma conexão declarada na aba Conexões com o identificador configurado em 'conexao' (padrão: sorteio). O serviço precisa fornecer a função 'sorteia' recebendo 'minimo' (número) e 'maximo' (número), devolvendo o número inteiro sorteado.
+avisa nota
+  Não precisa de conexão nenhuma: o sorteio roda dentro do bot. É decisão revista — a primeira versão chamava um serviço externo, o que trocava um microssegundo de conta por até 300 ms de rede e punha um ponto de falha num comando de brincadeira. O argumento que liberou isso veio de uma revisão sobre outro assunto: isolamento controla por onde o bot FALA para fora, não impede que ele faça conta sozinho.

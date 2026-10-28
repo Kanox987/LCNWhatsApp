@@ -1,46 +1,32 @@
 template cara-ou-coroa v1
-  nome: Cara ou Coroa
-  descrição: Joga uma moeda virtual para decidir um impasse entre duas opções. Utiliza a chamada de sorteio externa para escolher entre cara ou coroa e responde com mensagens personalizáveis.
+  nome: Cara ou coroa
+  descrição: Joga uma moeda e responde o resultado. Serve para decidir qualquer coisa em grupo sem ninguém poder reclamar do critério.
   categoria: utilitarios
 
 automação
-  nome: Cara ou Coroa
+  nome: Cara ou coroa
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Joga uma moeda e tira cara ou coroa
+  menu: {{params.command}} — Joga uma moeda
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto
-  casa: exato ou com argumentos
+  casa: exato
   quem: {{params.allowFrom}}
 
-  chama {{params.conexao}}.sorteia
-    com
-      minimo: 1
-      maximo: 2
-    erro: "{{params.errorText}}"
-
-  se evento resultado.texto == "1"
-    responde "{{params.caraText}}"
-  senão
-    responde "{{params.coroaText}}"
+  sorteia local lado = entre "{{params.lados}}"
+  responde "{{params.formato}}"
 
 configurável
   command: texto = "/moeda"
     rótulo: Comando
     ajuda: A palavra que a pessoa digita para jogar a moeda.
-  conexao: texto = "sorteio"
-    rótulo: Serviço de sorteio
-    ajuda: Identificador da conexão externa declarada na aba Conexões.
-  caraText: texto = "🪙 Deu Cara!"
-    rótulo: Mensagem para Cara
-    ajuda: Texto enviado de volta quando o resultado for 1 (cara).
-  coroaText: texto = "👑 Deu Coroa!"
-    rótulo: Mensagem para Coroa
-    ajuda: Texto enviado de volta quando o resultado for 2 (coroa).
-  errorText: texto = "Não foi possível jogar a moeda. Verifique a conexão com o serviço de sorteio."
-    rótulo: Se falhar
-    ajuda: Resposta enviada se a chamada ao serviço de sorteio falhar.
+  lados: texto = "cara, coroa"
+    rótulo: Os dois lados
+    ajuda: Separados por vírgula. Dá para trocar por qualquer par — "sim, não", "eu, você" — e até pôr mais de dois, que aí vira um sorteio comum.
+  formato: texto = "🪙 Deu *{{local.lado}}*!"
+    rótulo: Como responder
+    ajuda: O texto da resposta. Use {{local.lado}} onde o resultado deve aparecer.
   familia: texto = "utils"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -51,8 +37,5 @@ configurável
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
 
-avisa exige
-  Exige uma conexão declarada na aba Conexões com o identificador configurado em 'conexao' (padrão: sorteio). O serviço externo precisa expor a função 'sorteia' recebendo 'minimo' (número) e 'maximo' (número), devolvendo 1 ou 2 no corpo da resposta.
-
 avisa nota
-  Este é o primeiro comando do catálogo que DECIDE a partir do que uma chamada externa devolveu. A forma é `se evento resultado.texto == "..."` — e ela só existe depois de uma chamada, porque é ali que o motor retoma o fluxo com a resposta em mãos. Escrever `se o resultado == ...` NÃO funciona: fora de um texto, `o resultado` não é um operando que o compilador entenda.
+  A primeira versão pedia um número ao serviço externo e traduzia 1 em cara e 2 em coroa, com um `se` no meio. Sortear direto da lista é mais curto, não depende de rede, e deixa o dono trocar os dois lados sem abrir o fluxo.

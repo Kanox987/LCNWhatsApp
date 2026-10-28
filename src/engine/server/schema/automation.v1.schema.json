@@ -246,6 +246,9 @@
                 "$ref": "#/definitions/actionVariableRank"
               },
               {
+                "$ref": "#/definitions/actionVariableRandom"
+              },
+              {
                 "$ref": "#/definitions/actionWhatsappPin"
               },
               {
@@ -1024,6 +1027,28 @@
               "type": "string",
               "description": "Resposta quando o alvo é um DONO e a trava o protegeu. Sem este texto a trava age em silêncio: o comando casa, não envia nada, e quem digitou não entende por quê."
             }
+          }
+        }
+      }
+    },
+    "actionVariableRandom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.variable.random" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "key"],
+          "properties": {
+            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global", "local"] },
+            "categoryKey": { "type": "string", "minLength": 1 },
+            "key": { "type": "string", "minLength": 1 },
+            "minimo": { "type": "integer", "description": "O menor número que pode sair, incluído." },
+            "maximo": { "type": "integer", "description": "O maior número que pode sair, incluído." },
+            "entre": { "type": "string", "minLength": 1, "description": "Itens separados por vírgula; sai UM deles. Existe porque a linguagem não manipula lista: quem tem a coleção faz o trabalho." }
           }
         }
       }

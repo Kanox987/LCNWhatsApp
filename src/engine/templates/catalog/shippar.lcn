@@ -1,45 +1,36 @@
 template shippar v1
-  nome: Shippar Casal
-  descrição: Calcula a porcentagem de compatibilidade entre dois nomes informados na mensagem. Se a pessoa digitar o comando sozinho, o bot avisa como usar informando os dois nomes.
+  nome: Shippar
+  descrição: Recebe dois nomes e responde uma porcentagem de compatibilidade, de brincadeira. Os dois nomes vêm do que a pessoa escreveu — o comando não sorteia gente do grupo.
   categoria: utilitarios
 
 automação
-  nome: Shippar Casal
+  nome: Shippar
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Calcula a compatibilidade entre dois nomes
+  argumentos: um / outro
+  menu: {{params.command}} — Mede a compatibilidade entre dois nomes
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
 
-  se evento message.args == ""
-    responde "{{params.semNomesText}}"
+  se evento message.args contém "/"
+    sorteia local medida = 0 até 100
+    responde "{{params.formato}}"
   senão
-    chama {{params.conexao}}.sorteia
-      com
-        minimo: 0
-        maximo: 100
-      erro: "{{params.errorText}}"
-    responde "{{params.textoDoResultado}}"
+    responde "{{params.ajudaText}}"
 
 configurável
   command: texto = "/ship"
     rótulo: Comando
-    ajuda: A palavra que a pessoa digita para calcular o shipp.
-  conexao: texto = "sorteio"
-    rótulo: Serviço de sorteio
-    ajuda: Identificador da conexão externa declarada na aba Conexões.
-  semNomesText: texto = "Escreva dois nomes depois do comando para shippar (exemplo: /ship Romeu e Julieta)."
-    rótulo: Mensagem sem argumentos
-    ajuda: Resposta enviada se a pessoa enviar apenas o comando sem nenhum nome.
-  textoDoResultado: texto = "💘 Compatibilidade entre {{message.args}}: {{o resultado}}%!"
-    rótulo: Mensagem do resultado
-    ajuda: Texto da resposta com a porcentagem calculada para os nomes enviados.
-  errorText: texto = "Não foi possível calcular o shipp no momento. Verifique a conexão com o serviço de sorteio."
-    rótulo: Se falhar
-    ajuda: Resposta enviada se o serviço de sorteio externo falhar.
+    ajuda: A palavra que a pessoa digita, seguida dos dois nomes separados por barra.
+  formato: texto = "💘 *{{argumentos.um}}* e *{{argumentos.outro}}*: {{local.medida}}% de combinação!"
+    rótulo: Como responder
+    ajuda: Use {{argumentos.um}}, {{argumentos.outro}} e {{local.medida}}.
+  ajudaText: texto = "Use assim: /ship Maria / João — a barra separa os dois nomes."
+    rótulo: Quando vem sem a barra
+    ajuda: É o erro de uso mais provável deste comando. Sem este texto ele responderia com os marcadores crus no meio da frase.
   familia: texto = "utils"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -50,5 +41,8 @@ configurável
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
 
-avisa exige
-  Exige uma conexão declarada na aba Conexões com o identificador configurado em 'conexao' (padrão: sorteio). O serviço externo precisa expor a função 'sorteia' recebendo 'minimo' (número) e 'maximo' (número), devolvendo a porcentagem calculada (0 a 100).
+avisa nota
+  Os dois nomes são DIGITADOS, não sorteados do grupo. Shippar gente que não pediu para ser shippada costuma render briga, e quem quiser isso pode marcar as pessoas no texto por conta própria.
+
+avisa nota
+  A guarda é `contém "/"` e não `== ""`: quando uma parte do argumento não vem, ela fica ausente, e ausente comparado com vazio devolve falso — a condição cairia no ramo que responde, com os marcadores crus na frase.

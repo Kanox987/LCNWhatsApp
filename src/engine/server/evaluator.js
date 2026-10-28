@@ -1996,6 +1996,40 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.variable.random': {
+      // SORTEAR, com a aleatoriedade acontecendo AQUI e não numa API.
+      //
+      // Duas formas: número numa faixa, ou um item de uma lista. A segunda
+      // existe porque a linguagem não manipula coleção — quem tem a lista faz
+      // o trabalho, igual ao sorteio de membro.
+      if (ehChaveReservada(no.config.key)) throw new ErroDeFluxo(motivoDeRecusa(no.config.key))
+      let valor
+      if (typeof no.config.entre === 'string' && no.config.entre) {
+        const itens = no.config.entre.split(',').map((x) => x.trim()).filter(Boolean)
+        if (!itens.length) throw new ErroDeFluxo('Não há de onde sortear: a lista veio vazia.')
+        valor = itens[Math.floor(Math.random() * itens.length)]
+      } else {
+        const minimo = Number.isInteger(no.config.minimo) ? no.config.minimo : 1
+        const maximo = Number.isInteger(no.config.maximo) ? no.config.maximo : 100
+        if (maximo < minimo) throw new ErroDeFluxo(`A faixa do sorteio está invertida: de ${minimo} até ${maximo}.`)
+        // As duas pontas ENTRAM: "de 1 até 6" tem que poder dar 1 e 6, senão
+        // um dado de seis lados nunca tira seis.
+        valor = minimo + Math.floor(Math.random() * (maximo - minimo + 1))
+      }
+      if (no.config.scope === 'local') {
+        if (no.config.categoryKey || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(no.config.key)) {
+          throw new ErroDeFluxo('Resultado local precisa de nome simples, sem categoria.')
+        }
+        contexto.local[no.config.key] = valor
+      } else {
+        const alvo = resolverEscopo(no.config.scope, evento, { categoryKey: no.config.categoryKey })
+        if (!alvo) throw new ErroDeFluxo(`O destino do sorteio não existe neste evento: ${no.config.scope}.`)
+        gravarAtributo(db, alvo, no.config.key, valor)
+        aplicarNasVariaveis(contexto.var, no.config.scope, no.config.key, valor, { categoryKey: no.config.categoryKey })
+      }
+      return 'success'
+    }
+
     case 'action.variable.calculate': {
       if (ehChaveReservada(no.config.key)) throw new ErroDeFluxo(motivoDeRecusa(no.config.key))
       const esquerda = resolverOperando(db, no.config.left, evento, contexto)

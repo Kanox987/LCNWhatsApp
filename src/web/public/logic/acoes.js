@@ -398,6 +398,22 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.variable.random',
+    rotulo: 'Sortear',
+    familia: 'variavel',
+    resumo: 'Tira um número de uma faixa, ou um item de uma lista, e guarda numa variável.',
+    exemplo: 'Rolar um dado, tirar cara ou coroa, escolher o lanche da sexta.',
+    ressalva: { level: 'note', text: 'O sorteio acontece DENTRO do bot, sem chamar serviço nenhum — então ele não depende de rede e não fica lento. Cada execução tira um valor novo: não há semente guardada, e dois comandos seguidos podem dar o mesmo resultado, como em qualquer sorteio honesto.' },
+    campos: [
+      { chave: 'scope', rotulo: 'Onde guardar', ajuda: 'Desta execução (local) é o normal: vale só enquanto o comando roda e não grava nada. Os outros escopos gravam de verdade.' },
+      { chave: 'categoryKey', rotulo: 'Qual categoria', ajuda: 'Só quando o escopo é "categoria".' },
+      { chave: 'key', rotulo: 'Nome', ajuda: 'Como o valor sorteado vai ser chamado na resposta.' },
+      { chave: 'minimo', rotulo: 'De', ajuda: 'O menor número que pode sair, e ele pode sair.' },
+      { chave: 'maximo', rotulo: 'Até', ajuda: 'O maior número que pode sair, e ele também pode sair — um dado de 6 precisa poder tirar 6.' },
+      { chave: 'entre', rotulo: 'Ou escolher entre', ajuda: 'Itens separados por vírgula, como "pizza, pastel, sushi". Sai um deles. Preenchendo isto, a faixa de números é ignorada.' }
+    ]
+  },
+  {
     tipo: 'action.variable.rank',
     rotulo: 'Montar um ranking',
     familia: 'variavel',

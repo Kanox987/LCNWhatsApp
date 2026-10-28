@@ -201,6 +201,29 @@ function lerAcao (linha, filhas) {
     if (def.palavra === 'calcula') {
       if (filhas.length) throw new ErroDeSintaxe('"calcula" não tem campos indentados; escreva uma operação por linha', filhas[0].n)
       Object.assign(config, lerCalculo(mm[3], linha.n))
+    } else if (def.palavra === 'sorteia') {
+      // Duas formas, e a segunda existe porque a linguagem não manipula lista:
+      //   sorteia local dado = 1 até 6
+      //   sorteia local prato = entre "pizza, pastel, sushi"
+      // Quem tem a coleção faz o trabalho — mesma ideia do sorteio de membro.
+      const bruto = mm[3].trim()
+      const entre = bruto.match(/^entre\s+(.+)$/)
+      if (entre) {
+        config.entre = descitar(entre[1], linha.n)
+      } else {
+        const faixa = bruto.match(/^(\S+)\s+at[ée]\s+(\S+)$/)
+        if (!faixa) {
+          throw new ErroDeSintaxe('"sorteia" aceita "<de> até <até>" ou \'entre "um, outro"\'', linha.n)
+        }
+        const lerNumero = (x) => {
+          if (ehMarcador(x)) return x
+          const n = Number(x)
+          if (!Number.isInteger(n)) throw new ErroDeSintaxe(`"sorteia" precisa de números inteiros; veio "${x}"`, linha.n)
+          return n
+        }
+        config.minimo = lerNumero(faixa[1])
+        config.maximo = lerNumero(faixa[2])
+      }
     } else if (def.palavra === 'soma') {
       const bruto = mm[3].trim()
       // Num TEMPLATE o passo pode ser o buraco que quem instala preenche,

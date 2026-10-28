@@ -23,6 +23,24 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // BANCO — não à linguagem. A linguagem continua sem coleção e sem índice:
   // ela pede o ranking pronto, como pede o sorteio de um membro.
   'action.variable.rank',
+  // SORTEAR, e a decisão que mudou.
+  //
+  // O dono recusou a primitiva de aleatório quando ela custava nove camadas e
+  // a alternativa era "declare uma conexão HTTP que devolve número". Depois a
+  // rodada cruzada do painel estabeleceu outra coisa, sobre AGENDAMENTO mas
+  // valendo igual aqui: isolamento controla FRONTEIRA DE COMUNICAÇÃO, não
+  // impede o sistema de executar tarefa sozinho. Um `Math.random()` local não
+  // abre porta nenhuma.
+  //
+  // E o custo da outra saída estava medido, pelo próprio revisor que a
+  // propôs: trocar 0,001 ms por 50 a 300 ms de rede e um ponto único de falha
+  // num /dado, além de obrigar quem aluga a montar infraestrutura para jogar
+  // uma moeda.
+  //
+  // Sorteia número numa faixa OU um item de uma lista. O item entra aqui
+  // porque a linguagem não manipula coleção: quem tem a lista faz o trabalho,
+  // mesma forma do sorteio de membro.
+  'action.variable.random',
   'action.whatsapp.recover',
   'action.menu.render',
   'action.menu.config',

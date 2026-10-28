@@ -35,6 +35,12 @@ function linhaDeAcao (no) {
       if (!simbolo) throw new Error(`Operação aritmética desconhecida: ${cfg.operator}`)
       return [`calcula ${escopo} ${cfg.key} = ${operando(cfg.left)} ${simbolo} ${operando(cfg.right)}`]
     }
+    if (def.palavra === 'sorteia') {
+      const corpo = cfg.entre !== undefined && cfg.entre !== null
+        ? `entre ${citar(cfg.entre)}`
+        : `${cfg.minimo} até ${cfg.maximo}`
+      return [`sorteia ${escopo} ${cfg.key} = ${corpo}`]
+    }
     const valor = def.palavra === 'soma' ? String(cfg.by) : citar(cfg.value)
     return [`${def.palavra} ${escopo} ${cfg.key} = ${valor}`]
   }

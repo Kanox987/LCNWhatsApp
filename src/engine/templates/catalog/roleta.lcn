@@ -1,6 +1,6 @@
 template roleta v1
   nome: Roleta (sorteia um item da lista)
-  descrição: Sorteia um item de uma lista que o dono escreve na configuração do comando — lanche da sexta, quem paga a conta, tarefa do dia. A lista é editável em Programar sem mexer em código, e a pessoa também pode mandar a própria lista depois do comando.
+  descrição: Sorteia um item de uma lista que o dono escreve na configuração do comando — lanche da sexta, quem paga a conta, tarefa do dia. A lista é editável em Programar, sem mexer em código.
   categoria: utilitarios
 
 automação
@@ -11,45 +11,22 @@ automação
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto
-  casa: exato ou com argumentos
+  casa: exato
   quem: {{params.allowFrom}}
 
-  se evento message.args == ""
-    chama {{params.conexao}}.sorteia_item
-      com
-        lista: {{params.listaPadrao}}
-        separador: ","
-      avisa: "{{params.ackText}}"
-      erro: "{{params.errorText}}"
-    responde "{{params.formato}}"
-  senão
-    chama {{params.conexao}}.sorteia_item
-      com
-        lista: {{message.args}}
-        separador: ","
-      avisa: "{{params.ackText}}"
-      erro: "{{params.errorText}}"
-    responde "{{params.formato}}"
+  sorteia local escolhido = entre "{{params.lista}}"
+  responde "{{params.formato}}"
 
 configurável
   command: texto = "/roleta"
     rótulo: Comando
-    ajuda: A palavra que a pessoa digita. Sozinha, sorteia da lista que você configurou aqui. Com texto depois, sorteia da lista que a pessoa escreveu — por exemplo "/roleta pizza, pastel, sushi".
-  listaPadrao: texto = "pizza, hambúrguer, sushi, pastel, açaí"
-    rótulo: Lista padrão
-    ajuda: Os itens separados por vírgula, usados quando a pessoa digita o comando sozinho. Troque pelo que o seu grupo sorteia de verdade.
-  conexao: texto = "sorteio"
-    rótulo: Serviço de sorteio
-    ajuda: Identificador da conexão declarada na aba Conexões que faz o sorteio. É a mesma conexão dos outros comandos de sorte.
-  formato: texto = "🎲 Saiu: *{{o resultado}}*"
-    rótulo: Como mostrar o resultado
-    ajuda: O texto da resposta. Use {{o resultado}} onde o item sorteado deve aparecer.
-  ackText: texto = "Girando a roleta…"
-    rótulo: Aviso enquanto sorteia
-    ajuda: Mensagem curta enviada antes da resposta, para a pessoa saber que o comando foi recebido.
-  errorText: texto = "Não consegui sortear agora. Confira a conexão do serviço de sorteio."
-    rótulo: Se falhar
-    ajuda: Resposta enviada quando a chamada ao serviço não dá certo.
+    ajuda: A palavra que a pessoa digita para sortear um item.
+  lista: texto = "pizza, hambúrguer, sushi, pastel, açaí"
+    rótulo: A lista
+    ajuda: Os itens separados por vírgula. Troque pelo que o seu grupo sorteia de verdade — nomes de pessoas, tarefas, lugares.
+  formato: texto = "🎯 Saiu: *{{local.escolhido}}*"
+    rótulo: Como responder
+    ajuda: O texto da resposta. Use {{local.escolhido}} onde o item sorteado deve aparecer.
   familia: texto = "utils"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -60,8 +37,8 @@ configurável
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
 
-avisa exige
-  Exige uma conexão declarada na aba Conexões com a função "sorteia_item", recebendo "lista" (texto com os itens separados) e "separador" (o caractere que separa), e devolvendo UM item já escolhido, como texto. É de propósito que quem escolhe é o serviço e não o bot: a linguagem não manipula coleção nem índice, então pedir um NÚMERO ao serviço e tentar recortar a lista aqui não funcionaria.
+avisa nota
+  A linguagem não manipula lista nem índice, e continua não manipulando: quem percorre os itens é a ação de sortear, de uma vez só. É a mesma forma do sorteio de membro do grupo — quem tem a coleção faz o trabalho, e o comando apenas pede.
 
 avisa nota
-  Este é o mesmo serviço de sorteio dos outros comandos de sorte, com uma função a mais. Se o seu serviço só tem "sorteia" (que devolve número), acrescente "sorteia_item" nele — é a diferença entre sortear um número e sortear de uma lista, e só a segunda serve aqui.
+  Este template já foi escrito de outra forma e foi RECUSADO por um revisor, com razão na época: ele tentava pedir um NÚMERO a um serviço externo e recortar a lista aqui, o que a linguagem não sabe fazer. Com a ação de sortear recebendo a lista inteira, o problema deixou de existir.

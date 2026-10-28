@@ -1,43 +1,39 @@
 template chance v1
-  nome: Medidor de Chance
-  descrição: Calcula e responde uma porcentagem aleatória sobre um atributo que o administrador configura, como nível de sorte ou coragem. Se alguém for marcado com @ ou citado, calcula para essa pessoa; se o comando vier sozinho, calcula para quem enviou a mensagem.
+  nome: Medidor de chance
+  descrição: Responde uma porcentagem de brincadeira sobre quem foi marcado, ou sobre quem digitou se ninguém foi marcado. O atributo medido é configurável — sortudo, apressado, o que o seu grupo quiser.
   categoria: utilitarios
 
 automação
-  nome: Medidor de Chance
+  nome: Medidor de chance
   tipo: comando
   dispara com: {{params.command}}
-  menu: {{params.command}} — Mede a porcentagem de um atributo para você ou quem marcar
+  menu: {{params.command}} — Mede uma porcentagem para você ou para quem marcar
   família: {{params.familia}}
   pool: {{params.poolId}}
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
 
-  chama {{params.conexao}}.sorteia
-    com
-      minimo: 0
-      maximo: 100
-    erro: "{{params.errorText}}"
-
-  se evento target.id == ""
-    responde "🎯 {{sender.name}} é {{o resultado}}% {{params.atributo}}!"
+  sorteia local medida = 0 até 100
+  se evento target.id contém "@"
+    responde "{{params.formatoAlvo}}"
+      marca: "{{target.id}}"
   senão
-    responde "🎯 @{{target.number}} é {{o resultado}}% {{params.atributo}}!"
+    responde "{{params.formatoProprio}}"
 
 configurável
   command: texto = "/chance"
     rótulo: Comando
-    ajuda: A palavra que a pessoa digita para calcular a chance.
-  conexao: texto = "sorteio"
-    rótulo: Serviço de sorteio
-    ajuda: Identificador da conexão externa declarada na aba Conexões.
+    ajuda: A palavra que a pessoa digita. Sozinha, mede quem digitou; marcando alguém com @, mede essa pessoa.
   atributo: texto = "sortudo"
-    rótulo: Atributo medido
-    ajuda: A característica que o comando calcula (ex.: sortudo, corajoso, inteligente).
-  errorText: texto = "Não foi possível calcular a porcentagem no momento. Verifique a conexão com o serviço de sorteio."
-    rótulo: Se falhar
-    ajuda: Resposta enviada se o serviço de sorteio externo falhar.
+    rótulo: O que está sendo medido
+    ajuda: A palavra que aparece na frase. Troque por qualquer coisa que faça sentido no seu grupo.
+  formatoAlvo: texto = "🎯 @{{target.number}} é *{{local.medida}}%* {{params.atributo}}!"
+    rótulo: Resposta quando alguém foi marcado
+    ajuda: Use {{local.medida}} para a porcentagem e {{target.number}} para a pessoa. Ela é marcada de verdade, então o nome aparece no lugar do número.
+  formatoProprio: texto = "🎯 {{sender.name}} é *{{local.medida}}%* {{params.atributo}}!"
+    rótulo: Resposta quando ninguém foi marcado
+    ajuda: Use {{local.medida}} para a porcentagem e {{sender.name}} para quem digitou.
   familia: texto = "utils"
     rótulo: Família
     ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
@@ -48,5 +44,8 @@ configurável
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
 
-avisa exige
-  Exige uma conexão declarada na aba Conexões com o identificador configurado em 'conexao' (padrão: sorteio). O serviço externo precisa expor a função 'sorteia' recebendo os campos 'minimo' (número) e 'maximo' (número), devolvendo a porcentagem calculada (0 a 100).
+avisa nota
+  A guarda do alvo é `contém "@"`, pelo lado positivo. Comparar com vazio NÃO protege nesta linguagem: quando não há alvo o valor fica ausente, e ausente comparado com vazio devolve falso — a condição cairia no ramo que marca alguém que não existe.
+
+avisa nota
+  O valor é novo a cada vez, e é brincadeira: duas pessoas medidas em seguida podem dar o mesmo número, e a mesma pessoa medida duas vezes dá números diferentes. Não há memória de resultado.

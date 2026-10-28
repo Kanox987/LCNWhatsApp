@@ -363,6 +363,19 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    palavra: 'sorteia',
+    tipo: 'action.variable.random',
+    forma: 'variavel',
+    campos: [
+      { chave: 'scope', tipo: 'palavra' },
+      { chave: 'categoryKey', tipo: 'palavra' },
+      { chave: 'key', tipo: 'palavra' },
+      { chave: 'minimo', rotulo: 'de', tipo: 'numero' },
+      { chave: 'maximo', rotulo: 'até', tipo: 'numero' },
+      { chave: 'entre', rotulo: 'entre', tipo: 'texto' }
+    ]
+  },
+  {
     palavra: 'monta o ranking',
     tipo: 'action.variable.rank',
     campos: [
