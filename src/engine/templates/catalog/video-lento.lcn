@@ -25,7 +25,7 @@ automação
     erro: "{{params.errorText}}"
 
 configurável
-  command: texto = "/slomo"
+  command: texto = "/videolento"
     rótulo: Comando
     ajuda: A palavra que a pessoa digita na legenda de um vídeo ou ao responder a um vídeo existente.
   conexao: texto = "efeitos"
@@ -61,3 +61,6 @@ avisa exige
 
 avisa nota
   Reutiliza a função velocidade_video do serviço externo, configurada com fator multiplicador 0.5 para câmera lenta.
+
+avisa nota
+  O nome diz AUDIO ou VIDEO de propósito. Os quatro comandos de velocidade nasceram como /rapido, /lento, /vrapido e /slomo, e uma revisão do catálogo inteiro apontou o problema: quatro nomes parecidos, todos sobre velocidade, sem dizer em que mídia agem. Outra revisão leu a mesma lista e entendeu que eram quatro VELOCIDADES do mesmo comando, e propôs cortar dois — o que teria removido metade da capacidade. Se um revisor atento lê errado, quem aluga o sistema lê errado também.
