@@ -384,6 +384,15 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    palavra: 'mostra o resultado da enquete',
+    tipo: 'action.whatsapp.pollResults',
+    campos: [
+      { chave: 'headerText', rotulo: 'título', tipo: 'texto' },
+      { chave: 'lineFormat', rotulo: 'cada linha', tipo: 'texto' },
+      { chave: 'emptyText', rotulo: 'sem votos', tipo: 'texto' }
+    ]
+  },
+  {
     palavra: 'abre uma enquete',
     tipo: 'action.whatsapp.poll',
     campos: [

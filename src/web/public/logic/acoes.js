@@ -427,6 +427,19 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.whatsapp.pollResults',
+    rotulo: 'Mostrar o resultado da enquete',
+    familia: 'resposta',
+    resumo: 'Escreve quantos votos cada opção recebeu.',
+    exemplo: 'Depois de perguntar o dia da reunião, mostrar qual ganhou.',
+    ressalva: { level: 'note', text: 'Conta apenas enquetes que o BOT abriu, e a contagem vive na memória: ela recomeça do zero quando o bot reinicia. Enquete criada por uma pessoa não é contada — o WhatsApp manda o voto como um código, e só dá para traduzir o código quando o próprio bot escreveu as opções.' },
+    campos: [
+      { chave: 'headerText', rotulo: 'Título', ajuda: 'A primeira linha, antes dos totais.' },
+      { chave: 'lineFormat', rotulo: 'Como escrever cada linha', ajuda: 'Use {{opcao}} e {{votos}}. O padrão é "• opção: votos".' },
+      { chave: 'emptyText', rotulo: 'Quando não há contagem', ajuda: 'Escreva "ainda não tenho contagem" e não "ninguém votou" — são coisas diferentes, e depois de um reinício a segunda seria mentira.' }
+    ]
+  },
+  {
     tipo: 'action.whatsapp.poll',
     rotulo: 'Abrir uma enquete',
     familia: 'resposta',

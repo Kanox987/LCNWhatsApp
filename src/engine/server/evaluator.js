@@ -1686,6 +1686,25 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.whatsapp.pollResults': {
+      // Quem conta é o gateway: a urna de votos vive lá, porque é lá que os
+      // votos chegam. O motor só pede e manda escrever.
+      comandos.push({
+        commandType: 'whatsapp.pollResults',
+        payload: {
+          chatId: evento.chat.id,
+          // Sem id, o gateway usa a última enquete desta conversa — ninguém
+          // copia id de mensagem no WhatsApp.
+          ...(evento.message?.quotedRef?.id ? { pollId: evento.message.quotedRef.id } : {}),
+          ...(no.config?.headerText ? { headerText: interpolar(no.config.headerText, contexto) } : {}),
+          ...(no.config?.lineFormat ? { lineFormat: no.config.lineFormat } : {}),
+          ...(no.config?.emptyText ? { emptyText: interpolar(no.config.emptyText, contexto) } : {}),
+          replyTo: referenciaDoLink(evento)
+        }
+      })
+      return 'success'
+    }
+
     case 'action.whatsapp.poll': {
       // Enquete nativa do WhatsApp.
       //

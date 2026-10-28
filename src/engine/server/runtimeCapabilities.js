@@ -40,6 +40,10 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // Cada uma custou as mesmas nove camadas de qualquer ação nova.
   'action.whatsapp.pin',
   'action.whatsapp.poll',
+  // O RESULTADO da enquete. Os votos já chegavam ao gateway e eram jogados
+  // fora — 17 pacotes numa captura de 40 minutos, todos como "mensagem
+  // desconhecida". Igual aos eventos de grupo antes do porteiro.
+  'action.whatsapp.pollResults',
   'action.whatsapp.profilePicture',
   'action.group.remove',
   // Administração do grupo. Nascem acompanhadas do executor no gateway, não

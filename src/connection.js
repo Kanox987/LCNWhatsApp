@@ -33,6 +33,7 @@ import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
 import { executarComandos } from './engine/gatewayExecutor.js'
 import { APARELHOS, resolverAparelho } from './aparelho.js'
+import * as urnaDeEnquetes from './engine/urnaDeEnquetes.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -216,6 +217,29 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
   client.on('message', (event) => { receber('message', event) })
   client.on('group', (event) => { receber('group', event) })
   client.on('message_unavailable', (event) => { receber('message_unavailable', event) })
+
+  // OS VOTOS DE ENQUETE, que até 27/10 chegavam e eram jogados fora.
+  //
+  // Medido numa captura de 40 minutos da produção: 17 pacotes de voto, todos
+  // registrados como "mensagem desconhecida". É a mesma história dos eventos
+  // de grupo antes do porteiro — o dado chegava, ninguém encaminhava.
+  //
+  // Este ouvinte NÃO vai ao motor e não ocupa vaga de admissão: ele só anota
+  // na urna, em memória. Um voto não aciona automação nenhuma; quem pergunta
+  // o resultado é um comando, e aí sim o caminho normal roda.
+  client.on('message_addon', (event) => {
+    try {
+      if (event?.kind !== 'poll_vote') return
+      const quem = event?.key?.participant || event?.key?.remoteJid
+      const alvo = event?.targetMessageId
+      const escolhidas = event?.decrypted?.pollVote?.selectedOptions
+      if (!quem || !alvo) return
+      urnaDeEnquetes.registrarVotoPorHash({ pollId: alvo, quem, hashes: escolhidas || [] })
+    } catch {
+      // Um voto perdido não pode derrubar o emissor de eventos: o resultado
+      // sai com um voto a menos, e isso é muito melhor que o bot cair.
+    }
+  })
 }
 
 // Dispara o caminho novo sem bloquear nem substituir a captura existente.

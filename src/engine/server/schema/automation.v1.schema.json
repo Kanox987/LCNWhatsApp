@@ -252,6 +252,9 @@
                 "$ref": "#/definitions/actionWhatsappPoll"
               },
               {
+                "$ref": "#/definitions/actionWhatsappPollResults"
+              },
+              {
                 "$ref": "#/definitions/actionGroupSetSubject"
               },
               {
@@ -1071,6 +1074,24 @@
               "type": "string",
               "description": "Resposta quando o comando veio sem responder mensagem nenhuma — não há o que fixar. Sem este texto a execução vira erro no histórico."
             }
+          }
+        }
+      }
+    },
+    "actionWhatsappPollResults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.pollResults" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headerText": { "type": "string", "description": "A primeira linha, antes dos totais." },
+            "lineFormat": { "type": "string", "description": "Como escrever cada linha. Use {{opcao}} e {{votos}}." },
+            "emptyText": { "type": "string", "description": "Resposta quando não há voto contado. Diga \"não tenho contagem\" e não \"ninguém votou\": a contagem vive em memória e recomeça quando o bot reinicia." }
           }
         }
       }

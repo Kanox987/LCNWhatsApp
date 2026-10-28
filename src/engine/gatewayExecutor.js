@@ -11,6 +11,7 @@ import {
   montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel, montarBotaoDePagina, VARIACOES_DE_PAGINA } from './carrossel.js'
 import { montarWastickersZip } from './wastickers.js'
 import * as groupInfo from './groupInfo.js'
+import * as urnaDeEnquetes from './urnaDeEnquetes.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -1818,7 +1819,7 @@ async function executarFixarMensagem (client, comando) {
 // casados — então a lista chega pronta do motor e NÃO é reordenada aqui.
 async function executarEnquete (client, comando) {
   const { chatId, pergunta, opcoes, quantasMarcar } = comando.payload
-  await comTimeout(
+  const enviado = await comTimeout(
     () => client.message.send(chatId, {
       type: 'poll',
       name: pergunta,
@@ -1827,6 +1828,51 @@ async function executarEnquete (client, comando) {
     }),
     TIMEOUT_ENVIO_MS,
     `timeout ao abrir a enquete do comando ${comando.id}`
+  )
+  // ANOTAR A ENQUETE NA URNA, e é o único momento em que dá.
+  //
+  // O voto que chega traz o SHA-256 do nome da opção, nunca o nome. Os nomes
+  // só são conhecidos AQUI, na hora de abrir. Sem esta linha, os votos
+  // chegariam e não haveria como dizer em que opção alguém votou.
+  const id = enviado?.id || enviado?.key?.id || enviado?.stanzaId
+  if (id) {
+    try { urnaDeEnquetes.registrarEnquete({ pollId: id, chatId, opcoes }) } catch {}
+  }
+}
+
+// O RESULTADO de uma enquete que o bot abriu.
+//
+// Sem id, usa a última enquete desta conversa que recebeu voto — porque
+// ninguém copia id de mensagem no WhatsApp, e um comando que exigisse isso
+// não seria usado por pessoa nenhuma.
+async function executarResultadoDaEnquete (client, comando) {
+  const p = comando.payload
+  const id = p.pollId || urnaDeEnquetes.ultimaDaConversa(p.chatId)
+  const apurado = id ? urnaDeEnquetes.apurar(id) : null
+
+  // "Não tenho" é diferente de "ninguém votou", e a diferença importa: a urna
+  // vive em memória e recomeça vazia quando o gateway reinicia. Anunciar zero
+  // votos nesse caso seria mentir com números.
+  if (!apurado || !apurado.opcoes.length) {
+    await comTimeout(
+      () => enviarERegistrar(client, p.chatId, { type: 'text', text: p.emptyText || 'Ainda não tenho voto nenhum contado para esta conversa.' }, opcoesDeEnvio(p)),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao avisar que não há votos (${comando.id})`
+    )
+    return
+  }
+
+  const linhas = apurado.opcoes.map((o) => (p.lineFormat || '• {{opcao}}: {{votos}}')
+    .replaceAll('{{opcao}}', o.opcao)
+    .replaceAll('{{votos}}', String(o.votos)))
+  const texto = [p.headerText || '', ...linhas, '', `${apurado.votantes} ${apurado.votantes === 1 ? 'pessoa votou' : 'pessoas votaram'}.`]
+    .filter((l) => l !== null && l !== undefined)
+    .join('\n')
+    .trim()
+  await comTimeout(
+    () => enviarERegistrar(client, p.chatId, { type: 'text', text: texto }, opcoesDeEnvio(p)),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao enviar o resultado da enquete (${comando.id})`
   )
 }
 
@@ -2248,6 +2294,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'whatsapp.react': executarReagir,
         'whatsapp.pin': executarFixarMensagem,
         'whatsapp.poll': executarEnquete,
+        'whatsapp.pollResults': executarResultadoDaEnquete,
         'whatsapp.profilePicture': executarFotoDePerfil,
         'group.remove': executarRemoverDoGrupo,
         'group.promote': executarPromoverNoGrupo,

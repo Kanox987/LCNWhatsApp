@@ -1,0 +1,49 @@
+template resultado-da-enquete v1
+  nome: Resultado da enquete
+  descrição: Escreve quantos votos cada opção recebeu na última enquete que o bot abriu nesta conversa. Serve para fechar a votação sem ninguém precisar contar na mão — e para registrar o resultado por escrito, que é o que costuma faltar depois.
+  categoria: utilitarios
+
+automação
+  nome: Resultado da enquete
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra quantos votos cada opção teve
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  mostra o resultado da enquete
+    título: "{{params.titulo}}"
+    cada linha: "{{params.molde}}"
+    sem votos: "{{params.semVotosText}}"
+
+configurável
+  command: texto = "/resultado"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Sozinho, mostra a última enquete desta conversa; respondendo a mensagem da enquete, mostra aquela.
+  titulo: texto = "📊 *Resultado da enquete*"
+    rótulo: Título
+    ajuda: A primeira linha, antes dos totais.
+  molde: texto = "• {{opcao}}: {{votos}}"
+    rótulo: Como escrever cada linha
+    ajuda: Use {{opcao}} e {{votos}}. As opções saem ordenadas da mais votada para a menos.
+  semVotosText: texto = "Ainda não tenho contagem para esta conversa. Lembrando que eu só conto enquete que eu mesmo abri, e a contagem recomeça se eu for reiniciado."
+    rótulo: Quando não há contagem
+    ajuda: Diga "não tenho contagem" e não "ninguém votou" — são coisas diferentes. Depois de um reinício a segunda frase seria mentira.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Só conta enquete que o BOT abriu, com o comando de enquete. O WhatsApp manda o voto como um código no lugar do nome da opção, e só dá para traduzir esse código quando foi o próprio bot que escreveu as opções. Enquete criada por uma pessoa chega e é descartada.
+
+avisa nota
+  A contagem vive na MEMÓRIA do bot e recomeça do zero quando ele reinicia. É limitação de verdade, não descuido: guardar em banco exigiria o gateway escrever onde ele não escreve hoje, e a fronteira entre os dois vale mais do que o histórico de uma enquete.
