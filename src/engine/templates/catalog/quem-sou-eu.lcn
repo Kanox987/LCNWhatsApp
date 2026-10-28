@@ -1,0 +1,40 @@
+template quem-sou-eu v1
+  nome: Quem sou eu
+  descrição: Mostra as informações que o bot possui sobre quem executou o comando, incluindo nome de exibição, número de telefone, permissões no grupo e anotações gravadas.
+  categoria: utilitarios
+
+automação
+  nome: Quem sou eu
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra o que o bot sabe sobre você
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se var sender {{params.chave}} contém ""
+    responde "📋 *Informações sobre você*\n\n• Nome: {{sender.name}}\n• Número: {{sender.number}}\n• Admin do grupo: {{sender.isAdmin}}\n• Dono do bot: {{sender.isOwner}}\n• Anotação ({{params.chave}}): {{var.sender.{{params.chave}}}}"
+  senão
+    responde "📋 *Informações sobre você*\n\n• Nome: {{sender.name}}\n• Número: {{sender.number}}\n• Admin do grupo: {{sender.isAdmin}}\n• Dono do bot: {{sender.isOwner}}\n• Anotação ({{params.chave}}): Nenhuma anotação registrada"
+
+configurável
+  command: texto = "/me"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para consultar suas próprias informações.
+  chave: texto = "nota"
+    rótulo: Chave da anotação
+    ajuda: Nome do atributo pessoal a ser consultado (deve coincidir com a chave configurada no comando de anotar).
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  Os dois ramos estão invertidos em relação ao que parece natural, e é de propósito: `contém ""` é verdadeiro quando existe alguma anotação, e falso quando não existe. Escrito como `== ""`, o caso "nunca anotaram nada" cairia no ramo que MOSTRA a anotação, e a pessoa receberia a mensagem com o marcador cru no meio — com chaves e tudo. Esse é o modo de falha mais feio desta base, e esta é a forma que o evita.

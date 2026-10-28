@@ -1,0 +1,51 @@
+template antifake v1
+  nome: Anti-fake (número estrangeiro)
+  descrição: Monitora a entrada no grupo e detecta participantes com número de fora do país. Pode avisar o grupo ou remover o intruso automaticamente.
+  categoria: modulos-especializados
+
+automação
+  nome: Anti-fake (número estrangeiro)
+  tipo: porteiro
+  pool: {{params.poolId}}
+  quando for: entrou
+
+  se evento target.number começa com "{{params.ddiPermitido}}"
+  senão
+    se "{{params.remover}}" == "sim"
+      remove do grupo
+        quem: quem foi marcado
+        nunca o dono: true
+      responde "{{params.removidoText}}"
+        marca: "{{target.id}}"
+    senão
+      responde "{{params.avisoText}}"
+        marca: "{{target.id}}"
+
+configurável
+  ddiPermitido: texto = "55"
+    rótulo: DDI permitido
+    ajuda: Prefixo do país autorizado no grupo (ex: 55 para o Brasil). Números que não contiverem esse código serão identificados como estrangeiros.
+  remover: opção (sim, nao) = "nao"
+    rótulo: Remover participante
+    ajuda: Escolha "sim" para remover automaticamente números com DDI estrangeiro, ou "nao" para apenas enviar um aviso no grupo.
+  avisoText: texto = "Atenção: @{{target.number}} entrou com número de fora do país configurado (+{{params.ddiPermitido}})."
+    rótulo: Mensagem de aviso
+    ajuda: Mensagem enviada no grupo quando alguém entra com número estrangeiro e a remoção automática está desligada.
+  removidoText: texto = "O número @{{target.number}} foi removido por ter prefixo estrangeiro não autorizado (+{{params.ddiPermitido}})."
+    rótulo: Mensagem de remoção
+    ajuda: Mensagem enviada no grupo após remover o participante com prefixo estrangeiro.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa este porteiro. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Para remover participantes, a conta do bot precisa ser ADMINISTRADORA do grupo. Sem permissão de administrador, o WhatsApp recusa a remoção e ela aparece como falha no histórico.
+
+avisa nota
+  O porteiro só atua em grupos autorizados (onde grupo_ativo está ativado). Certifique-se de ativar o grupo pelo painel ou com um comando de ativação do dono antes de ligar a portaria.
+
+avisa nota
+  A conferência é de PREFIXO, com o operador `começa com` — e isso é recente. Até hoje de manhã a linguagem só tinha `contém`, que acha o código do país em qualquer posição: um número estrangeiro com "55" no meio passava como brasileiro. O furo foi apontado numa revisão, o operador nasceu por causa dele, e este porteiro é o primeiro a usar.
+
+avisa nota
+  A remoção vem DESLIGADA de fábrica. Avisar de menos incomoda; expulsar por engano não tem desfazer. Ligue em Programar quando tiver confiança no resultado dos avisos.

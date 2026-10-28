@@ -227,7 +227,12 @@ export function descompilar (documento, template = null) {
   // O QUE ELA É, e o que a acorda — as duas primeiras coisas que se lê.
   h(`tipo: ${CLASSES[gatilho.type] || gatilho.type}`)
   if (gatilho.type !== 'trigger.group') {
-    h(`dispara com: ${gatilho.type === 'trigger.command' ? cfg.command : 'qualquer mensagem'}`)
+    // O canônico primeiro, os atalhos depois e na ordem em que foram
+    // declarados: é assim que o texto volta igual ao que entrou.
+    const comandoEscrito = gatilho.type === 'trigger.command'
+      ? [cfg.command, ...(Array.isArray(cfg.aliases) ? cfg.aliases : [])].join(', ')
+      : 'qualquer mensagem'
+    h(`dispara com: ${comandoEscrito}`)
   }
   if (documento.display?.family) h(`família: ${documento.display.family}`)
   if (documento.display?.menuLabel) {

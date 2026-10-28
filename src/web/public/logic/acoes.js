@@ -38,6 +38,7 @@ export const GATILHOS = Object.freeze([
     exemplo: 'Alguém digita "/ping" e o bot responde.',
     campos: [
       { chave: 'command', rotulo: 'A palavra', ajuda: 'O que a pessoa digita. A barra não é obrigatória — "menu" funciona igual a "/menu".' },
+      { chave: 'aliases', rotulo: 'Atalhos', ajuda: 'Outras palavras que acionam ESTA MESMA automação — "/p" para "/play". No .lcn se escreve tudo numa linha: "dispara com: /play, /p". A primeira é o nome oficial: é ela que aparece no menu. Cuidado com atalho curto: "/p" pode brigar com "/perfil" se a comparação for "começa com", e a tela de conflitos avisa quando duas automações ligadas disputam a mesma palavra.' },
       {
         chave: 'match',
         rotulo: 'Como comparar',
@@ -140,6 +141,18 @@ export const ACOES = Object.freeze([
       { chave: 'okText', rotulo: 'Confirmação', ajuda: '{{caminho}} vira o caminho onde ficou · {{id}} o identificador · {{nome}} o nome.' },
       { chave: 'notFoundText', rotulo: 'Se não houver arquivo', ajuda: 'Quando o comando chega sozinho, sem mídia por perto.' },
       { chave: 'errorText', rotulo: 'Se falhar', ajuda: '{{erro}} vira o motivo: tipo não aceito, arquivo grande demais, acervo cheio.' }
+    ]
+  },
+  {
+    tipo: 'action.acervo.read',
+    rotulo: 'Ler do acervo',
+    familia: 'midia',
+    resumo: 'Lê o nome, a descrição, a pasta e o tamanho de um item guardado, para usar na resposta seguinte.',
+    exemplo: 'Mostrar o nome e o preço de um produto antes de perguntar se a pessoa quer comprar.',
+    ressalva: { level: 'note', text: 'É a única ação do acervo que LÊ — as outras quatro escrevem. Ela devolve METADADO, nunca o arquivo: para enviar o arquivo em si continua sendo "Enviar arquivo". Ponha uma ação depois desta, senão a leitura não serve para nada.' },
+    campos: [
+      { chave: 'path', rotulo: 'Arquivo', ajuda: 'O caminho dentro do acervo, como "produtos/curso-python", ou só o nome quando não houver outro igual.' },
+      { chave: 'notFoundText', rotulo: 'Se o item não existir', ajuda: 'Enviado quando não há nada nesse caminho — por exemplo um produto tirado do ar depois de o comando ser publicado. Sem este texto a execução vira erro no histórico e ninguém recebe nada.' }
     ]
   },
   {
@@ -369,7 +382,8 @@ export const ACOES = Object.freeze([
     campos: [
       { chave: 'who', rotulo: 'Quem remover', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida).' },
       { chave: 'neverRemoveOwner', rotulo: 'Nunca remover um dono', ajuda: 'Ligado por padrão. Desligue só se você quiser de propósito uma regra que vale para todos, dono incluído.' },
-      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' },
+      { chave: 'ownerText', rotulo: 'Quando o alvo é um dono', ajuda: 'A trava acima age em SILÊNCIO sem este texto: o comando casa, não envia nada, e quem digitou acha que o bot morreu. Escreva aqui o que responder quando a pessoa marcada for um dono.' }
     ]
   },
   {
@@ -381,6 +395,48 @@ export const ACOES = Object.freeze([
     campos: [
       { chave: 'emoji', rotulo: 'Emoji', ajuda: 'O emoji da reação. DEIXAR VAZIO REVOGA a reação que já estava lá — é assim que o WhatsApp desfaz, e não com um comando separado.' },
       { chave: 'notFoundText', rotulo: 'Quando nada foi respondido', ajuda: 'Reagir precisa de uma mensagem respondida. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+    ]
+  },
+  {
+    tipo: 'action.variable.rank',
+    rotulo: 'Montar um ranking',
+    familia: 'variavel',
+    resumo: 'Ordena um contador e mostra as primeiras posições, com as pessoas marcadas.',
+    exemplo: 'Top 10 de quem mais pontuou no grupo este mês.',
+    ressalva: { level: 'note', text: 'É a única ação que lê MUITOS registros. Ela ordena o que outras ações já somaram — então primeiro é preciso existir um comando ou vigia que some alguma coisa, senão o ranking nasce vazio.' },
+    campos: [
+      { chave: 'scope', rotulo: 'De quem', ajuda: 'dos membros deste grupo conta separado por grupo (o mesmo escopo que a advertência usa) · das pessoas conta a pessoa em qualquer conversa.' },
+      { chave: 'key', rotulo: 'Contando o quê', ajuda: 'O nome do contador que vai ser ordenado, como "pontos" ou "mensagens". Tem que ser o MESMO nome que a ação de somar usa.' },
+      { chave: 'limit', rotulo: 'Quantas posições', ajuda: 'Quantos aparecem na lista. O teto é 50: acima disso o WhatsApp corta a mensagem e o fim do ranking some.' },
+      { chave: 'headerText', rotulo: 'Título', ajuda: 'A primeira linha, antes das posições.' },
+      { chave: 'lineFormat', rotulo: 'Como escrever cada linha', ajuda: 'Use {{posicao}}, {{numero}} e {{valor}}. O padrão é "1. @numero — valor". Quem aparece na lista é marcado de verdade, então o nome sai no lugar do número.' },
+      { chave: 'emptyText', rotulo: 'Quando ninguém pontuou', ajuda: 'Resposta para ranking vazio — comum logo depois de instalar. Sem este texto a execução vira erro no histórico e ninguém recebe nada.' }
+    ]
+  },
+  {
+    tipo: 'action.whatsapp.pin',
+    rotulo: 'Fixar a mensagem',
+    familia: 'moderacao',
+    resumo: 'Prende a mensagem respondida no topo da conversa, ou solta.',
+    exemplo: 'Deixar as regras do grupo fixadas por uma semana.',
+    ressalva: { level: 'requirement', text: 'Precisa RESPONDER uma mensagem: é ela que vai ser fixada. Em grupo, o WhatsApp costuma exigir que o número seja administrador.' },
+    campos: [
+      { chave: 'action', rotulo: 'O que fazer', ajuda: 'fixar prende no topo · soltar tira de lá.' },
+      { chave: 'durationSecs', rotulo: 'Por quanto tempo', ajuda: 'Em segundos. O WhatsApp oferece 86400 (24 horas), 604800 (7 dias) e 2592000 (30 dias). Deixando em branco vale 24 horas — e é importante que valha algo: sem duração o aparelho de quem recebe descarta o fixo sem avisar ninguém.' },
+      { chave: 'notFoundText', rotulo: 'Quando nada foi respondido', ajuda: 'Resposta para quem usou o comando sem responder mensagem nenhuma. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+    ]
+  },
+  {
+    tipo: 'action.whatsapp.poll',
+    rotulo: 'Abrir uma enquete',
+    familia: 'resposta',
+    resumo: 'Manda uma enquete de verdade, daquelas que o WhatsApp conta sozinho.',
+    exemplo: 'Perguntar ao grupo que dia fica melhor para a reunião.',
+    ressalva: { level: 'note', text: 'O bot ABRE a enquete e não lê os votos: contar quem votou no quê é outra capacidade, que não existe. Para decidir alguma coisa a partir do resultado, alguém olha e decide.' },
+    campos: [
+      { chave: 'question', rotulo: 'Pergunta', ajuda: 'O que vai ser perguntado.' },
+      { chave: 'options', rotulo: 'Opções', ajuda: 'As alternativas separadas por ponto e vírgula, como "Segunda; Terça; Quarta". Precisa de pelo menos duas. A ordem importa: é por ela que o WhatsApp casa os votos.' },
+      { chave: 'selectableCount', rotulo: 'Quantas dá para marcar', ajuda: '1 é voto único. Um número maior deixa a pessoa marcar várias. Nunca passa do total de opções.' }
     ]
   },
   {
@@ -410,6 +466,20 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.group.members',
+    rotulo: 'Falar com os membros',
+    familia: 'moderacao',
+    resumo: 'Marca todo mundo, lista o grupo, ou sorteia um membro.',
+    exemplo: 'Avisar o grupo inteiro de uma reunião sem escrever número nenhum.',
+    ressalva: { level: 'requirement', text: 'Só funciona em grupo. É a ÚNICA ação que enumera os membros: um comando normal não enxerga a lista de participantes, então marcar todos, listar e sortear só existem por aqui.' },
+    campos: [
+      { chave: 'mode', rotulo: 'O que fazer', ajuda: 'marcando todos avisa o grupo inteiro sem escrever os números; listando todos escreve a lista visível; sorteando um escolhe UMA pessoa ao acaso.' },
+      { chave: 'text', rotulo: 'Mensagem', ajuda: 'O que vai escrito junto. Sorteando um, escreva {{sorteado}} onde o nome da pessoa escolhida deve aparecer.' },
+      { chave: 'onlyAdmins', rotulo: 'Só os administradores', ajuda: 'Limita aos administradores do grupo. Desligado, alcança todo mundo.' },
+      { chave: 'notFoundText', rotulo: 'Quando não há ninguém', ajuda: 'Grupo só com o bot, ou "só administradores" num grupo sem outro admin. Sem este texto a execução vira erro no histórico e ninguém recebe nada.' }
+    ]
+  },
+  {
     tipo: 'action.group.demote',
     rotulo: 'Rebaixar de administrador',
     familia: 'moderacao',
@@ -419,7 +489,8 @@ export const ACOES = Object.freeze([
     campos: [
       { chave: 'who', rotulo: 'Quem rebaixar', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida). Marcando vários de uma vez, todos são rebaixados.' },
       { chave: 'neverRemoveOwner', rotulo: 'Nunca rebaixar um dono', ajuda: 'Ligado por padrão. Desligue só se você quiser de propósito uma regra que vale para todos, dono incluído.' },
-      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' },
+      { chave: 'ownerText', rotulo: 'Quando o alvo é um dono', ajuda: 'A trava acima age em SILÊNCIO sem este texto: o comando casa, não envia nada, e quem digitou acha que o bot morreu. Escreva aqui o que responder quando a pessoa marcada for um dono.' }
     ]
   },
   {
@@ -600,7 +671,9 @@ export const OPERADORES = Object.freeze([
   { id: 'lt', rotulo: 'é menor que', ajuda: 'Só entre números.' },
   { id: 'lte', rotulo: 'é menor ou igual a', ajuda: 'Só entre números.' },
   { id: 'contains', rotulo: 'contém', ajuda: 'Como texto, sem diferenciar maiúscula.' },
-  { id: 'not_contains', rotulo: 'não contém', ajuda: 'Como texto, sem diferenciar maiúscula.' }
+  { id: 'not_contains', rotulo: 'não contém', ajuda: 'Como texto, sem diferenciar maiúscula.' },
+  { id: 'starts_with', rotulo: 'começa com', ajuda: 'Confere o COMEÇO do texto, não qualquer posição. É a diferença entre "o número começa com 55" e "o número tem 55 em algum lugar" — a segunda deixa passar um número estrangeiro que tenha 55 no meio.' },
+  { id: 'not_starts_with', rotulo: 'não começa com', ajuda: 'O contrário do anterior. Sem valor nenhum para comparar, as duas são falsas: "não sei" nunca vira "sim".' }
 ])
 
 // --- ESCOPOS: de quem é aquele valor --------------------------------------

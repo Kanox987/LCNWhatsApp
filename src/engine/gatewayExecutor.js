@@ -10,6 +10,7 @@ import {
   ESTILOS_DE_CARROSSEL, FORMAS_DE_ESCOLHA, montarBotoesDeEscolha, montarCard,
   montarCarrossel, montarMenuDeEscolha, opcoesDoCarrossel, podeVirarCarrossel, montarBotaoDePagina, VARIACOES_DE_PAGINA } from './carrossel.js'
 import { montarWastickersZip } from './wastickers.js'
+import * as groupInfo from './groupInfo.js'
 
 const TIMEOUT_ENVIO_MS = 15000
 const TIMEOUT_CONFIRMACAO_MS = 1500
@@ -1302,6 +1303,43 @@ async function executarGuardarNoAcervo (client, comando, deps) {
 // O projeto prefere erro claro a falha calada: se o arquivo não existir, o
 // comando avisa via `notFoundText` (se configurado) e lança erro, para que a
 // execução registre falha e não finja que apagou o que não existia.
+// LER metadado de um item do acervo e devolver ao motor.
+//
+// A única das cinco ações de acervo que não escreve. Devolve `dados` — nome,
+// descrição, pasta, tipo e tamanho —, nunca bytes e nunca o caminho em disco:
+// o motor recebe INFORMAÇÃO, e arquivo continua saindo só por aqui.
+//
+// O item não existir é caso NORMAL, não falha: um produto tirado do ar depois
+// de o comando ser publicado é o caso comum, não a exceção.
+async function executarLerDoAcervo (client, comando, deps) {
+  const { acervo } = deps
+  const p = comando.payload
+  const registro = acervo.porCaminho(p.caminho)
+
+  if (!registro) {
+    if (p.notFoundText) {
+      await comTimeout(
+        () => enviarERegistrar(client, p.chatId, { type: 'text', text: p.notFoundText }, opcoesDeEnvio(p)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar que o item não existe (${comando.id})`
+      )
+      return null
+    }
+    throw new Error(`não há nada no acervo em "${p.caminho}"`)
+  }
+
+  return {
+    texto: registro.description || registro.name || '',
+    dados: {
+      nome: registro.name || '',
+      descricao: registro.description || '',
+      pasta: registro.folder || '',
+      tipo: registro.ext || '',
+      bytes: Number.isFinite(registro.size) ? registro.size : 0
+    }
+  }
+}
+
 async function executarApagarDoAcervo (client, comando, deps) {
   const { acervo } = deps
   const payload = comando.payload
@@ -1755,6 +1793,43 @@ async function executarReagir (client, comando) {
   )
 }
 
+// FIXAR uma mensagem no topo da conversa, ou soltá-la.
+//
+// `durationSecs` NÃO é opcional na prática, apesar de a biblioteca marcá-lo
+// assim: sem ele o aparelho que recebe descarta o fixo EM SILÊNCIO — nada
+// falha, nada aparece no histórico, e a mensagem simplesmente não fica fixada.
+// Por isso o motor sempre manda um valor, e o padrão é o mesmo do WhatsApp.
+async function executarFixarMensagem (client, comando) {
+  const { chatId, acao, duracaoSegundos, alvo } = comando.payload
+  await comTimeout(
+    () => client.message.send(chatId, {
+      type: acao === 'unpin' ? 'unpin' : 'pin',
+      target: alvo,
+      ...(acao === 'unpin' ? {} : { durationSecs: duracaoSegundos })
+    }),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao ${acao === 'unpin' ? 'soltar' : 'fixar'} a mensagem do comando ${comando.id}`
+  )
+}
+
+// ABRIR uma enquete nativa.
+//
+// A ordem das opções importa para o WhatsApp — é com ela que os votos são
+// casados — então a lista chega pronta do motor e NÃO é reordenada aqui.
+async function executarEnquete (client, comando) {
+  const { chatId, pergunta, opcoes, quantasMarcar } = comando.payload
+  await comTimeout(
+    () => client.message.send(chatId, {
+      type: 'poll',
+      name: pergunta,
+      options: opcoes,
+      selectableCount: quantasMarcar
+    }),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao abrir a enquete do comando ${comando.id}`
+  )
+}
+
 // Pegar a foto de perfil e entregar na conversa.
 //
 // `getProfilePicture` devolve um envelope em que TODOS os campos são opcionais
@@ -1790,6 +1865,77 @@ async function executarFotoDePerfil (client, comando) {
     TIMEOUT_ENVIO_MS,
     `timeout ao enviar a foto de perfil do comando ${comando.id}`
   )
+}
+
+// FALAR COM OS MEMBROS: marcar todos, listar, ou sortear um.
+//
+// A enumeração mora AQUI porque é aqui que a lista existe. O motor não tem
+// coleção nem índice, e um evento de mensagem não carrega participantes — só o
+// evento de grupo carrega. Pedir a lista ao motor exigiria coleções na
+// linguagem; pedir o TRABALHO ao gateway não exige nada.
+//
+// O sorteio do modo `pick` também acontece aqui, e é de propósito: é o que
+// entrega "sorteia um membro" sem primitiva de aleatório no motor. Duas
+// revisões independentes convergiram nisso antes de a ação existir.
+async function executarFalarComOsMembros (client, comando) {
+  const p = comando.payload
+  const dados = await groupInfo.obter(client, p.chatId)
+  const todos = Array.isArray(dados?.membros) ? dados.membros : []
+  // O próprio bot fora: marcar a si mesmo não avisa ninguém e polui a lista.
+  const proprio = normalizarNumero(client?.user?.id)
+  const candidatos = todos
+    .filter((m) => (p.onlyAdmins ? m.isAdmin : true))
+    .filter((m) => !proprio || normalizarNumero(m.id) !== proprio)
+
+  if (!candidatos.length) {
+    // Grupo só com o bot, ou "só administradores" num grupo sem nenhum outro
+    // admin. É caso NORMAL, não falha — e ficar mudo aqui seria o defeito que
+    // o /rebaixa já ensinou que dói.
+    if (p.notFoundText) {
+      await comTimeout(
+        () => enviarERegistrar(client, p.chatId, { type: 'text', text: p.notFoundText }, opcoesDeEnvio(p)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar que não há membros (${comando.id})`
+      )
+      return
+    }
+    throw new Error('não há membros a alcançar neste grupo')
+  }
+
+  if (p.mode === 'pick') {
+    const sorteado = candidatos[Math.floor(Math.random() * candidatos.length)]
+    const texto = String(p.text || '{{sorteado}}').replaceAll('{{sorteado}}', `@${soDigitosDoJid(sorteado.id)}`)
+    await comTimeout(
+      () => enviarERegistrar(client, p.chatId, { type: 'text', text: texto }, { ...opcoesDeEnvio(p), mentions: [sorteado.id] }),
+      TIMEOUT_ENVIO_MS,
+      `timeout ao anunciar o sorteado (${comando.id})`
+    )
+    return
+  }
+
+  const ids = candidatos.map((m) => m.id)
+  const texto = p.mode === 'list'
+    // `list` ESCREVE os números, `mention` não. A diferença é a razão de o modo
+    // existir: marcar todo mundo sem poluir a conversa é o caso comum, e ver
+    // quem está no grupo é outro pedido, não o mesmo.
+    ? [p.text || '', ...candidatos.map((m) => `• @${soDigitosDoJid(m.id)}`)].filter(Boolean).join('\n')
+    : (p.text || '')
+  await comTimeout(
+    () => enviarERegistrar(client, p.chatId, { type: 'text', text: texto }, { ...opcoesDeEnvio(p), mentions: ids }),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao falar com os membros (${comando.id})`
+  )
+}
+
+// Só os dígitos de um jid, para escrever "@5511..." no texto da menção. O
+// WhatsApp casa o texto com a lista de `mentions` pelo número.
+function soDigitosDoJid (jid) {
+  return String(jid || '').split('@')[0].replace(/\D/g, '')
+}
+
+function normalizarNumero (jid) {
+  const d = soDigitosDoJid(jid)
+  return d || null
 }
 
 async function executarPromoverNoGrupo (client, comando) {
@@ -2100,6 +2246,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'whatsapp.menu': executarMenu,
         'whatsapp.delete': executarApagar,
         'whatsapp.react': executarReagir,
+        'whatsapp.pin': executarFixarMensagem,
+        'whatsapp.poll': executarEnquete,
         'whatsapp.profilePicture': executarFotoDePerfil,
         'group.remove': executarRemoverDoGrupo,
         'group.promote': executarPromoverNoGrupo,
@@ -2109,12 +2257,14 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         'group.setDescription': executarMudarDescricaoDoGrupo,
         'group.setAnnounce': executarConfigurarAnuncioDoGrupo,
         'group.inviteCode': executarLinkDoGrupo,
+        'group.members': executarFalarComOsMembros,
         'whatsapp.rich': executarMensagemRica,
         'whatsapp.sendFile': executarEnvioDeArquivo,
         'media.download': executarDownload,
         'connection.call': executarChamadaDeConexao,
         'acervo.save': executarGuardarNoAcervo,
         'acervo.delete': executarApagarDoAcervo,
+        'acervo.read': executarLerDoAcervo,
         'acervo.createText': executarCriarTextoNoAcervo,
         'acervo.rewrite': executarSobrescreverNoAcervo,
         'whatsapp.stickerPack': executarPacoteDeFigurinhas

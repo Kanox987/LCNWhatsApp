@@ -1,0 +1,74 @@
+template gerar-qr v1
+  nome: Gerar QR Code
+  descrição: Cria a imagem de um QR Code a partir de qualquer texto, link ou chave Pix informado após o comando. Envia a imagem pronta diretamente na conversa. Quem gera o QR Code é o serviço configurado na aba Conexões.
+  categoria: utilitarios
+
+automação
+  nome: Gerar QR Code
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Gera a imagem de um QR Code a partir de texto ou link
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args == ""
+    responde "{{params.semTextoText}}"
+  senão
+    chama {{params.conexao}}.gerar_qr
+      com
+        texto: {{message.args}}
+        correcao: {{params.correcao}}
+        margem: {{params.margem}}
+        tamanho: {{params.tamanho}}
+      avisa: "{{params.ackText}}"
+      erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/qr"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para gerar o QR Code. Tudo o que vier depois do comando será codificado na imagem.
+  conexao: texto = "qr"
+    rótulo: Serviço que gera o QR Code
+    ajuda: O identificador da conexão com o serviço externo, como configurado na aba Conexões.
+  semTextoText: texto = "Escreva o texto, link ou chave Pix depois do comando para eu gerar o QR Code."
+    rótulo: Quando vem sozinho
+    ajuda: Mensagem de orientação enviada quando alguém digita o comando sem nenhum texto ou link.
+  ackText: texto = "Gerando QR Code…"
+    rótulo: Aviso ao começar
+    ajuda: Mensagem de aviso exibida enquanto o serviço processa a geração da imagem.
+  errorText: texto = "Não consegui gerar o QR Code: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem retornada caso ocorra algum erro na comunicação ou na geração da imagem. O marcador {{erro}} é substituído pelo motivo.
+  correcao: opção (L, M, Q, H) = "M"
+    rótulo: Nível de correção de erro
+    ajuda: Quanto o QR aguenta de sujeira e amassado antes de parar de ler. L lê menos borrado mas cabe mais texto; H aguenta mais e cabe menos. M serve para quase tudo. Suba para Q ou H se o código for impresso ou colado em algum lugar.
+  margem: número = 4
+    rótulo: Margem branca
+    ajuda: A borda branca em volta do código, em módulos. Abaixo de 4 muitos leitores falham — o WhatsApp comprime a imagem e a borda é o que salva a leitura.
+  tamanho: número = 512
+    rótulo: Tamanho da imagem
+    ajuda: O lado da imagem em pixels. Texto longo, como chave Pix copia-e-cola, precisa de mais: abaixo de 512 o código sai denso demais e a compressão do WhatsApp o deixa ilegível.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige uma conexão configurada na aba Conexões. O serviço deve implementar a função "gerar_qr", que recebe o campo "texto" (string contendo o texto ou link) e devolve a mídia binária da imagem (PNG ou JPEG).
+
+avisa nota
+  Você pode codificar qualquer texto: links de sites, mensagens, chaves Pix Copia e Cola ou números de telefone.
+
+avisa nota
+  O retorno de uma chamada é INDIVISÍVEL — não existe {{o resultado.campo}} —, mas a ENTRADA não tem esse limite: o bloco `com` aceita quantos campos a função precisar, como estes três. Se o seu serviço ignorar algum deles, nada quebra: ele chega e é descartado do outro lado.
+
+avisa nota
+  A conexão padrão é "qr" e NÃO "imagem" de propósito. O serviço de imagem que já existe tem sete funções (figurinha, figurinha de frase, trocar metadados, converter, remover fundo, melhorar e fundo) e nenhuma delas lê ou gera QR. Apontar este comando para ele faria a chamada falhar no ar, com o bot dizendo que não conseguiu — por uma função que nunca existiu ali. Declare "qr" como conexão própria, ou acrescente as duas funções ao serviço de imagem e troque o nome aqui.

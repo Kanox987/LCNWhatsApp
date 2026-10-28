@@ -1,0 +1,54 @@
+template anotar-pessoa v1
+  nome: Anotar sobre uma pessoa
+  descrição: Grava uma anotação ou atributo no perfil de quem foi marcado com @ ou citado, como etiqueta VIP, código de cliente ou observações. Permite que outras automações consultem esse dado posteriormente.
+  categoria: utilitarios
+
+automação
+  nome: Anotar sobre uma pessoa
+  tipo: comando
+  dispara com: {{params.command}}
+  argumentos: alvo / valor
+  menu: {{params.command}} — Grava uma anotação sobre a pessoa marcada
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento target.id contém "@"
+    se evento message.args contém "/"
+      define target {{params.chave}} = "{{argumentos.valor}}"
+      responde "{{params.sucessoText}}"
+    senão
+      responde "{{params.semValorText}}"
+  senão
+    responde "{{params.semAlvoText}}"
+
+configurável
+  command: texto = "/anotar"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita marcando alguém com @ ou respondendo uma mensagem. A barra separa a pessoa do que vai ser anotado — "/anotar @fulano / cliente ouro". Sem a barra o comando avisa em vez de gravar lixo.
+  chave: texto = "nota"
+    rótulo: Chave da anotação
+    ajuda: Nome do atributo que será gravado no perfil da pessoa (ex: nota, vip, cliente).
+  semAlvoText: texto = "Você precisa marcar alguém com @ ou responder a uma mensagem para anotar algo sobre essa pessoa."
+    rótulo: Sem pessoa marcada
+    ajuda: Resposta enviada quando o comando for usado sem marcar nem citar ninguém.
+  semValorText: texto = "Escreva a anotação no formato: /anotar @pessoa chave / valor"
+    rótulo: Sem valor informado
+    ajuda: Resposta enviada quando não houver o valor após a barra.
+  sucessoText: texto = "Anotação salva com sucesso para @{{target.number}}!"
+    rótulo: Mensagem de sucesso
+    ajuda: Resposta enviada após salvar a anotação no perfil.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  As duas guardas são escritas pelo lado POSITIVO de propósito, e isso não é estilo. Comparar com vazio não protege: quando o valor não existe, `compararValores` devolve falso (evaluator.js:576), a condição cai no `senão` e o comando grava mesmo sem alvo. Escrito como `contém`, o caso ausente cai no aviso, que é onde ele tem de cair. Quem editar este comando em Programar e trocar por `== ""` reabre esse buraco.

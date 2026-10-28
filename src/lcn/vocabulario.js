@@ -329,7 +329,8 @@ export const ACOES = Object.freeze([
     campos: [
       { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
       { chave: 'neverRemoveOwner', rotulo: 'nunca o dono', tipo: 'booleano' },
-      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' },
+      { chave: 'ownerText', rotulo: 'dono protegido', tipo: 'texto' }
     ]
   },
   // AS AÇÕES DE ADMINISTRAÇÃO DO GRUPO.
@@ -357,7 +358,56 @@ export const ACOES = Object.freeze([
     campos: [
       { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
       { chave: 'neverRemoveOwner', rotulo: 'nunca o dono', tipo: 'booleano' },
-      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' }
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' },
+      { chave: 'ownerText', rotulo: 'dono protegido', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'monta o ranking',
+    tipo: 'action.variable.rank',
+    campos: [
+      { chave: 'scope', rotulo: 'de quem', tipo: 'palavra', palavras: { group_member: 'dos membros deste grupo', contact: 'das pessoas' } },
+      { chave: 'key', rotulo: 'contando', tipo: 'palavra' },
+      { chave: 'limit', rotulo: 'quantos mostrar', tipo: 'numero' },
+      { chave: 'headerText', rotulo: 'título', tipo: 'texto' },
+      { chave: 'lineFormat', rotulo: 'cada linha', tipo: 'texto' },
+      { chave: 'emptyText', rotulo: 'sem ninguém', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'fixa a mensagem',
+    tipo: 'action.whatsapp.pin',
+    campos: [
+      { chave: 'action', rotulo: 'o que fazer', tipo: 'palavra', palavras: { pin: 'fixar', unpin: 'soltar' } },
+      { chave: 'durationSecs', rotulo: 'por quanto tempo', tipo: 'numero' },
+      { chave: 'notFoundText', rotulo: 'sem mensagem', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'abre uma enquete',
+    tipo: 'action.whatsapp.poll',
+    campos: [
+      { chave: 'question', rotulo: 'pergunta', tipo: 'texto' },
+      { chave: 'options', rotulo: 'opções', tipo: 'texto' },
+      { chave: 'selectableCount', rotulo: 'quantas dá para marcar', tipo: 'numero' }
+    ]
+  },
+  {
+    palavra: 'lê do acervo',
+    tipo: 'action.acervo.read',
+    campos: [
+      { chave: 'path', rotulo: 'arquivo', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'fala com os membros',
+    tipo: 'action.group.members',
+    campos: [
+      { chave: 'mode', rotulo: 'modo', tipo: 'palavra', palavras: { mention: 'marcando todos', list: 'listando todos', pick: 'sorteando um' } },
+      { chave: 'text', rotulo: 'texto', tipo: 'texto' },
+      { chave: 'onlyAdmins', rotulo: 'só os administradores', tipo: 'booleano' },
+      { chave: 'notFoundText', rotulo: 'sem membros', tipo: 'texto' }
     ]
   },
   {
@@ -481,7 +531,21 @@ export const OPERADORES = Object.freeze({
   gt: '>',
   gte: '>=',
   contains: 'contém',
-  not_contains: 'não contém'
+  not_contains: 'não contém',
+  // COMEÇA COM, e por que ele é OPERADOR e não ação.
+  //
+  // A sugestão que chegou do painel foi uma ação `texto.começa_com` gravando
+  // o resultado numa variável. Uma segunda cabeça discordou, e tem razão:
+  // comparar texto não deveria produzir efeito colateral só para caber no
+  // modelo de ações. Aqui é o que é — uma comparação a mais, ao lado de
+  // `contém`.
+  //
+  // O que ele conserta: o porteiro anti-fake conferia o código do país com
+  // `contém`, que acha "55" em QUALQUER posição — um número estrangeiro com
+  // 55 no meio passava como brasileiro. Prefixo é a pergunta certa, e agora
+  // ela existe.
+  starts_with: 'começa com',
+  not_starts_with: 'não começa com'
 })
 
 // --- destinos -------------------------------------------------------------

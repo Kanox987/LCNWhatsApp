@@ -1,0 +1,67 @@
+template voz-esquilo v1
+  nome: Voz de Esquilo
+  descrição: Modifica o áudio para criar uma voz aguda e estridente no estilo esquilo de desenho animado. Eleva os semitons da voz com leve aceleração rítmica. Processado pelo serviço externo de efeitos.
+  categoria: utilitarios
+
+automação
+  nome: Voz de Esquilo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Transforma a voz do áudio em voz de esquilo
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto, áudio
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.tom_audio
+    com
+      arquivo: a mídia
+      escala_semitons: {{params.escalaSemitons}}
+      reforco_graves: {{params.reforcoGraves}}
+      fator_tempo: {{params.fatorTempo}}
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/esquilo"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita ao responder um áudio para afiná-lo com voz de esquilo.
+  conexao: texto = "efeitos"
+    rótulo: Serviço de efeitos
+    ajuda: Identificador da conexão externa na aba Conexões onde as funções de efeitos de mídia estão configuradas.
+  escalaSemitons: número = 8
+    rótulo: Elevação de tom (semitons)
+    ajuda: Quantidade de semitons a aumentar na voz. Valores entre 6 e 10 geram a voz fina e estridente de esquilo.
+  reforcoGraves: opção (sim, nao) = "nao"
+    rótulo: Reforçar frequências graves
+    ajuda: Em efeito de esquilo o padrão é nao para destacar a clareza dos tons agudos.
+  fatorTempo: número = 1.15
+    rótulo: Fator de velocidade
+    ajuda: Leve aceleração temporal (1.15) que complementa a afinação aguda típica de personagens animados.
+  semMidiaText: texto = "Responda a uma mensagem de voz ou áudio com este comando para afinar a voz."
+    rótulo: Aviso quando não vier mídia
+    ajuda: Resposta enviada se o comando for executado sem citar um áudio ou recado de voz.
+  ackText: texto = "🐿️ Transformando em voz de esquilo…"
+    rótulo: Aviso ao começar
+    ajuda: Mensagem temporária informando que a transformação de voz foi iniciada.
+  errorText: texto = "Não consegui aplicar a voz de esquilo: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem exibida caso a conexão de efeitos retorne erro ao processar.
+  familia: texto = "efeitos"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige a conexão de efeitos configurada na aba Conexões. O serviço externo precisa expor a função tom_audio recebendo { arquivo, escala_semitons, reforco_graves, fator_tempo } e devolvendo o arquivo de áudio resultante.
+
+avisa nota
+  Utiliza a mesma função tom_audio do efeito de voz grave, configurada com semitons positivos (+8) e leve aceleração de tempo para gerar o tom agudo de esquilo.

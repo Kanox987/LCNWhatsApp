@@ -1,0 +1,37 @@
+template meu-id v1
+  nome: Meu ID
+  descrição: Responde com o identificador da conversa e o de quem perguntou. É o comando que resolve o problema de configurar qualquer outra automação: escopo de grupo, lista de donos e filtro por pessoa todos pedem um id, e sem este comando a única forma de descobrir o seu é abrir o painel e caçar na aba Dados.
+  categoria: utilitarios
+
+automação
+  nome: Meu ID
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra o id desta conversa e o seu
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  responde "{{params.titulo}}\n\n*Conversa:* {{chat.id}}\n*Tipo:* {{chat.kind}}\n*Você:* {{sender.id}}\n*Seu número:* {{sender.number}}\n*Bot:* {{bot.id}}"
+
+configurável
+  command: texto = "/id"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Funciona em grupo e na conversa direta — em grupo o id da conversa é o do grupo, que é o que você cola no escopo de uma automação.
+  titulo: texto = "🪪 Identificadores desta conversa"
+    rótulo: Primeira linha da resposta
+    ajuda: Troque por qualquer texto, ou deixe vazio para a resposta começar direto nos dados.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda — e é o normal aqui, porque quem mais usa este comando é quem está configurando o sistema. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  O id de um grupo termina em @g.us e o de uma pessoa em @s.whatsapp.net. Alguns aparelhos entregam a pessoa como @lid em vez do telefone — é normal, e é o mesmo identificador que o motor usa internamente.

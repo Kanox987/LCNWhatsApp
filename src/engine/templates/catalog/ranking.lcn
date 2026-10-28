@@ -1,0 +1,58 @@
+template ranking v1
+  nome: Ranking do grupo
+  descrição: Mostra as primeiras posições de um contador — quem mais pontuou, quem mais participou, quem levou mais advertência. Ordena o que outros comandos já somaram, e marca as pessoas para o nome aparecer no lugar do número.
+  categoria: utilitarios
+
+automação
+  nome: Ranking do grupo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra as primeiras posições do grupo
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  monta o ranking
+    de quem: dos membros deste grupo
+    contando: {{params.contador}}
+    quantos mostrar: {{params.quantos}}
+    título: "{{params.titulo}}"
+    cada linha: "{{params.molde}}"
+    sem ninguém: "{{params.vazioText}}"
+
+configurável
+  command: texto = "/ranking"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para ver as primeiras posições.
+  contador: texto = "pontos"
+    rótulo: Contando o quê
+    ajuda: O nome do contador que vai ser ordenado. Tem que ser EXATAMENTE o mesmo nome que a ação de somar usa no outro comando — se lá está "pontos" e aqui "ponto", o ranking nasce vazio e nada avisa.
+  quantos: número = 10
+    rótulo: Quantas posições
+    ajuda: Quantas pessoas aparecem. O teto é 50: acima disso o WhatsApp corta a mensagem e o fim da lista some sem aviso.
+  titulo: texto = "🏆 *Ranking do grupo*"
+    rótulo: Título
+    ajuda: A primeira linha, antes das posições.
+  molde: texto = "{{posicao}}. @{{numero}} — {{valor}}"
+    rótulo: Como escrever cada linha
+    ajuda: Use {{posicao}}, {{numero}} e {{valor}}. Quem aparece é marcado de verdade, então o WhatsApp mostra o nome no lugar do número.
+  vazioText: texto = "Ninguém pontuou ainda por aqui."
+    rótulo: Quando ninguém pontuou
+    ajuda: Resposta para ranking vazio, que é o normal logo depois de instalar. Sem este texto o comando falha em silêncio e a falta só aparece na aba Execuções.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Este comando só ORDENA — ele não conta nada sozinho. É preciso existir antes um comando ou vigia que SOME no mesmo contador, no escopo "de quem enviou, NESTE grupo". Sem isso o ranking fica vazio para sempre, e a causa não aparece em lugar nenhum.
+
+avisa nota
+  Quem tem o contador em texto, e não em número, fica de fora da lista em vez de entrar como zero. É de propósito: um atributo de texto com o mesmo nome encheria o ranking de gente que nunca pontuou.

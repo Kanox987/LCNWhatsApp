@@ -1,0 +1,52 @@
+template chance v1
+  nome: Medidor de Chance
+  descrição: Calcula e responde uma porcentagem aleatória sobre um atributo que o administrador configura, como nível de sorte ou coragem. Se alguém for marcado com @ ou citado, calcula para essa pessoa; se o comando vier sozinho, calcula para quem enviou a mensagem.
+  categoria: utilitarios
+
+automação
+  nome: Medidor de Chance
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mede a porcentagem de um atributo para você ou quem marcar
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  chama {{params.conexao}}.sorteia
+    com
+      minimo: 0
+      maximo: 100
+    erro: "{{params.errorText}}"
+
+  se evento target.id == ""
+    responde "🎯 {{sender.name}} é {{o resultado}}% {{params.atributo}}!"
+  senão
+    responde "🎯 @{{target.number}} é {{o resultado}}% {{params.atributo}}!"
+
+configurável
+  command: texto = "/chance"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para calcular a chance.
+  conexao: texto = "sorteio"
+    rótulo: Serviço de sorteio
+    ajuda: Identificador da conexão externa declarada na aba Conexões.
+  atributo: texto = "sortudo"
+    rótulo: Atributo medido
+    ajuda: A característica que o comando calcula (ex.: sortudo, corajoso, inteligente).
+  errorText: texto = "Não foi possível calcular a porcentagem no momento. Verifique a conexão com o serviço de sorteio."
+    rótulo: Se falhar
+    ajuda: Resposta enviada se o serviço de sorteio externo falhar.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige uma conexão declarada na aba Conexões com o identificador configurado em 'conexao' (padrão: sorteio). O serviço externo precisa expor a função 'sorteia' recebendo os campos 'minimo' (número) e 'maximo' (número), devolvendo a porcentagem calculada (0 a 100).

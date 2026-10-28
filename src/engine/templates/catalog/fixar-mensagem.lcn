@@ -1,0 +1,55 @@
+template fixar-mensagem v1
+  nome: Fixar mensagem
+  descrição: Um administrador responde uma mensagem e ela fica presa no topo da conversa pelo tempo configurado. É como se avisa sem depender de ninguém rolar o histórico — regra nova, horário de reunião, link do evento.
+  categoria: modulos-especializados
+
+automação
+  nome: Fixar mensagem
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Prende no topo a mensagem que você responder
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento sender.isAdmin == true
+    fixa a mensagem
+      o que fazer: fixar
+      por quanto tempo: {{params.duracaoSegundos}}
+      sem mensagem: "{{params.semCitadaText}}"
+  senão
+    responde "{{params.negadoText}}"
+
+configurável
+  command: texto = "/fixar"
+    rótulo: Comando
+    ajuda: A palavra que o administrador digita RESPONDENDO a mensagem que quer prender no topo.
+  duracaoSegundos: número = 604800
+    rótulo: Por quanto tempo
+    ajuda: 86400 é um dia, 604800 é uma semana, 2592000 é um mês. São os três valores que o próprio WhatsApp oferece — outros podem não ser respeitados pelo aparelho de quem recebe.
+  semCitadaText: texto = "Responda a mensagem que você quer fixar e mande o comando de novo."
+    rótulo: Quando nada foi respondido
+    ajuda: Resposta para quem digitou o comando sozinho. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.
+  negadoText: texto = "Só administrador do grupo pode fixar mensagem."
+    rótulo: Para quem não é administrador
+    ajuda: A conferência é feita aqui, no comando, para a pessoa receber uma resposta em vez de ver o comando falhar calado.
+  familia: texto = "moderacao"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às suas próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Em grupo, o WhatsApp costuma exigir que o número do bot seja ADMINISTRADOR para fixar. Sem isso ele recusa, e o comando aparece como falha no histórico.
+
+avisa nota
+  A duração não é enfeite: sem ela, o aparelho de quem recebe DESCARTA o fixo em silêncio — nada falha, nada aparece no histórico, e a mensagem simplesmente não fica fixada. Por isso o comando sempre manda um valor.
+
+avisa nota
+  A duração é campo NUMÉRICO e não lista de três opções, por uma razão de mecânica: um parâmetro de lista entrega texto, e o campo do fluxo é número — o documento sairia com "604800" entre aspas e deixaria de bater consigo mesmo ao ser reaberto para edição. Os três valores que o WhatsApp realmente respeita estão escritos na ajuda do campo.

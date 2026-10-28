@@ -1,0 +1,55 @@
+template limpar-anotacao v1
+  nome: Limpar anotação
+  descrição: Permite que um administrador limpe a anotação salva sobre um participante marcado ou citado. Redefine o texto da anotação para vazio.
+  categoria: utilitarios
+
+automação
+  nome: Limpar anotação
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Limpa a anotação do participante marcado
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento sender.isAdmin == true
+    se evento target.id contém ""
+      define target anotacao = ""
+      responde "{{params.sucessoText}}"
+        marca: "{{target.id}}"
+    senão
+      responde "{{params.semAlvoText}}"
+  senão
+    responde "{{params.negadoText}}"
+
+configurável
+  command: texto = "/limpar-anotacao"
+    rótulo: Comando
+    ajuda: A palavra digitada pelo administrador para limpar a anotação de quem foi marcado com @ ou citado.
+  sucessoText: texto = "A anotação de @{{target.number}} foi limpa (o valor foi redefinido para vazio)."
+    rótulo: Confirmação de limpeza
+    ajuda: Mensagem enviada confirmando que o valor da anotação foi redefinido para vazio.
+  semAlvoText: texto = "Marque alguém com @ ou responda a uma mensagem da pessoa para limpar a anotação."
+    rótulo: Sem alvo
+    ajuda: Resposta enviada quando o comando é enviado sem marcar nem citar nenhum participante.
+  negadoText: texto = "Apenas administradores do grupo podem limpar anotações."
+    rótulo: Acesso negado
+    ajuda: Resposta enviada quando um membro comum tenta utilizar este comando.
+  familia: texto = "moderacao"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+declara
+  target anotacao: texto
+    Anotação ou observação salva sobre o participante.
+
+avisa nota
+  A linguagem não possui ação para apagar fisicamente um atributo do banco; esta automação limpa a anotação redefinindo seu valor para um texto vazio.

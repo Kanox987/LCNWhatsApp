@@ -1,0 +1,58 @@
+template captura-de-site v1
+  nome: Captura de Site
+  descrição: Tira uma foto ou captura de tela de uma página da web a partir do link enviado junto com o comando. Devolve a imagem da página renderizada diretamente na conversa. Quem acessa o endereço e tira a foto é o serviço configurado na aba Conexões.
+  categoria: utilitarios
+
+automação
+  nome: Captura de Site
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Tira uma foto de uma página da web
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de um link: na mensagem ou na citada
+  sem ele: "{{params.semLinkText}}"
+
+  chama {{params.conexao}}.capturar
+    com
+      url: o link
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/print"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita, seguida do link da página que deseja capturar.
+  conexao: texto = "navegador"
+    rótulo: Serviço que captura
+    ajuda: O identificador da conexão com o serviço externo de captura web, como configurado na aba Conexões.
+  semLinkText: texto = "Envie o endereço do site junto com o comando. Exemplo: /print https://exemplo.com"
+    rótulo: Quando não houver link
+    ajuda: Mensagem enviada quando o comando é acionado sem um link válido no argumento.
+  ackText: texto = "Acessando o site e gerando a captura…"
+    rótulo: Aviso ao começar
+    ajuda: Mensagem de aviso exibida enquanto o serviço externo acessa a página e tira a foto.
+  errorText: texto = "Não consegui capturar o site: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem retornada caso o endereço seja inacessível, dê tempo esgotado ou o serviço falhe. O marcador {{erro}} é substituído pelo motivo.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige uma conexão configurada na aba Conexões. O serviço deve implementar a função "capturar", que recebe o campo "url" (string com o link a ser carregado) e devolve a mídia binária da imagem renderizada (PNG ou JPEG).
+
+avisa nota
+  O carregamento e a captura podem levar alguns segundos dependendo do peso do site solicitado.
+
+avisa nota
+  RISCO DE REDE, e quem fecha isso é o serviço, não o bot: sem filtro, alguém digita o comando com um endereço interno (127.0.0.1, 10.x, 192.168.x, metadados da nuvem) e recebe de volta a foto de uma página que só o servidor enxerga. Quem declarar a conexão precisa recusar endereço privado ANTES de abrir a página. E saiba o que esperar do resultado: site moderno costuma devolver banner de cookies, paywall ou tela de verificação em vez do conteúdo, e a página leva de 5 a 20 segundos para carregar — por isso o aviso de espera existe neste template.

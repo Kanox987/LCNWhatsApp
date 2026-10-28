@@ -1,0 +1,87 @@
+template calculadora v1
+  nome: Calculadora
+  descrição: Realiza cálculos aritméticos básicos entre dois números (soma, subtração, multiplicação e divisão). Recebe os valores separados por barra e responde com o resultado da operação.
+  categoria: utilitarios
+
+automação
+  nome: Calculadora
+  tipo: comando
+  dispara com: {{params.command}}
+  argumentos: num1 / op / num2
+  menu: {{params.command}} — Calcula operações básicas (+, -, *, /)
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento argumentos.num2 contém ""
+    se evento argumentos.op == "+"
+      calcula local resultado = evento argumentos.num1 + evento argumentos.num2
+      responde "{{params.formato}}"
+    senão se evento argumentos.op == "mais"
+      calcula local resultado = evento argumentos.num1 + evento argumentos.num2
+      responde "{{params.formato}}"
+    senão se evento argumentos.op == "-"
+      calcula local resultado = evento argumentos.num1 - evento argumentos.num2
+      responde "{{params.formato}}"
+    senão se evento argumentos.op == "menos"
+      calcula local resultado = evento argumentos.num1 - evento argumentos.num2
+      responde "{{params.formato}}"
+    senão se evento argumentos.op == "*"
+      calcula local resultado = evento argumentos.num1 * evento argumentos.num2
+      responde "{{params.formato}}"
+    senão se evento argumentos.op == "x"
+      calcula local resultado = evento argumentos.num1 * evento argumentos.num2
+      responde "{{params.formato}}"
+    senão se evento argumentos.op == "vezes"
+      calcula local resultado = evento argumentos.num1 * evento argumentos.num2
+      responde "{{params.formato}}"
+    senão se evento argumentos.op == ":"
+      se evento argumentos.num2 == "0"
+        responde "{{params.divisaoZeroText}}"
+      senão
+        calcula local resultado = evento argumentos.num1 / evento argumentos.num2
+        responde "{{params.formato}}"
+    senão se evento argumentos.op == "dividido"
+      se evento argumentos.num2 == "0"
+        responde "{{params.divisaoZeroText}}"
+      senão
+        calcula local resultado = evento argumentos.num1 / evento argumentos.num2
+        responde "{{params.formato}}"
+    senão
+      responde "{{params.ajudaText}}"
+  senão
+    responde "{{params.ajudaText}}"
+
+configurável
+  command: texto = "/calc"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para calcular. Exemplo de uso: /calc 10 / + / 5
+  ajudaText: texto = "Envie a conta no formato: /calc número / operação / número\nExemplo: /calc 10 / + / 5\nOperações aceitas: +, -, *, x, /"
+    rótulo: Mensagem de ajuda
+    ajuda: Resposta enviada quando o comando for usado com formato incorreto ou argumentos incompletos.
+  divisaoZeroText: texto = "Não é possível dividir por zero."
+    rótulo: Divisão por zero
+    ajuda: Resposta enviada quando houver tentativa de divisão por zero.
+  formato: texto = "🧮 Resultado: *{{local.resultado}}*"
+    rótulo: Como mostrar o resultado
+    ajuda: O texto da resposta. Use {{local.resultado}} onde o número deve aparecer.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  Calcula operações aritméticas entre dois valores com precisão padrão do Number. Expressões com parênteses ou múltiplos operadores em cadeia não são suportadas pela linguagem.
+
+avisa nota
+  A BARRA NÃO SERVE COMO SINAL DE DIVIDIR, e não é capricho: a barra é o que separa as três partes do comando. Escrever "/calc 10 / / / 2" faria o motor cortar nos lugares errados e devolver lixo. Por isso dividir se escreve com ":" ou com a palavra "dividido" — "/calc 10 / : / 2". As outras operações aceitam o sinal e a palavra: + ou mais, - ou menos, * ou x ou vezes.
+
+avisa nota
+  A guarda é `argumentos.num2 contém ""`, e não `== ""`, de propósito. Quando uma parte não vem, ela fica AUSENTE, e comparar ausente com vazio devolve falso (evaluator.js:576) — o comando seguiria adiante e tentaria calcular com um buraco. Escrito com `contém`, só passa quem tem as três partes.

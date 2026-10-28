@@ -1,0 +1,53 @@
+template membros v1
+  nome: Membros do grupo
+  descrição: Escreve a lista de quem está no grupo, visível na conversa. Serve para conferir quem entrou, achar quem sumiu e montar a lista de administradores sem abrir a tela de participantes do WhatsApp.
+  categoria: modulos-especializados
+
+automação
+  nome: Membros do grupo
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Lista quem está no grupo
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: {{params.allowFrom}}
+
+  se evento sender.isAdmin == true
+    fala com os membros
+      modo: listando todos
+      texto: "{{params.titulo}}"
+      só os administradores: não
+      sem membros: "{{params.semMembrosText}}"
+  senão
+    responde "{{params.negadoText}}"
+
+configurável
+  command: texto = "/membros"
+    rótulo: Comando
+    ajuda: A palavra que o administrador digita para ver a lista.
+  titulo: texto = "👥 *Quem está neste grupo*"
+    rótulo: Primeira linha da lista
+    ajuda: O cabeçalho que aparece antes dos nomes.
+  semMembrosText: texto = "Não há mais ninguém neste grupo além de mim."
+    rótulo: Quando não há ninguém
+    ajuda: Resposta para grupo só com o bot, ou para "só administradores" num grupo sem outro admin.
+  negadoText: texto = "Só administrador do grupo pode ver a lista de membros."
+    rótulo: Para quem não é administrador
+    ajuda: A lista de quem está no grupo é informação de quem administra. Tire esta trava em Programar se o seu grupo preferir aberto.
+  familia: texto = "moderacao"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às suas próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  Em grupo MUITO grande a lista fica longa e o WhatsApp pode cortar a mensagem. Para esses casos, ligar "listar só os administradores" costuma ser o que a pessoa realmente queria.
+
+avisa nota
+  Para listar SÓ os administradores — que costuma ser o que a pessoa realmente queria em grupo grande —, troque `só os administradores: não` por `sim` em Programar. Campo booleano não aceita parâmetro de instalação: ele é escrito no fluxo.

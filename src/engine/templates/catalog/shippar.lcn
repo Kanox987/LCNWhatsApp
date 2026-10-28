@@ -1,0 +1,54 @@
+template shippar v1
+  nome: Shippar Casal
+  descrição: Calcula a porcentagem de compatibilidade entre dois nomes informados na mensagem. Se a pessoa digitar o comando sozinho, o bot avisa como usar informando os dois nomes.
+  categoria: utilitarios
+
+automação
+  nome: Shippar Casal
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Calcula a compatibilidade entre dois nomes
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args == ""
+    responde "{{params.semNomesText}}"
+  senão
+    chama {{params.conexao}}.sorteia
+      com
+        minimo: 0
+        maximo: 100
+      erro: "{{params.errorText}}"
+    responde "{{params.textoDoResultado}}"
+
+configurável
+  command: texto = "/ship"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para calcular o shipp.
+  conexao: texto = "sorteio"
+    rótulo: Serviço de sorteio
+    ajuda: Identificador da conexão externa declarada na aba Conexões.
+  semNomesText: texto = "Escreva dois nomes depois do comando para shippar (exemplo: /ship Romeu e Julieta)."
+    rótulo: Mensagem sem argumentos
+    ajuda: Resposta enviada se a pessoa enviar apenas o comando sem nenhum nome.
+  textoDoResultado: texto = "💘 Compatibilidade entre {{message.args}}: {{o resultado}}%!"
+    rótulo: Mensagem do resultado
+    ajuda: Texto da resposta com a porcentagem calculada para os nomes enviados.
+  errorText: texto = "Não foi possível calcular o shipp no momento. Verifique a conexão com o serviço de sorteio."
+    rótulo: Se falhar
+    ajuda: Resposta enviada se o serviço de sorteio externo falhar.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige uma conexão declarada na aba Conexões com o identificador configurado em 'conexao' (padrão: sorteio). O serviço externo precisa expor a função 'sorteia' recebendo 'minimo' (número) e 'maximo' (número), devolvendo a porcentagem calculada (0 a 100).

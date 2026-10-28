@@ -1,0 +1,41 @@
+template atendimento v1
+  nome: Chamar atendimento humano
+  descrição: A pessoa pede para falar com gente de verdade, e o bot CALA nesta conversa até alguém devolver. É o que separa uma plataforma de atendimento de um bot cheio de comandos: sem isso, o cliente que escreve "quero falar com uma pessoa" continua recebendo cardápio automático no meio da conversa com o atendente.
+  categoria: utilitarios
+
+automação
+  nome: Chamar atendimento humano
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Chama uma pessoa de verdade e silencia o bot aqui
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  define chat atendimento_humano = "sim"
+  responde "{{params.confirmaText}}"
+
+configurável
+  command: texto = "/atendimento"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para pedir uma pessoa de verdade. Funciona na conversa direta e em grupo.
+  confirmaText: texto = "✅ Chamei um atendente. A partir de agora quem responde aqui é uma pessoa — não vou mais responder automaticamente nesta conversa."
+    rótulo: Confirmação
+    ajuda: O que a pessoa recebe ao pedir atendimento. Diga claramente que o bot parou, senão ela vai continuar tentando comandos e achar que quebrou.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Depois deste comando, NENHUMA automação responde nesta conversa — nem comando, nem vigia, nem porteiro. A única coisa que ainda funciona é um comando marcado como "só dono", e é por isso que o par deste template é o "Devolver ao bot". Instale os dois juntos, ou a conversa fica muda até alguém apagar a marca na aba Dados.
+
+avisa nota
+  O silêncio vale por CONVERSA, não pelo bot inteiro: as outras conversas seguem normais. A marca é um atributo comum, `atendimento_humano`, visível e apagável na aba Dados — não há estado escondido em lugar nenhum.

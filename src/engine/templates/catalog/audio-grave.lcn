@@ -1,0 +1,67 @@
+template audio-grave v1
+  nome: Áudio Grave
+  descrição: Altera o tom de uma mensagem de voz ou áudio, deixando a voz grossa e encorpada com reforço de frequências graves. Funciona respondendo a um áudio ou nota de voz. O processamento é realizado pela conexão de efeitos externa.
+  categoria: utilitarios
+
+automação
+  nome: Áudio Grave
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Deixa a voz do áudio grossa e grave
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto, áudio
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.tom_audio
+    com
+      arquivo: a mídia
+      escala_semitons: {{params.escalaSemitons}}
+      reforco_graves: {{params.reforcoGraves}}
+      fator_tempo: {{params.fatorTempo}}
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/grave"
+    rótulo: Comando
+    ajuda: A palavra que aciona o efeito ao responder uma mensagem de áudio ou voz.
+  conexao: texto = "efeitos"
+    rótulo: Serviço de efeitos
+    ajuda: Identificador da conexão externa na aba Conexões onde as funções de efeitos de mídia estão configuradas.
+  escalaSemitons: número = -6
+    rótulo: Alteração de tom (semitons)
+    ajuda: Quantidade de semitons a reduzir na frequência fundamental do áudio. -6 produz uma voz bem encorpada e -10 cria um efeito monstruoso.
+  reforcoGraves: opção (sim, nao) = "sim"
+    rótulo: Reforçar frequências graves
+    ajuda: sim aplica equalização de ganho nas frequências baixas para encorpar o som. nao apenas desloca a altura musical.
+  fatorTempo: número = 1
+    rótulo: Fator de velocidade
+    ajuda: 1 mantém a velocidade original. Valores menores desaceleram ligeiramente para aumentar o peso da voz.
+  semMidiaText: texto = "Responda a uma mensagem de voz ou áudio com este comando para engrossar a voz."
+    rótulo: Aviso quando não vier mídia
+    ajuda: Resposta enviada se o comando for executado sem citar um áudio ou recado de voz.
+  ackText: texto = "🎙️ Deixando a voz grave…"
+    rótulo: Aviso ao começar
+    ajuda: Mensagem temporária informando que o processamento de áudio foi iniciado.
+  errorText: texto = "Não consegui alterar o tom do áudio: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem exibida caso a conexão de efeitos retorne erro ao processar.
+  familia: texto = "efeitos"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige a conexão de efeitos configurada na aba Conexões. O serviço externo precisa expor a função tom_audio recebendo { arquivo, escala_semitons, reforco_graves, fator_tempo } e devolvendo o arquivo de áudio resultante.
+
+avisa nota
+  Para usar, basta citar um áudio recebido e enviar o comando. É possível regular a intensidade da voz grossa ajustando o campo escalaSemitons em Programar.

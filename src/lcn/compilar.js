@@ -95,6 +95,15 @@ function descitar (bruto, linha) {
   }
 }
 
+// Os tipos de campo que o vocabulário pode declarar.
+//
+// `palavra` e `operando` chegam aqui quando o campo não traz lista de palavras
+// (o `language` do bloco de código é assim): aí o valor segue como texto, que
+// é o certo. O que NÃO pode seguir é um tipo escrito errado — foi assim que
+// 'número' com acento virou texto em silêncio e quebrou a ida e volta só na
+// recompilação.
+const TIPOS_DE_CAMPO = new Set(['texto', 'palavra', 'booleano', 'numero', 'operando'])
+
 function medirIndentacao (linha, numero) {
   const prefixo = linha.match(/^\s*/)[0]
   // Arredondar três espaços para um nível mudava o ramo sem avisar.
@@ -512,6 +521,15 @@ function lerAcao (linha, filhas) {
         throw new ErroDeSintaxe(`"${rotulo}" aceita: ${validas} — veio "${valor}"`, filha.n)
       }
       config[campo.chave] = codigo
+    } else if (campo.tipo && !TIPOS_DE_CAMPO.has(campo.tipo)) {
+      // TIPO DESCONHECIDO É ERRO, e não "trata como texto".
+      //
+      // Isto custou uma ida e volta quebrada: um campo declarado como
+      // 'número' (com acento) não casava com 'numero', caía aqui calado e
+      // virava string. O documento compilava, o render funcionava, e a
+      // diferença só aparecia ao recompilar o texto descompilado — ou seja,
+      // num teste, e não antes. Errar o nome do tipo agora é recusado na cara.
+      throw new ErroDeSintaxe(`o campo "${rotulo}" foi declarado com um tipo que não existe: "${campo.tipo}"`, filha.n)
     } else config[campo.chave] = valor
   }
   return { type: def.tipo, config }
@@ -828,10 +846,26 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       case 'dispara com': {
         temDisparaCom = true
         if (tipoDoGatilho === 'trigger.command') {
-          if (!valor || /\s/.test(valor)) {
-            throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${valor}"`, l.n)
+          // ATALHOS: "dispara com: /play, /p" — o primeiro é o nome canônico,
+          // os outros são apelidos da MESMA automação. A vírgula separa porque
+          // é o que uma pessoa escreveria sem ler manual nenhum.
+          const palavras = valor.split(',').map((x) => x.trim()).filter(Boolean)
+          if (!palavras.length) {
+            throw new ErroDeSintaxe('"dispara com" precisa de pelo menos uma palavra, como "/menu"', l.n)
           }
-          gatilhoConfig.command = valor
+          for (const palavra of palavras) {
+            if (/\s/.test(palavra)) {
+              throw new ErroDeSintaxe(`um comando dispara com uma palavra só, como "/menu" — veio "${palavra}"`, l.n)
+            }
+          }
+          if (new Set(palavras.map((x) => x.toLowerCase())).size !== palavras.length) {
+            throw new ErroDeSintaxe(`a mesma palavra aparece duas vezes em "dispara com": ${valor}`, l.n)
+          }
+          gatilhoConfig.command = palavras[0]
+          // Lista vazia não vira campo: documento antigo e documento novo sem
+          // atalho têm de sair IDÊNTICOS, senão a ida e volta quebra para os
+          // 108 templates do catálogo de uma vez.
+          if (palavras.length > 1) gatilhoConfig.aliases = palavras.slice(1)
         } else if (tipoDoGatilho === 'trigger.message') {
           if (valor !== 'qualquer mensagem') {
             throw new ErroDeSintaxe(

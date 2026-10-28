@@ -1,0 +1,64 @@
+template traduzir v1
+  nome: Tradutor
+  descrição: Traduz o texto enviado após o comando para o idioma de destino configurado. Envia o conteúdo para uma conexão de tradução externa e responde com o resultado traduzido.
+  categoria: utilitarios
+
+automação
+  nome: Tradutor
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Traduz um texto para outro idioma
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args == ""
+    responde "{{params.semTextoText}}"
+  senão
+    chama {{params.conexao}}.traduzir
+      com
+        texto: {{message.args}}
+        para: {{params.idiomaDestino}}
+      avisa: "{{params.ackText}}"
+      erro: "{{params.errorText}}"
+    responde "{{params.formato}}"
+
+configurável
+  command: texto = "/traduzir"
+    rótulo: Comando
+    ajuda: Palavra que a pessoa digita para traduzir uma mensagem. Exemplo: /traduzir Good morning.
+  conexao: texto = "traducao"
+    rótulo: Conexão da API de tradução
+    ajuda: Identificador da conexão configurada na aba Conexões do painel que fornece o serviço de tradução.
+  idiomaDestino: texto = "pt"
+    rótulo: Idioma de destino
+    ajuda: Código do idioma para o qual o texto deve ser traduzido (ex: "pt" para português, "en" para inglês, "es" para espanhol).
+  semTextoText: texto = "Escreva o texto que deseja traduzir após o comando. Exemplo: /traduzir Good morning"
+    rótulo: Mensagem sem texto
+    ajuda: Resposta enviada quando o usuário digita o comando sem informar nenhuma frase para traduzir.
+  ackText: texto = "Traduzindo…"
+    rótulo: Mensagem de aguardo
+    ajuda: Mensagem temporária exibida enquanto o serviço externo processa a tradução.
+  errorText: texto = "Não foi possível traduzir: {{erro}}"
+    rótulo: Mensagem de erro
+    ajuda: Texto exibido caso o serviço falhe ou o idioma não seja suportado. O marcador {{erro}} é substituído pelo motivo retornado.
+  formato: texto = "🌐 Tradução:\n\n{{o resultado}}"
+    rótulo: Formato da resposta
+    ajuda: Como a mensagem traduzida será exibida. Use {{o resultado}} para incluir o retorno da chamada externa.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige uma conexão configurada na aba Conexões com a função "traduzir". A função deve receber os campos "texto" (conteúdo textual informado no comando) e "para" (código do idioma de destino) e devolver uma string com o texto traduzido para exibição em {{o resultado}}. Caso a conexão suporte identificar o idioma no próprio texto (ex: se o usuário digitar o código do idioma antes da frase), pode usá-lo preferencialmente sobre o campo "para".
+
+avisa nota
+  A linguagem SABE dividir argumentos: pondo `argumentos: idioma / texto` no cabeçalho, `/traduzir es Bom dia` chegaria separado em {{argumentos.idioma}} e {{argumentos.texto}}. Este template não faz isso de propósito — com a divisão ligada, `/traduzir Good morning` viraria idioma="Good" e texto="morning", e a pessoa receberia lixo sem entender por quê. Quem quiser o idioma no comando pode ligar a divisão em Programar, aceitando essa troca.

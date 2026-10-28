@@ -1,0 +1,59 @@
+template ler-qr v1
+  nome: Ler QR Code
+  descrição: Lê e decodifica a imagem de um QR Code recebida na mensagem ou na mensagem citada. Devolve o texto ou link decodificado diretamente na conversa. Quem processa e decodifica a imagem é o serviço configurado na aba Conexões.
+  categoria: utilitarios
+
+automação
+  nome: Ler QR Code
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Lê e decodifica o conteúdo de um QR Code
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto, foto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.ler_qr
+    com
+      arquivo: a mídia
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+  responde "{{o resultado}}"
+
+configurável
+  command: texto = "/lerqr"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Funciona enviando a imagem com o comando na legenda ou respondendo com ele a uma imagem já enviada.
+  conexao: texto = "qr"
+    rótulo: Serviço que decodifica
+    ajuda: O identificador da conexão com o serviço externo, como configurado na aba Conexões.
+  semMidiaText: texto = "Envie uma foto contendo um QR Code com este comando na legenda, ou responda a uma foto com ele."
+    rótulo: Aviso quando não vier mídia
+    ajuda: Resposta enviada quando o comando é acionado sem nenhuma foto na mensagem nem na mensagem citada.
+  ackText: texto = "Lendo QR Code…"
+    rótulo: Aviso ao começar
+    ajuda: Mensagem de aviso exibida enquanto o serviço processa a leitura da imagem.
+  errorText: texto = "Não consegui ler o QR Code: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem retornada caso a imagem não contenha um QR Code legível ou ocorra falha no serviço. O marcador {{erro}} é substituído pelo motivo.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número, que é o padrão seguro quando outras pessoas usam o comando. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige uma conexão configurada na aba Conexões. O serviço deve implementar a função "ler_qr", que recebe o campo "arquivo" (mídia binária da imagem) e devolve uma string de texto puro com o conteúdo decodificado.
+
+avisa nota
+  Útil especialmente no próprio celular quando alguém recebe um QR Code pelo WhatsApp e não tem outro aparelho por perto para apontar a câmera.
+
+avisa nota
+  A conexão padrão é "qr" e NÃO "imagem" de propósito. O serviço de imagem que já existe tem sete funções (figurinha, figurinha de frase, trocar metadados, converter, remover fundo, melhorar e fundo) e nenhuma delas lê ou gera QR. Apontar este comando para ele faria a chamada falhar no ar, com o bot dizendo que não conseguiu — por uma função que nunca existiu ali. Declare "qr" como conexão própria, ou acrescente as duas funções ao serviço de imagem e troque o nome aqui.

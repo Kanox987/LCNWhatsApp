@@ -21,6 +21,7 @@ import {
   gravarAtributo,
   incrementarAtributo,
   resolverAlvo,
+  separarIdMembro,
   resolverEscopo
 } from './attributeScopes.js'
 import { usosDoArquivo } from './usosDeArquivo.js'
@@ -105,6 +106,27 @@ function politicaDeEntrada (documento) {
 // em massa ou avisos) em grupos onde o bot é mero participante passivo (como grupos
 // de família, trabalho ou grupos em que foi adicionado sem aviso prévio) seria desastroso.
 // O portão decide se o bot EXISTE ali como agente automatizado.
+// ATENDIMENTO HUMANO: a conversa foi passada para uma pessoa, e o bot cala.
+//
+// Vale para QUALQUER conversa, não só grupo — e é essa a diferença para
+// `grupo_ativo`, que decide se o bot existe num grupo. Aqui o bot existe e
+// está autorizado; ele só não deve responder enquanto alguém de carne e osso
+// estiver atendendo. Um cliente perguntando de entrega não pode receber o
+// cardápio automático no meio da conversa com o atendente.
+//
+// A exceção é a MESMA do outro portão, e pela mesma razão: comando restrito ao
+// dono continua passando, senão não haveria como devolver a conversa ao bot de
+// dentro dela — a única saída seria o painel.
+//
+// O marcador é um atributo comum da conversa. Quem quiser destravar sem
+// comando nenhum apaga a chave na aba Dados, e o bot volta a responder.
+export const CHAVE_ATENDIMENTO = 'atendimento_humano'
+
+function emAtendimentoHumano (db, evento, trigger) {
+  if (trigger?.config?.requireOwner === true) return false
+  return conversaMarcada(db, evento?.chat, CHAVE_ATENDIMENTO)
+}
+
 function grupoBloqueado (db, evento, trigger) {
   if (evento?.chat?.kind !== 'group') return false
   if (trigger?.config?.requireOwner === true) return false
@@ -463,11 +485,33 @@ function barreiraDeGatilhoAutomatico (evento) {
   return true
 }
 
+// QUAL palavra casou — e não só SE casou.
+//
+// Com atalho, saber apenas que casou não basta: a extração dos argumentos tira
+// o prefixo do texto, e tirar "/play" de "/p musica" devolveria lixo. Então o
+// casamento passou a devolver a palavra, e quem precisa do booleano chama
+// `textoCasaComando`, que é esta mesma função perguntada de outro jeito.
+//
+// A ordem importa: o comando principal é tentado ANTES dos atalhos. Se alguém
+// declarar um atalho igual ao próprio comando, o principal ganha e nada muda.
+function comandoQueCasou (texto, config) {
+  if (typeof texto !== 'string') return null
+  const atalhos = Array.isArray(config?.aliases) ? config.aliases : []
+  for (const palavra of [config?.command, ...atalhos]) {
+    if (typeof palavra !== 'string' || !palavra) continue
+    if (casaUmaPalavra(texto, palavra, config?.match)) return palavra
+  }
+  return null
+}
+
 function textoCasaComando (texto, config) {
+  return comandoQueCasou(texto, config) !== null
+}
+
+function casaUmaPalavra (texto, comando, match) {
   if (typeof texto !== 'string') return false
   const alvo = texto.trim()
-  const comando = config.command
-  switch (config.match) {
+  switch (match) {
     case 'exact': return alvo.toLowerCase() === comando.toLowerCase()
     case 'prefix': return alvo.toLowerCase().startsWith(comando.toLowerCase())
     case 'keyword': return new RegExp(`(^|\\s)${comando.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`, 'i').test(alvo)
@@ -564,6 +608,18 @@ function compararValores (esquerda, operador, direita) {
     if (alvo === undefined || agulha === undefined) return false
     const achou = alvo.toLowerCase().includes(agulha.toLowerCase())
     return operador === 'contains' ? achou : !achou
+  }
+
+  if (operador === 'starts_with' || operador === 'not_starts_with') {
+    // PREFIXO é pergunta diferente de "contém em algum lugar", e a diferença
+    // importa: conferir código de país com `contém` deixa passar um número
+    // estrangeiro que tenha o código no meio. Sem valor, é falso nos dois
+    // sentidos — igual a `contains` —, porque "não sei" nunca vira "sim".
+    const alvo = comoTexto(esquerda)
+    const agulha = comoTexto(direita)
+    if (alvo === undefined || agulha === undefined) return false
+    const achou = alvo.toLowerCase().startsWith(agulha.toLowerCase())
+    return operador === 'starts_with' ? achou : !achou
   }
 
   if (operador === 'eq' || operador === 'neq') {
@@ -1352,8 +1408,17 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
         throw new ErroDeFluxo('Não há quem remover: o comando não indicou ninguém.')
       }
       if (no.config?.neverRemoveOwner !== false && ehDono(db, quem)) {
-        // Silencioso de propósito: uma regra automática tentando remover o
-        // dono é engano de configuração, não motivo para derrubar a execução.
+        // Silencioso quando NINGUÉM declarou o aviso: uma regra automática
+        // tentando remover o dono é engano de configuração, não motivo para
+        // derrubar a execução. Mas um comando que uma PESSOA digitou e que
+        // termina mudo é defeito — foi o que aconteceu com `/rebaixa`. Quem
+        // declarar o texto recebe resposta; a trava não muda.
+        if (typeof no.config?.ownerText === 'string' && no.config.ownerText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.ownerText, contexto) }
+          })
+        }
         return 'success'
       }
       comandos.push({
@@ -1496,11 +1561,216 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
         throw new ErroDeFluxo('Não há quem rebaixar: o comando não indicou ninguém.')
       }
       if (no.config?.neverRemoveOwner !== false && ehDono(db, quem)) {
+        // O silêncio daqui custou uma investigação inteira: em 27/10, três
+        // `/rebaixa` seguidos gravaram `matched_live` com ZERO comandos, e no
+        // WhatsApp não apareceu nada. O alvo citado era um dono, a trava
+        // funcionou, e ninguém ficou sabendo. A trava continua — o que muda é
+        // que quem declarar o texto recebe resposta.
+        if (typeof no.config?.ownerText === 'string' && no.config.ownerText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.ownerText, contexto) }
+          })
+        }
         return 'success'
       }
       comandos.push({
         commandType: 'group.demote',
         payload: { chatId: evento.chat.id, participantId: quem }
+      })
+      return 'success'
+    }
+
+    case 'action.variable.rank': {
+      // RANKING: ordenar muitos contadores, que é a única coisa que a
+      // linguagem nunca soube fazer com variável.
+      //
+      // A ordenação acontece AQUI e não no gateway — diferente do sorteio de
+      // membro — porque o dado mora no banco do motor, e mandar o gateway
+      // pedir de volta seria uma volta inteira por nada. O princípio é o
+      // mesmo: quem tem a coleção faz o trabalho, a linguagem só pede.
+      const escopo = no.config.scope === 'contact' ? 'contact' : 'group_member'
+      if (escopo === 'group_member' && evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('O ranking dos membros só existe dentro de um grupo.')
+      }
+      const teto = Number.isInteger(no.config?.limit) ? Math.min(no.config.limit, 50) : 10
+
+      // `LIKE grupo|%` limita ao grupo desta conversa. O separador não pode
+      // aparecer em id nenhum (montarIdMembro recusa), então não há colisão.
+      const linhas = escopo === 'group_member'
+        ? db.prepare(
+          "SELECT scope_id, value_json FROM entity_attributes WHERE scope_kind = 'group_member' AND key = ? AND scope_id LIKE ? ESCAPE '\\'"
+        ).all(no.config.key, `${evento.chat.id.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}|%`)
+        : db.prepare("SELECT scope_id, value_json FROM entity_attributes WHERE scope_kind = 'contact' AND key = ?")
+          .all(no.config.key)
+
+      const pontuados = []
+      for (const linha of linhas) {
+        let valor
+        try { valor = JSON.parse(linha.value_json) } catch { continue }
+        const n = comoNumero(valor)
+        // Quem não tem número não entra: um atributo de texto com a mesma
+        // chave entraria como zero e sujaria o ranking com gente que nunca
+        // pontuou.
+        if (n === undefined) continue
+        const membro = escopo === 'group_member' ? separarIdMembro(linha.scope_id) : null
+        // `separarIdMembro` devolve { groupId, memberId } — não `pessoaId`.
+        // Ler o nome errado não quebrava nada: devolvia undefined e TODAS as
+        // linhas caíam no `continue`, deixando o ranking vazio para sempre
+        // sem erro nenhum. Foi o teste que pegou.
+        const quem = escopo === 'group_member' ? membro?.memberId : linha.scope_id
+        if (!quem) continue
+        pontuados.push({ quem, valor: n })
+      }
+      pontuados.sort((a, b) => b.valor - a.valor)
+      const topo = pontuados.slice(0, teto)
+
+      if (!topo.length) {
+        if (typeof no.config?.emptyText === 'string' && no.config.emptyText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.emptyText, contexto), replyTo: referenciaDoLink(evento) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Ninguém pontuou ainda: não há ranking para mostrar.')
+      }
+
+      const molde = no.config?.lineFormat || '{{posicao}}. @{{numero}} — {{valor}}'
+      const linhasTexto = topo.map((p, i) => molde
+        .replaceAll('{{posicao}}', String(i + 1))
+        .replaceAll('{{numero}}', soDigitos(p.quem))
+        .replaceAll('{{valor}}', String(p.valor)))
+      const cabecalho = no.config?.headerText ? interpolar(no.config.headerText, contexto) : ''
+      comandos.push({
+        commandType: 'whatsapp.reply',
+        payload: {
+          chatId: evento.chat.id,
+          text: [cabecalho, ...linhasTexto].filter(Boolean).join('\n'),
+          // As menções fazem os nomes aparecerem em vez dos números crus.
+          mentions: topo.map((p) => p.quem),
+          replyTo: referenciaDoLink(evento)
+        }
+      })
+      return 'success'
+    }
+
+    case 'action.whatsapp.pin': {
+      // Fixar (ou soltar) a mensagem RESPONDIDA.
+      //
+      // A referência é a mesma que `reagir` usa — a da citação —, porque fixar
+      // é sempre sobre uma mensagem que já existe. Sem citação não há o que
+      // fixar, e isso é erro de uso, não falha do sistema: avisa.
+      const paraFixar = referenciaDoLink(evento)
+      if (!paraFixar || !evento.message?.quotedRef) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há mensagem para fixar: o comando precisa responder uma.')
+      }
+      comandos.push({
+        commandType: 'whatsapp.pin',
+        payload: {
+          chatId: evento.chat.id,
+          acao: no.config?.action === 'unpin' ? 'unpin' : 'pin',
+          // 24h é o padrão do próprio WhatsApp, e mandar SEMPRE um valor é o
+          // que impede o fixo de sumir calado no aparelho de quem recebe.
+          duracaoSegundos: Number.isInteger(no.config?.durationSecs) ? no.config.durationSecs : 86400,
+          alvo: paraFixar
+        }
+      })
+      return 'success'
+    }
+
+    case 'action.whatsapp.poll': {
+      // Enquete nativa do WhatsApp.
+      //
+      // As opções chegam como TEXTO separado por ponto e vírgula, e quem
+      // divide é aqui — num lugar só. A linguagem não tem coleção, e inventar
+      // uma só para este campo seria pagar a mudança inteira por um caso.
+      const opcoes = String(interpolar(no.config.options, contexto) || '')
+        .split(';')
+        .map((x) => x.trim())
+        .filter(Boolean)
+      if (opcoes.length < 2) {
+        throw new ErroDeFluxo('Uma enquete precisa de pelo menos duas opções, separadas por ponto e vírgula.')
+      }
+      comandos.push({
+        commandType: 'whatsapp.poll',
+        payload: {
+          chatId: evento.chat.id,
+          pergunta: interpolar(no.config.question, contexto),
+          opcoes,
+          // Não dá para marcar mais opções do que existem: o WhatsApp aceita o
+          // envio e a enquete sai quebrada no aparelho.
+          quantasMarcar: Math.min(
+            Number.isInteger(no.config?.selectableCount) ? no.config.selectableCount : 1,
+            opcoes.length
+          ),
+          replyTo: referenciaDoLink(evento)
+        }
+      })
+      return 'success'
+    }
+
+    case 'action.acervo.read': {
+      // LER metadado de um item do acervo, e devolver ao fluxo.
+      //
+      // As outras quatro ações do acervo escrevem. Esta é a única que lê, e
+      // ela existe porque sem dado de item não há vitrine: nome, descrição e
+      // preço de um produto moram no acervo e não havia como mostrá-los.
+      //
+      // O caminho é o mesmo do cano de `chama`: emite o comando, DORME, e a
+      // retomada traz o resultado. Não é canal novo — `retomarFluxo` já fazia
+      // isso para conexão desde que o encadeamento existe. Reusar foi a
+      // condição que uma das revisões pôs para aprovar, e ela já estava
+      // satisfeita antes de a pergunta ser feita.
+      // `temSucessor` já vem calculado pelo caminhador (montarFluxo), que é
+      // quem enxerga o documento. É o MESMO parâmetro que o cano de `chama`
+      // usa — reusar é o que garante que as duas ações durmam pela mesma regra.
+      comandos.push({
+        commandType: 'acervo.read',
+        payload: {
+          chatId: evento.chat.id,
+          caminho: interpolar(no.config.path, contexto),
+          ...(temSucessor ? { encadeado: true, retomarDe: no.id, locais: contexto.local } : {}),
+          ...(no.config?.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {}),
+          replyTo: referenciaDoLink(evento)
+        }
+      })
+      // Sem passo depois, ler não serve para nada — mas não é erro: alguém
+      // pode estar montando o fluxo aos poucos no painel.
+      return temSucessor ? 'dormindo' : 'success'
+    }
+
+    case 'action.group.members': {
+      // Falar COM os membros — marcando todos, listando ou sorteando um.
+      //
+      // O motor não enumera ninguém aqui, e não é omissão: um comando é evento
+      // de MENSAGEM, e evento de mensagem não traz participantes (só o de
+      // grupo traz, zapoAdapter.js:504). Quem tem a lista é o gateway. Então
+      // esta ação emite um TRABALHO e o gateway resolve com a lista em mãos.
+      //
+      // É também o que permite `pick` sem primitiva de aleatório no motor: o
+      // sorteio acontece onde a coleção existe. Duas revisões independentes
+      // (Gemini e Grok) chegaram a essa mesma conclusão antes de eu escrever.
+      if (evento.chat.kind !== 'group') {
+        throw new ErroDeFluxo('Só dá para falar com os membros dentro de um grupo.')
+      }
+      comandos.push({
+        commandType: 'group.members',
+        payload: {
+          chatId: evento.chat.id,
+          mode: no.config?.mode || 'mention',
+          ...(no.config?.text ? { text: interpolar(no.config.text, contexto) } : {}),
+          ...(no.config?.onlyAdmins === true ? { onlyAdmins: true } : {}),
+          ...(no.config?.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {}),
+          replyTo: referenciaDoLink(evento)
+        }
       })
       return 'success'
     }
@@ -1832,6 +2102,11 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
     }
     return comandos
   }
+  // Com atalho (`/p` para `/play`), o prefixo a descontar é o que a pessoa
+  // DIGITOU, não o nome canônico — senão "/p musica" devolveria "lay musica"
+  // ou vazio, conforme o tamanho da palavra.
+  const palavraQueCasou = comandoQueCasou(evento.message?.text, gatilho?.config) || gatilho?.config?.command
+
   const contexto = {
     // A chamada externa pode dormir. Os resultados locais acompanham só a
     // continuação desta execução, sem virar atributos de conversa ou pessoa.
@@ -1846,7 +2121,7 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
     // disponíveis, em `media.*`, porque são dados e não segredo.
     message: semTokens({
       ...evento.message,
-      args: extrairArgumentos(evento.message?.text, gatilho?.config?.command),
+      args: extrairArgumentos(evento.message?.text, palavraQueCasou),
       // O primeiro link da própria mensagem — é o que o download automático usa,
       // já que ali ninguém digitou comando nenhum.
       ...(primeiroLink(evento.message?.text) ? { link: primeiroLink(evento.message.text) } : {})
@@ -1863,7 +2138,7 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
     // resposta. É o sinal de erro desta base: melhor a pessoa ver
     // "{{argumentos.autor}}" do que receber um pacote com autor vazio.
     ...(gatilho?.config?.args?.names?.length
-      ? { argumentos: dividirArgumentos(extrairArgumentos(evento.message?.text, gatilho?.config?.command), gatilho.config.args) }
+      ? { argumentos: dividirArgumentos(extrairArgumentos(evento.message?.text, palavraQueCasou), gatilho.config.args) }
       : {}),
     // isOwner entra como campo do remetente (e não como variável de usuário)
     // porque é uma propriedade do evento, não algo que a automação grava.
@@ -1915,7 +2190,14 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
     contexto.resultado = {
       ...(r.tipo ? { tipo: r.tipo } : {}),
       ...(r.mime ? { mime: r.mime } : {}),
-      ...(typeof r.texto === 'string' ? { texto: r.texto } : {})
+      ...(typeof r.texto === 'string' ? { texto: r.texto } : {}),
+      // DADOS é metadado puro, e entra por `action.acervo.read`. É o que
+      // permite escrever {{resultado.dados.nome}} numa resposta — a navegação
+      // existe no interpolador, que anda qualquer caminho deste objeto; o que
+      // não existia era alguém PÔR dado aqui. Nunca carrega token nem caminho
+      // em disco: o invariante 4 vale igual, e `resultadoValidado` é quem o
+      // garante, filtrando campo por campo.
+      ...(r.dados && typeof r.dados === 'object' ? { dados: r.dados } : {})
     }
     edge = documento.flow.edges.find((e) => e.from === retomada.nodeId && e.on === 'success')
   } else {
@@ -2113,6 +2395,10 @@ export function avaliarEvento (db, evento) {
       // com o que importa. E o dono pediu que o bot não ficasse lendo conversa
       // de grupo onde ninguém o chamou.
       if (trigger && grupoBloqueado(db, evento, trigger)) continue
+      // O atendimento humano cala TUDO nesta conversa, menos o comando do dono
+      // que o encerra. Fica depois do portão do grupo de propósito: são duas
+      // perguntas diferentes, e misturá-las faria uma esconder a outra no log.
+      if (trigger && emAtendimentoHumano(db, evento, trigger)) continue
       let status = 'no_match'
       let comandosGerados = []
       let detalheErro = null
@@ -2322,6 +2608,18 @@ function resultadoValidado (resultado) {
   const limpo = {}
   for (const campo of ['token', 'tipo', 'mime', 'texto']) {
     if (typeof resultado[campo] === 'string' && resultado[campo]) limpo[campo] = resultado[campo]
+  }
+  // `dados` é a porta da leitura do acervo, e ela é ESTREITA de propósito: só
+  // escalar, só um nível, e nenhum campo com cara de token ou de caminho em
+  // disco. Aceitar o objeto inteiro que o gateway mandar transformaria este
+  // ponto — que existe justamente para filtrar — num repasse.
+  if (resultado.dados && typeof resultado.dados === 'object' && !Array.isArray(resultado.dados)) {
+    const dados = {}
+    for (const [chave, valor] of Object.entries(resultado.dados)) {
+      if (/token|caminho|path|secret|chave/i.test(chave)) continue
+      if (typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean') dados[chave] = valor
+    }
+    if (Object.keys(dados).length) limpo.dados = dados
   }
   return Object.keys(limpo).length ? limpo : null
 }

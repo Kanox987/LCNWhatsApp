@@ -20,6 +20,7 @@ automação
       quem: quem foi marcado
       nunca o dono: sim
       sem alvo: "{{params.semAlvoText}}"
+      dono protegido: "{{params.donoText}}"
   senão
     responde "{{params.soAdminText}}"
 
@@ -30,6 +31,9 @@ configurável
   semAlvoText: texto = "Marque quem você quer rebaixar, ou responda a mensagem dessa pessoa."
     rótulo: Quando ninguém foi marcado
     ajuda: Resposta para quem digitou o comando sozinho. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.
+  donoText: texto = "Essa pessoa é dona do bot — a proteção de dono não deixa rebaixar."
+    rótulo: Quando o alvo é um dono
+    ajuda: A trava de dono age em SILÊNCIO sem este texto — o comando casa, não envia nada, e quem digitou acha que o bot parou. Foi exatamente o que aconteceu em 27/10.
   soAdminText: texto = "Só administrador do grupo pode rebaixar alguém."
     rótulo: Quando quem pediu não é admin
     ajuda: A conferência é feita aqui, no comando, e não pelo WhatsApp — assim quem não é admin recebe uma resposta em vez de ver o comando falhar calado.

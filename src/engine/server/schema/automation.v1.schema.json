@@ -237,6 +237,21 @@
                 "$ref": "#/definitions/actionGroupAdd"
               },
               {
+                "$ref": "#/definitions/actionGroupMembers"
+              },
+              {
+                "$ref": "#/definitions/actionAcervoRead"
+              },
+              {
+                "$ref": "#/definitions/actionVariableRank"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappPin"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappPoll"
+              },
+              {
                 "$ref": "#/definitions/actionGroupSetSubject"
               },
               {
@@ -522,6 +537,13 @@
               "minLength": 1,
               "pattern": "^\\S+$",
               "description": "O prefixo que dispara o comando, como \"/menu\" ou \"!ajuda\". Um comando é definido pelo prefixo: ele não pode conter espaço, porque o que vem depois do prefixo são os argumentos, não parte do nome. Uma automação que precisa reagir sem prefixo é vigia, não comando."
+            },
+            "aliases": {
+              "type": "array",
+              "maxItems": 8,
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1, "pattern": "^\\S+$" },
+              "description": "Atalhos que disparam a MESMA automação, como \"/p\" para \"/play\". Seguem as mesmas regras do comando: sem espaço, porque o que vem depois é argumento. O comando principal continua sendo o nome canônico — é ele que aparece no menu e no histórico."
             },
             "match": {
               "enum": [
@@ -888,6 +910,10 @@
             "notFoundText": {
               "type": "string",
               "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            },
+            "ownerText": {
+              "type": "string",
+              "description": "Resposta quando o alvo é um DONO e a trava o protegeu. Sem este texto a trava age em silêncio: o comando casa, não envia nada, e quem digitou não entende por quê."
             }
           }
         }
@@ -990,6 +1016,144 @@
             "notFoundText": {
               "type": "string",
               "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            },
+            "ownerText": {
+              "type": "string",
+              "description": "Resposta quando o alvo é um DONO e a trava o protegeu. Sem este texto a trava age em silêncio: o comando casa, não envia nada, e quem digitou não entende por quê."
+            }
+          }
+        }
+      }
+    },
+    "actionVariableRank": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.variable.rank" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "key"],
+          "properties": {
+            "scope": {
+              "enum": ["group_member", "contact"],
+              "description": "De quem é o contador que vai ser ordenado. group_member conta dentro DESTE grupo; contact conta a pessoa em qualquer lugar."
+            },
+            "key": { "type": "string", "minLength": 1, "description": "O nome do contador, como \"pontos\" ou \"mensagens\"." },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Quantas posições mostrar. O teto é 50 porque mensagem longa demais o WhatsApp corta." },
+            "headerText": { "type": "string", "description": "A primeira linha, antes das posições." },
+            "lineFormat": { "type": "string", "description": "Como cada linha é escrita. Use {{posicao}}, {{numero}} e {{valor}}." },
+            "emptyText": { "type": "string", "description": "Resposta quando ninguém pontuou ainda. Sem este texto a execução vira erro no histórico." }
+          }
+        }
+      }
+    },
+    "actionWhatsappPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.pin" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": { "enum": ["pin", "unpin"], "description": "Fixar a mensagem respondida, ou soltá-la." },
+            "durationSecs": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Por quanto tempo o fixo dura, em segundos. O WhatsApp oferece 86400 (24h), 604800 (7 dias) e 2592000 (30 dias); sem isto o aparelho que recebe DESCARTA o fixo em silêncio, então o padrão é 24h."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando o comando veio sem responder mensagem nenhuma — não há o que fixar. Sem este texto a execução vira erro no histórico."
+            }
+          }
+        }
+      }
+    },
+    "actionWhatsappPoll": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.whatsapp.poll" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["question", "options"],
+          "properties": {
+            "question": { "type": "string", "minLength": 1, "description": "A pergunta da enquete." },
+            "options": {
+              "type": "string",
+              "minLength": 1,
+              "description": "As opções separadas por ponto e vírgula. É TEXTO e não lista porque a linguagem não tem coleção: quem divide é o motor, num lugar só."
+            },
+            "selectableCount": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Quantas opções cada pessoa pode marcar. 1 é voto único."
+            }
+          }
+        }
+      }
+    },
+    "actionAcervoRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.acervo.read" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Caminho lógico do item no acervo (pasta/nome), ou só o nome quando ele é único."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando não há item nesse caminho. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            }
+          }
+        }
+      }
+    },
+    "actionGroupMembers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.group.members" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "enum": ["mention", "list", "pick"],
+              "description": "mention marca todo mundo sem escrever os números; list escreve a lista visível; pick sorteia UM membro. O sorteio acontece no gateway, onde a lista existe — a linguagem não escolhe item de coleção."
+            },
+            "text": {
+              "type": "string",
+              "description": "A mensagem que acompanha. Em pick, é onde {{sorteado}} aparece."
+            },
+            "onlyAdmins": {
+              "type": "boolean",
+              "description": "Restringe a só os administradores do grupo."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando não há membro nenhum a alcançar — grupo só com o bot, ou lista de administradores vazia. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
             }
           }
         }
@@ -1325,7 +1489,9 @@
                 "lt",
                 "lte",
                 "contains",
-                "not_contains"
+                "not_contains",
+                "starts_with",
+                "not_starts_with"
               ]
             },
             "right": {

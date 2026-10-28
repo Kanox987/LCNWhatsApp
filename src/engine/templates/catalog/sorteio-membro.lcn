@@ -1,0 +1,47 @@
+template sorteio-membro v1
+  nome: Sortear um membro
+  descrição: Escolhe uma pessoa do grupo ao acaso e anuncia marcando ela. Serve para sorteio de brinde, para decidir quem fala primeiro, para escolher quem paga a conta. Sem repetir nome e sem ninguém poder discutir o critério.
+  categoria: modulos-especializados
+
+automação
+  nome: Sortear um membro
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Sorteia uma pessoa do grupo
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  fala com os membros
+    modo: sorteando um
+    texto: "{{params.anuncio}}"
+    só os administradores: não
+    sem membros: "{{params.semMembrosText}}"
+
+configurável
+  command: texto = "/sorteio"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita para sortear alguém do grupo.
+  anuncio: texto = "🎉 O sorteado foi {{sorteado}}!"
+    rótulo: Como anunciar
+    ajuda: O texto do anúncio. Escreva {{sorteado}} onde o nome da pessoa escolhida deve aparecer — ela é marcada de verdade e recebe a notificação.
+  semMembrosText: texto = "Não há ninguém para sortear aqui além de mim."
+    rótulo: Quando não há ninguém
+    ajuda: Resposta para grupo só com o bot, ou para "só administradores" num grupo sem outro admin.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  O sorteio acontece no momento do envio, com a lista de quem está no grupo NAQUELE instante, e o próprio bot nunca é sorteado. Não há semente escrita em lugar nenhum: dois comandos seguidos podem cair na mesma pessoa, como em qualquer sorteio honesto.
+
+avisa nota
+  Para sortear SÓ entre administradores, troque `só os administradores: não` por `sim` em Programar. Campo booleano não aceita parâmetro de instalação: ele é escrito no fluxo.

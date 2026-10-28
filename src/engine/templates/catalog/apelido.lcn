@@ -1,0 +1,54 @@
+template apelido v1
+  nome: Apelido
+  descrição: Permite que a pessoa defina como quer ser chamada pelas automações. Enviado sozinho, exibe o apelido atualmente cadastrado.
+  categoria: utilitarios
+
+automação
+  nome: Apelido
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Define ou consulta seu apelido
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento message.args == ""
+    se var sender apelido contém ""
+      responde "{{params.mostrarText}}"
+    senão
+      responde "{{params.semApelidoText}}"
+  senão
+    define sender apelido = "{{message.args}}"
+    responde "{{params.definidoText}}"
+
+configurável
+  command: texto = "/apelido"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita. Digitando sozinha, exibe o apelido atual. Seguida de texto, define o novo apelido.
+  definidoText: texto = "Apelido atualizado para: {{var.sender.apelido}}"
+    rótulo: Confirmação de gravação
+    ajuda: Mensagem enviada após definir com sucesso o novo apelido.
+  mostrarText: texto = "Seu apelido atual é: {{var.sender.apelido}}"
+    rótulo: Apelido atual
+    ajuda: Mensagem enviada quando a pessoa digita apenas o comando e já possui um apelido gravado.
+  semApelidoText: texto = "Você ainda não definiu um apelido. Digite /apelido seguido do seu apelido."
+    rótulo: Sem apelido
+    ajuda: Mensagem enviada quando a pessoa digita apenas o comando mas ainda não cadastrou nenhum apelido.
+  familia: texto = "usuarios"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+declara
+  sender apelido: texto
+    Nome preferido ou apelido gravado para o remetente.
+
+avisa nota
+  O apelido é gravado no escopo do remetente (sender), ficando acessível para outras automações através de {{var.sender.apelido}}.

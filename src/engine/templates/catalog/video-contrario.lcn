@@ -1,0 +1,59 @@
+template video-contrario v1
+  nome: Vídeo ao Contrário
+  descrição: Reverte a ordem de reprodução de um vídeo para tocar de trás para frente, invertendo também a trilha sonora. Perfeito para vídeos cômicos, mágicas e efeitos visuais reversos. Processado pelo serviço externo de efeitos.
+  categoria: utilitarios
+
+automação
+  nome: Vídeo ao Contrário
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Inverte o vídeo para tocar de trás para frente
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto, vídeo
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  precisa de uma mídia: na mensagem ou na citada
+  sem ela: "{{params.semMidiaText}}"
+
+  chama {{params.conexao}}.reverter_video
+    com
+      arquivo: a mídia
+      reverter_audio: {{params.reverterAudio}}
+    avisa: "{{params.ackText}}"
+    erro: "{{params.errorText}}"
+
+configurável
+  command: texto = "/reverso"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita na legenda de um vídeo ou ao responder a um vídeo existente.
+  conexao: texto = "efeitos"
+    rótulo: Serviço de efeitos
+    ajuda: Identificador da conexão externa na aba Conexões onde as funções de efeitos de mídia estão configuradas.
+  reverterAudio: opção (sim, nao) = "sim"
+    rótulo: Reverter trilha sonora
+    ajuda: sim inverte o fluxo do áudio sincronizado com os quadros reversos. nao silencia ou preserva a orientação original.
+  semMidiaText: texto = "Envie um vídeo com este comando na legenda ou responda a um vídeo com ele."
+    rótulo: Aviso quando não vier mídia
+    ajuda: Resposta enviada se o comando for executado sem nenhum vídeo enviado ou citado.
+  ackText: texto = "🔄 Invertendo o vídeo de trás para frente…"
+    rótulo: Aviso ao começar
+    ajuda: Mensagem temporária informando que a reversão do vídeo foi iniciada.
+  errorText: texto = "Não consegui inverter o vídeo: {{erro}}"
+    rótulo: Se falhar
+    ajuda: Mensagem exibida caso o serviço de efeitos falhe ao processar o vídeo reverso.
+  familia: texto = "efeitos"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Exige a conexão de efeitos configurada na aba Conexões. O serviço externo precisa expor a função reverter_video recebendo { arquivo, reverter_audio } e devolvendo o arquivo de vídeo resultante.
+
+avisa nota
+  Reverter vídeo exige renderização completa de todos os quadros de trás para frente. Vídeos maiores podem demorar alguns segundos a mais.

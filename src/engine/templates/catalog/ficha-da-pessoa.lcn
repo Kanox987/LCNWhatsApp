@@ -1,0 +1,49 @@
+template ficha-da-pessoa v1
+  nome: Ficha da pessoa
+  descrição: Consulta as anotações salvas no perfil de uma pessoa marcada com @ ou respondida. Se nenhuma anotação foi gravada, responde informando que o perfil não possui anotações.
+  categoria: utilitarios
+
+automação
+  nome: Ficha da pessoa
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra anotações da pessoa marcada
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  se evento target.id contém "@"
+    se var target {{params.chave}} contém ""
+      responde "📋 *Ficha de @{{target.number}}*\n\n{{params.chave}}: {{var.target.{{params.chave}}}}"
+    senão
+      responde "{{params.semAnotacaoText}}"
+  senão
+    responde "{{params.semAlvoText}}"
+
+configurável
+  command: texto = "/ficha"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita marcando alguém com @ ou respondendo uma mensagem.
+  chave: texto = "nota"
+    rótulo: Chave da anotação
+    ajuda: Nome do atributo a ser consultado no perfil da pessoa (deve ser a mesma chave usada ao anotar).
+  semAlvoText: texto = "Você precisa marcar alguém com @ ou responder a uma mensagem para ver a ficha."
+    rótulo: Sem pessoa marcada
+    ajuda: Resposta enviada quando o comando for usado sem marcar nem citar ninguém.
+  semAnotacaoText: texto = "Nenhuma anotação encontrada para @{{target.number}} com a chave '{{params.chave}}'."
+    rótulo: Sem anotação
+    ajuda: Resposta enviada quando a pessoa marcada ainda não possui valor registrado nessa chave.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  `contém ""` é o jeito de perguntar "isso existe?" nesta linguagem. Todo texto contém o vazio, então a condição é verdadeira para qualquer valor gravado e FALSA quando nada foi gravado — que é o caso que precisa cair no aviso. Comparar com `== ""` não serve: ausente comparado com vazio devolve falso (evaluator.js:576) e o comando mostraria uma ficha com buraco no meio.

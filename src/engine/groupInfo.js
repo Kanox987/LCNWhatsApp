@@ -81,8 +81,30 @@ function resumir (metadados) {
     }
   }
 
+  // A LISTA DE MEMBROS, guardada e não descartada.
+  //
+  // Até 27/10 este resumo mantinha só o conjunto de admins e jogava os
+  // participantes fora. O efeito era que NADA no sistema conseguia enumerar o
+  // grupo: marcar todos, listar e sortear um membro eram impossíveis, porque o
+  // evento de mensagem não traz participantes e aqui a lista morria.
+  //
+  // Guardamos UMA forma endereçável por pessoa (a que o WhatsApp aceita em
+  // menção), não as três: as três servem para RECONHECER quem chegou, e para
+  // isso o conjunto de admins já existe. Para FALAR com alguém basta uma.
+  const membros = []
+  const vistos = new Set()
+  for (const p of participantes) {
+    const id = p?.jid || p?.phoneNumber || p?.lid
+    if (typeof id !== 'string' || !id) continue
+    const chave = normalizar(id)
+    if (!chave || vistos.has(chave)) continue
+    vistos.add(chave)
+    membros.push({ id, isAdmin: p?.isAdmin === true })
+  }
+
   return {
     name: typeof metadados?.subject === 'string' && metadados.subject ? metadados.subject : null,
+    membros,
     size: Number.isInteger(metadados?.size) ? metadados.size : participantes.length || null,
     // `announce` significa "só admin escreve". Vale expor porque muda o que
     // um comando consegue fazer no grupo.

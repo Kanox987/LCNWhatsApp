@@ -1,0 +1,36 @@
+template bom-dia v1
+  nome: Bom dia
+  descrição: Vigia a conversa em tempo real e responde cordialmente sempre que alguém envia uma mensagem contendo uma saudação de bom dia.
+  categoria: utilitarios
+
+automação
+  nome: Bom dia
+  tipo: vigia
+  dispara com: qualquer mensagem
+  pool: {{params.poolId}}
+  acessa: texto
+  quando for: texto
+  quem: {{params.allowFrom}}
+
+  se evento message.text contém "{{params.saudacao}}"
+    responde "{{params.respostaText}}"
+
+configurável
+  saudacao: texto = "bom dia"
+    rótulo: Saudação a observar
+    ajuda: A palavra ou termo observado nas mensagens. Sempre que alguém enviar esse texto, o bot responderá.
+  respostaText: texto = "Bom dia, {{sender.name}}! Tenha um ótimo dia!"
+    rótulo: Mensagem de resposta
+    ajuda: A resposta enviada pelo bot. Use {{sender.name}} para citar o nome da pessoa que enviou a saudação.
+  familia: texto = "social"
+    rótulo: Família
+    ajuda: A que grupo esta regra pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot responder apenas a outras pessoas. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder nesta conversa. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa nota
+  Por ser um vigia, esta automação observa todas as mensagens de texto que chegam e não exige comando com barra.

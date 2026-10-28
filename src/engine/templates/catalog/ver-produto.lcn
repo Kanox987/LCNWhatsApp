@@ -1,0 +1,49 @@
+template ver-produto v1
+  nome: Ver produto
+  descrição: Mostra o nome, a descrição e o preço de um produto digital guardado no acervo, sem entregar o arquivo. É a vitrine: a pessoa digita o comando, vê o que é e quanto custa, e só então decide. Primeiro comando do catálogo a LER o acervo em vez de escrever nele.
+  categoria: utilitarios
+
+automação
+  nome: Ver produto
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra o que é e quanto custa um produto
+  família: {{params.familia}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+
+  lê do acervo
+    arquivo: "{{params.pasta}}/{{message.args}}"
+    sem arquivo: "{{params.semProdutoText}}"
+  responde "{{params.vitrine}}"
+
+configurável
+  command: texto = "/produto"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita, seguida do nome do produto — por exemplo "/produto curso-python".
+  pasta: texto = "produtos"
+    rótulo: Pasta do acervo
+    ajuda: A pasta onde os produtos ficam guardados. O comando procura só dentro dela, para que uma pessoa não consiga espiar um arquivo que não está à venda escrevendo o nome dele.
+  vitrine: texto = "🛒 *{{resultado.dados.nome}}*\n\n{{resultado.dados.descricao}}\n\n_Arquivo {{resultado.dados.tipo}}, {{resultado.dados.bytes}} bytes._"
+    rótulo: Como mostrar o produto
+    ajuda: O texto da vitrine. Os dados do item são {{resultado.dados.nome}}, {{resultado.dados.descricao}}, {{resultado.dados.pasta}}, {{resultado.dados.tipo}} e {{resultado.dados.bytes}}. Ponha o preço dentro da DESCRIÇÃO do arquivo, na aba Acervo — assim você muda o preço sem mexer no comando.
+  semProdutoText: texto = "Não encontrei esse produto. Confira o nome e tente de novo."
+    rótulo: Quando o produto não existe
+    ajuda: Resposta para nome errado, ou para produto tirado do ar depois de o comando ser publicado. Sem este texto a execução vira erro no histórico e ninguém recebe nada.
+  familia: texto = "utils"
+    rótulo: Família
+    ajuda: A que grupo este comando pertence. Serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, na aba Dados.
+  allowFrom: opção (external, any) = "external"
+    rótulo: Quem pode acionar
+    ajuda: external faz o bot ignorar o próprio número. any responde também às suas próprias mensagens.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+
+avisa exige
+  Os produtos precisam estar guardados no acervo, dentro da pasta configurada. O NOME do arquivo é o que a pessoa digita; a DESCRIÇÃO é o texto que aparece na vitrine — é lá que vai o preço, para você poder mudá-lo sem tocar no comando.
+
+avisa nota
+  Este comando NÃO entrega o arquivo: ele só mostra. Entregar depois da compra é outro passo, e é de propósito que sejam separados — a vitrine pode ser aberta a todos enquanto a entrega não é.

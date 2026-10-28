@@ -15,6 +15,14 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.variable.set',
   'action.variable.increment',
   'action.variable.calculate',
+  // RANKING: a única ação que lê MUITOS registros em vez de um.
+  //
+  // Até aqui só existia contador por pessoa: dava para somar, não para
+  // ordenar. As três cabeças do painel convergiram em que esta era a maior
+  // alavanca do que restava, e em que a ordenação pertence a QUEM TEM O
+  // BANCO — não à linguagem. A linguagem continua sem coleção e sem índice:
+  // ela pede o ranking pronto, como pede o sorteio de um membro.
+  'action.variable.rank',
   'action.whatsapp.recover',
   'action.menu.render',
   'action.menu.config',
@@ -24,6 +32,14 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // uma pessoa também, e por isso NÃO tem a trava de só-grupo que as ações de
   // administração têm.
   'action.whatsapp.react',
+  // FIXAR e ENQUETE, as duas últimas que o bot antigo tinha e este não.
+  //
+  // Eu já afirmei no plano que elas "só dependiam de autorização" porque li
+  // `WaSendPinMessage` e `WaSendPollMessage` na biblioteca. Estava errado, e a
+  // revisão pegou: a biblioteca saber ENVIAR não é a linguagem saber PEDIR.
+  // Cada uma custou as mesmas nove camadas de qualquer ação nova.
+  'action.whatsapp.pin',
+  'action.whatsapp.poll',
   'action.whatsapp.profilePicture',
   'action.group.remove',
   // Administração do grupo. Nascem acompanhadas do executor no gateway, não
@@ -37,6 +53,19 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.group.setDescription',
   'action.group.setAnnounce',
   'action.group.inviteCode',
+  // ENUMERAR OS MEMBROS, e é a única ação que faz isso.
+  //
+  // Um comando é evento de MENSAGEM, e evento de mensagem não traz
+  // `group.participants` — só o evento de grupo traz (zapoAdapter.js:504).
+  // Então nenhum template conseguia marcar todo mundo, listar o grupo ou
+  // sortear um membro: faltava quem enumerasse.
+  //
+  // A enumeração acontece no GATEWAY, onde a lista existe de verdade
+  // (groupInfo.js já busca os metadados e hoje descarta os participantes,
+  // guardando só os admins). A linguagem não ganha coleção nem índice — ela
+  // pede um TRABALHO pronto e recebe uma mensagem. É o que permite as três
+  // modalidades sem nenhuma primitiva nova no motor.
+  'action.group.members',
   'action.whatsapp.rich',
   'action.whatsapp.sendFile',
   'action.media.download',
@@ -55,6 +84,16 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.acervo.delete',
   'action.acervo.createText',
   'action.acervo.rewrite',
+  // LER o acervo, e é a única das cinco que não escreve.
+  //
+  // As outras quatro gravam, apagam e sobrescrevem; nenhuma devolvia dado. Sem
+  // isso, nenhum comando conseguia mostrar o NOME, o PREÇO ou a DESCRIÇÃO de
+  // um item guardado — que é o que uma vitrine é. Três revisões independentes
+  // apontaram esta como a peça que faltava.
+  //
+  // Ela devolve METADADO, nunca bytes nem caminho em disco: o que vai para o
+  // motor é informação, e arquivo continua saindo só pelo gateway.
+  'action.acervo.read',
   // Mostrar os metadados da mensagem. Ele não tem executor próprio no gateway:
   // o motor o transforma numa resposta de texto comum, pelo mesmo caminho de
   // `whatsapp.reply`. Entra nesta lista mesmo assim, porque é esta lista que
@@ -82,7 +121,7 @@ export const ESCOPOS_DE_VARIAVEL = Object.freeze([
 ])
 
 export const OPERADORES_DE_COMPARACAO = Object.freeze([
-  'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'not_contains'
+  'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'not_contains', 'starts_with', 'not_starts_with'
 ])
 
 export function obterCapacidadesRuntime () {

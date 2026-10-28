@@ -18,6 +18,7 @@ automação
       quem: quem foi marcado
       nunca o dono: true
       sem alvo: "{{params.semAlvoText}}"
+      dono protegido: "{{params.donoText}}"
   senão
     responde "{{params.negadoText}}"
 
@@ -28,6 +29,9 @@ configurável
   semAlvoText: texto = "Marque a pessoa com @ ou responda uma mensagem dela — sem isso eu não sei quem remover."
     rótulo: Aviso quando ninguém foi marcado
     ajuda: Sem este texto o comando não responde nada quando usado sozinho, e a falta só aparece na aba Execuções.
+  donoText: texto = "Essa pessoa é dona do bot — a proteção de dono não deixa remover."
+    rótulo: Aviso quando o alvo é um dono
+    ajuda: A trava de dono age em SILÊNCIO sem este texto — o comando casa, não envia nada, e quem digitou acha que o bot parou.
   negadoText: texto = "Só administradores do grupo podem usar este comando."
     rótulo: Resposta para quem não é administrador
     ajuda: Enviado quando quem digitou não é administrador do grupo — e também quando o bot ainda não conseguiu carregar a lista de administradores daquele grupo.
