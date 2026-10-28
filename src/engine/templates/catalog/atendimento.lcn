@@ -14,7 +14,7 @@ automação
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
 
-  define chat atendimento_humano = "sim"
+  define chat atendimento_humano = "{{now.iso}}"
   responde "{{params.confirmaText}}"
 
 configurável
@@ -39,3 +39,6 @@ avisa exige
 
 avisa nota
   O silêncio vale por CONVERSA, não pelo bot inteiro: as outras conversas seguem normais. A marca é um atributo comum, `atendimento_humano`, visível e apagável na aba Dados — não há estado escondido em lugar nenhum.
+
+avisa nota
+  O atendimento EXPIRA SOZINHO depois de 12 horas. Não é detalhe: uma revisão do catálogo elegeu este par de comandos o maior gerador de suporte, com um caso concreto — o atendente resolve a dúvida, fecha o WhatsApp e esquece de devolver; horas depois o dono acha que o bot caiu e abre chamado urgente, com o sistema perfeito e silenciado de propósito. O prazo faz isso se resolver sozinho. Para outro prazo, grave `atendimento_horas` na conversa pela aba Dados.

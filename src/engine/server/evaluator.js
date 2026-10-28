@@ -123,9 +123,47 @@ function politicaDeEntrada (documento) {
 // comando nenhum apaga a chave na aba Dados, e o bot volta a responder.
 export const CHAVE_ATENDIMENTO = 'atendimento_humano'
 
+// Quantas horas um atendimento humano dura sem ninguém devolver a conversa.
+//
+// A REVISÃO DO CATÁLOGO ELEGEU ESTE O MAIOR GERADOR DE SUPORTE, e por um
+// motivo concreto: o atendente digita /atendimento, resolve a dúvida, fecha o
+// WhatsApp e ESQUECE de devolver. Horas depois o dono acha que o bot caiu,
+// abre chamado urgente — e o sistema está perfeito, só silenciado de
+// propósito por esquecimento de gente.
+//
+// O prazo faz isso se resolver sozinho. Doze horas é mais que um turno e
+// menos que um dia: quem está atendendo de verdade não é interrompido, e quem
+// esqueceu não descobre no dia seguinte.
+const HORAS_DE_ATENDIMENTO_PADRAO = 12
+export const CHAVE_PRAZO_ATENDIMENTO = 'atendimento_horas'
+
 function emAtendimentoHumano (db, evento, trigger) {
   if (trigger?.config?.requireOwner === true) return false
-  return conversaMarcada(db, evento?.chat, CHAVE_ATENDIMENTO)
+  if (!conversaMarcada(db, evento?.chat, CHAVE_ATENDIMENTO)) return false
+
+  // Desde quando. A marca guarda o momento em que o atendimento começou; uma
+  // marca antiga, escrita antes deste prazo existir, vale como "sem hora" e
+  // continua valendo para sempre — mudar o sentido de dado já gravado seria
+  // devolver conversas que alguém silenciou de propósito.
+  const inicio = valorDaMarca(db, evento?.chat, CHAVE_ATENDIMENTO)
+  const comecouEmMs = typeof inicio === 'string' ? Date.parse(inicio) : NaN
+  if (!Number.isFinite(comecouEmMs)) return true
+
+  // Teto no código, não: quem quiser outro prazo grava `atendimento_horas` na
+  // conversa, pela aba Dados ou por um comando.
+  const horas = Number(valorDaMarca(db, evento?.chat, CHAVE_PRAZO_ATENDIMENTO))
+  const limite = Number.isFinite(horas) && horas > 0 ? horas : HORAS_DE_ATENDIMENTO_PADRAO
+  return (Date.now() - comecouEmMs) < limite * 3600 * 1000
+}
+
+// O valor cru de uma marca da conversa, sem o julgamento de "está ligada".
+function valorDaMarca (db, chat, chave) {
+  if (!db || !chave || !chat) return null
+  const linha = db.prepare(
+    'SELECT value_json FROM entity_attributes WHERE scope_kind = ? AND scope_id = ? AND key = ?'
+  ).get(kindDoEscopo(chat), chat.id, chave)
+  if (!linha) return null
+  try { return JSON.parse(linha.value_json) } catch { return null }
 }
 
 function grupoBloqueado (db, evento, trigger) {

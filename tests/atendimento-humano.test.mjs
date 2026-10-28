@@ -10,7 +10,7 @@
 // Estes casos fixam as três coisas que importam — que cala tudo, que o dono
 // ainda passa, e que o silêncio é só daquela conversa.
 import { abrirBanco } from '../src/engine/server/db.js'
-import { avaliarEvento, CHAVE_ATENDIMENTO } from '../src/engine/server/evaluator.js'
+import { avaliarEvento, CHAVE_ATENDIMENTO, CHAVE_PRAZO_ATENDIMENTO } from '../src/engine/server/evaluator.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -97,6 +97,36 @@ check('outra conversa segue respondendo normalmente', casou(rodar(evento('/carda
 // nada — e isso é exatamente o tipo de falha que não aparece em teste nenhum.
 marcar(CLIENTE, '')
 check('gravar vazio devolve a conversa ao bot', casou(rodar(evento('/cardapio', CLIENTE)), 'cardapio'))
+
+// =========================================================================
+// 6. O ATENDIMENTO EXPIRA SOZINHO — o maior gerador de suporte, consertado
+// =========================================================================
+// Duas revisões independentes elegeram este par o campeão de chamado, com o
+// mesmo caso: o atendente resolve a dúvida, fecha o WhatsApp e ESQUECE de
+// devolver. Horas depois o dono acha que o bot caiu e abre chamado urgente —
+// com o sistema perfeito, só silenciado de propósito por esquecimento humano.
+{
+  const horasAtras = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString()
+
+  marcar(CLIENTE, horasAtras(1))
+  check('atendimento de uma hora atrás ainda cala o bot', !casou(rodar(evento('/cardapio', CLIENTE)), 'cardapio'))
+
+  marcar(CLIENTE, horasAtras(13))
+  check('depois de 12 horas o bot volta sozinho', casou(rodar(evento('/cardapio', CLIENTE)), 'cardapio'))
+
+  // Padrão sensato, teto nenhum: quem quiser outro prazo grava na conversa.
+  db.prepare('INSERT OR REPLACE INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?,?,?,?,?)')
+    .run('contact', CLIENTE, CHAVE_PRAZO_ATENDIMENTO, '48', agora)
+  check('com prazo de 48h, treze horas ainda é atendimento', !casou(rodar(evento('/cardapio', CLIENTE)), 'cardapio'))
+  db.prepare('DELETE FROM entity_attributes WHERE scope_id = ? AND key = ?').run(CLIENTE, CHAVE_PRAZO_ATENDIMENTO)
+
+  // Marca antiga, escrita antes de o prazo existir, não tem hora nenhuma.
+  // Mudar o sentido de dado já gravado devolveria conversas que alguém
+  // silenciou de propósito — então "sem hora" continua valendo para sempre.
+  marcar(CLIENTE, 'sim')
+  check('marca antiga sem hora continua valendo', !casou(rodar(evento('/cardapio', CLIENTE)), 'cardapio'))
+  marcar(CLIENTE, '')
+}
 
 db.close()
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE ATENDIMENTO HUMANO PASSARAM')

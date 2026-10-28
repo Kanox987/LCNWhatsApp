@@ -60,10 +60,20 @@ export function valoresDeAgora (agoraMs = Date.now(), { timeZone } = {}) {
     year: p.year,
     hour: p.hour,
     minute: p.minute,
-    greeting: saudacaoPara(Number(p.hour))
+    greeting: saudacaoPara(Number(p.hour)),
+    // O momento em forma de MÁQUINA, para ser comparado e não lido.
+    //
+    // Os outros campos são para a pessoa ver — "27/10", "14:35". Este é para
+    // guardar numa variável e o motor saber depois quanto tempo passou. O
+    // primeiro uso foi o atendimento humano, que precisa expirar sozinho
+    // quando o atendente esquece de devolver a conversa.
+    //
+    // É sempre UTC, de propósito: fuso vira comparação errada quando o
+    // servidor e a pessoa estão em lugares diferentes.
+    iso: new Date(agoraMs).toISOString()
   }
 }
 
 export const CAMPOS_DE_AGORA = Object.freeze([
-  'date', 'time', 'weekday', 'day', 'month', 'year', 'hour', 'minute', 'greeting'
+  'date', 'time', 'weekday', 'day', 'month', 'year', 'hour', 'minute', 'greeting', 'iso'
 ])

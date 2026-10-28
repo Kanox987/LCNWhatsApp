@@ -19,9 +19,9 @@ automação
   responde "{{params.confirmaText}}"
 
 configurável
-  command: texto = "/voltar"
+  command: texto = "/retomar"
     rótulo: Comando
-    ajuda: A palavra que encerra o atendimento. Só quem é dono do bot consegue usar — e tem de ser assim, porque durante o atendimento humano este é o ÚNICO comando que o motor ainda escuta.
+    ajuda: A palavra que encerra o atendimento. NÃO é "/voltar": o catálogo já tem "/voltei", que desfaz o status de ausência, e os dois nomes a uma letra de distância mexendo em estados diferentes foi apontado numa revisão como receita para chamado de suporte. Só quem é dono do bot consegue usar — e tem de ser assim, porque durante o atendimento humano este é o ÚNICO comando que o motor ainda escuta.
   confirmaText: texto = "🤖 Atendimento encerrado. Voltei a responder nesta conversa."
     rótulo: Confirmação
     ajuda: O que é enviado ao devolver a conversa. Vale avisar, senão ninguém sabe que o bot voltou.
@@ -37,3 +37,6 @@ avisa exige
 
 avisa nota
   Apagar a marca é o mesmo que escrever vazio: o portão trata vazio como "não marcado". Por isso o comando grava "" em vez de precisar de uma ação de apagar que não existe.
+
+avisa nota
+  O nome deste comando foi TROCADO depois de pronto. Ele nascia como "/voltar" e o catálogo já tinha "/voltei" (que desfaz o status de ausência). Uma revisão do catálogo inteiro apontou o par: nomes quase iguais mexendo em coisas diferentes, um deles restrito ao dono e o outro não. Quem digitasse errado não entenderia o resultado.
