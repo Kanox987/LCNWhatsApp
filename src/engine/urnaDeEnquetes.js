@@ -31,6 +31,24 @@
 // que outra pessoa criou chega e é descartado — e é melhor descartar do que
 // mostrar hash para alguém.
 import crypto from 'crypto'
+import * as lidMap from '../lidMap.js'
+
+// QUEM VOTOU, numa forma só.
+//
+// A mesma pessoa chega às vezes como @lid e às vezes como telefone — a
+// própria biblioteca tipa o jid do participante como "LID or PN". Sem
+// normalizar, alguém que vota como LID e TROCA o voto chegando como telefone
+// vira duas pessoas: o voto antigo nunca é substituído e o total passa do
+// tamanho do grupo. O risco foi levantado numa revisão e o mapa que resolve já
+// existia no projeto, usado pelo porteiro pela mesma razão.
+function normalizarEleitor (jid) {
+  if (typeof jid !== 'string' || !jid) return null
+  try {
+    const telefone = lidMap.paraTelefone(jid)
+    if (typeof telefone === 'string' && telefone) return telefone
+  } catch {}
+  return jid
+}
 
 function hashDaOpcao (nome) {
   return crypto.createHash('sha256').update(String(nome), 'utf8').digest('hex')
@@ -97,7 +115,8 @@ function liberarVaga () {
 
 export function registrarVoto ({ pollId, chatId, quem, opcoes, emMs = Date.now() }) {
   if (typeof pollId !== 'string' || !pollId) return false
-  if (typeof quem !== 'string' || !quem) return false
+  const eleitor = normalizarEleitor(quem)
+  if (!eleitor) return false
   if (!Array.isArray(opcoes)) return false
 
   let enquete = urna.get(pollId)
@@ -108,7 +127,7 @@ export function registrarVoto ({ pollId, chatId, quem, opcoes, emMs = Date.now()
   }
   // Substitui, não soma: trocar de voto manda outro pacote, e somar contaria a
   // mesma pessoa duas vezes.
-  enquete.votos.set(quem, opcoes.filter((o) => typeof o === 'string' && o))
+  enquete.votos.set(eleitor, opcoes.filter((o) => typeof o === 'string' && o))
   enquete.ultimoEmMs = emMs
   return true
 }

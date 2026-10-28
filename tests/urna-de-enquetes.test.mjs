@@ -12,6 +12,7 @@ import crypto from 'crypto'
 import {
   registrarEnquete, registrarVotoPorHash, apurar, ultimaDaConversa, limparTudo, quantasGuardadas
 } from '../src/engine/urnaDeEnquetes.js'
+import * as lidMap from '../src/lidMap.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -91,6 +92,28 @@ for (let i = 0; i < 260; i++) {
 }
 check('a urna tem teto', quantasGuardadas() <= 200, String(quantasGuardadas()))
 check('e o que sai é o mais antigo', apurar('X0') === null && apurar('X259') !== null)
+
+// =========================================================================
+// 8. A MESMA PESSOA POR DUAS FORMAS CONTA UMA VEZ
+// =========================================================================
+// Levantado numa revisão externa: "se o gateway não recebe identificação
+// suficiente para associar atualizações ao mesmo eleitor, a contagem de
+// alterações de voto não está garantida". É risco de verdade — a biblioteca
+// tipa o jid do participante como "LID or PN", e a mesma pessoa chega das
+// duas formas. Sem normalizar, quem vota como LID e troca o voto chegando
+// como telefone vira DOIS eleitores, o voto antigo nunca é substituído, e o
+// total passa do tamanho do grupo.
+limparTudo()
+lidMap.registrarPar('999888777@lid', '5511900000444@s.whatsapp.net')
+registrarEnquete({ pollId: 'P9', chatId: GRUPO, opcoes: ['Sim', 'Não'] })
+registrarVotoPorHash({ pollId: 'P9', quem: '999888777@lid', hashes: [hash('Sim')] })
+registrarVotoPorHash({ pollId: 'P9', quem: '5511900000444@s.whatsapp.net', hashes: [hash('Não')] })
+{
+  const r = apurar('P9')
+  check('LID e telefone da mesma pessoa são UM eleitor', r.votantes === 1, String(r.votantes))
+  check('e a troca de voto substitui, como deve',
+    JSON.stringify(r.opcoes) === JSON.stringify([{ opcao: 'Não', votos: 1 }]), JSON.stringify(r.opcoes))
+}
 
 limparTudo()
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA URNA DE ENQUETES PASSARAM')
