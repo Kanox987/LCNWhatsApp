@@ -205,6 +205,16 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
         eventoCanonico = construirEventoDeIndisponivel(event, opcoes)
       } else {
         registrarContatoConhecido(event)
+        // ENQUETE CRIADA POR QUALQUER PESSOA, não só pelo bot.
+        //
+        // A criação passa por aqui com os nomes das opções EM CLARO — só o
+        // voto é que vem como hash. Anotar o mapa agora é o que permite
+        // contar enquete que um membro abriu, e não apenas as do próprio bot.
+        //
+        // Foi a terceira saída, que nenhuma das duas primeiras revisões viu:
+        // uma propunha um banco novo no gateway, a outra limitava a contagem
+        // às enquetes do bot. Esta não precisa de nenhum dos dois.
+        anotarEnqueteCriada(event)
         eventoCanonico = construirEventoDeMensagem(event, opcoes)
         if (eventoCanonico?.message?.kind === 'unknown') emitirDesconhecidoDebug(event, cfg, registrar)
       }
@@ -250,6 +260,31 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
 // como variável livre não é "pegar a versão atual" — é ReferenceError, e foi
 // exatamente o que quebrou TODAS as automações que produzem comando: o motor
 // casava, gravava o comando, e o gateway estourava antes de executar.
+// Anota na urna uma enquete que acabou de nascer na conversa.
+//
+// Os nomes das opções só existem em claro AQUI, na criação. O voto que chegar
+// depois traz o SHA-256 de um deles, e sem este mapa não haveria como dizer em
+// que opção alguém votou — apenas um hash, que não serve para ninguém.
+function anotarEnqueteCriada (event) {
+  try {
+    const bruto = event?.message
+    const criacao = bruto?.pollCreationMessage || bruto?.pollCreationMessageV2 ||
+      bruto?.pollCreationMessageV3 || bruto?.pollCreationMessageV5
+    if (!criacao) return
+    const opcoes = (criacao.options || [])
+      .map((o) => (typeof o === 'string' ? o : o?.optionName))
+      .filter((n) => typeof n === 'string' && n)
+    if (opcoes.length < 2) return
+    const pollId = event?.key?.id
+    const chatId = event?.key?.remoteJid
+    if (!pollId) return
+    urnaDeEnquetes.registrarEnquete({ pollId, chatId, opcoes })
+  } catch {
+    // Enquete não anotada significa resultado indisponível para ela, e só.
+    // Nunca pode atrapalhar a entrega da mensagem em si.
+  }
+}
+
 export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log) {
   // Esboço não vai ao motor.
   //

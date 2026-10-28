@@ -138,7 +138,15 @@ function entrada ({ hardware = {}, encaminhar, invalidarGrupo, clienteEngine = {
   }
   await volta()
   check('motor lento limita 10 mil entradas a três chamadas e sete eventos esperando', chamadas === 3 && admissao.estado.emCurso === 3 && admissao.estado.esperando === 7 && admissao.estado.recusas === 9990)
-  check('recusadas e pendentes ainda não tiveram conteúdo canônico construído', leuConteudo === 3)
+  // DUAS leituras por evento ADMITIDO, e nenhuma pelos outros 9.997.
+  //
+  // O que esta linha guarda é que recusado e pendente não são tocados — e são
+  // 9.997 contra 6. As duas leituras do admitido são deliberadas: a primeira
+  // procura uma enquete recém-criada (é só na criação que os nomes das opções
+  // passam em claro), a segunda monta o evento canônico. Se este número subir
+  // de novo, alguém pôs trabalho no caminho de entrada; se ele passar a
+  // crescer com o total de eventos, a admissão deixou de proteger.
+  check('recusadas e pendentes ainda não tiveram conteúdo canônico construído', leuConteudo === 6, String(leuConteudo))
   const drenagem = admissao.encerrar()
   let drenou = false
   drenagem.then(() => { drenou = true })
@@ -148,7 +156,7 @@ function entrada ({ hardware = {}, encaminhar, invalidarGrupo, clienteEngine = {
   check('encerrar é idempotente', admissao.encerrar() === drenagem)
   bloqueio.abrir()
   await drenagem
-  check('drenagem termina todas as dez cadeias e limpa vagas, espera e mapa', chamadas === 10 && leuConteudo === 10 && admissao.estado.emCurso === 0 && admissao.estado.esperando === 0 && admissao.estado.chavesAtivas === 0)
+  check('drenagem termina todas as dez cadeias e limpa vagas, espera e mapa', chamadas === 10 && leuConteudo === 20 && admissao.estado.emCurso === 0 && admissao.estado.esperando === 0 && admissao.estado.chavesAtivas === 0)
   check('a última rajada publica resumos com quantidade, fila e janela', logs.reduce((soma, l) => soma + Number(l.texto.match(/recusados=(\d+)/)?.[1]), 0) === 9991 && logs.every((l) => /fila admissao: recusados=\d+, expirados=0, totalRecusados=\d+, janela=.+\.\..+/.test(l.texto)))
 }
 
