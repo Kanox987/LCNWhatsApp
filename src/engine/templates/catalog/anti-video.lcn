@@ -1,0 +1,48 @@
+template anti-video v1
+  nome: Anti-vídeo
+  descrição: Apaga automaticamente todo vídeo enviado no grupo, sem precisar de comando. Você escolhe quantos avisos a pessoa recebe antes de ser removida. O contador é por pessoa e por grupo, e o dono do bot nunca é removido.
+  categoria: modulos-especializados
+
+automação
+  nome: Anti-vídeo
+  tipo: vigia
+  dispara com: qualquer mensagem
+  pool: {{params.poolId}}
+  acessa: vídeo
+  quando for: vídeo
+  quem: só externos
+
+  apaga mensagem
+  soma group_member anti-video_apagados = 1
+  se var group_member anti-video_apagados >= "{{params.limite}}"
+    remove do grupo
+      quem: quem enviou
+      nunca o dono: true
+  senão
+    responde "{{params.aviso}}"
+
+configurável
+  limite: número = 3
+    rótulo: Avisos antes de remover
+    ajuda: Use um número alto (ex: 999) se quiser só apagar e avisar, sem nunca remover ninguém.
+  aviso: texto = "Vídeos não são permitidos neste grupo."
+    rótulo: Texto do aviso
+    ajuda: Enviado toda vez que um vídeo é apagado, antes de a pessoa atingir o limite.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que executa esta regra.
+
+declara
+  member anti-video_apagados: número
+    Quantos vídeos desta pessoa já foram apagados NESTE grupo.
+
+avisa exige
+  Para apagar mensagens e remover pessoas, o número precisa ser ADMINISTRADOR do grupo.
+
+avisa nota
+  O contador é SEPARADO do anti-áudio e dos outros anti: quem mandou dois vídeos e um áudio tem dois no de vídeo e um no de áudio, não três. É de propósito — somar tudo num contador só removeria alguém por acumular infrações de regras diferentes.
+
+avisa nota
+  Figurinha animada NÃO cai aqui: para o WhatsApp ela é figurinha, não vídeo, e quem quiser barrá-la usa o Anti-figurinha.
+
+# nós: detectar, apagar, contar, passou, remover, avisar
