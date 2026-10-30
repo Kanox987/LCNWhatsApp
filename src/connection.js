@@ -30,6 +30,7 @@ import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
 import { executarComandos } from './engine/gatewayExecutor.js'
+import { criarSenderRateLimiter } from './engine/senderRateLimiter.js'
 import { APARELHOS, resolverAparelho } from './aparelho.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
@@ -145,7 +146,23 @@ function ehErroBadMacOuCorrupcao (reason) {
 // como variável livre não é "pegar a versão atual" — é ReferenceError, e foi
 // exatamente o que quebrou TODAS as automações que produzem comando: o motor
 // casava, gravava o comando, e o gateway estourava antes de executar.
+let senderRateLimiter = null
+
 export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log) {
+  // Lazy init from cfg (same pattern as configurarFilaDoSocket in gatewayExecutor.js)
+  if (!senderRateLimiter) {
+    senderRateLimiter = criarSenderRateLimiter(cfg?.hardware?.senderRateLimit)
+  }
+
+  // RATE LIMIT CHECK — before tipoPodeCasar, before motor call
+  const senderId = eventoCanonico?.sender?.id
+  if (senderId && !senderRateLimiter.verificar(senderId)) {
+    if (cfg?.hardware?.debug) {
+      log?.(`[engine] rate-limited: sender=${senderId}`)
+    }
+    return Promise.resolve() // fail-open: drop silently, do not throw
+  }
+
   // Esboço não vai ao motor.
   //
   // A mesma mensagem chega duas vezes: primeiro sem conteúdo decifrado

@@ -25,7 +25,12 @@
       "uploadBytesPerSecond": 0
     },
     "modoEconomia": true,
-    "debug": false
+    "debug": false,
+    "senderRateLimit": {
+      "maxTokens": 5,
+      "refillRate": 1,
+      "refillIntervalMs": 1000
+    }
   },
   "transcricao": {
     "provedor": "off",

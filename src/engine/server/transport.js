@@ -121,13 +121,22 @@ async function prepararSocket (socketPath) {
   fs.rmSync(socketPath)
 }
 
-export async function iniciarTransport (roteador, { socketPath = SOCKET_PATH } = {}) {
+export async function iniciarTransport (roteador, { socketPath = SOCKET_PATH, autenticar = null } = {}) {
   await prepararSocket(socketPath)
   const servidor = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost')
       const body = await lerCorpoJson(req)
-      const retorno = await roteador.resolver(req.method, url.pathname, { req, body, query: url.searchParams })
+      let contextoAuth = null
+      if (autenticar) {
+        const header = req.headers.authorization
+        const token = header?.startsWith('Bearer ') ? header.slice(7) : null
+        contextoAuth = token ? autenticar(token) : null
+        if (!contextoAuth && req.method !== 'GET' && req.method !== 'HEAD') {
+          throw new ErroHttp(401, 'Token de API ausente ou inválido.')
+        }
+      }
+      const retorno = await roteador.resolver(req.method, url.pathname, { req, body, query: url.searchParams, contextoAuth })
       if (retorno?.__respostaHttp) {
         // Suporte a ETag em respostas HTTP estruturadas: o campo `etag` é
         // opcional e só aparece quando o endpoint quer habilitar conditional

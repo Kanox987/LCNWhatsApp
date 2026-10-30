@@ -6,6 +6,7 @@ import { fecharPendentesAntigos } from './evaluator.js'
 import { iniciarVarredura } from './retencao.js'
 import { criarApi } from './api.js'
 import { iniciarTransport } from './transport.js'
+import { validarChave } from './apiKeys.js'
 import { ARQ_DB, ARQ_PID_ENGINE, PASTA_RUN, SOCKET_PATH } from '../paths.js'
 
 function gravarPid () {
@@ -38,7 +39,10 @@ async function main () {
   const varredura = iniciarVarredura(db)
   let transport
   try {
-    transport = await iniciarTransport(criarApi(db), { socketPath: SOCKET_PATH })
+    transport = await iniciarTransport(criarApi(db), {
+      socketPath: SOCKET_PATH,
+      autenticar: (token) => validarChave(db, token)
+    })
     gravarPid()
   } catch (erro) {
     db.close()

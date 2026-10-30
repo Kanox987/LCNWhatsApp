@@ -149,7 +149,11 @@ export async function renderDashboard ({ navigate, refresh }) {
   ]))
 
   if (!instances.length) {
-    root.append(emptyState('Nenhuma instância cadastrada', 'Crie uma instância pela ferramenta de terminal; ela aparecerá aqui automaticamente.'))
+    root.append(emptyState(
+      'Comece adicionando um número',
+      'Você ainda não tem instâncias. Crie seu primeiro número agora — ele nasce parado e você conecta depois pelo QR ou código de pareamento.',
+      button('Novo número', { variant: 'primary', onClick: () => abrirCriacao() })
+    ))
     return root
   }
   const conectadas = instances.filter((instance) => instance.connected === true).length

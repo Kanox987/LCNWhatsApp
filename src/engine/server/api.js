@@ -11,6 +11,7 @@ import { registrarRotasTemplates } from './routes/templates.js'
 import { registrarRotasOwners } from './routes/owners.js'
 import { registrarRotasMenu } from './routes/menu.js'
 import { registrarRotasRetencao } from './routes/retencao.js'
+import { registrarRotasApiKeys } from './routes/apiKeys.js'
 
 export function criarApi (db) {
   const roteador = criarRoteador()
@@ -26,6 +27,7 @@ export function criarApi (db) {
   registrarRotasEntities(roteador, db)
   registrarRotasTemplates(roteador, db)
   registrarRotasRetencao(roteador, db)
+  registrarRotasApiKeys(roteador, db)
   registrarRotasMeta(roteador, db)
   return roteador
 }

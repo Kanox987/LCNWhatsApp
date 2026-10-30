@@ -1,0 +1,11 @@
+-- Pool routing: sem alteração de esquema.
+--
+-- As tabelas pools, pool_members e instances já existem desde a migração 001.
+-- O que faltava era o avaliador ler documento.responder.poolId e escolher uma
+-- instância do pool em vez de usar sempre evento.accountId. Isso é código no
+-- poolRouter.js, não mudança de banco.
+--
+-- Esta migração existe apenas para reservar o número 011 e documentar que o
+-- roteamento por pool foi habilitado nesta versão. Se no futuro precisarmos
+-- adicionar índices ou colunas para suportar a feature, o SQL vai aqui.
+SELECT 1;

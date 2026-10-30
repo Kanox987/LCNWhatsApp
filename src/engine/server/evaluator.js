@@ -12,6 +12,7 @@ import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
+import { selecionarInstanciaDoPool } from './poolRouter.js'
 import {
   ErroDeContador,
   aplicarNasVariaveis,
