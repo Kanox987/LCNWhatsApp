@@ -285,14 +285,65 @@ function logsCard (instanceId) {
   ])
 }
 
-// Só uma instância de página fica visível por vez — um módulo-level timer
-// simples basta, contanto que toda entrada nesta página limpe o anterior E
-// o próprio timer se auto-cancele ao perceber que o usuário navegou pra
-// outro lugar (o roteador deste painel não tem hook de "desmontar").
+// Polling condicional com ETag e backoff exponencial.
+//
+// O problema anterior: setInterval de 4s chamava refresh() inteiro, que
+// re-renderizava a página TODA mesmo quando o estado da conexão não mudou.
+// O QR era regenerado em PNG a cada ciclo, o DOM piscava, e o navegador
+// ficava num ciclo de layout thrashing que consumia bateria e CPU.
+//
+// A solução tem três camadas:
+// 1. ETag no backend: o pareamento devolve um ETag derivado da máquina de
+//    estados; se nada mudou, o servidor responde 304 e zero bytes de QR.
+// 2. If-None-Match no frontend: o cliente envia o ETag conhecido e só
+//    atualiza o DOM quando recebe dados novos.
+// 3. Backoff exponencial: começa em 2s, dobra a cada poll sem mudança até
+//    30s, e reseta para 2s assim que algo muda. Estados terminais
+//    (quarantined/terminal) param o polling entirely — exigem ação manual.
+//
+// O timer é cancelado quando o usuário navega para outra página (o
+// roteador não tem hook de desmontar, então verificamos o pathname).
 let pollTimer = null
+let pollAbortController = null
+let lifecycleCleanup = null
+let pollPaused = false
+
+const POLL_MIN_MS = 2000
+const POLL_MAX_MS = 30000
+
+function schedulePoll (fn, delayMs) {
+  if (pollTimer) { window.clearTimeout(pollTimer); pollTimer = null }
+  pollTimer = window.setTimeout(fn, delayMs)
+}
+
+function cancelPoll () {
+  if (pollTimer) { window.clearTimeout(pollTimer); pollTimer = null }
+  if (pollAbortController) { pollAbortController.abort(); pollAbortController = null }
+  pollPaused = false
+}
+
+// Registra listeners de ciclo de vida da página para cancelar o polling
+// quando a aba fica oculta ou quando o usuário sai da página. O cleanup
+// anterior é removido primeiro para evitar vazamento em re-renderizações.
+function setupLifecycleListeners (pausePoll, resumePoll) {
+  if (lifecycleCleanup) { lifecycleCleanup(); lifecycleCleanup = null }
+
+  const onVisibilityChange = () => {
+    if (document.hidden) { pausePoll() } else { resumePoll() }
+  }
+  const onBeforeUnload = () => { cancelPoll() }
+
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('beforeunload', onBeforeUnload)
+
+  lifecycleCleanup = () => {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('beforeunload', onBeforeUnload)
+  }
+}
 
 export async function renderInstance ({ params, navigate, refresh }) {
-  if (pollTimer) { window.clearInterval(pollTimer); pollTimer = null }
+  cancelPoll()
   const id = params.id
   const [instance, pairing, optimization, usageResult] = await Promise.all([
     api.instances.get(id),
@@ -307,18 +358,83 @@ export async function renderInstance ({ params, navigate, refresh }) {
     actions: [button('← Voltar', { onClick: () => navigate('/') }), button('Atualizar', { onClick: refresh })]
   })
 
-  // Enquanto não conectar, atualiza sozinho — pega a conexão automaticamente
-  // assim que o QR for escaneado, sem precisar ficar clicando em Atualizar.
-  if (pairing.connected !== true) {
-    const caminhoEsperado = `/instances/${encodeURIComponent(id)}`
-    pollTimer = window.setInterval(() => {
-      if (window.location.pathname !== caminhoEsperado) {
-        window.clearInterval(pollTimer)
-        pollTimer = null
-        return
+  // Estado inicial do polling condicional.
+  let etagConhecido = pairing.etag || null
+  let backoffMs = POLL_MIN_MS
+  const caminhoEsperado = `/instances/${encodeURIComponent(id)}`
+
+  // Atualiza SOMENTE o cartão de pareamento no DOM, sem re-renderizar a
+  // página inteira. Isto evita o layout thrashing que o refresh() completo
+  // causava a cada 4s.
+  const pairingContainer = el('div')
+  const renderPairingOnly = (pairingData) => {
+    pairingContainer.replaceChildren(pairingCard(pairingData, instance.instanceId, refresh))
+  }
+  renderPairingOnly(pairing)
+
+  // Inicia o polling condicional apenas se não estiver conectado e não
+  // estiver num estado terminal (quarantined/terminal).
+  const shouldPoll = () => {
+    if (window.location.pathname !== caminhoEsperado) return false
+    if (pairing.connected === true) return false
+    const connState = pairing.connectionState
+    if (connState === 'terminal' || connState === 'quarantined') return false
+    return true
+  }
+
+  const pollStep = async () => {
+    if (!shouldPoll()) { cancelPoll(); return }
+
+    pollAbortController = new AbortController()
+    try {
+      const resultado = await api.instances.pairing(id, etagConhecido, pollAbortController.signal)
+
+      if (resultado.notModified) {
+        // Nada mudou: aumenta o backoff e tenta de novo depois.
+        backoffMs = Math.min(backoffMs * 2, POLL_MAX_MS)
+      } else {
+        // Dados novos: atualiza o DOM, reseta o backoff e guarda o ETag.
+        etagConhecido = resultado.etag || etagConhecido
+        backoffMs = POLL_MIN_MS
+        renderPairingOnly(resultado)
+
+        // Se conectou ou entrou em estado terminal, para o polling.
+        if (resultado.connected === true ||
+            resultado.connectionState === 'terminal' ||
+            resultado.connectionState === 'quarantined') {
+          cancelPoll()
+          return
+        }
       }
-      refresh()
-    }, 4000)
+    } catch (erro) {
+      // Erro de rede/transiente: não reseta o backoff, mas também não
+      // deixa crescer além do teto. O próximo poll tenta de novo.
+      backoffMs = Math.min(backoffMs * 2, POLL_MAX_MS)
+    } finally {
+      pollAbortController = null
+    }
+
+    schedulePoll(pollStep, backoffMs)
+  }
+
+  // Pausa o polling quando a aba fica oculta e retoma quando volta.
+  // O cancelPoll() já limpa o timer e aborta requisições em andamento;
+  // o resume só reagenda se shouldPoll() ainda for verdadeiro.
+  const pausePoll = () => {
+    pollPaused = true
+    cancelPoll()
+  }
+  const resumePoll = () => {
+    pollPaused = false
+    if (shouldPoll() && !pollTimer) {
+      schedulePoll(pollStep, backoffMs)
+    }
+  }
+
+  setupLifecycleListeners(pausePoll, resumePoll)
+
+  if (shouldPoll()) {
+    schedulePoll(pollStep, backoffMs)
   }
 
   return el('div', { className: 'stack-lg' }, [
@@ -328,7 +444,7 @@ export async function renderInstance ({ params, navigate, refresh }) {
       el('div', {}, [el('span', { text: 'Serviço' }), el('strong', { text: instance.unitStatus || '—' })]),
       el('div', {}, [el('span', { text: 'Criada em' }), el('strong', { text: formatDate(instance.createdAt) })])
     ]),
-    el('div', { className: 'two-columns' }, [lifecycleCard(instance, refresh, navigate), pairingCard(pairing, instance.instanceId, refresh)]),
+    el('div', { className: 'two-columns' }, [lifecycleCard(instance, refresh, navigate), pairingContainer]),
     optimizationCard(id, optimization),
     usageCard(usageResult.usage, usageResult.error),
     logsCard(id)

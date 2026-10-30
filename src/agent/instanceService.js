@@ -550,21 +550,57 @@ export function criarInstanceService ({
   // atrás de um transporte hospedado (WSS, ver plano — Etapa 4.5,
   // "Fronteira hospedada"), ele PRECISA ganhar controle de acesso por
   // workspace/instalação antes disso — nunca repassar sem essa checagem.
+  // Cache do QR em data URL por hash — evita regenerar PNG a cada poll quando
+  // o conteúdo do QR não mudou. O WhatsApp renova o QR periodicamente mas às
+  // vezes com o MESMO payload; sem cache, cada poll de 4s gerava um PNG novo
+  // e invalidava o frontend à toa. Com o cache + ETag derivado da máquina de
+  // estados, polls redundantes devolvem 304 e zero bytes de QR.
+  const cacheQrDataUrl = new Map()
+  const TAMANHO_MAX_CACHE_QR = 8
+
   async function pareamento (id) {
     const instancia = exigir(id)
     const estado = estadoDa(instancia) || {}
+    const estadoConexao = estado.estadoConexao || null
+    const etag = estadoConexao?.etag || null
+
     let qrDataUrl = null
     if (estado.qr) {
-      try { qrDataUrl = await gerarQrDataUrl(estado.qr) } catch { qrDataUrl = null }
+      const qrHash = estadoConexao?.qrHash || null
+      if (qrHash && cacheQrDataUrl.has(qrHash)) {
+        qrDataUrl = cacheQrDataUrl.get(qrHash)
+      } else {
+        try {
+          qrDataUrl = await gerarQrDataUrl(estado.qr)
+          if (qrHash) {
+            // Evita crescimento ilimitado do cache em instâncias que ficam
+            // muito tempo em laço de QR com renovações frequentes.
+            if (cacheQrDataUrl.size >= TAMANHO_MAX_CACHE_QR) {
+              const primeiro = cacheQrDataUrl.keys().next().value
+              cacheQrDataUrl.delete(primeiro)
+            }
+            cacheQrDataUrl.set(qrHash, qrDataUrl)
+          }
+        } catch { qrDataUrl = null }
+      }
     }
+
     return {
-      connected: estado.conectado ?? null,
-      phoneNumber: estado.numero ?? null,
-      qr: estado.qr ?? null,
-      qrDataUrl,
-      qrAt: estado.qrEm ?? null,
-      pairingCode: estado.codigoPareamento ?? null,
-      pairingCodeAt: estado.codigoPareamentoEm ?? null
+      __respostaHttp: true,
+      status: 200,
+      etag,
+      body: {
+        connected: estado.conectado ?? null,
+        phoneNumber: estado.numero ?? null,
+        qr: estado.qr ?? null,
+        qrDataUrl,
+        qrAt: estado.qrEm ?? null,
+        pairingCode: estado.codigoPareamento ?? null,
+        pairingCodeAt: estado.codigoPareamentoEm ?? null,
+        connectionState: estadoConexao?.estado || null,
+        connectionStateSince: estadoConexao?.desde || null,
+        consecutiveFailures: estadoConexao?.falhasConsecutivas ?? 0
+      }
     }
   }
 

@@ -71,7 +71,39 @@ export const api = {
     criar: (nome) => request('/instances', { method: 'POST', body: { nome } }),
     remover: (id) => request(`/instances/${segment(id)}`, { method: 'DELETE' }),
     action: (id, action, body) => request(`/instances/${segment(id)}/${action}`, { method: 'POST', body: body || {} }),
-    pairing: (id) => request(`/instances/${segment(id)}/pairing`),
+    // Conditional request: envia If-None-Match com o ETag conhecido. Se o
+    // estado da conexão não mudou, o servidor devolve 304 e nenhum byte de
+    // QR/PNG — evita re-render agressivo a cada poll. O retorno inclui
+    // `etag` para o próximo poll e `notModified: true` quando 304.
+    pairing: async (id, etagConhecido = null, signal = undefined) => {
+      const headers = etagConhecido ? { 'if-none-match': etagConhecido } : {}
+      const options = { method: 'GET', headers: { accept: 'application/json', ...headers } }
+      if (signal !== undefined) options.signal = signal
+      let response
+      try {
+        response = await fetch(`/api/v1/instances/${segment(id)}/pairing`, options)
+      } catch {
+        throw new ApiError('O painel está inacessível no momento.')
+      }
+      if (response.status === 304) {
+        return { notModified: true, etag: etagConhecido }
+      }
+      const text = await response.text()
+      let data = null
+      if (text) {
+        try { data = JSON.parse(text) } catch {
+          throw new ApiError('O servidor devolveu uma resposta inválida.', { status: response.status })
+        }
+      }
+      if (!response.ok) {
+        throw new ApiError(data?.error || `A operação falhou (HTTP ${response.status}).`, {
+          status: response.status,
+          details: data?.details ?? null
+        })
+      }
+      const etagNovo = response.headers.get('etag') || etagConhecido
+      return { ...data, etag: etagNovo, notModified: false }
+    },
     optimization: (id) => request(`/instances/${segment(id)}/optimization`),
     updateOptimization: (id, body) => request(`/instances/${segment(id)}/optimization`, { method: 'PUT', body }),
     directory: (id, filters) => request(withQuery(`/instances/${segment(id)}/directory`, filters)),

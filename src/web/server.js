@@ -68,7 +68,16 @@ export async function iniciarServidorWeb ({ host = '127.0.0.1', port = 4780, apl
       const body = await lerCorpoJson(req)
       const retorno = await roteador.resolver(req.method, url.pathname, { req, body, query: url.searchParams })
       if (ehRespostaBinaria(retorno)) enviarBinario(res, retorno)
-      else if (retorno?.__respostaHttp) enviarJson(res, retorno.status, retorno.body)
+      else if (retorno?.__respostaHttp) {
+        // Suporte a ETag em respostas HTTP estruturadas: o campo `etag` é
+        // opcional e só aparece quando o endpoint quer habilitar conditional
+        // requests (ex: /pairing). Headers extras vindos de `resposta()`
+        // também são repassados aqui. Sem eles, o comportamento é idêntico
+        // ao anterior — compatibilidade total com rotas que não usam ETag.
+        const headersExtras = { ...(retorno.headers || {}) }
+        if (retorno.etag) headersExtras.etag = retorno.etag
+        enviarJson(res, retorno.status, retorno.body, headersExtras)
+      }
       else enviarJson(res, 200, retorno)
     } catch (erro) {
       // client.js (chamadas ao motor) usa `.status`/`.details`; ErroHttp

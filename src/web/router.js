@@ -80,7 +80,23 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.post('/api/v1/instances/:id/start', ({ params, body }) => aplicacao.instancias.iniciar(params.id, { pairNumber: body?.pairNumber }))
   roteador.post('/api/v1/instances/:id/stop', ({ params }) => aplicacao.instancias.parar(params.id))
   roteador.post('/api/v1/instances/:id/restart', ({ params }) => aplicacao.instancias.reiniciar(params.id))
-  roteador.get('/api/v1/instances/:id/pairing', ({ params }) => aplicacao.instancias.pareamento(params.id))
+  // Pareamento com suporte a ETag/conditional requests: o frontend envia
+  // If-None-Match com o último ETag conhecido; se o estado da conexão não
+  // mudou, devolve 304 e zero bytes de QR/PNG. Evita o ciclo de re-render
+  // agressivo que invalidava a tela a cada poll de 4s mesmo sem mudança real.
+  roteador.get('/api/v1/instances/:id/pairing', async ({ params, req }) => {
+    const resultado = await aplicacao.instancias.pareamento(params.id)
+    // O serviço pode devolver __respostaHttp com etag (novo caminho) ou um
+    // objeto simples (caminho antigo/fallback). Normaliza para suportar ambos.
+    if (resultado?.__respostaHttp) {
+      const ifNoneMatch = req?.headers?.['if-none-match']
+      if (resultado.etag && ifNoneMatch === resultado.etag) {
+        return resposta(304, null, { etag: resultado.etag })
+      }
+      return resultado
+    }
+    return resultado
+  })
   roteador.get('/api/v1/instances/:id/optimization', ({ params }) => aplicacao.instancias.obterOtimizacao(params.id))
   roteador.put('/api/v1/instances/:id/optimization', ({ params, body }) => aplicacao.instancias.definirOtimizacao(params.id, body))
   roteador.get('/api/v1/instances/:id/usage', ({ params }) => aplicacao.instancias.obterUso(params.id))

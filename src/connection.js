@@ -82,6 +82,61 @@ async function numeroParaParear () {
 }
 const SESSION_ID = 'default'
 
+// Debounce mínimo pro handler de auth_pairing_required: evita que eventos
+// rápidos disparem solicitarCodigo() em rajada (o dedup por promise não
+// segura intervalo entre chamadas sucessivas).
+let ultimoRenewTimestamp = 0
+const RENEW_MIN_INTERVAL_MS = 5000
+
+// Limpeza de arquivos de sessão problemáticos antes de retry transiente,
+// inspirado no padrão badMacHandler do takeshi-bot. Remove arquivos que
+// costumam causar Bad MAC / stream_error / corrupção de sessão, preservando
+// creds.json e chaves de app-state-sync.
+function limparSessaoProblematica () {
+  try {
+    if (!fs.existsSync(PASTA_SESSAO)) return false
+    const arquivos = fs.readdirSync(PASTA_SESSAO)
+    let removidos = 0
+    for (const nome of arquivos) {
+      // Preserva credenciais principais e estado de sync
+      if (nome === 'creds.json') continue
+      if (nome.includes('app-state-sync-key')) continue
+      if (nome.includes('app-state-sync-version')) continue
+      // Preserva o store SQLite principal — só remove auxiliares corrompidos
+      if (nome === 'zapo.sqlite' || nome.endsWith('-wal') || nome.endsWith('-shm')) continue
+      const caminho = path.join(PASTA_SESSAO, nome)
+      try {
+        if (fs.statSync(caminho).isFile()) {
+          fs.unlinkSync(caminho)
+          removidos++
+        }
+      } catch {}
+    }
+    if (removidos > 0) {
+      log(`Limpeza de sessão: ${removidos} arquivo(s) problemático(s) removido(s) antes do retry.`)
+      return true
+    }
+    return false
+  } catch (e) {
+    log('Erro na limpeza de sessão:', e.message)
+    return false
+  }
+}
+
+function ehErroBadMacOuCorrupcao (reason) {
+  if (!reason) return false
+  const msg = String(reason).toLowerCase()
+  return (
+    msg.includes('bad mac') ||
+    msg.includes('mac verification') ||
+    msg.includes('decryption failed') ||
+    msg.includes('stream_error') ||
+    msg.includes('corrupt') ||
+    msg.includes('invalid key') ||
+    msg.includes('signal protocol')
+  )
+}
+
 // Dispara o caminho novo sem bloquear nem substituir a captura existente.
 // Embora sink/executor sejam defensivos por conta própria, o catch final
 // protege o event emitter contra qualquer regressão futura nesses módulos.
@@ -466,6 +521,13 @@ export async function iniciar () {
 
         if (classe === 'transiente') {
           falhas++
+          // Limpeza de sessão problemática antes do retry transiente: se o
+          // motivo indica Bad MAC / stream_error / corrupção, remove arquivos
+          // auxiliares que costumam causar o erro, preservando creds e chaves
+          // principais. Padrão emprestado do badMacHandler do takeshi-bot.
+          if (ehErroBadMacOuCorrupcao(reason)) {
+            limparSessaoProblematica()
+          }
           // Usa o valor retornado, não state.ler() — o flush em disco é
           // debounced (250ms), reler o arquivo aqui sempre pegaria o valor
           // ANTERIOR (bug real encontrado em revisão de código).
@@ -534,6 +596,15 @@ export async function iniciar () {
         }
         const renovarCodigo = () => {
           if (client.getState().registered) return
+          // Debounce por intervalo mínimo: eventos auth_pairing_required
+          // podem chegar em rajada; o dedup por promise só evita chamadas
+          // simultâneas, não sucessivas dentro da janela de 5s.
+          const agora = Date.now()
+          if (agora - ultimoRenewTimestamp < RENEW_MIN_INTERVAL_MS) {
+            log(`Renovação de código ignorada: menos de ${RENEW_MIN_INTERVAL_MS / 1000}s desde a última tentativa.`)
+            return
+          }
+          ultimoRenewTimestamp = agora
           void solicitarCodigo().catch((e) => log('Erro renovando código de pareamento:', e.message))
         }
         const encerrarRenovacao = () => {
