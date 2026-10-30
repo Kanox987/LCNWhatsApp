@@ -184,7 +184,7 @@ function socket () {
 // Então o relógio de quem chamou é PAUSADO enquanto a tarefa espera vez: o
 // `comTimeout` recebe uma função que só começa a contar quando a fila libera.
 // Ver `pausarRelogioAte` logo abaixo.
-async function enviarERegistrar (client, destino, conteudo, opcoes) {
+export async function enviarERegistrar (client, destino, conteudo, opcoes) {
   const resultado = await semContarAEspera((sinal) => socket().executar(() => {
     sinal()
     return client.message.send(destino, conteudo, opcoes)
@@ -1195,6 +1195,22 @@ async function executarEnvioDeArquivo (client, comando, deps) {
   )
 }
 
+// Agendar mensagem: o motor já guardou em scheduled_messages via evaluator.
+// Aqui só confirmamos ao motor que o comando foi recebido (fail-open) e
+// respondemos ao usuário que o agendamento foi registrado. O envio real
+// acontece no timer do scheduler (connection.js), não aqui.
+async function executarAgendamento (client, comando, deps) {
+  const payload = comando?.payload || {}
+  // Responde ao usuário confirmando o agendamento. O envio real é assíncrono
+  // e acontece no poll do scheduler — esta resposta é só o ack imediato.
+  if (payload.okText) {
+    const texto = payload.okText
+      .replace(/\{\{scheduledAt\}\}/g, payload.scheduledAt || '')
+      .replace(/\{\{chatId\}\}/g, payload.chatId || '')
+    await enviarERegistrar(client, payload.chatId, { type: 'text', text: texto })
+  }
+}
+
 export async function executarComandos (client, comandos, clienteEngine, deps = {}) {
   configurarFilaDoSocket(deps?.cfg)
   for (const comando of Array.isArray(comandos) ? comandos : []) {
@@ -1211,7 +1227,8 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       'whatsapp.sendFile': executarEnvioDeArquivo,
       'media.download': executarDownload,
       'connection.call': executarChamadaDeConexao,
-      'acervo.save': executarGuardarNoAcervo
+      'acervo.save': executarGuardarNoAcervo,
+      'whatsapp.schedule': executarAgendamento
     }[comando?.commandType]
 
     let resultado = null

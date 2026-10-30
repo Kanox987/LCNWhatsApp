@@ -29,8 +29,9 @@ import { emitirDesconhecidoDebug, emitirEventoDebug } from './engine/eventSink.j
 import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
-import { executarComandos } from './engine/gatewayExecutor.js'
+import { executarComandos, enviarERegistrar } from './engine/gatewayExecutor.js'
 import { criarSenderRateLimiter } from './engine/senderRateLimiter.js'
+import { criarScheduler } from './engine/server/scheduler.js'
 import { APARELHOS, resolverAparelho } from './aparelho.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
@@ -298,6 +299,89 @@ function criarStore () {
   })
 }
 
+// Scheduler poll: busca mensagens agendadas vencidas e envia via WhatsApp.
+// Roda só enquanto conectado; se a conexão cair, o timer para e retoma no
+// próximo 'open'. O motor guarda (scheduler.js), o gateway envia (aqui).
+let schedulerTimer = null
+async function iniciarSchedulerPoll (client, clienteEngine, accountId, cfg, log) {
+  if (schedulerTimer) clearInterval(schedulerTimer)
+  const intervaloMs = cfg?.scheduler?.pollIntervalMs || 30000
+  let scheduler = null
+  try {
+    // O scheduler precisa do db do engine. Ambos rodam no mesmo processo
+    // quando o engine é embarcado (modo padrão), então importa o módulo
+    // diretamente pra evitar round-trip HTTP a cada poll.
+    const dbPath = path.join(PASTA_DADOS, 'engine.db')
+    if (!fs.existsSync(dbPath)) {
+      log('scheduler: engine.db não encontrado, poll desativado')
+      return
+    }
+    // Lazy import pra não quebrar se o engine estiver em modo remoto.
+    // better-sqlite3 é síncrono e já está carregado pelo engine.
+    const Database = (await import('better-sqlite3')).default
+    const db = new Database(dbPath, { readonly: false })
+    scheduler = criarScheduler(db)
+  } catch (e) {
+    log('scheduler: falha ao inicializar —', e?.message || e)
+    return
+  }
+
+  const tick = async () => {
+    try {
+      const pendentes = scheduler.buscarPendentes({ limite: 20 })
+      if (!pendentes.length) return
+      for (const msg of pendentes) {
+        try {
+          const payload = JSON.parse(msg.payload_json)
+          await enviarERegistrar(client, msg.chat_id, { type: 'text', text: payload.text })
+          scheduler.marcarEnviado(msg.id)
+        } catch (e) {
+          scheduler.marcarFalha(msg.id, e?.message || String(e))
+          log(`scheduler: falha ao enviar ${msg.id}:`, e?.message || e)
+        }
+      }
+    } catch (e) {
+      log('scheduler: erro no poll —', e?.message || e)
+    }
+  }
+
+  // Primeiro tick imediato pra não esperar o intervalo na primeira vez.
+  tick().catch((e) => log('scheduler: primeiro tick falhou —', e?.message || e))
+  schedulerTimer = setInterval(tick, intervaloMs)
+  log(`scheduler: poll ativo a cada ${intervaloMs / 1000}s`)
+}
+
+// Seed de templates: instala automações pré-configuradas na primeira
+// conexão. Idempotente por automation_id — se já existe, pula. A lista
+// vem de env LCN_SEED_TEMPLATES (separado por vírgula) ou do config
+// seed.templates. Exemplo: "auto-recover,ping".
+async function executarSeedDeTemplates (clienteEngine, cfg, log) {
+  const slugsRaw = process.env.LCN_SEED_TEMPLATES || cfg?.seed?.templates || ''
+  const slugs = String(slugsRaw).split(',').map((s) => s.trim()).filter(Boolean)
+  if (!slugs.length) return
+
+  // O seed usa a API HTTP do engine (mesmo processo ou remoto) pra
+  // instalar templates pelo caminho normal (validação + publish).
+  // Não acessa o banco direto pra não pular o portão.
+  for (const slug of slugs) {
+    try {
+      // Verifica se já existe antes de tentar instalar.
+      const existente = await clienteEngine.automations.obter(slug).catch(() => null)
+      if (existente) {
+        log(`seed: "${slug}" já existe, pulando`)
+        continue
+      }
+      await clienteEngine.templates.instalar(slug, {
+        scope: { include: ['*'] },
+        deploymentMode: 'live'
+      })
+      log(`seed: "${slug}" instalado e ativado`)
+    } catch (e) {
+      log(`seed: falha ao instalar "${slug}" —`, e?.message || e)
+    }
+  }
+}
+
 export async function iniciar () {
   garantirPastas()
   let cfg = carregar()
@@ -510,6 +594,19 @@ export async function iniciar () {
         // "⏳ Baixando…" antes de baixar, e sem isto a pessoa fica esperando
         // para sempre uma mídia que nunca vem.
         fecharOrfaos(client, clienteEngine, accountId, { log }).catch(() => {})
+
+        // Scheduler: poll periódico de mensagens agendadas vencidas. O motor
+        // guarda (é dono do banco), o gateway envia (é dono da conexão).
+        // Roda só enquanto conectado; se cair, o próximo 'open' retoma.
+        iniciarSchedulerPoll(client, clienteEngine, accountId, cfg, log)
+
+        // Seed de templates: instala e ativa automações pré-configuradas na
+        // primeira conexão de cada container. Idempotente por slug — roda
+        // toda vez mas só cria o que não existe ainda.
+        executarSeedDeTemplates(clienteEngine, cfg, log).catch((e) => {
+          log('seed de templates falhou:', e?.message || e)
+        })
+
         state.definirConexao({
           conectado: true,
           numero: jid ? jid.split('@')[0].split(':')[0] : null,

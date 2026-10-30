@@ -224,6 +224,9 @@
               },
               {
                 "$ref": "#/definitions/actionAcervoSave"
+              },
+              {
+                "$ref": "#/definitions/actionWhatsappSchedule"
               }
             ]
           }
@@ -1131,6 +1134,58 @@
             },
             "buttonTitle": {
               "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "actionWhatsappSchedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "action.whatsapp.schedule"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "chatId",
+            "scheduledAt"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Texto da mensagem a ser enviada no horário agendado."
+            },
+            "chatId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Destinatário (JID ou número). Aceita variáveis."
+            },
+            "scheduledAt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Data/hora ISO 8601 em UTC para o envio. Aceita variáveis."
+            },
+            "okText": {
+              "type": "string",
+              "description": "Resposta imediata confirmando o agendamento. {{scheduledAt}} e {{chatId}} disponíveis."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "Resposta quando o agendamento falha. {{erro}} vira o motivo."
             }
           }
         }

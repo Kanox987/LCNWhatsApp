@@ -157,6 +157,21 @@ export const ACOES = Object.freeze([
       { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
     ]
   },
+  // Agendar uma mensagem para envio futuro. O motor guarda o pedido numa
+  // tabela própria (scheduled_messages) e o gateway envia quando o horário
+  // chegar, sem depender de evento externo. É o caminho pra "manda isso
+  // amanhã às 9h" dentro de um fluxo.
+  {
+    palavra: 'agenda mensagem',
+    tipo: 'action.whatsapp.schedule',
+    campos: [
+      { chave: 'text', inline: true, tipo: 'texto' },
+      { chave: 'chatId', rotulo: 'para', tipo: 'texto' },
+      { chave: 'scheduledAt', rotulo: 'quando', tipo: 'texto' },
+      { chave: 'okText', rotulo: 'confirma', tipo: 'texto' },
+      { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
+    ]
+  },
   // Mostrar o que de fato chegou na mensagem: id, quem mandou, o que ela
   // responde, e o toque no botão por inteiro. Não tem campo nenhum — o que ele
   // mostra é o evento, e o evento não se configura.

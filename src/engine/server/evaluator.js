@@ -718,6 +718,39 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.whatsapp.schedule': {
+      // Agendar mensagem para envio futuro. O motor guarda em scheduled_messages
+      // (scheduler.js) e o gateway envia quando o horário chegar. A resposta
+      // imediata confirma o agendamento; o envio real acontece depois, sem evento.
+      const chatId = interpolar(no.config.chatId, contexto)
+      const scheduledAt = interpolar(no.config.scheduledAt, contexto)
+      const text = interpolar(no.config.text, contexto)
+
+      if (!chatId || !scheduledAt || !text) {
+        if (typeof no.config?.errorText === 'string' && no.config.errorText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.errorText, { ...contexto, erro: 'campos obrigatórios ausentes (para, quando, texto)' }), replyTo: referenciaDoLink(evento) }
+          })
+        }
+        return 'success'
+      }
+
+      comandos.push({
+        commandType: 'whatsapp.schedule',
+        payload: {
+          chatId,
+          text,
+          scheduledAt,
+          automationId: candidato?.automation_id || null,
+          targetAccountId: evento.accountId,
+          ...(no.config?.okText ? { okText: no.config.okText } : {}),
+          ...(no.config?.errorText ? { errorText: no.config.errorText } : {})
+        }
+      })
+      return 'success'
+    }
+
     case 'action.media.download': {
       // O motor NÃO fala com a rede. Ele resolve a URL, decide qual mensagem
       // marcar na resposta, e passa isso ao gateway — que é quem chama o
@@ -1611,11 +1644,21 @@ export function avaliarEvento (db, evento) {
         .run(evento.eventId, candidato.automation_id, candidato.revision_id, candidato.deployment_mode, status,
           detalheErro ? JSON.stringify(detalheErro) : null, agora)
 
+      // Pool routing: se a automação declara responder.strategy = 'weighted_rendezvous',
+      // escolhe uma instância do pool em vez de usar sempre evento.accountId.
+      // Fallback para evento.accountId quando poolId ausente, pool vazio ou sem membros habilitados.
+      const poolId = documento?.responder?.strategy === 'weighted_rendezvous'
+        ? documento.responder.poolId
+        : null
+      const alvoConta = poolId
+        ? (selecionarInstanciaDoPool(db, poolId) || evento.accountId)
+        : evento.accountId
+
       const inserirComando = db.prepare(`INSERT INTO outbound_commands
         (id, run_id, target_account_id, command_type, payload_json, created_at)
         VALUES (?, ?, ?, ?, ?, ?)`)
       for (const cmd of comandosGerados) {
-        inserirComando.run(crypto.randomUUID(), runResult.lastInsertRowid, evento.accountId, cmd.commandType, JSON.stringify(cmd.payload), agora)
+        inserirComando.run(crypto.randomUUID(), runResult.lastInsertRowid, alvoConta, cmd.commandType, JSON.stringify(cmd.payload), agora)
       }
 
       resultados.push({

@@ -33,7 +33,10 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // diz o que uma automação pode DECLARAR — um tipo de nó fora dela é recusado
   // na publicação, e seria recusado depois de alguém escrever o comando.
   'action.whatsapp.metadata',
-  'action.whatsapp.webview'
+  'action.whatsapp.webview',
+  // Agendar mensagem para envio futuro. O motor guarda em scheduled_messages
+  // e o gateway envia quando o horário chegar (scheduler.js).
+  'action.whatsapp.schedule'
 ])
 
 export const CONDICOES_SUPORTADAS = Object.freeze([
