@@ -14,8 +14,8 @@ export class ErroHttp extends Error {
   }
 }
 
-export function resposta (status, body, headers = {}) {
-  return { __respostaHttp: true, status, body, headers }
+export function resposta (status, body) {
+  return { __respostaHttp: true, status, body }
 }
 
 function compilarCaminho (modelo) {
@@ -78,20 +78,11 @@ export function lerCorpoJson (req) {
   })
 }
 
-export function enviarJson (res, status, body, headersExtras = {}) {
-  // 304 Not Modified: sem corpo, só cabeçalhos. O spec HTTP proíbe body em 304,
-  // e alguns clientes (incluindo fetch do navegador) podem se comportar de forma
-  // imprevisível se receberem conteúdo num 304.
-  if (status === 304) {
-    res.writeHead(304, headersExtras)
-    res.end()
-    return
-  }
+export function enviarJson (res, status, body) {
   const conteudo = JSON.stringify(body ?? null)
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
-    'content-length': Buffer.byteLength(conteudo),
-    ...headersExtras
+    'content-length': Buffer.byteLength(conteudo)
   })
   res.end(conteudo)
 }
@@ -128,15 +119,8 @@ export async function iniciarTransport (roteador, { socketPath = SOCKET_PATH } =
       const url = new URL(req.url, 'http://localhost')
       const body = await lerCorpoJson(req)
       const retorno = await roteador.resolver(req.method, url.pathname, { req, body, query: url.searchParams })
-      if (retorno?.__respostaHttp) {
-        // Suporte a ETag em respostas HTTP estruturadas: o campo `etag` é
-        // opcional e só aparece quando o endpoint quer habilitar conditional
-        // requests (ex: /pairing). Headers extras vindos de `resposta()`
-        // também são repassados aqui.
-        const headersExtras = { ...(retorno.headers || {}) }
-        if (retorno.etag) headersExtras.etag = retorno.etag
-        enviarJson(res, retorno.status, retorno.body, headersExtras)
-      } else enviarJson(res, 200, retorno)
+      if (retorno?.__respostaHttp) enviarJson(res, retorno.status, retorno.body)
+      else enviarJson(res, 200, retorno)
     } catch (erro) {
       const status = Number.isInteger(erro?.status) ? erro.status : 500
       const body = { error: status === 500 ? 'Erro interno do motor.' : erro.message }
