@@ -588,9 +588,15 @@ export async function iniciar () {
 
     if (!USAR_CODIGO) {
       client.on('auth_qr', ({ qr }) => {
-        qrcode.generate(qr, { small: true })   // pros logs (docker logs -f)
         state.definirQR(qr)                     // pro painel renderizar
-        log('QR gerado — escaneie pelo painel (lcn > Serviço > Conectar) ou nos logs.')
+        // O QR só é desenhado no log quando o dono pediu — ver
+        // `hardware.credencialNoLog` em src/config.js.
+        if (cfg.hardware?.credencialNoLog) {
+          qrcode.generate(qr, { small: true })   // pros logs (docker logs -f)
+          log('QR gerado — escaneie pelo painel (lcn > Serviço > Conectar) ou nos logs.')
+        } else {
+          log('QR gerado — escaneie pelo painel (lcn > Serviço > Conectar).')
+        }
       })
     }
 
@@ -722,8 +728,14 @@ export async function iniciar () {
           pedidoCodigo = client.auth.requestPairingCode(numero)
             .then((codigo) => {
               const formatado = codigo.match(/.{1,4}/g)?.join('-') || codigo
-              log('Código de pareamento:', formatado)
               state.definirCodigoPareamento(formatado)
+              // Os dígitos só vão para o log quando o dono pediu — ver
+              // `hardware.credencialNoLog` em src/config.js. Sem eles a linha
+              // continua existindo: quem acompanha o log precisa saber que o
+              // código SAIU, senão não distingue "pediram e chegou" de
+              // "travou antes de pedir".
+              if (cfg.hardware?.credencialNoLog) log('Código de pareamento:', formatado)
+              else log('Código de pareamento gerado — pegue pelo painel (lcn > Serviço > Conectar).')
             })
             .finally(() => { pedidoCodigo = null })
           return pedidoCodigo
