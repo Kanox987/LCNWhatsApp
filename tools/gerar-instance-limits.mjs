@@ -220,7 +220,7 @@ export function gerar () {
   L.push('rota — porque a leitura também valida. O que NÃO está, e não é implementável')
   L.push('como especificado sem uma camada de identidade: distinguir "o cliente" de "o')
   L.push('administrador" na mesma porta. Isso é da frente **J**, e é pré-requisito real')
-  L.push('para alugar o sistema a terceiros.')
+  L.push('para separar cliente de administrador na mesma porta.')
   L.push('')
   return L.join('\n') + '\n'
 }

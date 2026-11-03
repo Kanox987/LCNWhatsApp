@@ -39,9 +39,9 @@ destacado isso travaria para sempre — e travar em silêncio é pior que
 recusar."* Num container ou sob systemd não há TTY, então o número tem de
 chegar pelo ambiente — que é exatamente o que o painel faz.
 
-## O caminho pelo painel, que é o que importa para quem aluga
+## O caminho pelo painel, que é o que importa
 
-Quem aluga o sistema não tem terminal. O caminho inteiro, ponta a ponta:
+Quem usa só o painel não tem terminal. O caminho inteiro, ponta a ponta:
 
 1. **Tela.** `src/web/public/pages/instance.js:95-99` manda
    `api.instances.action(instanceId, 'start', { pairNumber: numero })`.

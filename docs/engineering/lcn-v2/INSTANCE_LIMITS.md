@@ -303,5 +303,5 @@ editado à mão, a configuração importada, a arquivo trocado e a gravação pe
 rota — porque a leitura também valida. O que NÃO está, e não é implementável
 como especificado sem uma camada de identidade: distinguir "o cliente" de "o
 administrador" na mesma porta. Isso é da frente **J**, e é pré-requisito real
-para alugar o sistema a terceiros.
+para separar cliente de administrador na mesma porta.
 
