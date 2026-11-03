@@ -239,9 +239,9 @@ configurável
     ['automação\n  tipo: comando\n  dispara com: /x\n  onde: no além\n', 'destino desconhecido'],
     ['automação\n  tipo: comando\n  dispara com: /x\n  acessa: hologramas\n', 'tipo de mensagem desconhecido'],
     ['automação\n  tipo: comando\n  dispara com: /x\n\n  dança "oi"\n', 'não conheço a ação'],
-    ['automação\n  tipo: comando\n  dispara com: /x\n\n  responde sem aspas\n', 'esperava texto entre aspas'],
-    ['automação\n  tipo: comando\n  dispara com: /x\n\n  responde "oi"\n    cor: "azul"\n', 'não tem campo'],
-    ['automação\n  tipo: comando\n  dispara com: /x\n\n  se var chat a b\n', 'precisa de um operador']
+    ['automação\n  tipo: comando\n  dispara com: /x\n  casa: exato\n  quem: qualquer um\n\n  responde sem aspas\n', 'esperava texto entre aspas'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n  casa: exato\n  quem: qualquer um\n\n  responde "oi"\n    cor: "azul"\n', 'não tem campo'],
+    ['automação\n  tipo: comando\n  dispara com: /x\n  casa: exato\n  quem: qualquer um\n\n  se var chat a b\n', 'precisa de um operador']
   ]
   for (const [fonte, esperado] of casos) {
     let e

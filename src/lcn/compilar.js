@@ -1062,6 +1062,21 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
     if (!temDisparaCom) {
       throw new ErroDeSintaxe('falta "dispara com:" — a palavra que aciona o comando', cabeca.n)
     }
+    // O schema do motor exige `match` e `allowFrom` em trigger.command, e o
+    // compilador não inventa padrão para nenhum dos dois: `allowFrom` é campo de
+    // permissão. Sem esta recusa o documento compila e só é rejeitado com 422 na
+    // instalação, longe do editor.
+    if (gatilhoConfig.match === undefined) {
+      throw new ErroDeSintaxe(`falta "casa:" — como comparar a mensagem. Use: ${Object.values(CASAMENTOS).join(', ')}`, cabeca.n)
+    }
+    if (gatilhoConfig.allowFrom === undefined) {
+      throw new ErroDeSintaxe(`falta "quem:" — quem pode acionar. Use: ${Object.values(ORIGENS).join(', ')}`, cabeca.n)
+    }
+  } else if (tipoDoGatilho === 'trigger.message') {
+    // trigger.message exige só `allowFrom` no schema.
+    if (gatilhoConfig.allowFrom === undefined) {
+      throw new ErroDeSintaxe(`falta "quem:" — quem pode acionar. Use: ${Object.values(ORIGENS).join(', ')}`, cabeca.n)
+    }
   } else if (tipoDoGatilho === 'trigger.group') {
     if (!temQuandoFor) {
       throw new ErroDeSintaxe('falta "quando for:" — um porteiro precisa dizer quais ações observa: entrou, saiu, promoveu, rebaixou ou mudou o nome', cabeca.n)

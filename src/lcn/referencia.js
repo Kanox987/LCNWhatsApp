@@ -97,6 +97,7 @@ export const TRECHOS = Object.freeze([
       '  argumentos: pacote / autor',
       '  acessa: texto',
       '  casa: exato ou com argumentos',
+      '  quem: qualquer um',
       '',
       '  responde "pacote: {{argumentos.pacote}} · autor: {{argumentos.autor}}"'
     ].join('\n')
@@ -149,6 +150,7 @@ export const TRECHOS = Object.freeze([
       '  dispara com: /baixar',
       '  acessa: texto',
       '  casa: exato ou com argumentos',
+      '  quem: qualquer um',
       '  precisa de um link: na mensagem ou na citada',
       '  sem ele: "Manda o link junto com o comando, ou responde a mensagem que tem o link."',
       '',
@@ -256,6 +258,7 @@ const MOLDE_DE_CORPO = [
   '  dispara com: /exemplo',
   '  acessa: texto, foto',
   '  casa: exato ou com argumentos',
+  '  quem: qualquer um',
   '',
   '···'
 ].join('\n')
@@ -271,6 +274,7 @@ const MOLDE_DE_BLOCOS = [
   '  dispara com: /exemplo',
   '  acessa: texto',
   '  casa: exato',
+  '  quem: qualquer um',
   '',
   '  responde "oi"',
   '',
@@ -361,12 +365,129 @@ function prosaDoCampoDeGatilho (prosa, doc, vale) {
   return null
 }
 
-function juntarCampoDoCabecalho (campo, prosa) {
-  const encontrada = campo.doc ? prosaDoCampoDeGatilho(prosa, campo.doc, campo.vale) : null
+// `doc` é a chave do DOCUMENTO, e pode depender da classe: `quando for` escreve
+// `messageKinds` num vigia e `actions` num porteiro. Uma string vale para todas as
+// classes do campo; um objeto diz a chave de cada uma.
+// Exportada para a guarda: um teste que copiasse esta resolução estaria provando
+// a cópia, não a derivação.
+export function docDaClasse (campo, classe) {
+  if (!campo.doc) return null
+  return typeof campo.doc === 'string' ? campo.doc : (campo.doc[classe] ?? null)
+}
+
+// As palavras escritas que correspondem a um enum do schema. Devolve null se
+// faltar palavra para algum valor: meia lista mentiria por omissão.
+function palavrasDoEnum (palavras, valores) {
+  if (!palavras || !Array.isArray(valores)) return null
+  const escritas = valores.map((v) => palavras[v])
+  return escritas.every(Boolean) ? escritas : null
+}
+
+// A prosa de UMA classe. Sem laço de reserva: quando a chave é por classe, aceitar a
+// descrição de outra classe é exatamente o erro que se está consertando.
+function prosaDaClasse (prosa, doc, classe) {
+  const gatilhos = prosa?.GATILHOS || []
+  for (const g of gatilhos) {
+    if (CLASSES[g.tipo] !== classe) continue
+    const achado = (g.campos || []).find((c) => c.chave === doc)
+    if (achado) return achado
+  }
+  return null
+}
+
+// A reversa de CLASSES: do nome escrito no cabeçalho para o tipo de gatilho do schema.
+export const GATILHO_DA_CLASSE = Object.freeze(
+  Object.fromEntries(Object.entries(CLASSES).map(([tipo, classe]) => [classe, tipo]))
+)
+
+function classesDoCampo (vale) {
+  if (!vale || vale === 'ambos' || vale === 'todos') return Object.keys(GATILHO_DA_CLASSE)
+  return (Array.isArray(vale) ? vale : [vale]).filter((c) => GATILHO_DA_CLASSE[c])
+}
+
+// Um campo do cabeçalho vale em uma ou mais CLASSES, e cada classe tem a sua definição
+// de gatilho no schema. Vale aqui a mesma regra de `juntarAcao`: tipo, obrigatoriedade,
+// valores aceitos, padrão e limites saem do schema que a instalação usa, nunca de uma
+// lista escrita à mão — senão a ajuda promete o que o 422 recusa.
+// Onde as definições DIVERGEM eu não escolho uma: `allowFrom` é exigido no comando e no
+// vigia, mas só o vigia declara padrão, e prometer "external" para comando seria
+// prometer o que a instalação não garante.
+function doSchemaDoCabecalho (campo, prosa, schema) {
+  if (!campo.doc || !schema || typeof prosa?.acharDefinicao !== 'function') return null
+  const classes = classesDoCampo(campo.vale)
+  const achados = []
+  for (const classe of classes) {
+    const doc = docDaClasse(campo, classe)
+    if (!doc) continue
+    const definicao = prosa.acharDefinicao(schema, GATILHO_DA_CLASSE[classe])
+    const doCampo = definicao ? prosa.campoDoSchema(definicao, doc) : null
+    if (doCampo) achados.push({ classe, doc, ...doCampo })
+  }
+  if (!achados.length) return null
+  const concordam = (ler) => {
+    const primeiro = JSON.stringify(ler(achados[0]) ?? null)
+    if (!achados.every((a) => JSON.stringify(ler(a) ?? null) === primeiro)) return null
+    return ler(achados[0]) ?? null
+  }
+  // Obrigatoriedade não é média nem maioria: o campo é obrigatório nas classes onde o
+  // schema o exige. Exigido em todas as classes em que vale -> `true`; só em algumas ->
+  // o nome delas, que é o vocabulário que a tela de referência já desenha.
+  const exigem = achados.filter((a) => a.obrigatorio).map((a) => a.classe)
+  let obrigatorio = false
+  if (exigem.length === classes.length) obrigatorio = true
+  else if (exigem.length === 1) obrigatorio = exigem[0]
+  else if (exigem.length) obrigatorio = exigem
+  return {
+    obrigatorio,
+    tipo: concordam((a) => a.tipo),
+    valoresAceitos: concordam((a) => a.valores),
+    padrao: concordam((a) => a.padrao),
+    limites: concordam((a) => a.limites),
+    explicacaoTecnica: concordam((a) => a.descricaoDoSchema),
+    // Onde as classes DIVERGEM, `concordam` devolve null — e null sozinho esconde a
+    // resposta em vez de dar. `porClasse` é a resposta inteira: a lista de valores que
+    // cada classe aceita, com a prosa daquela classe, derivada do mesmo schema.
+    porClasse: achados.map((a) => {
+      const prosaDela = prosaDaClasse(prosa, a.doc, a.classe)
+      return Object.freeze({
+        classe: a.classe,
+        campoDoDocumento: a.doc,
+        obrigatorio: a.obrigatorio,
+        tipo: a.tipo,
+        valoresAceitos: a.valores ?? null,
+        padrao: a.padrao ?? null,
+        limites: a.limites ?? null,
+        explicacaoTecnica: a.descricaoDoSchema ?? null,
+        // O enum do schema está em inglês; o que se ESCREVE na linha é a palavra
+        // em português. O mapa `palavras` do campo cobre as duas classes juntas,
+        // então aqui ele é filtrado pelo enum DAQUELA classe: é essa a lista que
+        // a pessoa pode digitar num vigia, e a outra num porteiro.
+        palavras: palavrasDoEnum(campo.palavras, a.valores),
+        rotulo: prosaDela?.rotulo ?? null,
+        ajuda: prosaDela?.ajuda ?? null
+      })
+    })
+  }
+}
+
+function juntarCampoDoCabecalho (campo, prosa, schema) {
+  const docUnico = typeof campo.doc === 'string' ? campo.doc : null
+  const encontrada = docUnico ? prosaDoCampoDeGatilho(prosa, docUnico, campo.vale) : null
+  const doSchema = doSchemaDoCabecalho(campo, prosa, schema)
   return Object.freeze({
     chave: campo.chave,
     vale: campo.vale,
-    obrigatorio: campo.obrigatorio ?? false,
+    obrigatorio: doSchema ? doSchema.obrigatorio : (campo.obrigatorio ?? false),
+    tipo: doSchema?.tipo ?? null,
+    valoresAceitos: doSchema?.valoresAceitos ?? null,
+    padrao: doSchema?.padrao ?? null,
+    limites: doSchema?.limites ?? null,
+    explicacaoTecnica: doSchema?.explicacaoTecnica ?? null,
+    // Só os campos cuja chave do documento depende da classe trazem o detalhe por
+    // classe; nos outros a lista acima já é a resposta inteira.
+    porClasse: doSchema?.porClasse?.length > 1 && typeof campo.doc !== 'string'
+      ? doSchema.porClasse
+      : null,
     repetivel: campo.repetivel ?? false,
     depende: campo.depende ?? null,
     palavras: campo.palavras ? Object.values(campo.palavras) : null,
@@ -377,10 +498,22 @@ function juntarCampoDoCabecalho (campo, prosa) {
   })
 }
 
-function juntarAcao (acao, prosa) {
+function juntarAcao (acao, prosa, schema) {
   const descrita = (prosa?.ACOES || []).find((a) => a.tipo === acao.tipo) || null
+  // A definição desta ação DENTRO do JSON Schema — a mesma que o Ajv usa na
+  // instalação. É daqui que saem tipo, obrigatoriedade, valores aceitos,
+  // padrão e limites de cada campo: a ajuda não redeclara nenhum dos cinco,
+  // senão ela promete o que a instalação recusa com 422.
+  //
+  // A ponte (`acharDefinicao`/`campoDoSchema`) mora no glossário porque o
+  // navegador também precisa dela, e por isso chega aqui pelo mesmo `prosa`
+  // injetado — nada novo é importado, e `src/lcn` continua sem depender de
+  // `src/web`. Sem schema, ou sem glossário, cada um destes sai `null`, que é
+  // o certo quando a referência é montada fora do painel.
+  const definicao = (schema && prosa?.acharDefinicao) ? prosa.acharDefinicao(schema, acao.tipo) : null
   const campos = (acao.campos || []).map((c) => {
     const prosaDoCampo = (descrita?.campos || []).find((p) => p.chave === c.chave) || null
+    const doSchema = (definicao && prosa?.campoDoSchema) ? prosa.campoDoSchema(definicao, c.chave) : null
     return Object.freeze({
       // Como o campo APARECE no texto: o primeiro inline vai na mesma linha da
       // palavra; o resto é linha indentada "rótulo: valor".
@@ -388,7 +521,15 @@ function juntarAcao (acao, prosa) {
       chave: c.chave,
       palavras: c.palavras ? Object.values(c.palavras) : null,
       rotulo: prosaDoCampo?.rotulo ?? null,
-      ajuda: prosaDoCampo?.ajuda ?? null
+      ajuda: prosaDoCampo?.ajuda ?? null,
+      tipo: doSchema?.tipo ?? null,
+      obrigatorio: doSchema?.obrigatorio ?? null,
+      valoresAceitos: doSchema?.valores ?? null,
+      padrao: doSchema?.padrao ?? null,
+      limites: doSchema?.limites ?? null,
+      // A explicação técnica do campo escrita NO schema. Quando existe, ela é
+      // a que vale: está ao lado da regra que valida.
+      explicacaoTecnica: doSchema?.descricaoDoSchema ?? null
     })
   })
   return Object.freeze({
@@ -399,6 +540,18 @@ function juntarAcao (acao, prosa) {
     resumo: descrita?.resumo ?? null,
     exemplo: descrita?.exemplo ?? null,
     ressalva: descrita?.ressalva ?? null,
+    // O que esta ação PRECISA ter antes de rodar, o que ela DEVOLVE e o que
+    // mais dá errado com ela. Os três são prosa, e prosa só se escreve num
+    // lugar: o glossário. Não há campo no schema que diga "o bot tem de ser
+    // admin do grupo" — validação estrutural não garante condição operacional.
+    dependencias: descrita?.dependencias ?? null,
+    resultado: descrita?.resultado ?? null,
+    errosComuns: descrita?.errosComuns ?? null,
+    // A lista exata que o schema EXIGE, no nível da ação. Serve para a ajuda
+    // listar o que falta sem percorrer campo por campo.
+    obrigatorios: definicao?.properties?.config?.required
+      ? Object.freeze([...definicao.properties.config.required])
+      : null,
     // Só `chama` tem isto: o alvo "conexão.função" e as palavras de arquivo.
     alvo: acao.alvo ? Object.freeze({ forma: 'conexão.função' }) : null,
     blocoDeEntradas: acao.mapa?.bloco ?? null,
@@ -451,11 +604,17 @@ function palavrasParaRealce () {
  * @param {object} [opcoes.prosa] O glossário do painel. Sem ele, a referência
  *   sai com as palavras e sem as explicações — que é o certo quando o painel
  *   não está por perto (gerar documento, por exemplo), e nunca um erro.
+ * @param {object} [opcoes.schema] O JSON Schema do documento de automação, o
+ *   mesmo que o motor valida na instalação. Entra INJETADO pela mesma razão do
+ *   glossário: ele vive em `src/engine`, e importá-lo aqui faria a linguagem
+ *   depender do motor. Com ele, cada campo de cada ação sai com tipo,
+ *   obrigatoriedade, valores aceitos, padrão e limites derivados da fonte que
+ *   recusa o documento — nunca de uma segunda lista escrita à mão.
  */
-export function montarReferencia ({ prosa = null } = {}) {
+export function montarReferencia ({ prosa = null, schema = null } = {}) {
   return Object.freeze({
-    cabecalho: Object.freeze(CAMPOS_DO_CABECALHO.map((c) => juntarCampoDoCabecalho(c, prosa))),
-    marcas: Object.freeze(MARCAS_DO_CABECALHO.map((m) => juntarCampoDoCabecalho(m, prosa))),
+    cabecalho: Object.freeze(CAMPOS_DO_CABECALHO.map((c) => juntarCampoDoCabecalho(c, prosa, schema))),
+    marcas: Object.freeze(MARCAS_DO_CABECALHO.map((m) => juntarCampoDoCabecalho(m, prosa, schema))),
     template: Object.freeze(CAMPOS_DO_TEMPLATE.map((c) => Object.freeze({
       chave: c.chave, repetivel: c.repetivel ?? false, ajuda: c.ajuda ?? null
     }))),
@@ -466,7 +625,7 @@ export function montarReferencia ({ prosa = null } = {}) {
       ajuda: b.ajuda ?? null,
       filhos: Object.freeze((b.filhos || []).map((f) => Object.freeze({ chave: f.chave, ajuda: f.ajuda })))
     }))),
-    acoes: Object.freeze(ACOES.map((a) => juntarAcao(a, prosa))),
+    acoes: Object.freeze(ACOES.map((a) => juntarAcao(a, prosa, schema))),
     condicao: Object.freeze({
       forma: 'se <o que> <operador> <o que>',
       ajuda: `Use dois espaços por nível. Condições no mesmo nível executam em sequência; condições dentro de um ramo só executam quando ele é escolhido. "senão se" testa outra condição no ramo falso. Um ramo pode ficar vazio, mas pelo menos um precisa ter ação. O limite padrão é ${PROFUNDIDADE_CONDICOES_PADRAO} condições aninhadas (cada "senão se" conta mais um nível), ajustável por LCN_MAX_PROFUNDIDADE_CONDICOES ou pela opção maxProfundidade do compilador.`,

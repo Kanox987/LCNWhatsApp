@@ -289,8 +289,8 @@ for (const [nome, texto] of vigiaOrdens) {
   const err = recusa(texto)
   check(`vigia: recusa ${nome}`, err instanceof ErroDeSintaxe && /um vigia dispara com "qualquer mensagem"/.test(err.message), err?.message)
 }
-const vigiaAntes = compilar('automação vig3\n  dispara com: qualquer mensagem\n  tipo: vigia\n  pool: p1\n\n  responde "oi"\n')
-const vigiaDepois = compilar('automação vig3\n  tipo: vigia\n  dispara com: qualquer mensagem\n  pool: p1\n\n  responde "oi"\n')
+const vigiaAntes = compilar('automação vig3\n  dispara com: qualquer mensagem\n  tipo: vigia\n  quem: qualquer um\n  pool: p1\n\n  responde "oi"\n')
+const vigiaDepois = compilar('automação vig3\n  tipo: vigia\n  dispara com: qualquer mensagem\n  quem: qualquer um\n  pool: p1\n\n  responde "oi"\n')
 check('vigia: as duas ordens produzem o MESMO documento', JSON.stringify(vigiaAntes) === JSON.stringify(vigiaDepois))
 
 // 5d. CAMPO REPETIDO: toda ocorrência é conferida, não só a última.
@@ -312,7 +312,7 @@ for (const [nome, texto, regex, linhaEsperada] of repetidosInvalidos) {
 }
 
 // E o campo repetido VÁLIDO continua valendo o último, como antes.
-const repetidoValido = compilar('automação rep5\n  tipo: comando\n  dispara com: /primeiro\n  dispara com: /ultimo\n  pool: p1\n\n  responde "oi"\n')
+const repetidoValido = compilar('automação rep5\n  tipo: comando\n  dispara com: /primeiro\n  dispara com: /ultimo\n  casa: exato\n  quem: qualquer um\n  pool: p1\n\n  responde "oi"\n')
 check('campo repetido válido: vale o último', repetidoValido.flow.nodes[0].config.command === '/ultimo')
 
 // 5e. "sem ele"/"sem ela" avisa sobre a exigência que está ESCRITA ACIMA dele.
@@ -322,6 +322,8 @@ check('campo repetido válido: vale o último', repetidoValido.flow.nodes[0].con
 const semTextoOrfao = compilar(`automação sem1
   tipo: comando
   dispara com: /x
+  casa: exato
+  quem: qualquer um
   precisa de um link: na mensagem
   sem ele: "FALTA O LINK"
   precisa de uma mídia: na mensagem
@@ -337,6 +339,8 @@ check('"sem ele" órfão não é pendurado na exigência que veio depois',
 const semTextoCerto = compilar(`automação sem2
   tipo: comando
   dispara com: /x
+  casa: exato
+  quem: qualquer um
   precisa de um link: na mensagem
   sem ele: "FALTA O LINK"
   pool: p1
@@ -389,6 +393,8 @@ check('"sem ele" debaixo de "precisa de uma mídia" é recusado',
 const parCertoLink = compilar(`automação sem_ok_link
   tipo: comando
   dispara com: /x
+  casa: exato
+  quem: qualquer um
   precisa de um link: na mensagem
   sem ele: "falta link"
   pool: p1
@@ -402,6 +408,8 @@ check('par certo: "sem ele" debaixo de "precisa de um link" compila',
 const parCertoMidia = compilar(`automação sem_ok_midia
   tipo: comando
   dispara com: /x
+  casa: exato
+  quem: qualquer um
   precisa de uma mídia: na mensagem
   sem ela: "falta mídia"
   pool: p1
@@ -415,6 +423,8 @@ check('par certo: "sem ela" debaixo de "precisa de uma mídia" compila',
 const semElaVazioSobLink = compilar(`automação sem_vazio
   tipo: comando
   dispara com: /x
+  casa: exato
+  quem: qualquer um
   precisa de um link: na mensagem
   sem ela: ""
   pool: p1
@@ -468,6 +478,8 @@ check('"sem ele" sem aspas é recusado mesmo com a exigência substituída depoi
 const menuRepetido = compilar(`automação mr1
   tipo: comando
   dispara com: /x
+  casa: exato
+  quem: qualquer um
   menu: Antigo — Descrição antiga
   menu: Novo
   pool: p1
@@ -481,6 +493,8 @@ check('"menu:" repetido sem descrição apaga a descrição anterior',
 const menuComDescricao = compilar(`automação mr2
   tipo: comando
   dispara com: /x
+  casa: exato
+  quem: qualquer um
   menu: /x — faz coisa
   pool: p1
 

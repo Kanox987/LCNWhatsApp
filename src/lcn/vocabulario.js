@@ -779,7 +779,12 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     chave: 'quando for',
     vale: ['vigia', 'porteiro'],
     palavras: { ...TIPOS_DE_MENSAGEM, ...ACOES_DE_GRUPO },
-    doc: 'messageKinds',
+    // `doc` por CLASSE: a mesma linha do cabeçalho vira campos diferentes no documento.
+    // Num vigia, `quando for` escreve `messageKinds`; num porteiro, `actions`. Com uma
+    // chave só, a ajuda do porteiro saía sem tipo, sem valores e sem a descrição do
+    // schema, e a prosa dele ("Ações observadas") só chegava por acaso, pelo laço de
+    // reserva de `prosaDoCampoDeGatilho`.
+    doc: { vigia: 'messageKinds', porteiro: 'actions' },
     ajuda: 'Num vigia, os tipos de mensagem observados (texto, foto...). Num porteiro, as ações observadas no grupo (entrou, saiu, promoveu, rebaixou, mudou o nome).'
   },
   {

@@ -20,9 +20,11 @@
 // só visualmente, e o salto continua existindo na falha de salvar, que é o
 // momento em que a pessoa parou de escrever e está olhando o resultado.
 import { api } from '../api.js'
+import { ajudaNoCursor } from '../logic/ajuda-no-cursor.js'
 import { realcar } from '../logic/realce.js'
 import { inserirTrecho } from '../logic/trechos.js'
 import { button, el } from '../ui.js'
+import { corpoDaAcao } from './referencia-lcn.js'
 
 const ESPERA_ANTES_DE_CONFERIR = 400
 
@@ -68,10 +70,15 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
   const numeros = el('div', { className: 'lcn-numeros', 'aria-hidden': 'true' })
   const estado = el('div', { className: 'lcn-estado', role: 'status' })
   const aviso = el('div', {})
+  const ajuda = el('div', { className: 'lcn-ajuda', role: 'complementary' })
 
   // Sem palavras, o editor funciona e não acende — é o que acontece se o
   // servidor não responder. Perder a cor é aceitável; perder o editor não.
   let palavras = {}
+  // As 38 ações, com os catorze campos de explicação que o servidor deriva do
+  // vocabulário e do MESMO JSON Schema que o Ajv usa na instalação. Chegam na
+  // mesma resposta de onde saem as palavras do realce — uma requisição só.
+  let acoes = []
   const acompanhar = acompanharRolagem(area, camada, numeros)
   const repintar = () => {
     // `palavras` é relido a cada pintura porque ele chega depois, por rede.
@@ -88,9 +95,55 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
     acompanhar()
   }
 
+  // --- a ajuda da ação onde o cursor está --------------------------------
+  //
+  // O pedido manda a explicação ficar ao alcance "sem abandonar a IDE", e manda
+  // montá-la a partir da mesma fonte de verdade do compilador. Por isso quem
+  // desenha é `corpoDaAcao`, o MESMO componente da aba de referência: a aba e o
+  // editor explicam a ação com as mesmas palavras, ou divergiriam na primeira
+  // correção.
+  //
+  // Ela só LÊ `selectionStart`. Dar foco ou mexer na seleção aqui brigaria com
+  // quem está digitando, e é a regra que este arquivo declara no cabeçalho.
+  let ultimaAcao = null
+  const atualizarAjuda = () => {
+    if (!acoes.length) return
+    const achado = ajudaNoCursor({ texto: area.value, posicao: area.selectionStart, acoes })
+    if (!achado) {
+      ultimaAcao = null
+      ajuda.replaceChildren(el('p', { className: 'lcn-ajuda-vazia', text: 'Ponha o cursor numa linha de ação para ver o que ela faz, o que aceita e como ela erra.' }))
+      return
+    }
+    // Remontar o mesmo bloco a cada tecla fecharia o `details` que a pessoa
+    // acabou de abrir. Enquanto o cursor não trocar de ação, não se mexe.
+    const campo = achado.campo ? `  ${achado.campo.escrita}` : ''
+    if (ultimaAcao === achado.acao && ajuda.dataset.campo === campo) return
+    ultimaAcao = achado.acao
+    ajuda.dataset.campo = campo
+    ajuda.replaceChildren(el('details', { className: 'lcn-ref-item', open: true }, [
+      el('summary', {}, [
+        el('code', { text: achado.acao.palavra }),
+        achado.acao.rotulo ? el('span', { className: 'lcn-ref-detalhe', text: achado.acao.rotulo }) : null,
+        achado.campo ? el('span', { className: 'lcn-ref-detalhe', text: `no campo ${achado.campo.escrita}` }) : null
+      ]),
+      el('div', { className: 'lcn-ref-corpo' }, corpoDaAcao(achado.acao))
+    ]))
+  }
+
   api.linguagem.referencia()
-    .then((ref) => { palavras = ref?.palavras || {}; repintar() })
-    .catch(() => { /* sem cor, e o editor continua */ })
+    .then((ref) => {
+      palavras = ref?.palavras || {}
+      acoes = ref?.acoes || []
+      repintar()
+      atualizarAjuda()
+    })
+    .catch(() => { /* sem cor e sem ajuda, e o editor continua */ })
+
+  // O cursor anda por tecla, por clique e por seleção — e nenhum desses eventos
+  // é `input`, porque andar não altera o texto.
+  for (const evento of ['click', 'keyup', 'focus', 'select']) {
+    area.addEventListener(evento, atualizarAjuda)
+  }
 
   // --- a linha do erro, marcada sem mexer no cursor -----------------------
   let linhaComErro = null
@@ -163,6 +216,7 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
     aviso.replaceChildren()
     if (linhaComErro !== null) marcarVisualmente(null)
     repintar()
+    atualizarAjuda()
     clearTimeout(relogio)
     relogio = setTimeout(conferir, ESPERA_ANTES_DE_CONFERIR)
   })
@@ -178,11 +232,13 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
   }
 
   repintar()
+  atualizarAjuda()
   conferir()
 
   const elemento = el('section', { className: 'card stack' }, [
     el('div', { className: 'lcn-caixa' }, [numeros, camada, area]),
     estado,
+    ajuda,
     aviso,
     botoes.length ? el('div', { className: 'button-row' }, botoes) : null
   ])

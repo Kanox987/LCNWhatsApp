@@ -557,7 +557,8 @@
                 "prefix",
                 "keyword",
                 "exact_or_args"
-              ]
+              ],
+              "description": "Como o prefixo é comparado com a mensagem. A comparação é sempre indiferente a maiúsculas. 'exact' só dispara quando a mensagem é o prefixo e nada mais. 'exact_or_args' dispara igual, ou quando vem um espaço e mais texto depois — é o que permite \"/adv fulano\", e é o modo de todo comando que recebe argumento. 'prefix' dispara com qualquer coisa colada depois, sem exigir o espaço. 'keyword' acha o prefixo em QUALQUER posição da frase, delimitado por espaço ou pelas pontas do texto — é o único modo que dispara sem a pessoa começar a mensagem com o comando. Não há padrão: o campo é obrigatório porque escolher por ela mudaria em silêncio o alcance do comando."
             },
             "allowFrom": {
               "enum": [

@@ -4,6 +4,7 @@
 // Módulos 1/2) — este arquivo só faz o mapeamento HTTP → chamada de método,
 // de propósito explícito rota por rota (nunca um proxy cru de path pro
 // motor) pra manter controlado o que o navegador pode alcançar.
+import fs from 'fs'
 import { criarRoteador, ErroHttp, resposta } from '../engine/server/transport.js'
 import { descreverEntradas, descreverResposta, quantosArquivos } from '../engine/server/conexoes/emPortugues.js'
 import { compilar, ErroDeSintaxe } from '../lcn/compilar.js'
@@ -18,7 +19,16 @@ import { respostaBinaria } from './binario.js'
 // precisa dele (o painel é servido estático, e nada fora de `public` chega ao
 // navegador), e `src/lcn` não pode importar de `src/web` sem a linguagem
 // passar a depender do painel. O BFF é o único lugar com os dois lados à mão.
-const REFERENCIA_DA_LINGUAGEM = montarReferencia({ prosa: glossario })
+// E o schema entra pelo mesmo portão, pela mesma razão: ele é a fonte que
+// RECUSA o documento na instalação, então é dele que a ajuda tira tipo,
+// obrigatoriedade, valores aceitos, padrão e limites de cada campo. Qualquer
+// outra origem seria uma segunda lista, e duas listas saem de sincronia — foi
+// assim que a lista de variáveis do interpolador divergiu da da condição.
+// `src/lcn` não pode importar daqui nem de `src/engine`; o BFF pode dos dois.
+const documentSchema = JSON.parse(fs.readFileSync(
+  new URL('../engine/server/schema/automation.v1.schema.json', import.meta.url), 'utf8'
+))
+const REFERENCIA_DA_LINGUAGEM = montarReferencia({ prosa: glossario, schema: documentSchema })
 
 function queryObjeto (query) {
   return Object.fromEntries(query.entries())
@@ -83,6 +93,10 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.get('/api/v1/instances/:id/pairing', ({ params }) => aplicacao.instancias.pareamento(params.id))
   roteador.get('/api/v1/instances/:id/optimization', ({ params }) => aplicacao.instancias.obterOtimizacao(params.id))
   roteador.put('/api/v1/instances/:id/optimization', ({ params, body }) => aplicacao.instancias.definirOtimizacao(params.id, body))
+  // Concessões: o teto que o administrador dá à instância. Mora no registro,
+  // fora da pasta da instância — ver src/agent/concessoes.js.
+  roteador.get('/api/v1/instances/:id/grants', ({ params }) => aplicacao.instancias.obterConcessoes(params.id))
+  roteador.put('/api/v1/instances/:id/grants', ({ params, body }) => aplicacao.instancias.definirConcessoes(params.id, body))
   roteador.get('/api/v1/instances/:id/usage', ({ params }) => aplicacao.instancias.obterUso(params.id))
   roteador.get('/api/v1/instances/:id/logs', ({ params, query }) => aplicacao.instancias.obterLogs(params.id, Number(query.get('lines'))))
   roteador.get('/api/v1/instances/:id/directory', ({ params, query }) => aplicacao.diretorio.listar(params.id, queryObjeto(query)))

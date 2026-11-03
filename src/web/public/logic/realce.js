@@ -28,11 +28,15 @@ function maisLongaPrimeiro (palavras) {
   return [...(palavras || [])].sort((a, b) => b.length - a.length)
 }
 
-function comecaCom (resto, palavra) {
+export function comecaCom (resto, palavra) {
   if (!resto.startsWith(palavra)) return false
   const depois = resto[palavra.length]
   // Palavra inteira: "casa" não pode acender dentro de "casamento". Fim de
   // linha, espaço e dois-pontos fecham a palavra.
+  //
+  // Exportada porque a ajuda contextual (`ajuda-no-cursor.js`) precisa da MESMA
+  // regra de fronteira para dizer em qual ação o cursor está. Duas regras de
+  // "palavra inteira" divergiriam na primeira correção.
   return depois === undefined || depois === ' ' || depois === ':'
 }
 

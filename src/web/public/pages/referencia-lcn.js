@@ -47,26 +47,136 @@ function listaDePalavras (palavras) {
   ])
 }
 
+// A MESMA linha do cabeçalho vira campos diferentes do documento conforme a
+// classe: `quando for` escreve `messageKinds` num vigia e `actions` num porteiro,
+// com enums que não se encontram. Mostrar só a união das palavras diria que um
+// porteiro aceita `texto`, que o compilador recusa. Cada classe ganha o seu bloco,
+// com a lista daquela classe e a prosa daquela classe, tudo derivado do schema.
+function porClasseDoCampo (porClasse) {
+  if (!porClasse?.length) return null
+  return el('div', { className: 'stack-sm' }, porClasse.map((pc) => {
+    const marcas = [
+      `grava "${pc.campoDoDocumento}"`,
+      pc.obrigatorio ? 'obrigatório' : null,
+      pc.tipo && pc.tipo !== 'desconhecido' ? `tipo ${pc.tipo}` : null,
+      pc.padrao !== null && pc.padrao !== undefined && pc.padrao !== '' ? `padrão: ${pc.padrao}` : null,
+      limitesEmTexto(pc.limites)
+    ].filter(Boolean)
+    return el('div', { className: 'lcn-ref-corpo' }, [
+      el('p', {}, [
+        el('strong', { text: `num ${pc.classe}` }),
+        pc.rotulo ? el('span', { className: 'lcn-ref-detalhe', text: pc.rotulo }) : null
+      ]),
+      pc.ajuda ? el('p', { text: pc.ajuda }) : null,
+      el('p', { className: 'lcn-ref-marcas', text: marcas.join(' \u00b7 ') }),
+      // Mesma regra do campo: existe o mapa, mostra a palavra que se digita; não
+      // existe, o enum do schema é a resposta mais honesta que se tem.
+      pc.palavras?.length ? listaDePalavras(pc.palavras) : (pc.valoresAceitos?.length ? emLinha('valores', pc.valoresAceitos) : null),
+      pc.explicacaoTecnica && pc.explicacaoTecnica !== pc.ajuda
+        ? el('p', { className: 'lcn-ref-marcas', text: pc.explicacaoTecnica })
+        : null
+    ])
+  }))
+}
+
 function campoDoCabecalho (campo) {
   const marcas = [
     campo.obrigatorio === true ? 'obrigatório' : null,
-    campo.obrigatorio === 'comando' ? 'obrigatório num comando' : null,
+    // `obrigatorio` sai do schema do gatilho: `true` quando toda classe em que o campo
+    // vale o exige, e o nome das classes que exigem quando só algumas exigem.
+    typeof campo.obrigatorio === 'string' ? `obrigatório num ${campo.obrigatorio}` : null,
+    Array.isArray(campo.obrigatorio) ? `obrigatório num ${campo.obrigatorio.join(' e num ')}` : null,
     campo.repetivel ? 'pode repetir' : null,
     campo.vale === 'comando' ? 'só comando' : null,
     campo.vale === 'vigia' ? 'só vigia' : null,
     campo.vale === 'porteiro' ? 'só porteiro' : null,
-    campo.depende ? `vem depois de "${campo.depende}"` : null
+    campo.depende ? `vem depois de "${campo.depende}"` : null,
+    campo.tipo && campo.tipo !== 'desconhecido' ? `tipo ${campo.tipo}` : null,
+    campo.padrao !== null && campo.padrao !== undefined && campo.padrao !== '' ? `padrão: ${campo.padrao}` : null,
+    limitesEmTexto(campo.limites)
   ].filter(Boolean)
   return dobravel(`${campo.chave}:`, campo.rotulo || marcas[0] || null, [
     campo.ajuda ? el('p', { text: campo.ajuda }) : null,
     marcas.length ? el('p', { className: 'lcn-ref-marcas', text: marcas.join(' · ') }) : null,
-    listaDePalavras(campo.palavras)
+    // `palavras` é o que se ESCREVE na linha; `valoresAceitos` é como o schema guarda a
+    // mesma escolha, em inglês. Onde há o mapa das duas, mostrar o enum cru ensinaria a
+    // escrever `exact` — que o compilador recusa. Onde não há mapa, o schema é a resposta.
+    !campo.palavras?.length && campo.valoresAceitos?.length
+      ? emLinha('valores', campo.valoresAceitos)
+      : null,
+    campo.explicacaoTecnica && campo.explicacaoTecnica !== campo.ajuda
+      ? el('p', { className: 'lcn-ref-marcas', text: campo.explicacaoTecnica })
+      : null,
+    listaDePalavras(campo.palavras),
+    porClasseDoCampo(campo.porClasse)
   ])
 }
 
-function acao (a) {
-  return dobravel(a.palavra, a.rotulo, [
+// Os LIMITES do campo, como o schema os escreve, ditos em português. Sem isto
+// a pessoa descobre o teto pelo 422 na hora de instalar.
+function limitesEmTexto (limites) {
+  if (!limites) return null
+  const partes = []
+  if (limites.minLength === 1) partes.push('não pode ficar vazio')
+  else if (limites.minLength > 1) partes.push(`no mínimo ${limites.minLength} caracteres`)
+  if (limites.maxLength) partes.push(`no máximo ${limites.maxLength} caracteres`)
+  if (limites.minimum !== undefined && limites.maximum !== undefined) partes.push(`de ${limites.minimum} a ${limites.maximum}`)
+  else if (limites.minimum !== undefined) partes.push(`a partir de ${limites.minimum}`)
+  else if (limites.maximum !== undefined) partes.push(`até ${limites.maximum}`)
+  return partes.length ? partes.join(' · ') : null
+}
+
+function emLinha (rotulo, valores) {
+  return el('p', { className: 'lcn-ref-palavras' }, [
+    el('span', { text: `${rotulo}: ` }),
+    ...valores.map((v, i) => [i ? el('span', { text: ' · ' }) : null, el('code', { text: String(v) })]).flat()
+  ])
+}
+
+/**
+ * UM campo de uma ação, com tudo que o pedido manda saber dele: tipo, valores
+ * possíveis, valor padrão, se é obrigatório e qual é o limite.
+ *
+ * Os cinco vêm do JSON Schema em tempo de execução — o mesmo que o Ajv usa na
+ * instalação —, nunca redeclarados aqui.
+ */
+export function campoDaAcao (c) {
+  const marcas = [
+    c.obrigatorio === true ? 'obrigatório' : null,
+    c.obrigatorio === false ? 'opcional' : null,
+    c.tipo && c.tipo !== 'desconhecido' ? `tipo ${c.tipo}` : null,
+    c.padrao !== null && c.padrao !== undefined && c.padrao !== '' ? `padrão: ${c.padrao}` : null,
+    limitesEmTexto(c.limites)
+  ].filter(Boolean)
+  return el('li', {}, [
+    el('code', { text: c.escrita }),
+    c.rotulo ? el('span', { text: ` ${c.rotulo}` }) : null,
+    marcas.length ? el('p', { className: 'lcn-ref-marcas', text: marcas.join(' · ') }) : null,
+    c.ajuda ? el('p', { text: c.ajuda }) : null,
+    c.valoresAceitos?.length ? emLinha('valores', c.valoresAceitos) : null,
+    c.explicacaoTecnica && c.explicacaoTecnica !== c.ajuda
+      ? el('p', { className: 'lcn-ref-marcas', text: c.explicacaoTecnica })
+      : null,
+    listaDePalavras(c.palavras)
+  ])
+}
+
+/**
+ * O CORPO da explicação de uma ação: nome, explicação curta, explicação
+ * técnica, utilidade, parâmetros, tipos aceitos, valores possíveis, valores
+ * padrão, campos obrigatórios, dependências, exemplo válido, resultado
+ * esperado, erros comuns e limitações.
+ *
+ * Exportado porque a ajuda contextual DENTRO do editor mostra exatamente isto.
+ * Duas montagens da mesma explicação divergiriam na primeira correção, e aí a
+ * aba diria uma coisa e o editor outra sobre a mesma ação.
+ */
+export function corpoDaAcao (a) {
+  return [
     a.resumo ? el('p', { text: a.resumo }) : null,
+    a.dependencias ? el('p', {}, [el('strong', { text: 'Depende de: ' }), el('span', { text: a.dependencias })]) : null,
+    a.resultado ? el('p', {}, [el('strong', { text: 'Devolve: ' }), el('span', { text: a.resultado })]) : null,
+    a.errosComuns ? el('p', {}, [el('strong', { text: 'Costuma errar assim: ' }), el('span', { text: a.errosComuns })]) : null,
     a.exemplo ? el('p', { className: 'lcn-ref-exemplo', text: a.exemplo }) : null,
     a.ressalva ? el('div', { className: 'notice notice-info' }, [el('p', { text: a.ressalva.text })]) : null,
     a.alvo ? el('p', { text: `Escreve-se "${a.palavra} ${a.alvo.forma}".` }) : null,
@@ -74,15 +184,14 @@ function acao (a) {
     a.arquivos?.length
       ? el('p', {}, [el('span', { text: 'Para o arquivo que chegou na conversa: ' }), ...a.arquivos.map((p, i) => [i ? el('span', { text: ' · ' }) : null, el('code', { text: p })]).flat()])
       : null,
-    a.campos?.length
-      ? el('ul', { className: 'lcn-ref-campos' }, a.campos.map((c) => el('li', {}, [
-        el('code', { text: c.escrita }),
-        c.rotulo ? el('span', { text: ` ${c.rotulo}` }) : null,
-        c.ajuda ? el('p', { text: c.ajuda }) : null,
-        listaDePalavras(c.palavras)
-      ])))
-      : null
-  ])
+    a.obrigatorios?.length ? emLinha('o schema exige', a.obrigatorios) : null,
+    a.campos?.length ? el('ul', { className: 'lcn-ref-campos' }, a.campos.map(campoDaAcao)) : null,
+    a.tipo ? el('p', { className: 'lcn-ref-marcas', text: `No documento guardado esta ação é "${a.tipo}".` }) : null
+  ]
+}
+
+function acao (a) {
+  return dobravel(a.palavra, a.rotulo, corpoDaAcao(a))
 }
 
 function funcaoDeConexao (f, inserir) {

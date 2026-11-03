@@ -120,6 +120,7 @@ const textoBom = [
   '  dispara com: /oi',
   '  acessa: texto',
   '  casa: exato',
+  '  quem: qualquer um',
   '',
   '  responde "oi"'
 ].join('\n')
@@ -155,6 +156,7 @@ const comoTemplate = await chamar('POST', '/api/v1/lcn/validar', {
     '  dispara com: {{params.command}}',
     '  acessa: texto',
     '  casa: exato',
+    '  quem: qualquer um',
     '',
     '  responde "oi"',
     '',

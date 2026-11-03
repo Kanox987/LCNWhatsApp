@@ -3,7 +3,7 @@
 // pra testar em Node puro sem simular navegador. Cobre as duas peças mais
 // arriscadas de a UI errar silenciosamente: conversão de unidade de banda
 // e montagem do documento de automação a partir do estado do wizard.
-import { parseBandwidth, formatBandwidth, formatBytes } from '../src/web/public/logic/optimization.js'
+import { parseBandwidth, formatBandwidth, formatBytes, formatarValorDeLimite, explicarDivergencia } from '../src/web/public/logic/optimization.js'
 import { converterParaTipo, descreverValor, tipoDoValor, valorParaCampo } from '../src/web/public/logic/valores.js'
 import { juntar, realcar, realcarLinha } from '../src/web/public/logic/realce.js'
 import { inserirTrecho, recuoDaLinha } from '../src/web/public/logic/trechos.js'
@@ -148,6 +148,29 @@ const comVazia = inserirTrecho('  x\n', 2, 'primeira\n\nsegunda')
 check('inserir: linha vazia não leva recuo', !/ +\n/.test(comVazia.texto.split('segunda')[0].replace('  primeira', 'primeira')))
 check('inserir: em texto vazio funciona', inserirTrecho('', 0, 'automação x').texto === 'automação x\n')
 check('inserir: posição além do fim não quebra', inserirTrecho('abc', 999, 'x').texto === 'x\nabc')
+
+// --- a tela de limites se explicando (frente E) ---
+// Ausente não é zero, e zero em banda é "sem limite": confundir os dois faria a
+// tela afirmar uma escolha que ninguém fez.
+check('limite: campo em branco aparece em branco, não como "sem limite"', formatarValorDeLimite(undefined, 'inteiro, bytes por segundo') === 'não escolhido')
+check('limite: zero em banda é sem limite', formatarValorDeLimite(0, 'inteiro, bytes por segundo') === 'sem limite')
+check('limite: MB sai com unidade', formatarValorDeLimite(60, 'inteiro, MB') === '60 MB')
+check('limite: booleano sai em palavra', formatarValorDeLimite(false, 'booleano') === 'desligado')
+check('limite: opção sai como está', formatarValorDeLimite('chrome', 'opção') === 'chrome')
+check('limite: banda em bytes por segundo vira unidade legível', formatarValorDeLimite(500000, 'inteiro, bytes por segundo') === '500 KB/s')
+
+// Reduzir uma cota NÃO reescreve a escolha do cliente: o configurado fica e o
+// efetivo é cortado na leitura. Se a tela não disser isso, o cliente vê o
+// número dele na caixa e acredita que está valendo.
+const cortado = explicarDivergencia({ configurado: 128, emVigor: 50, tipo: 'inteiro, MB', permitido: 50, fonteDoLimite: 'concessão do administrador', indisponivelPorque: 'A administração concedeu até 50.' })
+check('limite: divergência diz os dois números', cortado.includes('128 MB') && cortado.includes('50 MB'))
+check('limite: divergência diz por que', cortado.includes('A administração concedeu até 50.'))
+check('limite: divergência diz que a escolha volta a valer', cortado.includes('volta a valer'))
+check('limite: sem divergência não inventa aviso', explicarDivergencia({ configurado: 50, emVigor: 50, tipo: 'inteiro, MB' }) === null)
+check('limite: campo que ninguém escolheu não vira aviso', explicarDivergencia({ configurado: undefined, emVigor: 60, tipo: 'inteiro, MB' }) === null)
+// Sem motivo vindo do backend, a tela ainda tem de nomear a fonte — "não está
+// disponível" sem razão é exatamente a reclamação que a frente E manda evitar.
+check('limite: sem motivo, cai na fonte do limite', explicarDivergencia({ configurado: 9, emVigor: 1, tipo: 'inteiro', fonteDoLimite: 'mínimo obrigatório' }).includes('mínimo obrigatório'))
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LÓGICA DO PAINEL PASSARAM')
 process.exit(falhas ? 1 : 0)

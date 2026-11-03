@@ -42,9 +42,9 @@ export const GATILHOS = Object.freeze([
       {
         chave: 'match',
         rotulo: 'Como comparar',
-        ajuda: 'exato = a mensagem tem que ser só isso · começa com = aceita o que vier depois · palavra solta = acha em qualquer posição da frase · exato ou com argumento = igual, ou seguido de um espaço e mais texto (é o que permite "/adv fulano").'
+        ajuda: 'O nome vem de CASAMENTO de texto (o verbo casar), não da construção. A comparação nunca diferencia maiúscula de minúscula. · exato = a mensagem tem que ser só isso · começa com = aceita o que vier depois · palavra solta = acha em qualquer posição da frase · exato ou com argumentos = igual, ou seguido de um espaço e mais texto (é o que permite "/adv fulano").'
       },
-      { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'externo = o bot ignora as próprias mensagens (padrão seguro) · qualquer um = responde também quando VOCÊ manda do número onde o bot roda, que é o normal para comando de uso pessoal.' },
+      { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'só externos = o bot ignora as próprias mensagens (padrão seguro) · qualquer um = responde também quando VOCÊ manda do número onde o bot roda, que é o normal para comando de uso pessoal.' },
       { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número do bot passa — é assim que se cadastra o primeiro.' },
       { chave: 'args', rotulo: 'Partes do que vem depois', ajuda: 'Divide o texto que a pessoa escreve depois do comando em partes com nome, separadas por um símbolo que você escolhe. Com "pacote / autor", quem digitar "/rename Meu Pacote / Zé" entrega as duas partes separadas, cada uma disponível como {{argumentos.pacote}} e {{argumentos.autor}}. A última parte leva o resto, então o separador pode aparecer dentro dela. Sem isto, o texto inteiro só existe como {{message.args}}.' }
     ]
@@ -101,6 +101,9 @@ export const ACOES = Object.freeze([
     familia: 'resposta',
     resumo: 'Manda uma mensagem de texto na mesma conversa. Aceita variáveis.',
     exemplo: '"{{now.greeting}}, {{sender.name}}! Você é admin? {{sender.isAdmin}}"',
+    dependencias: 'Nada além da conversa onde o comando chegou. É a única ação sem pré-condição: não precisa de grupo, de permissão, de mídia nem de serviço configurado.',
+    resultado: 'A mensagem aparece na conversa. Nada fica gravado — para reusar o que foi dito depois, grave numa variável antes.',
+    errosComuns: 'Escrever "@5511999999999" dentro do texto e esperar que notifique. Não notifica: a menção viaja no campo "Marcar quem", ao lado do texto.',
     campos: [
       { chave: 'text', rotulo: 'Texto', ajuda: 'Aceita qualquer variável do sistema. Uma variável que não existe aparece do jeito que está, de propósito — é o sinal de que algo está errado.' },
       { chave: 'numbered', rotulo: 'Numerar a lista', ajuda: 'Numera desde 1 cada linha não vazia depois de substituir as variáveis. Linhas vazias continuam separando os itens. Desligado mantém o texto original.' },
@@ -114,6 +117,9 @@ export const ACOES = Object.freeze([
     familia: 'midia',
     resumo: 'Manda uma imagem, áudio, vídeo, PDF ou texto que você guardou no Acervo. É como responder com foto de produto ou cardápio sem reenviar o arquivo toda vez.',
     exemplo: 'Alguém digita "/cardapio" e recebe o PDF que você subiu.',
+    dependencias: 'O arquivo tem de existir no Acervo. Caminho é o que o painel mostra na aba Acervo, e o teto de bytes por envio é o mesmo da instalação.',
+    resultado: 'O arquivo chega na conversa, com legenda se você escrever uma. O arquivo continua no Acervo: enviar não consome nem move nada.',
+    errosComuns: 'Nome sem pasta quando existem dois arquivos com o mesmo nome em pastas diferentes — aí qual dos dois sai não é escolha sua. E caminho vindo de {{message.args}} sem texto de "não encontrei" deixa o comando mudo quando a pessoa erra o nome.',
     campos: [
       { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Como "produtos/fotos/capa.jpg" — é o que uma pessoa consegue escrever no WhatsApp. Aceita variáveis: {{message.args}} pega o que foi digitado depois do comando. Sem pasta, o nome sozinho resolve, desde que não haja dois arquivos com o mesmo nome.' },
       { chave: 'fileId', rotulo: 'Arquivo (por identificador)', ajuda: 'O identificador que aparece no cartão do arquivo na aba Acervo — tem um botão "Copiar id" lá. É a referência estável: não muda se o arquivo for renomeado ou movido de pasta.' },
@@ -134,6 +140,9 @@ export const ACOES = Object.freeze([
       level: 'note',
       text: 'A pasta é um RÓTULO do acervo, não uma pasta no disco: o arquivo continua gravado por identificador gerado. É isso que impede um nome vindo do WhatsApp de virar caminho no sistema de arquivos.'
     },
+    dependencias: 'Uma mídia na mensagem — anexada ou respondida. Sem mídia não há o que guardar, e o espaço do Acervo da instalação tem teto.',
+    resultado: 'O arquivo passa a existir no Acervo, na pasta que você escolheu, e pode ser enviado depois por "Enviar um arquivo do acervo". O nome gravado é o que você definiu, não o nome original do celular de quem mandou.',
+    errosComuns: 'Deixar o nome fixo num comando que várias pessoas usam: cada uso sobrescreve o anterior. Use {{sender.id}} ou {{now.iso}} no nome quando o comando for de todos.',
     campos: [
       { chave: 'folder', rotulo: 'Pasta', ajuda: 'Onde organizar, até três níveis ("produtos/fotos"). Aceita variáveis.' },
       { chave: 'name', rotulo: 'Nome', ajuda: 'Vazio usa o nome que veio no WhatsApp.' },
@@ -150,6 +159,9 @@ export const ACOES = Object.freeze([
     resumo: 'Lê o nome, a descrição, a pasta e o tamanho de um item guardado, para usar na resposta seguinte.',
     exemplo: 'Mostrar o nome e o preço de um produto antes de perguntar se a pessoa quer comprar.',
     ressalva: { level: 'note', text: 'É a única ação do acervo que LÊ — as outras quatro escrevem. Ela devolve METADADO, nunca o arquivo: para enviar o arquivo em si continua sendo "Enviar arquivo". Ponha uma ação depois desta, senão a leitura não serve para nada.' },
+    dependencias: 'O arquivo tem de existir no Acervo. Esta ação lê METADADO — nome, descrição, pasta, tipo, bytes —, nunca o conteúdo.',
+    resultado: 'Os dados caem em {{resultado.dados.*}} para a ação seguinte: {{resultado.dados.nome}}, {{resultado.dados.descricao}}, {{resultado.dados.bytes}}. Fora do fluxo que segue, não sobra nada.',
+    errosComuns: 'Esperar o conteúdo do arquivo em {{resultado.texto}}. Não vem: para mandar o arquivo use "Enviar um arquivo do acervo"; esta ação serve para decidir e para escrever sobre ele.',
     campos: [
       { chave: 'path', rotulo: 'Arquivo', ajuda: 'O caminho dentro do acervo, como "produtos/curso-python", ou só o nome quando não houver outro igual.' },
       { chave: 'notFoundText', rotulo: 'Se o item não existir', ajuda: 'Enviado quando não há nada nesse caminho — por exemplo um produto tirado do ar depois de o comando ser publicado. Sem este texto a execução vira erro no histórico e ninguém recebe nada.' }
@@ -165,6 +177,9 @@ export const ACOES = Object.freeze([
       level: 'note',
       text: 'Apagar é definitivo e irreversível. O id deixa de existir no acervo e qualquer comando que aponte para ele deixará de encontrá-lo.'
     },
+    dependencias: 'O arquivo tem de existir. Apagar é definitivo — não há lixeira no Acervo.',
+    resultado: 'O arquivo sai do Acervo. Qualquer comando que o enviava passa a cair no texto de "não encontrei".',
+    errosComuns: 'Deixar o caminho vir de {{message.args}} sem nenhuma guarda de quem pode usar: aí qualquer pessoa da conversa apaga arquivo do seu Acervo pelo WhatsApp.',
     campos: [
       { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Como "produtos/cardapio.pdf". Aceita variáveis como {{message.args}}.' },
       { chave: 'fileId', rotulo: 'Arquivo (por identificador)', ajuda: 'O identificador único do arquivo no acervo.' },
@@ -183,6 +198,9 @@ export const ACOES = Object.freeze([
       level: 'note',
       text: 'Texto no acervo tem kind "text": ao ser enviado por comando, é entregue como mensagem de texto comum, e não como documento anexado.'
     },
+    dependencias: 'Nada além do texto que você escrever. É a ação de acervo que não precisa de mídia nenhuma.',
+    resultado: 'Nasce um arquivo de texto no Acervo, com o conteúdo já interpolado — as variáveis são resolvidas na hora de gravar, não na hora de ler.',
+    errosComuns: 'Esperar que o arquivo se atualize sozinho depois. Não se atualiza: o texto foi congelado na gravação. Para mudar, use "Sobrescrever um arquivo".',
     campos: [
       { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Caminho completo com pasta e nome (ex: "relatorios/recibo.txt").' },
       { chave: 'text', rotulo: 'Conteúdo do texto', ajuda: 'O texto a gravar no arquivo. Aceita variáveis do sistema como {{var.chat.total}} e {{sender.name}}.' },
@@ -203,6 +221,9 @@ export const ACOES = Object.freeze([
       level: 'note',
       text: 'O identificador (id) e o tipo do arquivo original são preservados intactos. Se não houver campo de texto, o comando usa a mídia enviada na mensagem.'
     },
+    dependencias: 'O arquivo tem de existir e ser de texto. Sobrescrever troca o conteúdo inteiro; não existe acrescentar ao fim.',
+    resultado: 'O conteúdo novo substitui o antigo, e o antigo não fica guardado em lugar nenhum.',
+    errosComuns: 'Usar para ir somando linhas. Não soma: cada escrita apaga a anterior. Para acumular, leia antes e escreva o texto inteiro de novo.',
     campos: [
       { chave: 'path', rotulo: 'Caminho do arquivo', ajuda: 'Caminho do arquivo a ser sobrescrito (ex: "cardapio.txt").' },
       { chave: 'fileId', rotulo: 'Arquivo (por identificador)', ajuda: 'O identificador estável do arquivo que será reescrito.' },
@@ -222,6 +243,9 @@ export const ACOES = Object.freeze([
       level: 'requirement',
       text: 'A conexão e a função precisam existir na aba Conexões. Quem escolhe o endereço, o método e a credencial é você, ali — o comando só nomeia a função, e é isso que impede uma automação de apontar para onde quiser.'
     },
+    dependencias: 'A conexão e a função precisam estar cadastradas na aba Conexões, com endereço resolvido. O que a função aceita de entrada é contrato dela, não desta ação.',
+    resultado: 'O que o serviço devolveu chega em {{resultado.texto}}, {{resultado.tipo}} e {{resultado.mime}}, e a mídia devolvida pode ser a entrada da ação seguinte por "o resultado".',
+    errosComuns: 'Esperar navegar no JSON da resposta. Só existe {{resultado.texto}} — a formatação tem de sair pronta do serviço. E nome de função que não está declarada falha no ar, não na publicação.',
     campos: [
       { chave: 'connectionRef', rotulo: 'Qual serviço', ajuda: 'O identificador da conexão, como está na aba Conexões.' },
       { chave: 'function', rotulo: 'Qual função', ajuda: 'O nome da função declarada naquela conexão. A publicação recusa uma que não exista, e diz quais existem.' },
@@ -248,6 +272,9 @@ export const ACOES = Object.freeze([
       level: 'requirement',
       text: 'Precisa de um serviço de download configurado em download.api no config.json, com o token num arquivo. O WhatsApp recusa arquivo grande, então há um teto (download.limiteMB, 64 MB por padrão) — acima dele o bot explica em vez de tentar e falhar.'
     },
+    dependencias: 'Um endereço de verdade na mensagem ou no parâmetro. O teto de bytes é o menor entre o da instalação e o do serviço.',
+    resultado: 'O arquivo chega na conversa. Ele NÃO vai para o Acervo: para guardar, salve depois.',
+    errosComuns: 'Mandar o comando sem link e sem texto de "não encontrei" — o comando fica mudo. E link de página, não de arquivo, costuma voltar como erro do serviço, não como mídia.',
     campos: [
       { chave: 'url', rotulo: 'O link', ajuda: 'Aceita variável: {{quoted.link}} pega o link da mensagem marcada, {{message.link}} pega o da própria mensagem. Se não houver link, o comando avisa em vez de tentar.' },
       { chave: 'modo', rotulo: 'O que baixar', ajuda: 'auto deixa o serviço escolher · video traz imagem e som · audio traz só a trilha · thumbnail traz só a capa.' },
@@ -265,6 +292,9 @@ export const ACOES = Object.freeze([
     resumo: 'Reenvia como mídia normal algo que foi mandado para ver uma vez só. Funciona respondendo a mídia, ou automaticamente quando ela chega.',
     exemplo: 'Responder uma visualização única com "/recover", ou deixar a conversa marcada para recuperar sozinho.',
     ressalva: { level: 'info', text: 'Só funciona com visualização única de verdade. Foto comum respondida não é recuperada — reenviar o que todo mundo ainda vê não é recuperar nada.' },
+    dependencias: 'Uma mensagem de visualização única que o bot tenha VISTO passar. Recuperar não busca no histórico do WhatsApp: só alcança o que passou pela conexão ligada.',
+    resultado: 'A mídia é reenviada ao destino que você escolher, e por isso costuma ser comando de dono: ela foi mandada para ser vista uma vez.',
+    errosComuns: 'Supor que funciona para qualquer mensagem antiga. Não funciona — se o bot estava desconectado quando a mídia passou, não há o que recuperar.',
     campos: [
       { chave: 'destination', rotulo: 'Para onde mandar', ajuda: 'mesma conversa = entrega ali, à vista de quem está · mensagens salvas = só para você · configurado = usa a conversa que o comando de configuração gravou, e cai para mensagens salvas enquanto ninguém configurou · fixo = um endereço que você escreve.' },
       { chave: 'destinationId', rotulo: 'Endereço', ajuda: 'Aceita variável: escrever {{var.global.recover_destino}} faz o destino vir da tabela, e um comando de configuração pode trocar sem mexer no comando.' },
@@ -282,6 +312,9 @@ export const ACOES = Object.freeze([
       level: 'unofficial',
       text: 'Depende de a mensagem viajar marcada como conteúdo da Meta AI. Não é documentado e pode parar de funcionar sem aviso — por isso a queda para texto comum é automática e obrigatória.'
     },
+    dependencias: 'Nada além do texto. O que varia é o aplicativo de quem recebe, não a instalação.',
+    resultado: 'O texto chega formatado quando o aparelho aceita, e o texto de reserva chega quando não aceita.',
+    errosComuns: 'Contar com o formato especial em público. Escreva o texto de reserva de modo que a mensagem continue fazendo sentido sozinha — é ele que muita gente vai ler.',
     campos: [
       { chave: 'text', rotulo: 'Conteúdo', ajuda: 'O código ou a fórmula.' },
       { chave: 'richKind', rotulo: 'Tipo', ajuda: 'código, fórmula (LaTeX) ou texto.' },
@@ -296,6 +329,9 @@ export const ACOES = Object.freeze([
     resumo: 'Soma, subtrai, multiplica ou divide dois números, variáveis ou campos do evento. O resultado pode ser só desta execução ou gravado como número.',
     exemplo: 'calcula local total = var chat preco * var chat quantidade; depois responde "Total: {{local.total}}".',
     ressalva: { level: 'info', text: 'Usa a precisão binária de Number, sem arredondar para inteiro ou centavos: 5 / 2 = 2.5 e 0.1 + 0.2 = 0.30000000000000004. Não é cálculo monetário exato. Divisão por zero, valores ausentes, booleanos, textos não numéricos, inteiros inseguros e resultados não representáveis interrompem a execução com motivo no histórico.' },
+    dependencias: 'Os dois operandos precisam resolver para número. Variável que nunca foi gravada não vira zero: ela não existe.',
+    resultado: 'O resultado fica gravado na variável e no escopo que você escolheu, e pode ser lido depois por {{var.<escopo>.<chave>}}.',
+    errosComuns: 'Contar com divisão por zero. E somar texto achando que o sistema converte: "10" com espaço, vírgula decimal ou moeda não é número.',
     campos: [
       { chave: 'scope', rotulo: 'Onde guardar o resultado', ajuda: 'local mantém só nesta execução, acessível em {{local.nome}} e em outro cálculo com evento local.nome. Os escopos de variável gravam no banco e usam {{var....}}.' },
       { chave: 'categoryKey', rotulo: 'Qual categoria', ajuda: 'Obrigatório só no escopo category.' },
@@ -311,6 +347,9 @@ export const ACOES = Object.freeze([
     familia: 'variavel',
     resumo: 'Guarda um valor ligado a alguém, a uma conversa, a um grupo ou ao sistema todo. É o que marca um contato como VIP, ou guarda em que etapa de um atendimento a pessoa está.',
     exemplo: 'Gravar "vip" = sim em quem usou o comando.',
+    dependencias: 'Nada. Gravar valor é a ação de variável sem pré-condição.',
+    resultado: 'A variável passa a existir no escopo escolhido e sobrevive a reinício. Gravar vazio é diferente de não existir — e é assim que se "desmarca" uma pessoa.',
+    errosComuns: 'Gravar no escopo errado. O escopo decide de quem é o valor: por pessoa, por conversa, por categoria, ou local — e "local" vale só durante aquela execução, não grava nada.',
     campos: [
       { chave: 'scope', rotulo: 'De quem é o valor', ajuda: 'O escopo decide a quem aquele valor pertence — ver a lista de escopos abaixo. É estrutural: nunca coloque o nome do grupo dentro do nome da variável.' },
       { chave: 'categoryKey', rotulo: 'Qual categoria', ajuda: 'Só quando o escopo é "categoria".' },
@@ -325,6 +364,9 @@ export const ACOES = Object.freeze([
     resumo: 'Soma (ou subtrai) de um contador. A soma acontece dentro do banco, então duas mensagens no mesmo instante não viram uma.',
     exemplo: 'Somar 1 no contador de avisos daquela pessoa naquele grupo.',
     ressalva: { level: 'info', text: 'Contador que nunca existiu NÃO vale zero: uma condição "avisos maior ou igual a 0" não pode punir quem nunca fez nada.' },
+    dependencias: 'Nada. Contador que nunca foi gravado começa do zero ao somar.',
+    resultado: 'O contador sobe (ou desce, com valor negativo) e fica gravado. O valor novo já está disponível para a condição seguinte no mesmo fluxo.',
+    errosComuns: 'Somar e conferir o limite em outra execução: entre as duas, outra mensagem pode ter somado também. Confira no mesmo fluxo, logo depois de somar.',
     campos: [
       { chave: 'scope', rotulo: 'De quem é o contador', ajuda: 'Ver a lista de escopos abaixo.' },
       { chave: 'categoryKey', rotulo: 'Qual categoria', ajuda: 'Só quando o escopo é "categoria".' },
@@ -342,6 +384,9 @@ export const ACOES = Object.freeze([
       level: 'note',
       text: 'Não existe HTML rodando dentro de uma mensagem do WhatsApp: o que existe é este botão, e o site continua hospedado onde você quiser. E o botão NÃO volta para o bot — quem toca abre a página e pronto. Se o comando precisa saber o que a pessoa fez lá, isso tem de vir da própria página falando com o serviço dela.'
     },
+    dependencias: 'Um endereço público de verdade. Página que só o servidor alcança não abre no celular de quem recebe.',
+    resultado: 'O botão chega na conversa e abre o endereço. O bot não sabe se alguém clicou: não há volta nenhuma do clique para o fluxo.',
+    errosComuns: 'Esperar saber quem abriu a página. Não há como saber. Para fluxo que continua, use botões de resposta rápida, que voltam como mensagem.',
     campos: [
       { chave: 'text', rotulo: 'Texto da mensagem', ajuda: 'O que aparece acima do botão. Aceita variáveis.' },
       { chave: 'url', rotulo: 'Endereço', ajuda: 'A página a abrir. Aceita variáveis, então dá para apontar para a página daquele item — "https://seu-site.com/{{message.args}}". Precisa ser http ou https.' },
@@ -361,6 +406,9 @@ export const ACOES = Object.freeze([
       level: 'note',
       text: 'Mostra o que o COMANDO consegue ler, que é o mesmo objeto que {{message.…}} enxerga — não o pacote cru do WhatsApp. O pacote cru carrega a chave de download da mídia, e publicá-lo numa conversa entregaria a quem estivesse lendo a capacidade de baixar a mídia de outra pessoa.'
     },
+    dependencias: 'Uma conversa. Em privado, os campos de grupo saem vazios — e isso é o normal, não erro.',
+    resultado: 'Os dados da conversa ficam disponíveis como variáveis para as ações seguintes. Nada é enviado por esta ação: ela só traz informação.',
+    errosComuns: 'Montar texto com campo de grupo num comando que também roda no privado: o texto sai com buraco. Confira a conversa antes, ou escreva um padrão.',
     campos: []
   },
   {
@@ -370,6 +418,9 @@ export const ACOES = Object.freeze([
     resumo: 'Apaga para todos a mensagem que acionou a automação.',
     exemplo: 'Apagar a mensagem que tinha link.',
     ressalva: { level: 'requirement', text: 'Num grupo, o número precisa ser ADMINISTRADOR. Sem isso o WhatsApp recusa e a ação aparece como falha no histórico. Dá para conferir antes com {{bot.isAdmin}}.' },
+    dependencias: 'Uma mensagem RESPONDIDA, para o bot saber qual apagar. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'A mensagem desaparece para todo mundo no grupo, com o aviso do próprio WhatsApp de que foi apagada.',
+    errosComuns: 'Usar sem responder mensagem nenhuma — não há o que apagar, e o comando fica mudo. E o WhatsApp recusa apagar mensagem antiga demais, mesmo com permissão.',
     campos: []
   },
   {
@@ -379,6 +430,9 @@ export const ACOES = Object.freeze([
     resumo: 'Tira alguém do grupo.',
     exemplo: 'Remover quem mandou link pela terceira vez.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise, em vez de tentar e falhar na frente de todo mundo.' },
+    dependencias: 'Alguém marcado ou respondido, e grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'A pessoa sai do grupo e pode voltar por link de convite, se o grupo tiver um.',
+    errosComuns: 'Não escrever o texto de dono protegido: a trava age em silêncio e quem digitou acha que o bot morreu.',
     campos: [
       { chave: 'who', rotulo: 'Quem remover', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida).' },
       { chave: 'neverRemoveOwner', rotulo: 'Nunca remover um dono', ajuda: 'Ligado por padrão. Desligue só se você quiser de propósito uma regra que vale para todos, dono incluído.' },
@@ -392,6 +446,9 @@ export const ACOES = Object.freeze([
     familia: 'resposta',
     resumo: 'Põe uma reação na mensagem respondida.',
     exemplo: 'Marcar com ✅ o pedido que já foi atendido.',
+    dependencias: 'Uma mensagem RESPONDIDA: a reação vai nela, não na conversa. Sem resposta não há onde reagir.',
+    resultado: 'O emoji aparece na mensagem. Reagir de novo troca o emoji; reagir com vazio tira a reação.',
+    errosComuns: 'Esperar LER a reação de outra pessoa. O bot reage e não enxerga reação alheia — para contar escolhas, use enquete.',
     campos: [
       { chave: 'emoji', rotulo: 'Emoji', ajuda: 'O emoji da reação. DEIXAR VAZIO REVOGA a reação que já estava lá — é assim que o WhatsApp desfaz, e não com um comando separado.' },
       { chave: 'notFoundText', rotulo: 'Quando nada foi respondido', ajuda: 'Reagir precisa de uma mensagem respondida. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
@@ -404,6 +461,9 @@ export const ACOES = Object.freeze([
     resumo: 'Tira um número de uma faixa, ou um item de uma lista, e guarda numa variável.',
     exemplo: 'Rolar um dado, tirar cara ou coroa, escolher o lanche da sexta.',
     ressalva: { level: 'note', text: 'O sorteio acontece DENTRO do bot, sem chamar serviço nenhum — então ele não depende de rede e não fica lento. Cada execução tira um valor novo: não há semente guardada, e dois comandos seguidos podem dar o mesmo resultado, como em qualquer sorteio honesto.' },
+    dependencias: 'Nada. É a única fonte de sorteio da linguagem, e roda no motor.',
+    resultado: 'O número sorteado fica gravado na variável escolhida e já serve à condição seguinte do mesmo fluxo.',
+    errosComuns: 'Sortear e esperar o mesmo número em duas ações diferentes. Cada sorteio é novo: grave uma vez e leia a variável.',
     campos: [
       { chave: 'scope', rotulo: 'Onde guardar', ajuda: 'Desta execução (local) é o normal: vale só enquanto o comando roda e não grava nada. Os outros escopos gravam de verdade.' },
       { chave: 'categoryKey', rotulo: 'Qual categoria', ajuda: 'Só quando o escopo é "categoria".' },
@@ -420,6 +480,9 @@ export const ACOES = Object.freeze([
     resumo: 'Ordena um contador e mostra as primeiras posições, com as pessoas marcadas.',
     exemplo: 'Top 10 de quem mais pontuou no grupo este mês.',
     ressalva: { level: 'note', text: 'É a única ação que lê MUITOS registros. Ela ordena o que outras ações já somaram — então primeiro é preciso existir um comando ou vigia que some alguma coisa, senão o ranking nasce vazio.' },
+    dependencias: 'Um contador já gravado por várias pessoas, no escopo que você vai ranquear. Ranking de contador que ninguém somou sai vazio.',
+    resultado: 'O texto do ranking é montado e respondido, com uma linha por colocado até o limite que você pedir.',
+    errosComuns: 'Ranquear o escopo errado e achar que o ranking está quebrado — o que não existe naquele escopo simplesmente não aparece. Escreva o texto de vazio: é o caso do primeiro dia.',
     campos: [
       { chave: 'scope', rotulo: 'De quem', ajuda: 'dos membros deste grupo conta separado por grupo (o mesmo escopo que a advertência usa) · das pessoas conta a pessoa em qualquer conversa.' },
       { chave: 'key', rotulo: 'Contando o quê', ajuda: 'O nome do contador que vai ser ordenado, como "pontos" ou "mensagens". Tem que ser o MESMO nome que a ação de somar usa.' },
@@ -436,6 +499,9 @@ export const ACOES = Object.freeze([
     resumo: 'Prende a mensagem respondida no topo da conversa, ou solta.',
     exemplo: 'Deixar as regras do grupo fixadas por uma semana.',
     ressalva: { level: 'requirement', text: 'Precisa RESPONDER uma mensagem: é ela que vai ser fixada. Em grupo, o WhatsApp costuma exigir que o número seja administrador.' },
+    dependencias: 'Uma mensagem RESPONDIDA, e grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'A mensagem sobe para o topo da conversa até a duração acabar, e soltar devolve ela para o lugar.',
+    errosComuns: 'Deixar a duração em branco achando que fica fixo para sempre: vale 24 horas. E duração fora dos valores que o WhatsApp oferece é recusada pelo aparelho, não aqui.',
     campos: [
       { chave: 'action', rotulo: 'O que fazer', ajuda: 'fixar prende no topo · soltar tira de lá.' },
       { chave: 'durationSecs', rotulo: 'Por quanto tempo', ajuda: 'Em segundos. O WhatsApp oferece 86400 (24 horas), 604800 (7 dias) e 2592000 (30 dias). Deixando em branco vale 24 horas — e é importante que valha algo: sem duração o aparelho de quem recebe descarta o fixo sem avisar ninguém.' },
@@ -449,6 +515,9 @@ export const ACOES = Object.freeze([
     resumo: 'Escreve quantos votos cada opção recebeu.',
     exemplo: 'Depois de perguntar o dia da reunião, mostrar qual ganhou.',
     ressalva: { level: 'note', text: 'Conta qualquer enquete que o bot viu NASCER na conversa, inclusive as criadas por outras pessoas — é na criação que os nomes das opções passam em claro, e é esse mapa que traduz os votos depois. A contagem é guardada e sobrevive a reinício.' },
+    dependencias: 'Uma enquete que o bot viu NASCER na conversa. O que torna a contagem possível está na ressalva desta ação.',
+    resultado: 'O texto com os totais é respondido na conversa. A contagem continua guardada: pedir de novo mais tarde dá o número daquele momento.',
+    errosComuns: 'Pedir o resultado de enquete criada antes de o bot entrar na conversa. Não há mapa de opções, então não há contagem — e o texto de vazio é o que a pessoa vai ler.',
     campos: [
       { chave: 'headerText', rotulo: 'Título', ajuda: 'A primeira linha, antes dos totais.' },
       { chave: 'lineFormat', rotulo: 'Como escrever cada linha', ajuda: 'Use {{opcao}} e {{votos}}. O padrão é "• opção: votos".' },
@@ -462,6 +531,9 @@ export const ACOES = Object.freeze([
     resumo: 'Manda uma enquete de verdade, daquelas que o WhatsApp conta sozinho.',
     exemplo: 'Perguntar ao grupo que dia fica melhor para a reunião.',
     ressalva: { level: 'note', text: 'O bot ABRE a enquete e não lê os votos: contar quem votou no quê é outra capacidade, que não existe. Para decidir alguma coisa a partir do resultado, alguém olha e decide.' },
+    dependencias: 'Pelo menos duas opções. Nenhuma permissão especial: enquete não é ato de administrador.',
+    resultado: 'A enquete chega na conversa e o próprio WhatsApp conta os votos no aparelho de cada um. Para ter o total em texto, use "Mostrar o resultado da enquete".',
+    errosComuns: 'Pedir mais marcações do que existem opções: o WhatsApp aceita e a enquete sai quebrada. O motor limita ao total, mas o desenho é seu.',
     campos: [
       { chave: 'question', rotulo: 'Pergunta', ajuda: 'O que vai ser perguntado.' },
       { chave: 'options', rotulo: 'Opções', ajuda: 'As alternativas separadas por ponto e vírgula, como "Segunda; Terça; Quarta". Precisa de pelo menos duas. A ordem importa: é por ela que o WhatsApp casa os votos.' },
@@ -475,6 +547,9 @@ export const ACOES = Object.freeze([
     resumo: 'Manda na conversa a foto de perfil de quem você marcar.',
     exemplo: 'Ver a foto de quem entrou no grupo.',
     ressalva: { level: 'note', text: 'Quem não tem foto é caso NORMAL, não erro: a consulta volta vazia e o comando responde o texto que você escrever. Sem esse texto ele fica mudo justamente no caso mais comum depois do sucesso.' },
+    dependencias: 'Alguém marcado ou respondido. Foto escondida pela privacidade da pessoa conta como "sem foto", não como erro.',
+    resultado: 'A foto chega na conversa, com legenda se você escrever uma.',
+    errosComuns: 'Não escrever o texto de "não tem foto": é o caso mais comum depois do sucesso, e sem ele o comando fica mudo justamente aí.',
     campos: [
       { chave: 'who', rotulo: 'De quem', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida).' },
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Texto que vai junto com a foto.' },
@@ -489,6 +564,9 @@ export const ACOES = Object.freeze([
     resumo: 'Dá admin a alguém no grupo.',
     exemplo: 'Quem entra pela lista branca já sai administrador.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise, em vez de tentar e falhar na frente de todo mundo.' },
+    dependencias: 'Alguém marcado ou respondido, e grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'A pessoa passa a ser administradora do grupo, com tudo que isso permite — inclusive remover outros.',
+    errosComuns: 'Promover a partir de {{message.args}} sem guarda de quem pode usar o comando: aí qualquer membro se promove sozinho.',
     campos: [
       { chave: 'who', rotulo: 'Quem promover', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida). Marcando vários de uma vez, todos são promovidos.' },
       { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
@@ -501,6 +579,9 @@ export const ACOES = Object.freeze([
     resumo: 'Marca todo mundo, lista o grupo, ou sorteia um membro.',
     exemplo: 'Avisar o grupo inteiro de uma reunião sem escrever número nenhum.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo. É a ÚNICA ação que enumera os membros: um comando normal não enxerga a lista de participantes, então marcar todos, listar e sortear só existem por aqui.' },
+    dependencias: 'Grupo. O que esta ação enxerga e as outras não está na ressalva desta ação.',
+    resultado: 'A mensagem é enviada ao grupo, marcando, listando ou sorteando conforme o modo. O bot sai da lista antes do envio, nos três modos.',
+    errosComuns: 'Marcar todos num grupo grande sem necessidade: é a forma mais rápida de irritar o grupo e de chamar atenção para a conta. E "sorteando um" sem {{sorteado}} no texto manda uma mensagem que não diz quem foi escolhido.',
     campos: [
       { chave: 'mode', rotulo: 'O que fazer', ajuda: 'marcando todos avisa o grupo inteiro sem escrever os números; listando todos escreve a lista visível; sorteando um escolhe UMA pessoa ao acaso.' },
       { chave: 'text', rotulo: 'Mensagem', ajuda: 'O que vai escrito junto. Sorteando um, escreva {{sorteado}} onde o nome da pessoa escolhida deve aparecer.' },
@@ -515,6 +596,9 @@ export const ACOES = Object.freeze([
     resumo: 'Tira os privilégios de administrador de alguém no grupo.',
     exemplo: 'Rebaixar quem violou as regras de moderação.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise, em vez de tentar e falhar na frente de todo mundo.' },
+    dependencias: 'Alguém marcado ou respondido, e grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'A pessoa deixa de ser administradora. O bot não pode rebaixar quem criou o grupo — isso o WhatsApp não permite a ninguém.',
+    errosComuns: 'Não escrever o texto de dono protegido: a trava age em silêncio e o comando parece morto. Foi exatamente o que aconteceu no /rebaixa.',
     campos: [
       { chave: 'who', rotulo: 'Quem rebaixar', ajuda: 'quem enviou a mensagem, ou o alvo (o @mencionado, ou o autor da mensagem respondida). Marcando vários de uma vez, todos são rebaixados.' },
       { chave: 'neverRemoveOwner', rotulo: 'Nunca rebaixar um dono', ajuda: 'Ligado por padrão. Desligue só se você quiser de propósito uma regra que vale para todos, dono incluído.' },
@@ -529,6 +613,9 @@ export const ACOES = Object.freeze([
     resumo: 'Coloca alguém no grupo pelo número de telefone.',
     exemplo: 'adiciona no grupo, com o número digitado.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. O WhatsApp recusa se a pessoa tiver restringido nas configurações de privacidade quem pode adicioná-la a grupos.' },
+    dependencias: 'Um número com código do país e DDD, e grupo. A exigência de administrador e a privacidade de quem vai entrar estão na ressalva desta ação.',
+    resultado: 'A pessoa entra no grupo, ou recebe um convite quando a privacidade dela impede a entrada direta — quem decide isso é o WhatsApp.',
+    errosComuns: 'Mandar número sem o 55 e sem DDD. Não é "não achei": é um identificador que não existe, e a falha aparece só na aba Execuções.',
     campos: [
       { chave: 'phone', rotulo: 'Número a adicionar', ajuda: 'Número de telefone com código do país e DDD (ex: 5511999999999) ou identificador completo. Aceita variáveis como {{message.args}}.' },
       { chave: 'notFoundText', rotulo: 'Quando nenhum número foi informado', ajuda: 'Resposta para quem usou o comando sem digitar o número. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' }
@@ -541,6 +628,9 @@ export const ACOES = Object.freeze([
     resumo: 'Altera o título ou nome exibido do grupo no WhatsApp.',
     exemplo: 'muda o nome do grupo, definindo o novo nome recebido.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    dependencias: 'Um nome novo, e grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'O nome do grupo muda para todos, e o WhatsApp registra na conversa quem mudou.',
+    errosComuns: 'Nome vindo de {{message.args}} sem guarda de quem pode usar: qualquer membro renomeia o grupo pelo comando.',
     campos: [
       { chave: 'subject', rotulo: 'Novo nome', ajuda: 'O novo nome do grupo. Aceita variáveis como {{message.args}}.' },
       { chave: 'notFoundText', rotulo: 'Quando o nome estiver vazio', ajuda: 'Resposta para quem usou o comando sem informar o novo nome. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada.' }
@@ -553,6 +643,9 @@ export const ACOES = Object.freeze([
     resumo: 'Atualiza o texto da descrição do grupo. Enviar texto vazio limpa a descrição existente.',
     exemplo: 'muda a descrição do grupo com as novas regras.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    dependencias: 'Grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'A descrição muda para todos. Texto vazio LIMPA a descrição — é comportamento declarado, não acidente.',
+    errosComuns: 'Usar num comando aberto sem perceber que vazio apaga: alguém manda o comando sozinho e a descrição do grupo desaparece.',
     campos: [
       { chave: 'description', rotulo: 'Nova descrição', ajuda: 'O novo texto descritivo do grupo. Deixar vazio limpa a descrição. Aceita variáveis.' }
     ]
@@ -564,6 +657,9 @@ export const ACOES = Object.freeze([
     resumo: 'Configura o grupo para apenas administradores enviarem mensagens (fechado) ou permite que todos enviem (aberto).',
     exemplo: 'fecha o grupo para manter o chat organizado à noite.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    dependencias: 'Grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'Fechado, só administradores escrevem; aberto, todos voltam a escrever. O WhatsApp avisa na conversa.',
+    errosComuns: 'Fechar sem ter um comando para abrir de novo. Com o grupo fechado, membro nenhum consegue nem pedir.',
     campos: [
       { chave: 'close', rotulo: 'Fechar o grupo', ajuda: 'sim para fechar o grupo (somente administradores escrevem), não para abrir o grupo a todos os participantes.' }
     ]
@@ -575,6 +671,9 @@ export const ACOES = Object.freeze([
     resumo: 'Consulta o link de convite do grupo e responde na conversa, podendo renovar o convite antes.',
     exemplo: 'mostra o link do grupo com o endereço de convite atual.',
     ressalva: { level: 'requirement', text: 'Só funciona em grupo e com o número sendo ADMINISTRADOR. Confira antes com {{bot.isAdmin}} e avise se faltar permissão.' },
+    dependencias: 'Grupo. A exigência de administrador está na ressalva desta ação.',
+    resultado: 'O link chega na conversa, em {{link}}, e o código cru em {{codigo}}. Renovando, o link antigo deixa de funcionar na hora.',
+    errosComuns: 'Deixar renovar ligado num comando que qualquer um usa: cada uso invalida o link que já está circulando. E link de grupo numa conversa pública é convite aberto para quem passar por ali.',
     campos: [
       { chave: 'text', rotulo: 'Mensagem', ajuda: 'Texto que acompanha o link enviado na conversa. Use {{link}} onde o link deve entrar e {{codigo}} para o código cru.' },
       { chave: 'renova', rotulo: 'Renovar link', ajuda: 'sim para revogar o convite atual e gerar um novo link antes de responder; não para manter o link existente.' }
@@ -587,6 +686,9 @@ export const ACOES = Object.freeze([
     resumo: 'Lista os comandos que funcionam naquela conversa. Só aparecem os que têm rótulo de menu definido.',
     exemplo: 'Alguém digita "/menu" e recebe a lista.',
     ressalva: { level: 'compatibility', text: 'O formato com botões depende do aplicativo de quem recebe. Quando não renderiza, o menu cai para texto sozinho — então ele sempre chega de algum jeito.' },
+    dependencias: 'Comandos com rótulo de menu definido naquela conversa. Sem rótulo, o comando existe e não aparece no menu.',
+    resultado: 'A lista chega na conversa, em texto ou com botões. Numerar muda só o que se lê: os identificadores dos comandos continuam iguais.',
+    errosComuns: 'Achar que o menu está quebrado quando ele sai vazio. Quase sempre é rótulo de menu não definido, ou comando que não vale naquela conversa.',
     campos: [
       { chave: 'numbered', rotulo: 'Numerar os comandos', ajuda: 'Numera só os comandos visíveis, desde 1, no texto e nos rótulos dos botões. Cabeçalho, rodapé e mensagem de vazio não entram na contagem; os IDs dos comandos continuam iguais.' },
       { chave: 'format', rotulo: 'Formato', ajuda: 'lista de texto, ou mensagem com botões.' },
@@ -602,6 +704,9 @@ export const ACOES = Object.freeze([
     familia: 'configuracao',
     resumo: 'Muda o texto do menu daquela conversa sem abrir o painel. O valor novo é o que a pessoa escreveu depois do comando.',
     exemplo: '"/configmenu Comandos da loja:" troca o cabeçalho só daquele grupo.',
+    dependencias: 'Nada além do texto depois do comando. Muda só a conversa onde foi usado, nunca as outras.',
+    resultado: 'O valor novo é gravado e já vale no próximo menu daquela conversa, sem passar pelo painel.',
+    errosComuns: 'Deixar o comando aberto a todos: aí qualquer pessoa reescreve o cabeçalho do seu menu. E sem o texto de uso, quem manda o comando sozinho não descobre como usar.',
     campos: [
       { chave: 'field', rotulo: 'O que mudar', ajuda: 'cabeçalho, rodapé, texto de menu vazio, título do botão ou formato.' },
       { chave: 'usageText', rotulo: 'Se vier sem texto', ajuda: 'Explica como usar quando alguém manda o comando sozinho.' },
@@ -618,6 +723,9 @@ export const ACOES = Object.freeze([
       level: 'compatibility',
       text: 'O botão volta para o bot como uma mensagem de texto comum contendo o comando configurado — é assim que o fluxo continua. Mensagem com botão depende do aplicativo de quem recebe: versões antigas ou WhatsApp Web/Business podem não renderizar. Quando o aplicativo aceita mas não desenha, não há erro em lugar nenhum (a conversa fica vazia); quando o envio falha de verdade, cai para texto comum com as opções listadas.'
     },
+    dependencias: 'Nada na instalação. O que varia é o aplicativo de quem recebe, e isso está na ressalva desta ação.',
+    resultado: 'A mensagem com botões chega, e cada toque VOLTA como mensagem de texto comum — é assim que o fluxo continua, e é por isso que o comando de cada botão tem de existir.',
+    errosComuns: 'Pôr no botão um comando que não existe: o toque volta, nada casa, e a conversa fica muda. E mais de três botões não é opção — o WhatsApp não tem.',
     campos: [
       { chave: 'text', rotulo: 'Texto da mensagem', ajuda: 'O texto que aparece acima dos botões. Aceita variáveis.' },
       { chave: 'buttons', rotulo: 'Botões', ajuda: 'Até 3 botões de resposta rápida. Cada botão tem um rótulo que a pessoa lê e o comando/texto que volta para o bot quando tocado.' },
@@ -635,6 +743,9 @@ export const ACOES = Object.freeze([
       level: 'compatibility',
       text: 'Carrossel de cards é mensagem interativa e depende do aplicativo de quem recebe. Se o aplicativo não renderizar mas aceitar, não há erro visível; se o envio falhar, o bot envia a lista descrita em texto. Os arquivos passam pelo carregador tardio e orçamento de bytes sob demanda.'
     },
+    dependencias: 'Uma pasta do Acervo com fotos, ou cards escritos no comando. O que varia é o aplicativo de quem recebe, e isso está na ressalva desta ação.',
+    resultado: 'Os cards chegam deslizáveis quando o aparelho aceita, e a lista em texto quando não. Os arquivos são lidos um por vez, não todos de uma vez na memória.',
+    errosComuns: 'Apontar para pasta vazia sem escrever o texto de vazio. E pôr o catálogo inteiro num carrossel só: quanto mais cards, maior a chance de o aparelho recusar a mensagem.',
     campos: [
       { chave: 'text', rotulo: 'Texto de abertura', ajuda: 'Texto exibido antes ou no cabeçalho do carrossel. Aceita variáveis.' },
       { chave: 'folder', rotulo: 'Pasta do acervo', ajuda: 'Nome da pasta no Acervo com as fotos para montar os cards. Aceita variáveis.' },
@@ -657,6 +768,9 @@ export const ACOES = Object.freeze([
       level: 'compatibility',
       text: 'O envio nativo de pacote via protocolo usa o campo da biblioteca (stickerPackMessage), mas ainda NÃO foi medido em número real neste aparelho: se o aplicativo recusar, não há erro em lugar nenhum (o envio é confirmado e a conversa fica vazia). A forma "arquivo" entrega o pacote em formato .wastickers como documento, que pode ser aberto em apps de figurinhas (como o Sticker Maker). A forma "diagnóstico" manda as duas formas numeradas de uma vez para medição.'
     },
+    dependencias: 'Uma pasta do Acervo com figurinhas. O que ainda não foi medido no envio nativo está na ressalva desta ação.',
+    resultado: 'O pacote chega como pacote nativo, como arquivo .wastickers, ou as duas formas numeradas no modo de diagnóstico.',
+    errosComuns: 'Confiar na forma "pacote" sem ter medido no aparelho de quem recebe. Enquanto não houver medição, "arquivo" é a forma que você vê chegar.',
     campos: [
       { chave: 'name', rotulo: 'Nome do pacote', ajuda: 'Título do pacote de figurinhas. Aceita variáveis.' },
       { chave: 'folder', rotulo: 'Pasta do acervo', ajuda: 'Nome da pasta no Acervo com as figurinhas. Aceita variáveis.' },
@@ -746,16 +860,32 @@ export function acharDefinicao (documentSchema, tipo) {
 
 // O tipo de um campo, lido do schema — nunca declarado aqui. Devolve também se
 // ele é obrigatório e, quando existe, a lista fechada de valores aceitos.
+//
+// `limites` sai pelo mesmo caminho, e é o que separa "aceita texto" de "aceita
+// texto de 1 a 25 caracteres". São 38 campos com mínimo ou máximo declarado no
+// schema; sem isto a ajuda diria que o campo aceita qualquer texto e a
+// instalação recusaria com 422 o valor que a ajuda prometeu.
 export function campoDoSchema (definicao, chave) {
   const config = definicao?.properties?.config
   const prop = config?.properties?.[chave]
   if (!prop) return null
-  const valores = prop.enum || prop.const ? (prop.enum || [prop.const]) : null
+  // Num campo de lista o enum não mora na propriedade, mora em `items`: `messageKinds`
+  // e `actions` são `array` com os valores fechados um nível abaixo. Ler só `prop.enum`
+  // devolvia `valores: null` para eles, e a ajuda dizia "aceita qualquer coisa" sobre o
+  // campo mais fechado que existe no gatilho.
+  const valores = prop.enum || prop.const
+    ? (prop.enum || [prop.const])
+    : (Array.isArray(prop.items?.enum) ? prop.items.enum : null)
+  const limites = {}
+  for (const nome of ['minimum', 'maximum', 'minLength', 'maxLength', 'minItems', 'maxItems']) {
+    if (prop[nome] !== undefined) limites[nome] = prop[nome]
+  }
   return {
     tipo: prop.type || (valores ? 'enum' : 'desconhecido'),
     obrigatorio: Array.isArray(config?.required) && config.required.includes(chave),
     valores,
     padrao: prop.default,
+    limites: Object.keys(limites).length ? limites : null,
     descricaoDoSchema: prop.description || null
   }
 }
