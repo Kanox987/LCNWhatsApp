@@ -51,3 +51,36 @@ export function formatBandwidth (bytesPerSecond) {
   }
   return `${Math.round(bytesPerSecond)} B/s`
 }
+
+// A tela de limites (frente E). `obterOtimizacao` devolve, por campo, o valor
+// configurado, o permitido, o que está em vigor e o tipo — e os três números
+// são de unidades diferentes: bytes por segundo, MB e contagem. Formatar isso
+// na marcação significaria repetir a regra de unidade em três lugares; aqui é
+// um lugar só, e dá pra testar em Node puro.
+//
+// Ausente NÃO é zero: zero em banda significa "sem limite", então um campo em
+// branco tem de aparecer como em branco, nunca como "sem limite" — senão a
+// tela afirma uma escolha que ninguém fez.
+export function formatarValorDeLimite (valor, tipo = '') {
+  if (valor === undefined || valor === null || valor === '') return 'não escolhido'
+  if (typeof valor === 'boolean') return valor ? 'ligado' : 'desligado'
+  // Campo de lista: o "permitido" é a lista de opções liberadas, não um número.
+  if (Array.isArray(valor)) return valor.length ? valor.join(', ') : 'nenhuma opção liberada'
+  if (tipo.includes('bytes por segundo')) return formatBandwidth(valor)
+  if (tipo.includes('MB')) return `${valor} MB`
+  return String(valor)
+}
+
+// O cliente escolheu um valor e vale outro: a tela TEM de dizer isso. Reduzir
+// uma cota não reescreve o config.json do cliente (a escolha dele volta a valer
+// se a cota for devolvida), então "configurado" e "em vigor" divergem de
+// propósito — e divergência sem explicação é a reclamação que a frente E manda
+// evitar. Devolve null quando não há nada a explicar.
+export function explicarDivergencia (campo) {
+  if (campo?.configurado === undefined || campo.configurado === null) return null
+  if (campo.configurado === campo.emVigor) return null
+  const escolhido = formatarValorDeLimite(campo.configurado, campo.tipo)
+  const vigente = formatarValorDeLimite(campo.emVigor, campo.tipo)
+  const porque = campo.indisponivelPorque || `O limite vem de: ${campo.fonteDoLimite}.`
+  return `Você escolheu ${escolhido}; vale ${vigente}. ${porque} Sua escolha continua guardada e volta a valer se o limite subir.`
+}

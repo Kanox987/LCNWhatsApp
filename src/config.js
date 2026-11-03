@@ -23,12 +23,42 @@ export const PADRAO = {
     },
     modoEconomia: true,
     debug: false,
+    // QR e código de pareamento são CREDENCIAL: enquanto valem, quem os lê
+    // entra na conta. Eles iam para o stdout, que `src/espelhoLog.js` espelha
+    // em `data/bot.log` — um arquivo que fica no disco, roda rotação e é
+    // servido pelo painel (`logsServico`, exposto em instanceService). O
+    // pareamento dura minutos; o log dura semanas.
+    //
+    // Padrão: NÃO vão para o log. O caminho de entrega é a tela, que lê o
+    // estado (`state.json`, modo 0600) — ela existe exatamente para isso.
+    //
+    // Mas tirar do log TIRA UMA CAPACIDADE: quem só tem `docker logs -f`,
+    // sem painel alcançável, conectava por ali. Padrão não é teto — quem
+    // precisa liga, sabendo o que está pondo no arquivo.
+    credencialNoLog: false,
     // Tamanho do cache em memória do SQLite do motor central (db.js), em MB.
     // O better-sqlite3 adota aproximadamente 16 MiB por conexão por padrão.
     // No SQLite, valor NEGATIVO no pragma significa KiB e POSITIVO páginas.
     // Padrão sensato: 4 MB (economiza 75% da RAM do cache sem estrangular I/O).
     // Sem teto no código: máquinas folgadas sobem; alvos de 512 MB descem.
     cacheSqliteMB: 4,
+    // Intervalo mínimo entre dois pedidos de código de pareamento, por
+    // instância, em segundos.
+    //
+    // O motivo NÃO é risco de banimento (que é plausível e não está provado):
+    // é CORREÇÃO. `requestPairingCode` da zapo-js reatribui `pairingSession`
+    // sem guarda nenhuma, e `handlePrimaryHello` deriva a chave de decifração
+    // justamente da chave efêmera que foi substituída — então o `ref` que o
+    // celular devolve não casa mais e a tentativa é descartada. No nosso
+    // caminho do painel é pior ainda: cada clique derruba e sobe o processo
+    // que guarda essa chave. Pedir um código novo INVALIDA EM SILÊNCIO o
+    // código que a pessoa ainda está digitando.
+    //
+    // Piso defensável: o próprio PAIRING_CODE_MAX_AGE_SECONDS da biblioteca
+    // (180 s, em node_modules/zapo-js/dist/protocol/defaults.js:49) — é
+    // exatamente o tempo que o código vale. Padrão não é teto: quem quiser
+    // menos baixa, e 0 desliga a guarda assumindo o efeito acima.
+    pareamentoIntervaloSegundos: 180,
     // Como a conexão aparece em "Aparelhos conectados" no celular. Só rótulo e
     // ícone — não muda o que a conexão é. Gravado no pareamento: trocar depois
     // não renomeia sessão existente. Ver src/aparelho.js para a lista.

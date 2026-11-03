@@ -1,5 +1,5 @@
 import { api, ApiError } from '../api.js'
-import { formatBandwidth, formatBytes, parseBandwidth } from '../logic/optimization.js'
+import { explicarDivergencia, formatarValorDeLimite, formatBandwidth, formatBytes, parseBandwidth } from '../logic/optimization.js'
 import { badge, button, copyText, el, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
 
 function formatUptime (uptimeMs) {
@@ -168,6 +168,55 @@ function pairingCard (pairing, instanceId, refresh) {
   ])
 }
 
+// A TELA SE EXPLICANDO (frente E). `obterOtimizacao` já devolve
+// `limites` — valor configurado, limite permitido, o que está em vigor, de onde
+// o limite vem, o que o campo significa, o que ele faz, e por que um valor não
+// está disponível. Isso vinha sendo buscado e jogado fora: a tela mostrava
+// quatro caixas editáveis e nenhum dos nove campos de limite, então quem
+// tivesse uma cota reduzida veria o número dele na caixa e acreditaria que
+// aquilo estava valendo.
+function limitesCard (limites) {
+  if (!Array.isArray(limites) || limites.length === 0) return null
+  // O teto do administrador viaja por ambiente até a instância (ver
+  // src/instances/quadlet.js), e ambiente só é lido quando o processo nasce.
+  // Então mudar a concessão de uma instância LIGADA não muda nada até ela
+  // reiniciar — e dizer isso aqui é o que impede o administrador de baixar uma
+  // cota, ver o número novo na tela e achar que já está valendo.
+  const temConcessao = limites.some((campo) => campo.temConcessao)
+  const linhas = limites.map((campo) => {
+    const divergencia = explicarDivergencia(campo)
+    return el('div', { className: 'limite-linha' }, [
+      el('div', { className: 'limite-cabeca' }, [
+        el('strong', { text: campo.rotulo }),
+        el('span', { className: 'limite-vigor', text: formatarValorDeLimite(campo.emVigor, campo.tipo) })
+      ]),
+      el('p', { className: 'limite-sentido', text: `${campo.significado} ${campo.efeito}` }),
+      el('dl', { className: 'limite-numeros' }, [
+        el('div', {}, [el('dt', { text: campo.foiEscolhido ? 'Você escolheu' : 'Padrão, ninguém mudou' }), el('dd', { text: formatarValorDeLimite(campo.configurado, campo.tipo) })]),
+        el('div', {}, [el('dt', { text: 'Permitido' }), el('dd', { text: campo.temConcessao ? formatarValorDeLimite(campo.permitido, campo.tipo) : 'sem teto do administrador' })]),
+        el('div', {}, [el('dt', { text: 'Padrão' }), el('dd', { text: formatarValorDeLimite(campo.padrao, campo.tipo) })]),
+        el('div', {}, [el('dt', { text: 'Fonte do limite' }), el('dd', { text: campo.fonteDoLimite || '—' })])
+      ]),
+      divergencia ? el('p', { className: 'limite-aviso', text: divergencia }) : null,
+      // Quando o limite não é nosso, a tela tem de dizer: o WhatsApp impõe teto
+      // próprio de tamanho de mídia e a instância não negocia isso.
+      campo.limiteDoProvedor ? el('p', { className: 'limite-provedor', text: 'O WhatsApp também impõe um teto próprio aqui; subir este número não passa do que ele aceita.' }) : null
+    ])
+  })
+  return el('section', { className: 'panel' }, [
+    el('div', { className: 'panel-heading' }, [
+      el('div', {}, [
+        el('h2', { text: 'Limites desta instância' }),
+        el('p', { text: 'O que você escolheu, o que o administrador permite e o que está valendo agora.' })
+      ])
+    ]),
+    el('div', { className: 'limites-lista' }, linhas),
+    temConcessao
+      ? el('p', { className: 'field-help', text: 'Os limites do administrador chegam na instância quando ela liga. Mudança de concessão só passa a valer depois de reiniciar a instância.' })
+      : null
+  ])
+}
+
 function optimizationCard (instanceId, optimization) {
   const download = el('input', { type: 'text', value: formatBandwidth(optimization.bandwidthLimit?.downloadBytesPerSecond), placeholder: '500 KB/s' })
   const upload = el('input', { type: 'text', value: formatBandwidth(optimization.bandwidthLimit?.uploadBytesPerSecond), placeholder: 'sem limite' })
@@ -330,6 +379,7 @@ export async function renderInstance ({ params, navigate, refresh }) {
     ]),
     el('div', { className: 'two-columns' }, [lifecycleCard(instance, refresh, navigate), pairingCard(pairing, instance.instanceId, refresh)]),
     optimizationCard(id, optimization),
+    limitesCard(optimization.limites),
     usageCard(usageResult.usage, usageResult.error),
     logsCard(id)
   ])

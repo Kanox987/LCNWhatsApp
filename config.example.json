@@ -25,6 +25,8 @@
     "maxMidiaMB": 60,
     "downloadConcorrencia": 2,
     "cacheSqliteMB": 4,
+    "credencialNoLog": false,
+    "pareamentoIntervaloSegundos": 180,
     "bandwidthLimit": {
       "downloadBytesPerSecond": 0,
       "uploadBytesPerSecond": 0

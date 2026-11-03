@@ -20,8 +20,10 @@ import fs from 'fs'
 import path from 'path'
 import { spawnSync } from 'child_process'
 import QRCode from 'qrcode'
-import { lerRegistro, buscarPorId, listarInstancias as listarInstanciasRegistro } from '../instances/registry.js'
+import { lerRegistro, salvarRegistro, buscarPorId, listarInstancias as listarInstanciasRegistro } from '../instances/registry.js'
+import * as concessoes from './concessoes.js'
 import { caminhoInstancia, nomeContainer } from '../instances/paths.js'
+import { gerarQuadlet } from '../instances/quadlet.js'
 import { ARQ_ESTADO as ARQ_ESTADO_BARE, ARQ_CONFIG as ARQ_CONFIG_BARE, RAIZ } from '../paths.js'
 import { ARQ_PID_ENGINE } from '../engine/paths.js'
 import * as processoDaInstancia from './processoDaInstancia.js'
@@ -69,10 +71,10 @@ function unidadeDa (instancia) {
 }
 
 const BANDWIDTH_PADRAO = { downloadBytesPerSecond: 0, uploadBytesPerSecond: 0 }
-// Dois comandos ao mesmo tempo. O recurso disputado é a conexão com o
-// WhatsApp; ver engine/fila.js para por que não é um.
-const COMANDOS_SIMULTANEOS_PADRAO = 2
-const QUARENTENA_PADRAO = 15
+// Os padrões de `comandosSimultaneos` e de falhas até a quarentena ficam em
+// src/agent/concessoes.js (PARAMETROS), junto com o tipo, o mínimo
+// obrigatório e a regra de cada um. Manter uma segunda cópia aqui era
+// exatamente a divergência de camadas que este projeto já pagou caro.
 const FORMATO_ID = /^wa-\d{6,}$/
 
 // `buscarPorId` (registry.js) faz `registro.instances[id]` — um objeto
@@ -367,6 +369,11 @@ function instanciaBareVirtual () {
 export function criarInstanceService ({
   exec = executarCapturando,
   obterRegistro = lerRegistro,
+  // `gravarRegistro` injetável pelo MESMO motivo de `obterRegistro`: desde que
+  // `definirConcessoes` existe, há um caminho que ESCREVE no registro, e um
+  // teste que o exercitasse com o default sobrescreveria o registry.json real
+  // do usuário. Ler fixture e gravar em arquivo real seria pior que não testar.
+  gravarRegistro = salvarRegistro,
   caminhoInstanciaFn = caminhoInstancia,
   nomeContainerFn = nomeContainer,
   bareArqEstado = ARQ_ESTADO_BARE,
@@ -583,6 +590,15 @@ export function criarInstanceService ({
         'Este número já está conectado. Desconecte antes de parear outro — pedir o código agora derrubaria a sessão que está no ar.'
       )
     }
+    const faltam = esperaDePareamento(instancia)
+    if (faltam > 0) {
+      throw new Error(
+        `Um código de pareamento foi pedido há pouco e ainda pode estar valendo. ` +
+        `Pedir outro agora INVALIDA o que está na tela — a biblioteca troca a chave ` +
+        `efêmera e descarta a tentativa anterior. Espere ${faltam}s.`
+      )
+    }
+
     if (acoes.statusAtual() === 'rodando') {
       const parado = acoes.parar()
       if (!parado.ok) throw new Error(parado.out)
@@ -590,6 +606,34 @@ export function criarInstanceService ({
     const resultado = acoes.iniciar(numero)
     if (!resultado.ok) throw new Error(resultado.out)
     return resultado
+  }
+
+  // Quantos segundos faltam para poder pedir outro código. 0 = pode pedir.
+  //
+  // A conta é sobre `codigoPareamentoEm`, que `src/state.js` grava quando um
+  // código REALMENTE nasceu — então uma tentativa que não produziu código
+  // (número torto, processo que nem subiu) não tranca ninguém.
+  //
+  // O intervalo é configurável (hardware.pareamentoIntervaloSegundos, padrão
+  // 180 s = PAIRING_CODE_MAX_AGE_SECONDS da zapo-js). Valor 0 ou negativo
+  // desliga a guarda; config ilegível não tranca, cai no padrão.
+  const INTERVALO_PAREAMENTO_PADRAO_S = 180
+  function esperaDePareamento (instancia) {
+    const config = lerJson(caminhoConfig(instancia)) || {}
+    const bruto = config?.hardware?.pareamentoIntervaloSegundos
+    const segundos = Number.isFinite(bruto) ? bruto : INTERVALO_PAREAMENTO_PADRAO_S
+    if (!(segundos > 0)) return 0
+
+    const em = estadoDa(instancia)?.codigoPareamentoEm
+    if (!Number.isFinite(em)) return 0
+
+    const decorrido = Date.now() - em
+    // Relógio para trás (ajuste de hora, estado copiado de outra máquina) não
+    // pode trancar para sempre: tempo negativo libera.
+    if (decorrido < 0) return 0
+
+    const restante = segundos * 1000 - decorrido
+    return restante > 0 ? Math.ceil(restante / 1000) : 0
   }
 
   function executarAcaoCicloDeVida (id, acao, opcoes = {}) {
@@ -752,17 +796,39 @@ export function criarInstanceService ({
   // Quadlet e reiniciar o container, uma operação mais pesada que não
   // existe ainda nem na CLI de terminal — redimensionar instância fica
   // pra quando alguém desenhar esse fluxo (recriar unit + daemon-reload).
+  // Concessões são do ADMINISTRADOR: moram no registro, nunca no config.json
+  // da instância — que é um arquivo dentro da pasta da instância e portanto
+  // editável por quem controla ela. Ver src/agent/concessoes.js.
+  function lerConcessoes (id) {
+    return (obterRegistro().grants || {})[id] || {}
+  }
+
   function obterOtimizacao (id) {
     const instancia = exigir(id)
     const config = lerJson(caminhoConfig(instancia)) || {}
+    const grants = lerConcessoes(id)
+    // O limite é aplicado na LEITURA, não só na gravação. Validar só na
+    // gravação protege de quem usa a tela; aplicar na leitura protege
+    // também de quem editou o config.json à mão, importou configuração ou
+    // chamou a rota direto. E é por isso que `configurado` e `emVigor`
+    // podem divergir: reduzir uma cota NÃO reescreve a escolha do cliente,
+    // ela volta a valer se a cota for devolvida.
+    const efetivo = concessoes.valoresEfetivos(config, grants)
     return {
-      bandwidthLimit: { ...BANDWIDTH_PADRAO, ...(config.hardware?.bandwidthLimit || {}) },
-      // QUANTOS COMANDOS AO MESMO TEMPO. O recurso disputado é a conexão com o
+      bandwidthLimit: {
+        downloadBytesPerSecond: efetivo['hardware.bandwidthLimit.downloadBytesPerSecond'],
+        uploadBytesPerSecond: efetivo['hardware.bandwidthLimit.uploadBytesPerSecond']
+      },
+      // QUANTOS COMANDOS AO MESMO TEMPO. O recurso disputado é a conexão com a
       // WhatsApp, que é uma só: sem limite, uma rajada de buscas sobe dezenas
       // de capas de uma vez e o socket estoura o tempo. Ver engine/fila.js.
-      comandosSimultaneos: config.hardware?.comandosSimultaneos ?? COMANDOS_SIMULTANEOS_PADRAO,
-      quarantineThreshold: config.confiabilidade?.falhasConsecutivasParaQuarentena ?? QUARENTENA_PADRAO,
-      resources: instancia.resources ?? { memory: null, cpus: null }
+      comandosSimultaneos: efetivo['hardware.comandosSimultaneos'],
+      quarantineThreshold: efetivo['confiabilidade.falhasConsecutivasParaQuarentena'],
+      resources: instancia.resources ?? { memory: null, cpus: null },
+      // O que a tela precisa para se explicar: valor configurado, limite
+      // permitido, o que está em vigor, de onde o limite vem, o que o campo
+      // significa, o que ele faz, e por que um valor não está disponível.
+      limites: concessoes.explicar(config, grants)
     }
   }
 
@@ -798,9 +864,38 @@ export function criarInstanceService ({
     return saida
   }
 
+  // Mapa entre o shape da rota (plano, histórico) e a chave da tabela de
+  // parâmetros. Sem isto, acrescentar parâmetro exigiria mexer em dois
+  // lugares — a divergência de camadas que este projeto já pagou caro.
+  const CHAVE_DO_CAMPO = {
+    'bandwidthLimit.downloadBytesPerSecond': 'hardware.bandwidthLimit.downloadBytesPerSecond',
+    'bandwidthLimit.uploadBytesPerSecond': 'hardware.bandwidthLimit.uploadBytesPerSecond',
+    comandosSimultaneos: 'hardware.comandosSimultaneos',
+    quarantineThreshold: 'confiabilidade.falhasConsecutivasParaQuarentena'
+  }
+
+  // Recusa com MOTIVO em vez de gravar um número e devolver outro: limitar
+  // calado é o que faz a pessoa achar que a tela está quebrada.
+  function conferirContraConcessao (id, mudancas) {
+    const grants = lerConcessoes(id)
+    const pedidos = []
+    if (mudancas.bandwidthLimit) {
+      for (const [nome, valor] of Object.entries(mudancas.bandwidthLimit)) {
+        if (valor !== undefined) pedidos.push([`bandwidthLimit.${nome}`, valor])
+      }
+    }
+    for (const nome of ['comandosSimultaneos', 'quarantineThreshold']) {
+      if (mudancas[nome] !== undefined) pedidos.push([nome, mudancas[nome]])
+    }
+    for (const [campo, valor] of pedidos) {
+      concessoes.validarPedido(CHAVE_DO_CAMPO[campo], valor, grants)
+    }
+  }
+
   function definirOtimizacao (id, patch) {
     const instancia = exigir(id)
     const mudancas = validarPatchOtimizacao(patch)
+    conferirContraConcessao(id, mudancas)
     const arquivo = caminhoConfig(instancia)
     const config = lerJson(arquivo) || {}
     config.hardware = { ...config.hardware }
@@ -819,6 +914,54 @@ export function criarInstanceService ({
     }
     escreverJsonAtomico(arquivo, config)
     return obterOtimizacao(id)
+  }
+
+  // ---- lado do ADMINISTRADOR ----
+  // Hoje o painel escuta só em 127.0.0.1 e não tem autenticação nem papéis
+  // (src/web/server.js:15,53), então quem alcança a porta JÁ é o
+  // administrador: estas duas funções são a camada de concessão, não um
+  // controle de acesso. Expor o painel na rede exige autenticação ANTES, e
+  // só então a diferença entre administrador e cliente passa a ser
+  // verificável. Está escrito em
+  // docs/engineering/lcn-v2/INSTANCE_LIMITS.md e é item da frente J.
+  function obterConcessoes (id) {
+    exigir(id)
+    return { concessoes: lerConcessoes(id), parametros: concessoes.PARAMETROS }
+  }
+
+  function definirConcessoes (id, patch) {
+    exigir(id)
+    const mudancas = concessoes.validarConcessao(patch)
+    const registro = obterRegistro()
+    const grants = { ...(registro.grants || {}) }
+    const atual = { ...(grants[id] || {}) }
+    for (const [chave, valor] of Object.entries(mudancas)) {
+      if (valor === null) delete atual[chave] // retirar a concessão devolve o padrão
+      else atual[chave] = valor
+    }
+    grants[id] = atual
+    gravarRegistro({ ...registro, grants })
+    // O REGISTRO NÃO É MONTADO NO CONTAINER (ver src/instances/quadlet.js) —
+    // de propósito: a instância não pode ler nem reescrever o teto que lhe
+    // deram. Então gravar aqui não basta: o teto tem de ser REESCRITO na unit,
+    // que é o lado do administrador, no host. Sem isso a concessão valeria só
+    // no painel e o runtime seguiria com o valor antigo.
+    const unitReescrita = reescreverUnitComConcessoes(id, atual)
+    // Não reiniciamos por conta própria: isso derrubaria o serviço de um
+    // cliente sem ninguém pedir. A tela diz que falta reiniciar.
+    return { concessoes: atual, unitReescrita, precisaReiniciar: unitReescrita }
+  }
+
+  // Devolve `false` quando não há unit a reescrever (bare, instância simples
+  // descoberta, ou unit que não existe no disco), e nunca lança por isso: a
+  // concessão já está gravada no registro e o painel já a mostra.
+  function reescreverUnitComConcessoes (id, concessoesDaInstancia) {
+    if (id === ID_BARE) return false
+    const instancia = buscarPorId(obterRegistro(), id)
+    if (!instancia || typeof instancia.unitFile !== 'string') return false
+    if (!fs.existsSync(instancia.unitFile)) return false
+    fs.writeFileSync(instancia.unitFile, gerarQuadlet(instancia, concessoesDaInstancia))
+    return true
   }
 
   // Painel de recursos (Parte C, Módulo 6 do plano) — leitura do uso REAL,
@@ -851,7 +994,14 @@ export function criarInstanceService ({
     }
     const estado = estadoDa(instancia) || {}
     const config = lerJson(caminhoConfig(instancia)) || {}
-    const limite = { ...BANDWIDTH_PADRAO, ...(config.hardware?.bandwidthLimit || {}) }
+    // Limite EFETIVO, não o configurado: o painel de recursos mostrando
+    // "sem limite" enquanto a concessão corta em 1 MB/s mentiria para quem
+    // está tentando entender por que o download está devagar.
+    const efetivo = concessoes.valoresEfetivos(config, lerConcessoes(id))
+    const limite = {
+      downloadBytesPerSecond: efetivo['hardware.bandwidthLimit.downloadBytesPerSecond'],
+      uploadBytesPerSecond: efetivo['hardware.bandwidthLimit.uploadBytesPerSecond']
+    }
 
     // 1. Gateway: lido do state.json (bloco memoria gravado por state.js, com fallback para memoriaMB)
     let gatewayMB = null
@@ -953,5 +1103,5 @@ export function criarInstanceService ({
     return { lines: saida.trimEnd().split('\n') }
   }
 
-  return { listar, obter, criar, remover, iniciar, parar, reiniciar, pareamento, obterOtimizacao, definirOtimizacao, obterUso, obterLogs }
+  return { listar, obter, criar, remover, iniciar, parar, reiniciar, pareamento, obterOtimizacao, definirOtimizacao, obterConcessoes, definirConcessoes, obterUso, obterLogs }
 }

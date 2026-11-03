@@ -32,7 +32,11 @@ check('formatarId não trunca números grandes', formatarId(123456), 'wa-123456'
 // lerRegistro num caminho inexistente devolve um registro vazio válido, não lança.
 const arqTmp = path.join(os.tmpdir(), `lcn-registry-test-${process.pid}-${Date.now()}.json`)
 const registroVazio = lerRegistro(arqTmp)
-check('registro inexistente vira vazio válido', registroVazio, { version: 1, nextSeq: 1, instances: {} })
+// `grants` entra na forma vazia porque o teto do administrador mora no
+// registro, FORA da pasta da instância (src/agent/concessoes.js). Esta
+// asserção é de forma exata de propósito: ela é a guarda de que `validar`
+// não descarta o mapa de concessões, que é a chave do cofre.
+check('registro inexistente vira vazio válido', registroVazio, { version: 1, nextSeq: 1, instances: {}, grants: {} })
 
 // Adicionar instância aloca id sequencial e não muta o registro original.
 const { registro: r1, instancia: inst1 } = adicionarInstancia(registroVazio, { label: 'Suporte', expectedPhoneE164: '+5511999999999' })
@@ -86,7 +90,7 @@ const leitorFake = (p) => {
 // — a varredura real de diretório fica coberta pela verificação manual do
 // plano (rodar `lcn instances rebuild-registry` de verdade).
 const registroReconstruidoVazio = reconstruirDeInstanceJsons(pastaFake, leitorFake)
-check('pasta de instâncias inexistente não lança, devolve registro vazio', registroReconstruidoVazio, { version: 1, nextSeq: 1, instances: {} })
+check('pasta de instâncias inexistente não lança, devolve registro vazio', registroReconstruidoVazio, { version: 1, nextSeq: 1, instances: {}, grants: {} })
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO REGISTRO DE INSTÂNCIAS PASSARAM')
 process.exit(falhas ? 1 : 0)

@@ -5,6 +5,8 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { spawn, spawnSync } from 'child_process'
 import { ARQ_RUNTIME, RAIZ, PASTA_DADOS } from './paths.js'
+import { lerRegistro } from './instances/registry.js'
+import { CHAVE_DE_AMBIENTE, serializarConcessoes } from './agent/concessoes.js'
 
 const ARQ_PID_BOT = path.join(PASTA_DADOS, 'bot.pid')
 
@@ -176,19 +178,40 @@ export function statusServico () {
 // O número chega aqui JÁ CONFERIDO (só dígitos, com DDI): quem confere é a
 // camada de cima, que é onde mora `numeroParaParear`. Esta função não inventa
 // validação própria — duas validações do mesmo campo divergem.
+// Nunca lança: registro ilegível não pode impedir o bot de subir. Falha cai
+// para "sem concessão", que é o comportamento de antes desta camada.
+function registroDoDisco () {
+  try { return lerRegistro() } catch { return {} }
+}
+
+// O que se ACRESCENTA ao ambiente do bot, e só isso. Fica separada do spawn
+// porque é a única parte decidível: o resto de `iniciarBot` nasce um processo
+// solto, que nenhum teste pode acordar sem subir o bot de verdade.
+export function ambienteDoBot ({ pairNumber = null, registro = registroDoDisco() } = {}) {
+  const extras = {}
+  if (pairNumber) extras.LCN_PAIR_NUMBER = pairNumber
+  // O bare não tem container nem unit: o único caminho pelo qual o teto do
+  // administrador chega ao processo é o ambiente de quem o sobe. O registro
+  // guarda a concessão do bare em `grants.bare` — ver src/agent/concessoes.js.
+  const concessaoBare = serializarConcessoes((registro?.grants || {}).bare || {})
+  if (concessaoBare) extras[CHAVE_DE_AMBIENTE] = concessaoBare
+  return extras
+}
+
 export function iniciarBot ({ pairNumber = null } = {}) {
   if (statusServico() === 'rodando') return { ok: false, out: 'Bot já está rodando.' }
   const entrada = path.join(RAIZ, 'index.js')
   if (!fs.existsSync(entrada)) return { ok: false, out: 'Não encontrei o index.js na raiz do projeto.' }
   const argumentos = pairNumber ? [entrada, '--code'] : [entrada]
+  const extras = ambienteDoBot({ pairNumber })
   const filho = spawn(process.execPath, argumentos, {
     detached: true,
     stdio: 'ignore',
     cwd: RAIZ,
-    // Sem pareamento o ambiente é HERDADO como sempre foi. Passar um `env`
-    // montado também no caminho normal mudaria o que o bot recebe por causa de
-    // um recurso que ele nem está usando.
-    ...(pairNumber ? { env: { ...process.env, LCN_PAIR_NUMBER: pairNumber } } : {})
+    // Sem pareamento e sem concessão o ambiente é HERDADO como sempre foi.
+    // Passar um `env` montado também no caminho normal mudaria o que o bot
+    // recebe por causa de um recurso que ele nem está usando.
+    ...(Object.keys(extras).length ? { env: { ...process.env, ...extras } } : {})
   })
   filho.unref()
   return {

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import { ARQ_DB } from '../paths.js'
 import { garantirAutomacoesNativas } from './nativeAutomations.js'
 import { carregar, PADRAO } from '../../config.js'
+import { valorEfetivo, concessoesDoProcesso } from '../../agent/concessoes.js'
 
 const PASTA_MIGRACOES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations')
 
@@ -91,7 +92,11 @@ export function abrirBanco (arquivo = ARQ_DB, { pastaMigracoes = PASTA_MIGRACOES
       : (() => {
           try { return carregar()?.hardware?.cacheSqliteMB } catch { return PADRAO?.hardware?.cacheSqliteMB }
         })()
-    const kib = resolverCacheSqliteKiB(mbEfetivo)
+    // O teto do administrador vale na LEITURA também: cache pedido acima da
+    // concessão é cortado aqui, não só recusado na gravação pelo painel.
+    const kib = resolverCacheSqliteKiB(
+      valorEfetivo('hardware.cacheSqliteMB', { hardware: { cacheSqliteMB: mbEfetivo } }, concessoesDoProcesso())
+    )
     db.pragma(`cache_size = -${kib}`)
 
     rodarMigrations(db, pastaMigracoes)

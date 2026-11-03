@@ -17,7 +17,7 @@ import { ARQ_REGISTRO, PASTA_LCN, caminhoInstancia, caminhoUnit, nomeContainer }
 export const VERSAO_REGISTRO = 1
 
 function registroVazio () {
-  return { version: VERSAO_REGISTRO, nextSeq: 1, instances: {} }
+  return { version: VERSAO_REGISTRO, nextSeq: 1, instances: {}, grants: {} }
 }
 
 // Sequencial (wa-000001, wa-000002, ...), não ULID — de propósito: é uma
@@ -31,7 +31,13 @@ function validar (bruto) {
   if (!bruto || typeof bruto !== 'object') return registroVazio()
   const instances = bruto.instances && typeof bruto.instances === 'object' ? bruto.instances : {}
   const nextSeq = Number.isInteger(bruto.nextSeq) && bruto.nextSeq > 0 ? bruto.nextSeq : 1
-  return { version: VERSAO_REGISTRO, nextSeq, instances }
+  // Concessões por instância (src/agent/concessoes.js). Ficam num mapa no
+  // TOPO do registro, não dentro de `instances[id]`, por dois motivos: a
+  // instância do modo simples (`bare`) não tem entrada no registro e também
+  // precisa de teto; e `validar` descarta chave que não conhece, então uma
+  // concessão escondida dentro da instância se perderia na primeira escrita.
+  const grants = bruto.grants && typeof bruto.grants === 'object' ? bruto.grants : {}
+  return { version: VERSAO_REGISTRO, nextSeq, instances, grants }
 }
 
 export function lerRegistro (caminho = ARQ_REGISTRO) {
