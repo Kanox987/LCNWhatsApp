@@ -1,0 +1,14 @@
+-- Quando um provisionamento é repetido, a instalação viva pode ganhar itens
+-- que faltavam: o §8 exige "instalação parcial e recuperação após falha", e o
+-- defeito medido era `registrarInstalacao` devolver os itens antigos sem
+-- comparar com os membros recebidos — um membro novo era PERDIDO em silêncio.
+--
+-- Esta coluna registra QUANDO a composição foi reconciliada. Sem ela, "o
+-- registro foi reparado" e "o registro nasceu assim" ficam indistinguíveis, e
+-- quem audita uma recuperação não tem a data do reparo.
+--
+-- Vai por migração própria, e não editando a 013, porque a 013 já está
+-- registrada em `schema_migrations` nos bancos de desenvolvimento: mudar o
+-- arquivo aplicado não acrescenta coluna em banco nenhum, e `rodarMigrations`
+-- (db.js:63) pula versão já aplicada em silêncio.
+ALTER TABLE package_installations ADD COLUMN reconciled_at TEXT;

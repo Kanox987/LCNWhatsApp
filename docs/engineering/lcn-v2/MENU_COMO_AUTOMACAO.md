@@ -31,22 +31,29 @@ coisa.
 ## O que o menu é agora
 
 O template `menu` do catálogo (`src/engine/templates/catalog/menu.lcn`, v2),
-instalado como automação comum. O boot semeia uma vez
-(`src/engine/server/menuPadrao.js`, `garantirMenuPadrao`) e nunca mais: o
-marcador em `menu_padrao_semeadura` é o que faz a remoção sobreviver ao
-reinício.
+instalado como automação comum, pelo mesmo
+`POST /templates/menu/install` que qualquer outro template do painel usa.
 
-O documento semeado é escrito **em linha** (`documentoDoMenu()`) em vez de ler
-o catálogo, porque `carregarCatalogo()` custa ~63 ms e isso rodaria a cada
-`abrirBanco()`. A guarda contra defasagem entre os dois não é confiança: é
-`tests/menu-padrao.test.mjs`, que renderiza o template de verdade e exige
-documento idêntico.
+**Instância nova não ganha menu nenhum.** A primeira versão desta frente
+semeava o menu em todo banco recém-criado, e isso tornava impossível o primeiro
+requisito da frente D — "uma instância deve poder começar completamente vazia".
+Hoje `src/engine/server/menuPadrao.js` exporta `migrarMenuLegado`, que só faz
+duas coisas na abertura do banco: garante um pool comum (pool é infraestrutura;
+sem nenhum pool nada é instalável, porque `responder.poolId` é obrigatório no
+schema) e **converte** o `__native_menu__` de quem já tinha menu nativo. Quem
+quer menu instala o template — pelo painel, ou pelo pacote escolhido no
+provisionamento.
 
-A única diferença legítima entre os dois é o `scope`, e é de propósito: nenhum
-dos 121 templates declara `onde:` — quem instala pelo painel escolhe o escopo na
-tela, e o menu semeado, que não passa por essa tela, nasce com
-`em todo lugar` (escopo vazio não significa "em tudo": `escopoCasa` recusa, e o
-menu ficaria mudo em toda conversa).
+O marcador em `menu_padrao_semeadura` continua gravado nos dois casos, com
+`automation_id` NULO quando nada foi semeado. É o que faz a remoção sobreviver
+ao reinício e impede que uma versão futura leia "não tem menu" como "nunca
+passou por aqui".
+
+Quando o menu é instalado pelo painel, quem instala escolhe o escopo na tela —
+e escopo vazio não significa "em tudo" (`escopoCasa` recusa, e o menu ficaria
+mudo em toda conversa). A conversão do menu legado preenche `em todo lugar`
+quando o documento antigo vinha com escopo vazio, porque era isso que o bypass
+de `native` fazia de fato.
 
 ## Os dez testes obrigatórios do §7
 

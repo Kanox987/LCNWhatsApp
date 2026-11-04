@@ -1,14 +1,15 @@
 // Módulo 5 da Parte C do plano — o /menu (`action.menu.render`).
 //
 // O /menu JÁ NÃO É NATIVO: não há mais coluna de privilégio nem bypass de
-// escopo. Ele é uma automação comum, de id `menu`, que `abrirBanco()` instala
-// a partir do template editável do catálogo (ver menuPadrao.js) declarando
+// escopo. Ele é uma automação comum, de id `menu`, instalada aqui pela
+// MESMA rota de qualquer outro template (ver a chamada abaixo), declarando
 // `onde: em qualquer lugar`. Logo ele responde em qualquer conversa porque
 // ASSIM ESTÁ ESCRITO no documento dele, e não porque o motor abre exceção —
 // o dono pode editar esse escopo, trocar o gatilho, desligar ou remover.
 // Banco :memory: — nunca o banco real do motor.
 import { abrirBanco } from '../src/engine/server/db.js'
 import { avaliarEvento } from '../src/engine/server/evaluator.js'
+import { criarApi } from '../src/engine/server/api.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -16,6 +17,19 @@ const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅
 const db = abrirBanco(':memory:')
 const agora = new Date().toISOString()
 db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p-menu', 'Pool menu', agora, agora)
+
+// Desde a frente D a inicialização NÃO provisiona nada: o menu entra pela rota
+// comum, como qualquer template. E como `menu.lcn` declara
+// `depende de: config-menu`, a instalação resolve os DOIS membros — nenhum dos
+// dois tem padrão para `poolId`, então os dois precisam de parâmetro.
+await criarApi(db).resolver('POST', '/templates/menu/install', {
+  body: {
+    scope: { include: [{ kind: 'everywhere' }] },
+    parameters: { menu: { poolId: 'p-menu' }, 'config-menu': { poolId: 'p-menu' } }
+  },
+  query: new URLSearchParams(''),
+  req: { headers: {} }
+})
 
 function criarAutomacao ({ id, scopeId, scopeKind = 'contact', display, deploymentMode = 'live', enabled = true, command = `/${id}` }) {
   const doc = {
@@ -56,6 +70,12 @@ const ID_DO_MENU = 'menu'
 // O próprio /menu é um item da lista como qualquer outro comando publicado
 // naquela conversa. Quem não quiser vê-lo ali escreve `menu: não` no .lcn dele.
 const LINHA_DO_MENU = '• /menu — Mostra esta lista de comandos'
+// O par do menu, que vem junto por declaração e não por acaso: `menu.lcn` tem
+// `depende de: config-menu`, então instalar um instala os dois, e os dois ficam
+// publicados naquela conversa. Aparecer na lista é o certo — quem não quiser o
+// item escreve `menu: não` no .lcn dele.
+const LINHA_DO_CONFIG = '• /configmenu — Muda o texto do menu desta conversa (só o dono)'
+const PAR_DO_MENU = [LINHA_DO_MENU, LINHA_DO_CONFIG].sort()
 
 function textoDoMenu (resultado) {
   const menu = resultado.results.find((r) => r.automationId === ID_DO_MENU)
@@ -74,14 +94,14 @@ try {
   const semNadaEmEscopo = await avaliarEvento(db, eventoMenu({ chatId: '5511000000001@s.whatsapp.net', msgId: 'M1' }))
   check('o /menu responde num chat sem nenhuma OUTRA automação escopada (escopo declarado, não bypass)',
     !!textoDoMenu(semNadaEmEscopo), textoDoMenu(semNadaEmEscopo))
-  check('e ali ele lista a si mesmo, único comando publicado naquela conversa',
-    JSON.stringify(itensDoMenu(semNadaEmEscopo)) === JSON.stringify([LINHA_DO_MENU]),
+  check('e ali ele lista a si mesmo e o par dele, os únicos publicados naquela conversa',
+    JSON.stringify(itensDoMenu(semNadaEmEscopo)) === JSON.stringify(PAR_DO_MENU),
     JSON.stringify(itensDoMenu(semNadaEmEscopo)))
 
   criarAutomacao({ id: 'ping', scopeId: '5511000000002@s.whatsapp.net', display: { menuLabel: '/ping', menuDescription: 'Testa a latência' } })
   const comPing = await avaliarEvento(db, eventoMenu({ chatId: '5511000000002@s.whatsapp.net', msgId: 'M2' }))
   check('/menu lista automação visível com label e descrição customizados',
-    JSON.stringify(itensDoMenu(comPing)) === JSON.stringify([LINHA_DO_MENU, '• /ping — Testa a latência'].sort()),
+    JSON.stringify(itensDoMenu(comPing)) === JSON.stringify([...PAR_DO_MENU, '• /ping — Testa a latência'].sort()),
     JSON.stringify(itensDoMenu(comPing)))
 
   const outroContato = await avaliarEvento(db, eventoMenu({ chatId: '5511000000003@s.whatsapp.net', msgId: 'M3' }))
@@ -100,7 +120,7 @@ try {
   check('automação desabilitada NUNCA aparece no /menu', !textoDoMenu(comDesligada).includes('/desligada'))
 
   const listaAutomacoes = db.prepare('SELECT id FROM automations').all().map((r) => r.id)
-  check('o /menu existe de verdade no banco, instalado por abrirBanco()', listaAutomacoes.includes(ID_DO_MENU))
+  check('o /menu existe de verdade no banco, instalado pela rota comum', listaAutomacoes.includes(ID_DO_MENU))
   // E nasce EDITÁVEL: documento normal, no modo ao vivo, sem marca de nativo.
   const linha = db.prepare('SELECT enabled, deployment_mode, active_revision_id, native FROM automations WHERE id = ?').get(ID_DO_MENU)
   check('o /menu é automação comum: ligada, ao vivo, com revisão ativa e SEM marca de nativo',

@@ -2,6 +2,7 @@ template atendimento v1
   nome: Chamar atendimento humano
   descrição: A pessoa pede para falar com gente de verdade, e o bot CALA nesta conversa até alguém devolver. É o que separa uma plataforma de atendimento de um bot cheio de comandos: sem isso, o cliente que escreve "quero falar com uma pessoa" continua recebendo cardápio automático no meio da conversa com o atendente.
   categoria: utilitarios
+  depende de: devolver-ao-bot
 
 automação
   nome: Chamar atendimento humano

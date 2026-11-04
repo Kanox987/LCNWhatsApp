@@ -2371,9 +2371,10 @@ function candidatosPublicados (db) {
 // NÃO EXISTE MAIS BYPASS DE ESCOPO. Automação do sistema pulava a checagem
 // porque "scope.include vazio nunca casa com tudo" foi pensado pra conteúdo
 // autorado pelo usuário, e o /menu nativo precisava responder em qualquer
-// chat. Agora o menu é automação comum e diz onde responde — o template já
-// nasce com `em qualquer lugar` (ver menuPadrao.js), que é a mesma coisa dita
-// pelas regras que valem pra todo mundo.
+// chat. Agora o menu é automação comum e diz onde responde: quem instala o
+// template escolhe o escopo, e a conversão do menu legado preenche
+// `em qualquer lugar` (ver menuPadrao.js) — pelas regras que valem pra todo
+// mundo, sem exceção no avaliador.
 
 // Lista as automações publicadas, ao vivo e habilitadas visíveis no chat do
 // evento — base do /menu. Reusa exatamente a mesma semântica de escopo

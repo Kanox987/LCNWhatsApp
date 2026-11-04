@@ -107,7 +107,7 @@ export const api = {
     enable: (id, enabled) => request(`/automations/${segment(id)}/enabled`, { method: 'PUT', body: { enabled } }),
     setMode: (id, mode) => request(`/automations/${segment(id)}/deployment-mode`, { method: 'PUT', body: { mode } }),
     getReconfigure: (id) => request(`/automations/${segment(id)}/reconfigure`),
-    reconfigure: (id, parameters) => request(`/automations/${segment(id)}/reconfigure`, { method: 'PUT', body: { parameters } }),
+    reconfigure: (id, parameters, confirmo = false) => request(`/automations/${segment(id)}/reconfigure`, { method: 'PUT', body: confirmo ? { parameters, confirmo: true } : { parameters } }),
     // A automação como texto. O documento continua sendo a verdade guardada;
     // isto é a mesma coisa numa forma que dá pra ler e editar.
     criarLcn: (texto) => request('/automations/lcn', { method: 'POST', body: { texto } }),

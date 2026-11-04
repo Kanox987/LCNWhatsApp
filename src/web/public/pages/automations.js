@@ -44,17 +44,25 @@ async function painelReconfiguracao (automation, { refresh }) {
       [definition.help, `Tipo: ${rotuloTipo(definition)}.`].filter(Boolean).join(' '))
   })
 
+  // Com edição à mão por baixo de um template novo, salvar a substitui. O
+  // servidor só aplica com a confirmação; a caixa a produz.
+  const confirmar = info.exigeConfirmacao ? el('input', { type: 'checkbox' }) : null
+
   const salvar = button('Salvar configuração', {
     variant: 'primary',
     onClick: async (event) => {
       const control = event.currentTarget
+      if (confirmar && !confirmar.checked) {
+        notify('Marque a confirmação: salvar substitui o que foi alterado à mão.', 'danger')
+        return
+      }
       setBusy(control, true, 'Salvando…')
       try {
         const parameters = {}
         for (const definition of info.parameters || []) {
           parameters[definition.key] = valorParametro(definition, controles.get(definition.key))
         }
-        await api.automations.reconfigure(automation.id, parameters)
+        await api.automations.reconfigure(automation.id, parameters, Boolean(confirmar?.checked))
         notify('Configuração salva e republicada.')
         await refresh()
       } catch (error) {
@@ -79,6 +87,7 @@ async function painelReconfiguracao (automation, { refresh }) {
     aviso,
     el('p', { className: 'muted compact', text: 'Salvar aplica os valores e republica a automação. O destino escolhido na instalação é preservado.' }),
     el('div', { className: 'form-grid' }, campos),
+    confirmar ? el('label', { className: 'switch-row' }, [confirmar, el('span', { text: `Entendo que salvar substitui o que foi alterado à mão (${(info.divergencias || []).join(', ')}).` })]) : null,
     el('div', { className: 'button-row' }, [salvar])
   ].filter(Boolean))
 }

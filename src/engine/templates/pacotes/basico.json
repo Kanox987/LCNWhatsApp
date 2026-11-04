@@ -1,0 +1,12 @@
+{
+  "packageId": "basico",
+  "packageVersion": 1,
+  "name": "Pacote básico",
+  "description": "O mínimo para a instância responder: menu, ajuda, teste de vida e identificação. Nada depende de serviço externo.",
+  "items": [
+    { "itemKey": "menu", "templateId": "menu", "templateVersion": 2 },
+    { "itemKey": "ajuda", "templateId": "ajuda", "templateVersion": 1 },
+    { "itemKey": "ping", "templateId": "ping", "templateVersion": 1 },
+    { "itemKey": "meu-id", "templateId": "meu-id", "templateVersion": 1 }
+  ]
+}

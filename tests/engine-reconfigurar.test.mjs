@@ -165,9 +165,24 @@ try {
       /se perde/.test(r.aviso || ''), r.aviso)
     check('a tela recebe a versão do catálogo para mostrar', r.templateVersion === 1, String(r.templateVersion))
 
-    // E aplicar FUNCIONA — é o ponto: era isto que estava bloqueado.
-    await api.resolver('PUT', '/automations/meu-ping/reconfigure', contexto({
+    check('o aviso passa a EXIGIR confirmação, porque há edição à mão por baixo',
+      r.exigeConfirmacao === true, String(r.exigeConfirmacao))
+
+    // A confirmação é do SERVIDOR, não da tela: PUT direto, sem ela, é recusado
+    // e a edição à mão continua lá. Antes isto aplicava calado (medido).
+    const semConfirmar = await capturarErro('PUT', '/automations/meu-ping/reconfigure', {
       parameters: { command: '/depois-da-versao', poolId: 'p' }
+    })
+    check('aplicar sem confirmação, com edição à mão por baixo -> 409',
+      semConfirmar?.status === 409 && /confirmo/.test(semConfirmar?.message || ''), String(semConfirmar?.status))
+    const aindaEditada = await api.resolver('GET', '/automations/meu-ping', contexto())
+    check('e a edição à mão sobrevive à tentativa',
+      aindaEditada.draft.document.flow.nodes.find((n) => n.type === 'action.whatsapp.reply').config.text === 'resposta escrita à mão')
+
+    // E aplicar FUNCIONA com a confirmação — é o ponto: era isto que estava bloqueado.
+    await api.resolver('PUT', '/automations/meu-ping/reconfigure', contexto({
+      parameters: { command: '/depois-da-versao', poolId: 'p' },
+      confirmo: true
     }))
     const ativa = await api.resolver('GET', '/automations/meu-ping', contexto())
     check('salvar com o template novo publica o valor novo',
@@ -187,6 +202,26 @@ try {
     const r = await api.resolver('GET', '/automations/meu-ping/reconfigure', contexto())
     check('sem divergência, o aviso não ameaça perder nada',
       r.podeReconfigurar === true && /nada seu se perde/.test(r.aviso || ''), r.aviso)
+  }
+
+  {
+    // Rascunho NÃO publicado por cima da revisão ativa. Reconfigurar regrava o
+    // rascunho e publica: sem a guarda, a edição pendente virava a ativa com o
+    // conteúdo do template (medido por sonda).
+    const antes = await api.resolver('GET', '/automations/meu-ping', contexto())
+    const rascunho = JSON.parse(JSON.stringify(antes.draft.document))
+    rascunho.flow.nodes.find((n) => n.type === 'action.whatsapp.reply').config.text = 'rascunho ainda nao publicado'
+    await api.resolver('PUT', '/automations/meu-ping/draft', contexto({ document: rascunho }))
+    const form = await api.resolver('GET', '/automations/meu-ping/reconfigure', contexto())
+    check('com rascunho pendente o formulário FECHA', form.podeReconfigurar === false, String(form.podeReconfigurar))
+    check('e o motivo manda publicar ou descartar', /rascunho/.test(form.motivo || '') && /publique ou descarte/.test(form.motivo || ''), form.motivo)
+    const barrado = await capturarErro('PUT', '/automations/meu-ping/reconfigure', {
+      parameters: { command: '/outro', poolId: 'p' }, confirmo: true
+    })
+    check('aplicar com rascunho pendente é 409 MESMO com confirmação', barrado?.status === 409, String(barrado?.status))
+    const sobrou = await api.resolver('GET', '/automations/meu-ping', contexto())
+    check('o rascunho continua lá, intacto',
+      sobrou.draft.document.flow.nodes.find((n) => n.type === 'action.whatsapp.reply').config.text === 'rascunho ainda nao publicado')
   }
 } catch (erro) {
   falhas++

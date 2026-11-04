@@ -1,0 +1,239 @@
+{
+  "versaoDaTrava": 1,
+  "pacotes": {
+    "administracao": {
+      "packageVersion": 1,
+      "conexoesExigidas": [],
+      "membros": [
+        {
+          "itemKey": "promover",
+          "templateId": "promover",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "227761484252919700d24920bd295000a705da23986b41aed8b30ee6b444182a"
+        },
+        {
+          "itemKey": "rebaixar",
+          "templateId": "rebaixar",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "a10727513c1b071dc6df67a94bca122504c7a6035e75b266e130ab9a4176906b"
+        },
+        {
+          "itemKey": "banir",
+          "templateId": "banir",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "419bcc04bca2d0f2f06338666e51958b3feb8071666eb21a7dab3f27adb4fd1f"
+        },
+        {
+          "itemKey": "silenciar",
+          "templateId": "silenciar",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "5fe4d13e2856cafa07364b98d50f86f5720b4f3cb9fdea7d18edac4ede5590d8"
+        },
+        {
+          "itemKey": "dessilenciar",
+          "templateId": "dessilenciar",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "4589edcb80857dd0bfb9eb5b0fde354071c910c6103a2a937885188fc0e8ac7c"
+        },
+        {
+          "itemKey": "nome-do-grupo",
+          "templateId": "nome-do-grupo",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "5ff696321bb897c58a423e3cce474a070168cacd1aa904cdee74b04e3b3f79f7"
+        },
+        {
+          "itemKey": "descricao-do-grupo",
+          "templateId": "descricao-do-grupo",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "0343a1d8a9abe8f5390a3c2c9016a0b77a340e2171957ab595420e8d2cbcac7a"
+        },
+        {
+          "itemKey": "trancar-grupo",
+          "templateId": "trancar-grupo",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "7c46780a6b5de9fd80c411b520c83a12953563624b135c5866c3564f0743d550"
+        },
+        {
+          "itemKey": "link-do-grupo",
+          "templateId": "link-do-grupo",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "3f01ce76e0d7aafbe8f2433bdf3fa0578f0c57364e684c94cc406c9d53d4cd56"
+        },
+        {
+          "itemKey": "membros",
+          "templateId": "membros",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "a1b71e965ebd1898288a5a43aca8d7308e77edd35632370f5a30a40bb2b026ac"
+        },
+        {
+          "itemKey": "marcar-todos",
+          "templateId": "marcar-todos",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "bb0dcbf3a88530c530155f2ddfc8478ef45786d62345a4a03c55f067591e2136"
+        }
+      ]
+    },
+    "atendimento": {
+      "packageVersion": 1,
+      "conexoesExigidas": [],
+      "membros": [
+        {
+          "itemKey": "devolver-ao-bot",
+          "templateId": "devolver-ao-bot",
+          "templateVersion": 1,
+          "origem": "dependencia",
+          "contentHash": "ed45cfd6b9aa2fbb52af2c0708a76a4ad81f7f42dc69a257772f22d3ae3e2ff1"
+        },
+        {
+          "itemKey": "atendimento",
+          "templateId": "atendimento",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "7e09f7567e9340400b8ff70fdb2f290a99a456997c811d237cc153c1763d140c"
+        },
+        {
+          "itemKey": "ver-produto",
+          "templateId": "ver-produto",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "4fd412f0b5a1e3dadc66f921ec62d940c3482e2cb101d441c6636b179babbdef"
+        },
+        {
+          "itemKey": "enviar-do-acervo",
+          "templateId": "enviar-do-acervo",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "80e631806d320186702e2b2e3d2f9be5db73617e7df3cd421c599ccffb8e55aa"
+        },
+        {
+          "itemKey": "botoes-escolha",
+          "templateId": "botoes-escolha",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "f2596bdc1c23ecab43bf1044fe4cdf49c00a80c811ae564755af4d259d61be5d"
+        },
+        {
+          "itemKey": "lista-numerada",
+          "templateId": "lista-numerada",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "baa4b8ed8997a11841517e20f49818aceee5c7a5e82b28a38af7d6b29a071f19"
+        },
+        {
+          "itemKey": "comunicado",
+          "templateId": "comunicado",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "c1767882c995482644b0444fb90868a7a0a2bd5989563663ceae7ef42f9ef293"
+        }
+      ]
+    },
+    "basico": {
+      "packageVersion": 1,
+      "conexoesExigidas": [],
+      "membros": [
+        {
+          "itemKey": "config-menu",
+          "templateId": "config-menu",
+          "templateVersion": 1,
+          "origem": "dependencia",
+          "contentHash": "b044de955afefca67d3dc45b3fe5c8249437cd8362693d87fc0e02e1cfc079c0"
+        },
+        {
+          "itemKey": "menu",
+          "templateId": "menu",
+          "templateVersion": 2,
+          "origem": "pedido",
+          "contentHash": "495ceb198a038f6ebe64b6fcf4fc63d21e8ed481380d58ca7c17ec6c918f092e"
+        },
+        {
+          "itemKey": "ajuda",
+          "templateId": "ajuda",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "540b015e77cf7db3b42060b23e6143dcd4ee0a677b2be4222fb73af118b94f4b"
+        },
+        {
+          "itemKey": "ping",
+          "templateId": "ping",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "37d2832c36695731682090d35147dc03d64b4c3a1936b78d16182dfb4b72fc92"
+        },
+        {
+          "itemKey": "meu-id",
+          "templateId": "meu-id",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "fcad194097105a7593e81dd46f0ed6d053ef1c0e4d21d156e4cc2a2220e97509"
+        }
+      ]
+    },
+    "protecao": {
+      "packageVersion": 1,
+      "conexoesExigidas": [],
+      "membros": [
+        {
+          "itemKey": "anti-link",
+          "templateId": "anti-link",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "836125936aa5d6c62c4ac8200f4a0271f395aaeb0e72b6f5dff39f957f9ff46a"
+        },
+        {
+          "itemKey": "antipalavrao",
+          "templateId": "antipalavrao",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "ead3cb74b8a293dc7d0cd6298c69c061e63a87723d14d3339031d38f798c3f0d"
+        },
+        {
+          "itemKey": "porteiro",
+          "templateId": "porteiro",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "fd41299572579a42b5fa3ddba04ec0ff9adce23774630dccb78fcea9bddb0b35"
+        },
+        {
+          "itemKey": "advertir",
+          "templateId": "advertir",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "007d77419658ead122cc5443ffd441ca03fc574c81a58bdb0ee4b29efdc51b61"
+        },
+        {
+          "itemKey": "antifake",
+          "templateId": "antifake",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "5ce0f1d48bb60589ab51b0c2c49a3b9a4c8fcd14fdc13e3227b07324f16ce684"
+        },
+        {
+          "itemKey": "anti-visualizacao-unica",
+          "templateId": "anti-visualizacao-unica",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "fdd139d8a635a5ba2a6b4fbfe21a8f69cb6323e0b148873fcc351f9d20d1690d"
+        },
+        {
+          "itemKey": "regras-do-grupo",
+          "templateId": "regras-do-grupo",
+          "templateVersion": 1,
+          "origem": "pedido",
+          "contentHash": "a02504e80994a9a9de2abed0818747a8ec38870ec6ac50ffde3426e1663e4bf4"
+        }
+      ]
+    }
+  }
+}

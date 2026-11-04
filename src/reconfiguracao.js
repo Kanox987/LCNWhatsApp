@@ -95,11 +95,43 @@ function frasesDeAjuste (ajustes) {
     : `"${a.chave}": ${a.de} vira ${a.para} (${a.motivo})`)
 }
 
+// A COMPARAÇÃO "o documento ainda é o que o template produz?", num lugar só.
+//
+// Duas telas precisam da mesma resposta: o formulário de reconfigurar ("dá para
+// regerar sem apagar o que a pessoa escreveu?") e o provisionamento de pacote
+// ("este item já está instalado como o template manda, ou mexeram nele?").
+// Enquanto isso vivia só dentro de analisarReconfiguracao, a segunda nasceria
+// como uma SEGUNDA implementação — e divergiria, que é exatamente o defeito que
+// a lista de escopos e a de ações desta base já cometeram.
+//
+// `estado`:
+//   igual         — o documento é o que o template produz nesta versão
+//   divergente    — mesma versão, documento diferente: editado à mão
+//   outraVersao   — instalado numa versão, catálogo em outra. Aqui NÃO dá para
+//                   saber se ALÉM disso houve edição à mão: o template antigo
+//                   não está mais no catálogo para comparar
+//   naoReconstroi — nem renderizar foi possível com os valores guardados
+export function compararComTemplate ({ documento, template, valores, renderizar, versaoInstalada = null }) {
+  const saneado = sanearValores({ template, valores })
+  let doTemplate
+  try {
+    doTemplate = renderizar(template, saneado.valores)
+  } catch (erro) {
+    return { estado: 'naoReconstroi', erro: erro.message, divergencias: [], ajustes: saneado.ajustes }
+  }
+  const divergencias = ondeDiverge(semOsDeFora(documento), semOsDeFora(doTemplate))
+  const versaoDoCatalogo = template.templateVersion ?? null
+  const trocouDeVersao = versaoInstalada !== null && versaoDoCatalogo !== null &&
+    versaoInstalada !== versaoDoCatalogo
+  const estado = trocouDeVersao ? 'outraVersao' : (divergencias.length ? 'divergente' : 'igual')
+  return { estado, erro: null, divergencias, ajustes: saneado.ajustes, versaoInstalada, versaoDoCatalogo }
+}
+
 // Pode reconfigurar pelo formulário?
 //
 // `renderizar` é injetado para este módulo não depender do motor — e para o
 // teste poder exercitar a decisão sem catálogo em disco.
-export function analisarReconfiguracao ({ documento, template, valores, renderizar, versaoInstalada = null }) {
+export function analisarReconfiguracao ({ documento, template, valores, renderizar, versaoInstalada = null, rascunhoPendente = false }) {
   if (!template) {
     return { podeReconfigurar: false, motivo: 'Esta automação não veio de um template, então não tem formulário para preencher.' }
   }
@@ -107,18 +139,27 @@ export function analisarReconfiguracao ({ documento, template, valores, renderiz
     return { podeReconfigurar: false, motivo: 'Este template não declara nada configurável.' }
   }
 
-  const saneado = sanearValores({ template, valores })
-  let doTemplate
-  try {
-    doTemplate = renderizar(template, saneado.valores)
-  } catch (erro) {
+  // Rascunho não publicado é edição da pessoa que ainda não está no documento
+  // ATIVO, que é o que se compara aqui. Reconfigurar regrava o rascunho e
+  // publica: o rascunho seria destruído sem aviso. Medido por sonda antes desta
+  // guarda — a revisão 2 (rascunho) virou a ativa com o conteúdo do template.
+  if (rascunhoPendente) {
+    return {
+      podeReconfigurar: false,
+      motivo: 'Há um rascunho desta automação que ainda não foi publicado. Reconfigurar pelo formulário o substituiria, então ele fica fechado — publique ou descarte o rascunho antes.'
+    }
+  }
+
+  const comparacao = compararComTemplate({ documento, template, valores, renderizar, versaoInstalada })
+  if (comparacao.estado === 'naoReconstroi') {
     // Template mudou e os valores guardados já não bastam (parâmetro novo
     // obrigatório, por exemplo). Dizer isso é melhor que mostrar um formulário
     // que não vai salvar.
-    return { podeReconfigurar: false, motivo: `Não consegui reconstruir a partir do template: ${erro.message}` }
+    return { podeReconfigurar: false, motivo: `Não consegui reconstruir a partir do template: ${comparacao.erro}` }
   }
 
-  const divergencias = ondeDiverge(semOsDeFora(documento), semOsDeFora(doTemplate))
+  const saneado = { ajustes: comparacao.ajustes }
+  const divergencias = comparacao.divergencias
   // O TEMPLATE MUDOU, e isso não é culpa de quem instalou.
   //
   // A comparação sozinha não distingue "foi editado à mão" de "o template é
@@ -133,10 +174,8 @@ export function analisarReconfiguracao ({ documento, template, valores, renderiz
   // dá para saber é se, além da versão nova, também houve edição à mão: o
   // template antigo não existe mais no catálogo para comparar. Então aqui não
   // se adivinha — abre o formulário e diz exatamente o que salvar vai fazer.
-  const versaoDoCatalogo = template.templateVersion ?? null
-  const trocouDeVersao = versaoInstalada !== null && versaoDoCatalogo !== null &&
-    versaoInstalada !== versaoDoCatalogo
-  if (trocouDeVersao) {
+  const versaoDoCatalogo = comparacao.versaoDoCatalogo
+  if (comparacao.estado === 'outraVersao') {
     return {
       podeReconfigurar: true,
       motivo: null,
@@ -144,6 +183,10 @@ export function analisarReconfiguracao ({ documento, template, valores, renderiz
       versaoInstalada,
       versaoDoCatalogo,
       ajustes: saneado.ajustes,
+      // Com divergência, salvar pode apagar edição da pessoa. Quem avisa é a
+      // tela, mas a tela pode estar desatualizada ou nem ser usada: o servidor
+      // só aplica com a confirmação explícita no pedido.
+      exigeConfirmacao: divergencias.length > 0,
       aviso: `Este comando foi instalado na versão ${versaoInstalada} do template e o catálogo já está na ${versaoDoCatalogo}. ` +
         (divergencias.length
           ? `Salvar aqui adota a versão nova, e com ela o que mudou: ${divergencias.join(', ')}. Se você também editou algo à mão depois de instalar, essa edição se perde — confira pelo texto antes de salvar.`

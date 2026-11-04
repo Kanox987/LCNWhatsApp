@@ -28,7 +28,36 @@
 // próximo boot. Então "remover o menu" e "rodar sem menu nenhum" eram
 // estados impossíveis de manter. A marca em `menu_padrao_semeadura`
 // (migration 012) é o que distingue "o dono apagou" de "nunca existiu".
-import { criarServicoAutomacoes, salvarScopes } from './automationsService.js'
+//
+// ----------------------------------------------------------------------
+// INICIALIZAÇÃO NÃO É PROVISIONAMENTO — mudança da frente D.
+//
+// A primeira versão deste módulo fazia DUAS coisas no mesmo lugar: convertia
+// o menu nativo de quem já tinha um (migração, sempre correta) e SEMEAVA um
+// menu novo em banco recém-criado (provisionamento, decisão de quem instala).
+// A segunda metade tornava impossível o primeiro requisito da frente D —
+// "uma instância deve poder começar completamente vazia" —, porque todo
+// `abrirBanco()` de banco novo publicava um /menu ligado antes de alguém
+// escolher pacote nenhum.
+//
+// Agora são operações separadas:
+//   - INICIALIZAÇÃO (aqui): cria só o que o motor precisa para funcionar, e
+//     converte estado legado. Em banco novo não instala automação nenhuma.
+//   - PROVISIONAMENTO (fora daqui): instala o que a configuração inicial
+//     escolhida autorizou, pelo caminho normal de
+//     `POST /templates/:id/install`. O menu é um template como os outros.
+//
+// A marca em `menu_padrao_semeadura` continua gravada nos dois casos, com
+// `automation_id` NULO quando nada foi semeado (a coluna é nullable desde a
+// migration 012). É o que impede uma versão futura de interpretar "não tem
+// menu" como "nunca passou por aqui" e semear por cima de uma escolha.
+//
+// O pool comum CONTINUA sendo criado na inicialização, e isso é deliberado:
+// pool é infraestrutura, não automação. Sem nenhum pool nada é instalável
+// (`responder.poolId` é obrigatório no schema, com `minLength: 1`), então um
+// banco sem pool deixaria o painel sem como instalar o primeiro comando. Uma
+// instância "vazia" tem zero automações; um pool vazio não responde nada.
+import { salvarScopes } from './automationsService.js'
 import { validarAutomacao } from './validate.js'
 
 // O id que o motor semeava quando o menu era nativo. Instâncias que já
@@ -36,72 +65,24 @@ import { validarAutomacao } from './validate.js'
 // migração CONVERTE em vez de recriar: o id, as revisões e os `automation_runs`
 // continuam valendo.
 const ID_MENU_ANTIGO = '__native_menu__'
-// Em instância nova, o menu nasce com o id natural do template, como qualquer
-// automação instalada pelo painel (`routes/templates.js` usa o templateId
-// quando ninguém escolhe outro id).
+// O id que o menu ganha quando é instalado pelo catálogo: o id natural do
+// template, como qualquer automação instalada pelo painel
+// (`routes/templates.js` usa o templateId quando ninguém escolhe outro id).
 const ID_MENU_NOVO = 'menu'
 const POOL_RESERVADO = '__native__'
-// O pool comum que a instância ganha quando não tem nenhum. Sem ele o menu
-// não pode existir: `responder.poolId` é obrigatório no schema com
+// O pool comum que a instância ganha quando não tem nenhum. Sem ele nenhuma
+// automação pode existir: `responder.poolId` é obrigatório no schema com
 // `minLength: 1`, e o único pool semeado por este projeto sempre foi o
 // reservado `__native__` — que o painel esconde do seletor de instalação, de
 // propósito, para um comando do usuário não nascer num pool do sistema.
 const ID_POOL_COMUM = 'padrao'
 
 export const TEMPLATE_DO_MENU = 'menu'
-// Casado com `template menu v2` em src/engine/templates/catalog/menu.lcn.
-// Quem subir a versão do template tem de subir aqui também — e o teste
-// tests/menu-padrao.test.mjs falha se os dois saírem de sincronia.
-export const VERSAO_TEMPLATE_MENU = 2
-
-// O documento que `renderizarTemplate(menu.lcn, { poolId: 'padrao' })`
-// produz, com o escopo "qualquer conversa" preenchido.
-//
-// Está escrito à mão aqui, e não carregado do catálogo, por custo de boot:
-// `carregarCatalogo()` compila os 121 templates em ~63 ms, e isto roda em
-// todo `abrirBanco()`, inclusive o de cada arquivo da bateria. A guarda
-// contra defasagem não é confiança — é o teste, que renderiza o template de
-// verdade e exige documento idêntico a este.
-export function documentoDoMenu (poolId = ID_POOL_COMUM) {
-  return {
-    schemaVersion: 1,
-    enabled: true,
-    name: 'Menu de comandos',
-    scope: { include: [{ kind: 'everywhere' }], exclude: [] },
-    inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
-    responder: { strategy: 'weighted_rendezvous', poolId },
-    scheduling: { priority: 'normal', onNoSlot: { kind: 'discard' } },
-    flow: {
-      nodes: [
-        {
-          id: 'gatilho-comando',
-          type: 'trigger.command',
-          config: { command: '/menu', match: 'exact', allowFrom: 'external' }
-        },
-        {
-          type: 'action.menu.render',
-          config: {
-            numbered: false,
-            header: 'Comandos disponíveis:',
-            emptyText: 'Nenhum comando disponível por aqui ainda.'
-          },
-          id: 'mostrar-menu'
-        }
-      ],
-      edges: [{ from: 'gatilho-comando', to: 'mostrar-menu', on: 'matched' }]
-    },
-    display: {
-      menuLabel: '/menu',
-      menuDescription: 'Mostra esta lista de comandos',
-      family: 'utilitarios'
-    }
-  }
-}
 
 // Devolve o id de um pool que o dono pode editar e apagar. Prefere um que já
 // exista: se a instância já tem pool próprio, o menu entra nele em vez de
 // ganhar um pool a mais sem razão.
-function garantirPoolComum (db, agora) {
+export function garantirPoolComum (db, agora = new Date().toISOString()) {
   const existente = db.prepare(
     "SELECT id FROM pools WHERE id NOT LIKE '\\_\\_%' ESCAPE '\\' ORDER BY created_at LIMIT 1"
   ).get()
@@ -144,31 +125,21 @@ function converterMenuNativo (db, linha, poolId, agora) {
   return linha.id
 }
 
-function semearMenuNovo (db, poolId, agora) {
-  const servico = criarServicoAutomacoes(db)
-  const automacao = servico.criarEPublicar({ id: ID_MENU_NOVO, document: documentoDoMenu(poolId) })
-  db.prepare("UPDATE automations SET deployment_mode = 'live', updated_at = ? WHERE id = ?")
-    .run(agora, automacao.id)
-  // Provenance é o que faz `GET /templates/atualizacoes` avisar o dono quando
-  // `menu.lcn` ganhar versão nova. Sem isso o menu semeado seria o único
-  // comando da instância que não sabe de que template nasceu.
-  db.prepare(`INSERT INTO automation_template_provenance
-    (automation_id, template_id, template_version, parameters_json, installed_at)
-    VALUES (?, ?, ?, ?, ?)`)
-    .run(automacao.id, TEMPLATE_DO_MENU, VERSAO_TEMPLATE_MENU, JSON.stringify({ poolId }), agora)
-  return automacao.id
-}
-
-export function garantirMenuPadrao (db) {
-  const jaSemeado = db.prepare('SELECT 1 FROM menu_padrao_semeadura WHERE id = 1').get()
-  if (jaSemeado) return
+// Inicialização do banco: converte o menu legado, cria o pool comum, e NÃO
+// instala nada em instância nova. Roda em todo `abrirBanco()`, uma vez por
+// banco — a marca é o que faz a segunda passada não fazer nada.
+export function migrarMenuLegado (db) {
+  const jaDecidido = db.prepare('SELECT 1 FROM menu_padrao_semeadura WHERE id = 1').get()
+  if (jaDecidido) return
   const agora = new Date().toISOString()
   const transacao = db.transaction(() => {
     const poolId = garantirPoolComum(db, agora)
     const nativa = db.prepare('SELECT id, active_revision_id FROM automations WHERE id = ?').get(ID_MENU_ANTIGO)
-    const automationId = nativa
-      ? converterMenuNativo(db, nativa, poolId, agora)
-      : semearMenuNovo(db, poolId, agora)
+    // Sem linha legada, não há o que converter — e instalar o menu é escolha
+    // do provisionamento, não da abertura do banco. `automation_id` nulo
+    // registra justamente isso: esta instância passou por aqui e nada foi
+    // semeado.
+    const automationId = nativa ? converterMenuNativo(db, nativa, poolId, agora) : null
     db.prepare(`INSERT INTO menu_padrao_semeadura (id, automation_id, semeado_em)
       VALUES (1, ?, ?)`).run(automationId, agora)
   })

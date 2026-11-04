@@ -1,0 +1,19 @@
+{
+  "packageId": "administracao",
+  "packageVersion": 1,
+  "name": "Pacote de administração",
+  "description": "Administrar o grupo pelo comando: promover, rebaixar, silenciar, trancar, nome, descrição, link e lista de membros. Nada depende de serviço externo.",
+  "items": [
+    { "itemKey": "promover", "templateId": "promover", "templateVersion": 1 },
+    { "itemKey": "rebaixar", "templateId": "rebaixar", "templateVersion": 1 },
+    { "itemKey": "banir", "templateId": "banir", "templateVersion": 1 },
+    { "itemKey": "silenciar", "templateId": "silenciar", "templateVersion": 1 },
+    { "itemKey": "dessilenciar", "templateId": "dessilenciar", "templateVersion": 1 },
+    { "itemKey": "nome-do-grupo", "templateId": "nome-do-grupo", "templateVersion": 1 },
+    { "itemKey": "descricao-do-grupo", "templateId": "descricao-do-grupo", "templateVersion": 1 },
+    { "itemKey": "trancar-grupo", "templateId": "trancar-grupo", "templateVersion": 1 },
+    { "itemKey": "link-do-grupo", "templateId": "link-do-grupo", "templateVersion": 1 },
+    { "itemKey": "membros", "templateId": "membros", "templateVersion": 1 },
+    { "itemKey": "marcar-todos", "templateId": "marcar-todos", "templateVersion": 1 }
+  ]
+}

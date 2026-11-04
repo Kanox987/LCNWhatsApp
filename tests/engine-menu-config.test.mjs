@@ -3,6 +3,7 @@
 // Nenhum dos bots de referência tem isso — lá o menu é único e fixo.
 import { abrirBanco } from '../src/engine/server/db.js'
 import { avaliarEvento } from '../src/engine/server/evaluator.js'
+import { criarApi } from '../src/engine/server/api.js'
 import { alvoDeConfig, gravarConfigDeMenu, resolverConfigDeMenu } from '../src/engine/server/menuConfig.js'
 import { executarComandos } from '../src/engine/gatewayExecutor.js'
 
@@ -12,6 +13,19 @@ const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅
 const db = abrirBanco(':memory:')
 const agora = new Date().toISOString()
 db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p1', 'Pool', agora, agora)
+
+// Desde a frente D a inicialização NÃO provisiona nada: o menu entra pela rota
+// comum, como qualquer template. E como `menu.lcn` declara
+// `depende de: config-menu`, a instalação resolve os DOIS membros — nenhum dos
+// dois tem padrão para `poolId`, então os dois precisam de parâmetro.
+await criarApi(db).resolver('POST', '/templates/menu/install', {
+  body: {
+    scope: { include: [{ kind: 'everywhere' }] },
+    parameters: { menu: { poolId: 'p1' }, 'config-menu': { poolId: 'p1' } }
+  },
+  query: new URLSearchParams(''),
+  req: { headers: {} }
+})
 
 const GRUPO_TESTES = '120000000000000001@g.us'
 const GRUPO_CLIENTES = '120000000000000002@g.us'

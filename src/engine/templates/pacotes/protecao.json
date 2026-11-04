@@ -1,0 +1,15 @@
+{
+  "packageId": "protecao",
+  "packageVersion": 1,
+  "name": "Pacote de proteção",
+  "description": "Vigias que agem sozinhos: anti-link, anti-palavrão, porteiro com lista, advertência por pessoa e recusa de visualização única. Nada depende de serviço externo.",
+  "items": [
+    { "itemKey": "anti-link", "templateId": "anti-link", "templateVersion": 1 },
+    { "itemKey": "antipalavrao", "templateId": "antipalavrao", "templateVersion": 1 },
+    { "itemKey": "porteiro", "templateId": "porteiro", "templateVersion": 1 },
+    { "itemKey": "advertir", "templateId": "advertir", "templateVersion": 1 },
+    { "itemKey": "antifake", "templateId": "antifake", "templateVersion": 1 },
+    { "itemKey": "anti-visualizacao-unica", "templateId": "anti-visualizacao-unica", "templateVersion": 1 },
+    { "itemKey": "regras-do-grupo", "templateId": "regras-do-grupo", "templateVersion": 1 }
+  ]
+}

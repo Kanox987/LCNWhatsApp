@@ -112,6 +112,19 @@ check('não publicada não conta', conflitosDeComando(db).length === 0)
   const quando = new Date().toISOString()
   banco.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)').run('p', 'Pool', quando, quando)
 
+  // Desde a frente D a inicialização NÃO provisiona nada: o menu entra pela
+  // rota comum, como qualquer template. E como `menu.lcn` declara
+  // `depende de: config-menu`, a instalação resolve os DOIS membros — nenhum
+  // dos dois tem padrão para `poolId`, então os dois precisam de parâmetro.
+  await criarApi(banco).resolver('POST', '/templates/menu/install', {
+    body: {
+      scope: { include: [{ kind: 'everywhere' }] },
+      parameters: { menu: { poolId: 'p' }, 'config-menu': { poolId: 'p' } }
+    },
+    query: new URLSearchParams(''),
+    req: { headers: {} }
+  })
+
   const doDono = {
     schemaVersion: 1,
     id: 'meu-menu',

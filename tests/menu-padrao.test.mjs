@@ -1,5 +1,10 @@
-// Os dez cenários que o pedido da frente C exige do menu, mais a guarda de
-// defasagem que `src/engine/server/menuPadrao.js` promete pelo nome.
+// Os dez cenários que o pedido da frente C exige do menu, agora com a
+// separação que a frente D trouxe: INICIALIZAÇÃO não provisiona nada, então
+// cada cenário INSTALA o menu pela mesma rota que qualquer outro template.
+//
+// Foi-se a guarda de defasagem que este arquivo tinha: ela comparava o
+// template do catálogo com uma duplicata inline do documento, que o módulo
+// não carrega mais. Sem duplicata não há defasagem para vigiar.
 //
 // Este arquivo SUBSTITUI o antigo `engine-native-automations.test.mjs`, que
 // afirmava o contrário de tudo isto: que a coluna `native` marcava o menu e
@@ -17,28 +22,12 @@ import { carregarCatalogo, obterTemplate } from '../src/engine/templates/catalog
 import { renderizarTemplate } from '../src/engine/templates/render.js'
 import { avaliarEvento } from '../src/engine/server/evaluator.js'
 import { criarServicoAutomacoes } from '../src/engine/server/automationsService.js'
-import { documentoDoMenu, garantirMenuPadrao, VERSAO_TEMPLATE_MENU, TEMPLATE_DO_MENU, IDS_DO_MENU } from '../src/engine/server/menuPadrao.js'
+import { migrarMenuLegado, TEMPLATE_DO_MENU, IDS_DO_MENU } from '../src/engine/server/menuPadrao.js'
 import { compilar } from '../src/lcn/compilar.js'
 import { descompilar } from '../src/lcn/descompilar.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
-
-// Igualdade profunda INDIFERENTE À ORDEM DAS CHAVES. `JSON.stringify` não
-// serve aqui: `renderizarTemplate` reconstrói o objeto chave por chave na
-// ordem do `.lcn`, e `documentoDoMenu()` escreve o segundo nó como
-// `{ type, config, id }`. Comparar texto acusaria uma defasagem inexistente.
-function mesmo (a, b) {
-  if (a === b) return true
-  if (Array.isArray(a) !== Array.isArray(b)) return false
-  if (Array.isArray(a)) return a.length === b.length && a.every((item, i) => mesmo(item, b[i]))
-  if (a && b && typeof a === 'object' && typeof b === 'object') {
-    const ca = Object.keys(a); const cb = Object.keys(b)
-    if (ca.length !== cb.length) return false
-    return ca.every((c) => Object.prototype.hasOwnProperty.call(b, c) && mesmo(a[c], b[c]))
-  }
-  return false
-}
 
 const contexto = (body = null) => ({ body, query: new URLSearchParams(), req: { headers: {} } })
 
@@ -66,39 +55,39 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
   'SELECT r.doc_json AS d FROM automations a JOIN automation_revisions r ON r.id = a.active_revision_id WHERE a.id = ?'
 ).get(id).d)
 
-// ---------------------------------------------------------------- defasagem
+// ------------------------------------------------- instalar, não semear
 
-{
-  const catalogo = carregarCatalogo()
-  const template = obterTemplate(catalogo, TEMPLATE_DO_MENU)
-  check('o template "menu" existe no catálogo', !!template)
-  check(`a versão do template bate com VERSAO_TEMPLATE_MENU (${VERSAO_TEMPLATE_MENU})`,
-    template.templateVersion === VERSAO_TEMPLATE_MENU,
-    `template v${template?.templateVersion}`)
+// `abrirBanco` não cria automação nenhuma: desde a frente D a inicialização
+// só converte menu legado e garante o pool. O menu entra pela rota comum, e
+// como `menu.lcn` declara `depende de: config-menu`, a instalação resolve os
+// DOIS membros — e `poolId` não tem padrão em nenhum dos dois, então os dois
+// precisam de parâmetro. `scope.include` vazio seria 400: escopo vazio nunca
+// significa "todos", nem aqui.
+async function instalarMenu (db) {
+  const poolId = IDS_DO_MENU.poolComum
+  return criarApi(db).resolver('POST', `/templates/${TEMPLATE_DO_MENU}/install`, contexto({
+    scope: { include: [{ kind: 'everywhere' }] },
+    parameters: { [TEMPLATE_DO_MENU]: { poolId }, 'config-menu': { poolId } }
+  }))
+}
 
-  const renderizado = renderizarTemplate(template, { poolId: IDS_DO_MENU.poolComum })
-  const inline = documentoDoMenu(IDS_DO_MENU.poolComum)
-
-  // O `scope` é a ÚNICA diferença legítima entre os dois, e é de propósito:
-  // nenhum dos 121 templates do catálogo declara `onde` — quem instala pelo
-  // painel escolhe o escopo na hora, e a rota de instalação o preenche. O
-  // menu semeado no boot não passa por essa tela, então nasce com
-  // `em todo lugar`, que é o único escopo que faz sentido para ele (escopo
-  // vazio NÃO significa "em tudo": `escopoCasa` recusa, e o menu ficaria
-  // mudo em toda conversa). O cenário 1 confere esse escopo por si.
-  const semEscopo = (d) => { const c = structuredClone(d); delete c.scope; return c }
-  const igual = mesmo(semEscopo(renderizado), semEscopo(inline))
-  check('documentoDoMenu() é IDÊNTICO ao template renderizado, fora o escopo (nada de defasagem)',
-    igual, igual ? '' : `render=${JSON.stringify(renderizado)} inline=${JSON.stringify(inline)}`)
-  check('o template não declara escopo (quem instala escolhe), e o semeado declara "em todo lugar"',
-    renderizado.scope.include.length === 0 && inline.scope.include[0]?.kind === 'everywhere',
-    JSON.stringify({ template: renderizado.scope, semeado: inline.scope }))
+async function bancoComMenu () {
+  const db = abrirBanco(':memory:')
+  await instalarMenu(db)
+  return db
 }
 
 // ----------------------------------------------- 1. instalar o menu padrão
 
 {
   const db = abrirBanco(':memory:')
+  // A exigência da frente D, em uma linha: "uma instância deve poder começar
+  // completamente vazia". Antes desta separação o boot semeava o menu, e esta
+  // asserção era impossível de escrever.
+  const nasceuCom = db.prepare('SELECT COUNT(*) AS t FROM automations').get().t
+  check('1. instância NOVA nasce SEM automação nenhuma', nasceuCom === 0, `${nasceuCom} automações`)
+
+  await instalarMenu(db)
   const api = criarApi(db)
 
   const linha = db.prepare('SELECT * FROM automations WHERE id = ?').get(IDS_DO_MENU.novo)
@@ -125,7 +114,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
 // ------------------------------------------------- 2. editar o menu em .lcn
 
 {
-  const db = abrirBanco(':memory:')
+  const db = await bancoComMenu()
   const servico = criarServicoAutomacoes(db)
 
   const texto = descompilar(docAtivo(db, IDS_DO_MENU.novo))
@@ -146,7 +135,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
 // --------------------------------------------- 3. criar um menu alternativo
 
 {
-  const db = abrirBanco(':memory:')
+  const db = await bancoComMenu()
   const servico = criarServicoAutomacoes(db)
   const meu = structuredClone(docAtivo(db, IDS_DO_MENU.novo))
   // `normalizarDocumento` exige doc.id === id da rota: sem isto, 400.
@@ -169,7 +158,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
 // ----------------------------------------------------- 4. alterar o gatilho
 
 {
-  const db = abrirBanco(':memory:')
+  const db = await bancoComMenu()
   const servico = criarServicoAutomacoes(db)
   const doc = structuredClone(docAtivo(db, IDS_DO_MENU.novo))
   doc.flow.nodes[0].config.command = '/ajuda'
@@ -187,7 +176,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
 // -------------------------------------------------------- 5. desativar menu
 
 {
-  const db = abrirBanco(':memory:')
+  const db = await bancoComMenu()
   db.prepare('UPDATE automations SET enabled = 0 WHERE id = ?').run(IDS_DO_MENU.novo)
   const r = await avaliarEvento(db, eventoTexto({ msgId: 'm7' }))
   check('5. desativar: o menu desligado não responde',
@@ -198,7 +187,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
 // ----------------------------------------- 6 e 7. remover, e rodar sem menu
 
 {
-  const db = abrirBanco(':memory:')
+  const db = await bancoComMenu()
   const api = criarApi(db)
   const saida = await api.resolver('DELETE', `/automations/${IDS_DO_MENU.novo}`, contexto())
   check('6. remover: a rota comum apaga o menu', saida?.removed === true, JSON.stringify(saida))
@@ -211,7 +200,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
     !casaram(await avaliarEvento(db, eventoTexto({ msgId: 'm8' }))).length)
 
   // 9a. reiniciar não RESSUSCITA o que foi removido — é a marca de semeadura.
-  garantirMenuPadrao(db)
+  migrarMenuLegado(db)
   check('9. reiniciar: o boot NÃO ressuscita o menu removido',
     !db.prepare('SELECT 1 FROM automations WHERE id = ?').get(IDS_DO_MENU.novo))
   db.close()
@@ -221,15 +210,17 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
 
 {
   const db = abrirBanco(':memory:')
-  // Apaga o que o boot semeou e forja o estado legado: `native = 1`, pool
+  // Aqui NÃO se instala o menu: forja-se o estado legado que a frente C
+  // deixou no banco de quem já tinha menu nativo — `native = 1`, pool
   // reservado, escopo vazio, nome com o sufixo "(nativo)". Por SQL cru de
   // propósito — `criarEPublicar` passaria pela validação, e escopo vazio é
   // exatamente o estado que `converterMenuNativo` existe para consertar.
-  db.prepare('DELETE FROM automations WHERE id = ?').run(IDS_DO_MENU.novo)
+  // A marca de semeadura sai porque o boot já a escreveu com
+  // `automation_id` NULL, que significa "esta instância não quis menu".
   db.prepare('DELETE FROM menu_padrao_semeadura').run()
 
   const agora = new Date().toISOString()
-  const antigo = documentoDoMenu('__native__')
+  const antigo = renderizarTemplate(obterTemplate(carregarCatalogo(), TEMPLATE_DO_MENU), { poolId: '__native__' })
   // `criarEPublicar` grava `id` e `revision` no doc_json; o SQL cru não, e o
   // documento sem eles é recusado pelo schema. Forjar o legado exige forjar
   // esses dois também, senão o teste mediria um estado que nunca existiu.
@@ -244,7 +235,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
     .run(IDS_DO_MENU.antigo, 'active', JSON.stringify(antigo), agora)
   db.prepare('UPDATE automations SET active_revision_id = ? WHERE id = ?').run(rev.lastInsertRowid, IDS_DO_MENU.antigo)
 
-  garantirMenuPadrao(db)
+  migrarMenuLegado(db)
 
   const linha = db.prepare('SELECT * FROM automations WHERE id = ?').get(IDS_DO_MENU.antigo)
   const doc = docAtivo(db, IDS_DO_MENU.antigo)
@@ -265,7 +256,7 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
     casaram(await avaliarEvento(db, eventoTexto({ msgId: 'm9' }))).includes(IDS_DO_MENU.antigo))
 
   const antes = db.prepare('SELECT COUNT(*) AS t FROM automations').get().t
-  garantirMenuPadrao(db)
+  migrarMenuLegado(db)
   check('9. reiniciar: a segunda passada é idempotente',
     db.prepare('SELECT COUNT(*) AS t FROM automations').get().t === antes)
   db.close()
@@ -274,14 +265,14 @@ const docAtivo = (db, id) => JSON.parse(db.prepare(
 // -------------------------------- 9b. reinício preserva a configuração feita
 
 {
-  const db = abrirBanco(':memory:')
+  const db = await bancoComMenu()
   const servico = criarServicoAutomacoes(db)
   const doc = structuredClone(docAtivo(db, IDS_DO_MENU.novo))
   doc.flow.nodes[1].config.header = 'Minha lista:'
   servico.salvarRascunho(IDS_DO_MENU.novo, { document: doc }, undefined)
   servico.publicar(IDS_DO_MENU.novo)
 
-  garantirMenuPadrao(db)
+  migrarMenuLegado(db)
   check('9. reiniciar: a edição do dono sobrevive ao boot',
     docAtivo(db, IDS_DO_MENU.novo).flow.nodes[1].config.header === 'Minha lista:',
     docAtivo(db, IDS_DO_MENU.novo).flow.nodes[1].config.header)

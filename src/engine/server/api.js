@@ -8,6 +8,7 @@ import { registrarRotasMeta } from './routes/meta.js'
 import { registrarRotasExecutions } from './routes/executions.js'
 import { registrarRotasEntities } from './routes/entities.js'
 import { registrarRotasTemplates } from './routes/templates.js'
+import { registrarRotasPacotes } from './routes/pacotes.js'
 import { registrarRotasOwners } from './routes/owners.js'
 import { registrarRotasMenu } from './routes/menu.js'
 import { registrarRotasRetencao } from './routes/retencao.js'
@@ -27,6 +28,7 @@ export function criarApi (db) {
   registrarRotasExecutions(roteador, db)
   registrarRotasEntities(roteador, db)
   registrarRotasTemplates(roteador, db)
+  registrarRotasPacotes(roteador, db)
   registrarRotasRetencao(roteador, db)
   registrarRotasEnquetes(roteador, criarServicoDeEnquetes(db))
   registrarRotasMeta(roteador, db)

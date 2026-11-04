@@ -5,9 +5,10 @@
 import { ErroHttp, resposta } from '../transport.js'
 import { criarServicoAutomacoes } from '../automationsService.js'
 import { carregarCatalogo, resolverOrdemInstalacao } from '../../templates/catalog.js'
-import { renderizarTemplate, renderizarVariaveisDeclaradas } from '../../templates/render.js'
-import { declararDoTemplate } from '../declaredVariables.js'
+import { renderizarTemplate } from '../../templates/render.js'
 import { analisarReconfiguracao, aplicarValores, sanearValores } from '../../../reconfiguracao.js'
+import { classificarOrdem, decidirProvisionamento } from '../provisionamento.js'
+import { leitoresDeClassificacao, publicarMembros } from '../provisionarMembros.js'
 
 function exporTemplateResumo (template) {
   return {
@@ -40,6 +41,10 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
       template_id = excluded.template_id,
       template_version = excluded.template_version,
       parameters_json = excluded.parameters_json`)
+
+  // Os cinco leitores que `classificarOrdem` exige, preparados uma vez — e
+  // DEPOIS de `obterProvenance`, que é o que separa `conflito` de `instalado`.
+  const leitores = leitoresDeClassificacao({ db, servicoAutomacoes, obterProvenance })
 
   // Instalação inteira (template + toda a árvore dependsOn) numa única
   // transação: se qualquer automação da árvore falhar validação/publish,
@@ -77,32 +82,38 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
     const automationIds = body?.automationIds && typeof body.automationIds === 'object' ? body.automationIds : {}
     const parametrosPorTemplate = body?.parameters && typeof body.parameters === 'object' ? body.parameters : {}
 
-    const instaladas = []
-    for (const templateId of ordem) {
-      const template = catalogo.get(templateId)
-      const automationId = automationIds[templateId] || templateId
-      const parametrosFornecidos = parametrosPorTemplate[templateId] || {}
-      let documento
-      try {
-        documento = renderizarTemplate(template, parametrosFornecidos)
-      } catch (erro) {
-        throw new ErroHttp(400, `Falha ao montar o template "${templateId}": ${erro.message}`)
-      }
-      documento.scope = { include: scope.include, exclude: Array.isArray(scope.exclude) ? scope.exclude : [] }
-      const automacao = servicoAutomacoes.criarEPublicar({ id: automationId, document: documento })
-      db.prepare('UPDATE automations SET deployment_mode = ?, updated_at = ? WHERE id = ?')
-        .run(deploymentMode, new Date().toISOString(), automationId)
-      automacao.deploymentMode = deploymentMode
-      inserirProvenance.run(automationId, template.templateId, template.templateVersion, JSON.stringify(parametrosFornecidos), new Date().toISOString())
-      // As variáveis que o comando usa passam a existir no catálogo agora, e
-      // não só quando alguma delas receber valor pela primeira vez.
-      declararDoTemplate(db, renderizarVariaveisDeclaradas(template, parametrosFornecidos), {
-        sourceTemplate: template.templateId,
-        sourceAutomation: automationId
-      })
-      instaladas.push(automacao)
+    // IDEMPOTÊNCIA (§8: "o provisionamento deve ser idempotente", "reiniciar não
+    // pode instalar comandos duplicados", "atualizar não pode sobrescrever
+    // personalização sem autorização").
+    //
+    // Antes, o primeiro membro já instalado estourava 409 lá dentro de
+    // `criar` e derrubava a transação inteira — então reinstalar um pacote de
+    // cinco comandos em que UM existia não instalava os outros quatro. Agora a
+    // ordem inteira é classificada ANTES de publicar qualquer coisa: o que já
+    // está no estado desejado é pulado, e o que está editado à mão, numa versão
+    // diferente ou em conflito PARA a operação inteira, dizendo qual membro e
+    // por quê. Nada de instalar meio pacote: quem pediu o pacote não tem como
+    // saber quais metades entraram.
+    const classificacao = classificarOrdem({
+      ordem,
+      catalogo,
+      automationIds,
+      parametrosPorTemplate,
+      ...leitores
+    })
+    const decisao = decidirProvisionamento(classificacao)
+    if (!decisao.podeInstalar) {
+      const erro = new ErroHttp(409, decisao.impedem.map((m) => m.motivo).join(' '))
+      erro.detalhes = { itens: classificacao }
+      throw erro
     }
-    return { installed: instaladas, deploymentMode }
+
+    const { instaladas, restauradas, jaInstalados } = publicarMembros({
+      db, catalogo, servicoAutomacoes, inserirProvenance,
+      classificacao, scope, deploymentMode, parametrosPorTemplate
+    })
+
+    return { installed: instaladas, restored: restauradas, alreadyInstalled: jaInstalados, deploymentMode }
   })
 
   roteador.get('/templates', () => [...catalogo.values()].map(exporTemplateResumo))
@@ -179,11 +190,15 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
       : null
     const documento = revisaoAtiva ? servicoAutomacoes.jsonOuNull(revisaoAtiva.doc_json) : null
     const valores = proveniencia ? JSON.parse(proveniencia.parameters_json) : {}
-    return { automacao, proveniencia, template, documento, valores }
+    // Rascunho mais novo que a revisão ativa = edição ainda não publicada.
+    const rascunhoPendente = Boolean(db.prepare(
+      "SELECT 1 AS ok FROM automation_revisions WHERE automation_id = ? AND status = 'draft'"
+    ).get(automationId))
+    return { automacao, proveniencia, template, documento, valores, rascunhoPendente }
   }
 
   roteador.get('/automations/:id/reconfigure', ({ params }) => {
-    const { proveniencia, template, documento, valores } = reunir(params.id)
+    const { proveniencia, template, documento, valores, rascunhoPendente } = reunir(params.id)
     if (!proveniencia) {
       return { podeReconfigurar: false, motivo: 'Esta automação não veio de um template, então não tem formulário para preencher.', parameters: [] }
     }
@@ -197,7 +212,8 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
       renderizar: renderizarTemplate,
       // Sem esta linha a análise não tem como saber que o template mudou, e
       // acusa a pessoa de ter editado à mão o que ela nunca tocou.
-      versaoInstalada: proveniencia.template_version ?? null
+      versaoInstalada: proveniencia.template_version ?? null,
+      rascunhoPendente
     })
     const saneados = sanearValores({ template, valores }).valores
     return {
@@ -221,8 +237,8 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
   // Aplicar passa pelo caminho NORMAL de publicação (rascunho -> publish), que
   // é onde validate.js e runtimeCapabilities.js impõem o invariante 7. Escrever
   // doc_json direto seria pular o portão e publicar o que o motor não executa.
-  const reconfigurar = db.transaction((automationId, valoresNovos) => {
-    const { proveniencia, template, documento, valores } = reunir(automationId)
+  const reconfigurar = db.transaction((automationId, valoresNovos, confirmou) => {
+    const { proveniencia, template, documento, valores, rascunhoPendente } = reunir(automationId)
     if (!proveniencia) throw new ErroHttp(400, 'Esta automação não veio de um template.')
     if (!template) throw new ErroHttp(400, `O template "${proveniencia.template_id}" não está mais no catálogo desta instalação.`)
 
@@ -231,11 +247,15 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
       template,
       valores,
       renderizar: renderizarTemplate,
-      versaoInstalada: proveniencia.template_version ?? null
+      versaoInstalada: proveniencia.template_version ?? null,
+      rascunhoPendente
     })
     // Recusar aqui, e não só na tela: a tela pode estar desatualizada, e
     // regerar por cima de uma edição manual a apagaria sem perguntar.
     if (!analise.podeReconfigurar) throw new ErroHttp(409, analise.motivo)
+    if (analise.exigeConfirmacao && confirmou !== true) {
+      throw new ErroHttp(409, `Salvar adota a versão nova do template e substitui o que foi alterado à mão (${analise.divergencias.join(', ')}). Para aplicar mesmo assim, envie "confirmo": true.`)
+    }
 
     let novo
     try {
@@ -255,7 +275,7 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
     if (!valores || typeof valores !== 'object' || Array.isArray(valores)) {
       throw new ErroHttp(400, 'Informe os valores em "parameters".')
     }
-    return reconfigurar(params.id, valores)
+    return reconfigurar(params.id, valores, body?.confirmo)
   })
 
   roteador.get('/automations/:id/provenance', ({ params }) => {

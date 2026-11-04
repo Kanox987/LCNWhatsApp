@@ -1,7 +1,7 @@
 -- O /menu deixa de ser automação NATIVA e passa a ser automação comum.
 --
 -- Esta tabela é a MEMÓRIA DE QUE A SEMEADURA JÁ ACONTECEU, e existe por um
--- motivo específico: sem ela, `garantirMenuPadrao` não consegue distinguir
+-- motivo específico: sem ela, `migrarMenuLegado` não consegue distinguir
 -- "o dono apagou o menu" de "esta instância nunca teve menu". O código antigo
 -- (nativeAutomations.js) fazia `if (jaExiste) return` — então apagar o menu
 -- pelo painel funcionava até o próximo reinício, quando ele ressuscitava.

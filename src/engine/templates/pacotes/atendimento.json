@@ -1,0 +1,14 @@
+{
+  "packageId": "atendimento",
+  "packageVersion": 1,
+  "name": "Pacote de atendimento",
+  "description": "Transferir a conversa para uma pessoa e devolver ao bot depois, mais vitrine do acervo e respostas estruturadas. Nada depende de serviço externo.",
+  "items": [
+    { "itemKey": "atendimento", "templateId": "atendimento", "templateVersion": 1 },
+    { "itemKey": "ver-produto", "templateId": "ver-produto", "templateVersion": 1 },
+    { "itemKey": "enviar-do-acervo", "templateId": "enviar-do-acervo", "templateVersion": 1 },
+    { "itemKey": "botoes-escolha", "templateId": "botoes-escolha", "templateVersion": 1 },
+    { "itemKey": "lista-numerada", "templateId": "lista-numerada", "templateVersion": 1 },
+    { "itemKey": "comunicado", "templateId": "comunicado", "templateVersion": 1 }
+  ]
+}

@@ -323,7 +323,6 @@ compilador, nunca pela pessoa.
 | `src/lcn/descompilar.js:252` | escreve a linha de volta |
 | `src/lcn/referencia.js:116` | entra na referência servida ao painel |
 | `src/engine/server/validate.js:293-296` | **o único lugar que de fato cobra algo** |
-| `src/engine/server/menuPadrao.js:71` | repete o `strategy` fixo (era `nativeAutomations.js`, removido na frente C) |
 | `src/engine/server/routes/pools.js` | o CRUD da aba |
 | `src/engine/server/migrations/001_init.sql:23` | a DDL de `pool_members` |
 | `src/web/public/pages/pools.js:125,175-177` | o `weight`, que só existe no painel |
