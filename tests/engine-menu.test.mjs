@@ -1,8 +1,12 @@
-// Módulo 5 da Parte C do plano — /menu nativo (`action.menu.render` +
-// bypass de escopo pra automação `native = 1`, ver nativeAutomations.js).
-// Banco :memory: — nunca o banco real do motor. `abrirBanco()` já semeia
-// a automação nativa `/menu` sozinha (mesmo caminho que o motor real usa
-// no boot), então este teste não precisa recriá-la.
+// Módulo 5 da Parte C do plano — o /menu (`action.menu.render`).
+//
+// O /menu JÁ NÃO É NATIVO: não há mais coluna de privilégio nem bypass de
+// escopo. Ele é uma automação comum, de id `menu`, que `abrirBanco()` instala
+// a partir do template editável do catálogo (ver menuPadrao.js) declarando
+// `onde: em qualquer lugar`. Logo ele responde em qualquer conversa porque
+// ASSIM ESTÁ ESCRITO no documento dele, e não porque o motor abre exceção —
+// o dono pode editar esse escopo, trocar o gatilho, desligar ou remover.
+// Banco :memory: — nunca o banco real do motor.
 import { abrirBanco } from '../src/engine/server/db.js'
 import { avaliarEvento } from '../src/engine/server/evaluator.js'
 
@@ -48,18 +52,37 @@ function eventoMenu ({ chatId, msgId, textoComando = '/menu' } = {}) {
   }
 }
 
+const ID_DO_MENU = 'menu'
+// O próprio /menu é um item da lista como qualquer outro comando publicado
+// naquela conversa. Quem não quiser vê-lo ali escreve `menu: não` no .lcn dele.
+const LINHA_DO_MENU = '• /menu — Mostra esta lista de comandos'
+
 function textoDoMenu (resultado) {
-  const menu = resultado.results.find((r) => r.automationId === '__native_menu__')
+  const menu = resultado.results.find((r) => r.automationId === ID_DO_MENU)
   return menu?.commands?.[0]?.payload?.text
 }
 
+// As linhas de item do menu, sem o cabeçalho. A ORDEM entre automações não é
+// contratada em lugar nenhum, então todo caso compara CONJUNTO, nunca índice.
+function itensDoMenu (resultado) {
+  return (textoDoMenu(resultado) || '').split('\n').slice(1).sort()
+}
+
 try {
+  // Num chat onde NADA mais está escopado, o /menu ainda responde — porque o
+  // documento dele diz `em qualquer lugar`, e não por exceção do motor.
   const semNadaEmEscopo = await avaliarEvento(db, eventoMenu({ chatId: '5511000000001@s.whatsapp.net', msgId: 'M1' }))
-  check('/menu responde mesmo num chat sem NENHUMA automação escopada pra ele (bypass de escopo nativo)', textoDoMenu(semNadaEmEscopo)?.includes('Nenhum comando'))
+  check('o /menu responde num chat sem nenhuma OUTRA automação escopada (escopo declarado, não bypass)',
+    !!textoDoMenu(semNadaEmEscopo), textoDoMenu(semNadaEmEscopo))
+  check('e ali ele lista a si mesmo, único comando publicado naquela conversa',
+    JSON.stringify(itensDoMenu(semNadaEmEscopo)) === JSON.stringify([LINHA_DO_MENU]),
+    JSON.stringify(itensDoMenu(semNadaEmEscopo)))
 
   criarAutomacao({ id: 'ping', scopeId: '5511000000002@s.whatsapp.net', display: { menuLabel: '/ping', menuDescription: 'Testa a latência' } })
   const comPing = await avaliarEvento(db, eventoMenu({ chatId: '5511000000002@s.whatsapp.net', msgId: 'M2' }))
-  check('/menu lista automação visível com label e descrição customizados', textoDoMenu(comPing) === 'Comandos disponíveis:\n• /ping — Testa a latência')
+  check('/menu lista automação visível com label e descrição customizados',
+    JSON.stringify(itensDoMenu(comPing)) === JSON.stringify([LINHA_DO_MENU, '• /ping — Testa a latência'].sort()),
+    JSON.stringify(itensDoMenu(comPing)))
 
   const outroContato = await avaliarEvento(db, eventoMenu({ chatId: '5511000000003@s.whatsapp.net', msgId: 'M3' }))
   check('/menu NÃO lista automação fora de escopo pra este contato', !textoDoMenu(outroContato).includes('/ping'))
@@ -77,7 +100,12 @@ try {
   check('automação desabilitada NUNCA aparece no /menu', !textoDoMenu(comDesligada).includes('/desligada'))
 
   const listaAutomacoes = db.prepare('SELECT id FROM automations').all().map((r) => r.id)
-  check('a automação nativa /menu existe de verdade no banco (semeada por abrirBanco())', listaAutomacoes.includes('__native_menu__'))
+  check('o /menu existe de verdade no banco, instalado por abrirBanco()', listaAutomacoes.includes(ID_DO_MENU))
+  // E nasce EDITÁVEL: documento normal, no modo ao vivo, sem marca de nativo.
+  const linha = db.prepare('SELECT enabled, deployment_mode, active_revision_id, native FROM automations WHERE id = ?').get(ID_DO_MENU)
+  check('o /menu é automação comum: ligada, ao vivo, com revisão ativa e SEM marca de nativo',
+    linha?.enabled === 1 && linha?.deployment_mode === 'live' && !!linha?.active_revision_id && linha?.native === 0,
+    JSON.stringify(linha))
 
   // Reenvio do MESMO evento: compara só o resultado da automação nativa em
   // si (não o total de `results`, que cresce à parte porque outras
@@ -85,8 +113,8 @@ try {
   // MESMO run é devolvido de novo (UNIQUE(event_id, revision) de sempre),
   // não que nenhuma automação nova entrou na lista de candidatas.
   const rodouDeNovo = await avaliarEvento(db, eventoMenu({ chatId: '5511000000001@s.whatsapp.net', msgId: 'M1' }))
-  const menuNaPrimeiraVez = semNadaEmEscopo.results.find((r) => r.automationId === '__native_menu__')
-  const menuNoReenvio = rodouDeNovo.results.find((r) => r.automationId === '__native_menu__')
+  const menuNaPrimeiraVez = semNadaEmEscopo.results.find((r) => r.automationId === ID_DO_MENU)
+  const menuNoReenvio = rodouDeNovo.results.find((r) => r.automationId === ID_DO_MENU)
   check('reenviar o MESMO evento de /menu é idempotente (mesmo texto, sem duplicar comando)', menuNoReenvio?.status === menuNaPrimeiraVez?.status && menuNoReenvio?.commands?.[0]?.payload?.text === menuNaPrimeiraVez?.commands?.[0]?.payload?.text)
 } catch (erro) {
   falhas++
@@ -95,5 +123,5 @@ try {
   db.close()
 }
 
-console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO MENU NATIVO PASSARAM')
+console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DO /MENU PASSARAM')
 process.exit(falhas ? 1 : 0)

@@ -3,7 +3,7 @@ import path from 'path'
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'url'
 import { ARQ_DB } from '../paths.js'
-import { garantirAutomacoesNativas } from './nativeAutomations.js'
+import { garantirMenuPadrao } from './menuPadrao.js'
 import { carregar, PADRAO } from '../../config.js'
 import { valorEfetivo, concessoesDoProcesso } from '../../agent/concessoes.js'
 
@@ -100,7 +100,7 @@ export function abrirBanco (arquivo = ARQ_DB, { pastaMigracoes = PASTA_MIGRACOES
     db.pragma(`cache_size = -${kib}`)
 
     rodarMigrations(db, pastaMigracoes)
-    garantirAutomacoesNativas(db)
+    garantirMenuPadrao(db)
     if (arquivo !== ':memory:') {
       try { fs.chmodSync(arquivo, 0o600) } catch {}
     }

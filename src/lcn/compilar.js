@@ -979,6 +979,18 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
         break
       }
       case 'menu': {
+        // ESCONDER É DIZÍVEL, e precisa ser: o rótulo do menu cai no próprio
+        // comando quando `menuLabel` falta (evaluator.js, automacoesVisiveisEm),
+        // então apagar a linha NÃO tira o comando da lista — só troca o rótulo
+        // por `/comando`. Sem esta palavra, o /menu obrigatoriamente se lista,
+        // e quem instalou não tem como mudar isso de dentro do .lcn.
+        if (/^(não|nao|oculto|escondido)$/i.test(valor.trim())) {
+          display.menuHidden = true
+          delete display.menuLabel
+          delete display.menuDescription
+          break
+        }
+        delete display.menuHidden
         const [rotulo, ...resto] = valor.split('—')
         display.menuLabel = rotulo.trim()
         // Repetir "menu:" substitui o PAR INTEIRO: antes só o rótulo era

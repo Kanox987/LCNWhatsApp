@@ -823,7 +823,7 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
   {
     chave: 'menu',
     vale: ['comando', 'vigia'],
-    ajuda: 'A linha que este comando ocupa no menu, no formato "rótulo — descrição". Sem esta linha, o comando funciona mas não aparece no menu.'
+    ajuda: 'A linha que este comando ocupa no menu, no formato "rótulo — descrição". Sem esta linha o comando aparece com a própria palavra de gatilho como rótulo · Escreva "menu: não" para tirá-lo da lista — é o único jeito, porque apagar o rótulo só troca o texto da linha.'
   },
   {
     chave: 'família',
@@ -832,7 +832,14 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
   },
   { chave: 'onde', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas".' },
   { chave: 'menos', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
-  { chave: 'pool', vale: 'todos', ajuda: 'Qual conjunto de números responde. Crie um na aba Automações antes, se ainda não tiver.' },
+  {
+    chave: 'pool',
+    vale: 'todos',
+    // A segunda frase é separada por ` · ` de propósito: `tests/cabecalho-contra-schema.test.mjs`
+    // lê cada trecho entre ` · ` e, se o trecho tiver ` = `, trata o lado esquerdo como valor
+    // declarado. Prosa sem ` = ` passa limpa.
+    ajuda: 'Qual conjunto de números responde. Crie um na aba Automações antes, se ainda não tiver. · A lista de membros e os pesos do conjunto não escolhem quem atende: hoje o nome só precisa existir para a automação poder ser publicada.'
+  },
   { chave: 'histórico', vale: ['comando', 'vigia'], ajuda: 'Se a automação enxerga mensagem antiga ou só a que está chegando agora.' },
   {
     chave: 'prioridade',

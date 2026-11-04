@@ -12,10 +12,12 @@ export function registrarRotasAutomations (roteador, db) {
     criar, salvarRascunho, publicar, despublicar
   } = servico
 
-  // Automações nativas (ex: /menu, ver nativeAutomations.js) ficam fora
-  // da listagem normal — são conteúdo do próprio motor, não algo que o
-  // usuário criou ou deveria editar pelo wizard genérico.
-  roteador.get('/automations', () => db.prepare('SELECT * FROM automations WHERE native = 0 ORDER BY id').all().map(exporAutomation))
+  // A listagem não esconde mais nada. Ela filtrava `native = 0` para manter
+  // o /menu fora da tela, e era esse filtro — não as rotas por id, que nunca
+  // filtraram — que tornava o menu não editável e não removível pelo painel.
+  // O menu agora é automação comum (ver menuPadrao.js), então aparece aqui
+  // como qualquer outra.
+  roteador.get('/automations', () => db.prepare('SELECT * FROM automations ORDER BY id').all().map(exporAutomation))
 
   // Comandos respondidos por mais de uma automação ligada. Ver conflitos.js
   // para por que isto avisa em vez de bloquear.
@@ -42,7 +44,7 @@ export function registrarRotasAutomations (roteador, db) {
       SELECT a.id AS automation_id, r.doc_json
       FROM automations a
       JOIN automation_revisions r ON r.id = a.active_revision_id
-      WHERE a.active_revision_id IS NOT NULL AND a.native = 0
+      WHERE a.active_revision_id IS NOT NULL
     `).all()
     const porFamilia = new Map()
     const semFamilia = []
@@ -75,7 +77,7 @@ export function registrarRotasAutomations (roteador, db) {
       SELECT a.id AS automation_id, r.doc_json
       FROM automations a
       JOIN automation_revisions r ON r.id = a.active_revision_id
-      WHERE a.active_revision_id IS NOT NULL AND a.native = 0
+      WHERE a.active_revision_id IS NOT NULL
     `).all()
     const automacoes = linhas.map((linha) => {
       let documento = null

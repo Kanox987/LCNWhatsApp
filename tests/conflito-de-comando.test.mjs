@@ -96,11 +96,17 @@ check('não publicada não conta', conflitosDeComando(db).length === 0)
     repetidos.map(([cmd, ids]) => `${cmd}: ${ids.join(' e ')}`).join(' | '))
 }
 
-// --- o nativo cede ao comando do dono -------------------------------------
+// --- dois menus na mesma palavra é CONFLITO, e a tela avisa ---------------
 //
-// O /menu nativo existe para o /menu funcionar sem ninguém instalar nada.
-// Quando o dono instala o dele, os DOIS respondiam — duas mensagens de menu
-// para quem digitou uma palavra. Medido no sistema do dono.
+// Antes havia um /menu nativo com privilégio no motor: quando o dono instalava
+// o dele, o nativo CEDIA em silêncio por uma regra escrita no avaliador. O
+// privilégio foi removido — o menu que vem instalado é automação comum —, e
+// com isso dois comandos na mesma palavra viraram o que sempre foram para
+// qualquer outro par de automações: um conflito que a tela relata e o dono
+// resolve desligando, removendo ou trocando o gatilho de um dos dois.
+//
+// Silêncio aqui era pior que aviso: o dono via UMA resposta e não sabia que
+// havia duas automações disputando a palavra.
 {
   const banco = abrirBanco(':memory:')
   const quando = new Date().toISOString()
@@ -128,10 +134,12 @@ check('não publicada não conta', conflitosDeComando(db).length === 0)
   criarServicoAutomacoes(banco).criarEPublicar({ document: doDono })
   banco.prepare("UPDATE automations SET deployment_mode = 'live' WHERE id = 'meu-menu'").run()
 
-  const nativo = banco.prepare("SELECT id, enabled, active_revision_id FROM automations WHERE native = 1").get()
-  check('o menu nativo existe e está ligado', !!nativo && nativo.enabled === 1, JSON.stringify(nativo))
+  // O menu que vem instalado: automação comum, sem coluna de privilégio.
+  const padrao = banco.prepare("SELECT id, enabled, deployment_mode FROM automations WHERE id = 'menu'").get()
+  check('o menu que vem instalado existe, ligado e ao vivo',
+    !!padrao && padrao.enabled === 1 && padrao.deployment_mode === 'live', JSON.stringify(padrao))
 
-  const r = avaliarEvento(banco, {
+  const evento = () => ({
     provider: 'zapo',
     accountId: 'conta',
     eventId: 'conta:c:s:menu1',
@@ -142,13 +150,28 @@ check('não publicada não conta', conflitosDeComando(db).length === 0)
     message: { kind: 'text', text: '/menu' },
     providerRef: { provider: 'zapo', id: 'menu1' }
   })
-  const casaram = (r.results || []).filter((x) => x.status === 'matched_live').map((x) => x.automationId)
-  check('só UMA automação responde /menu', casaram.length === 1, JSON.stringify(casaram))
-  check('e é a do dono, não a nativa', casaram[0] === 'meu-menu', casaram[0])
-  // E a tela não acusa isso como conflito: o motor já resolveu, e mandar a
-  // pessoa consertar o que está certo é pior que não avisar.
-  check('o encontro com a nativa não vira aviso na tela',
-    conflitosDeComando(banco).length === 0, JSON.stringify(conflitosDeComando(banco)))
+  const quemCasou = () => (avaliarEvento(banco, evento()).results || [])
+    .filter((x) => x.status === 'matched_live').map((x) => x.automationId).sort()
+
+  // As DUAS respondem, porque as duas foram publicadas naquela conversa e
+  // nenhuma tem precedência sobre a outra. É o que o dono precisa ver.
+  check('as duas automações respondem /menu enquanto o conflito existir',
+    JSON.stringify(quemCasou()) === JSON.stringify(['menu', 'meu-menu']), JSON.stringify(quemCasou()))
+
+  const aviso = conflitosDeComando(banco).find((c) => c.comando === '/menu')
+  check('a tela relata o conflito de /menu', !!aviso, JSON.stringify(conflitosDeComando(banco)))
+  check('o aviso nomeia as duas automações em disputa',
+    !!aviso && aviso.automacoes.map((a) => a.automationId).sort().join(',') === 'menu,meu-menu',
+    JSON.stringify(aviso))
+
+  // E o dono resolve: desligar o menu que vem instalado deixa só o dele. Este
+  // é o teste "verificar ausência de conflitos de comandos" da frente C — a
+  // ausência é alcançável pelo dono, não garantida por privilégio do motor.
+  banco.prepare("UPDATE automations SET enabled = 0 WHERE id = 'menu'").run()
+  check('desligando o menu padrão, só o do dono responde',
+    JSON.stringify(quemCasou()) === JSON.stringify(['meu-menu']), JSON.stringify(quemCasou()))
+  check('e o aviso de conflito desaparece',
+    !conflitosDeComando(banco).some((c) => c.comando === '/menu'), JSON.stringify(conflitosDeComando(banco)))
   banco.close()
 }
 

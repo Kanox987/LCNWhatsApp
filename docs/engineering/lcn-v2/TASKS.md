@@ -16,8 +16,8 @@ produziu documento, não código · **parado** = bloqueado, com a razão escrita
 | frente | o que o pedido quer | estado | prova |
 |---|---|---|---|
 | **A** onboarding | primeiro acesso guiado | **entregue pela `v2`, 4 linhas** — e a cópia dela prometia pareamento que não existia lá | `PAIRING.md` |
-| **B** documentação na IDE | ajuda contextual, 14 campos por função | **não começou** | — |
-| **C** menu como `.lcn` | menu deixa de ser aba privilegiada | **não começou** | — |
+| **B** documentação na IDE | ajuda contextual, 14 campos por função | **feito na maior parte** — 46 descrições novas no schema e `campo.explicacaoTecnica` em 154/154; **13 campos** das famílias de gatilho e condição seguem sem descrição | `LCN_FUNCTION_REFERENCE.md` |
+| **C** menu como `.lcn` | menu deixa de ser aba privilegiada | **feito** — os dez cenários do §7 passam por execução, e a lacuna está registrada | `MENU_COMO_AUTOMACAO.md` |
 | **D** pacotes de provisionamento | instância vazia/básico/atendimento/… | **não começou** (depende de E e C) | — |
 | **E** limites administrativos | hierarquia com verdade no backend | **feito** (metade), **parado** (metade) | `INSTANCE_LIMITS.md`, `UX_CHANGES.md` |
 | **F** QR ou código de pareamento | pareamento por número, se a biblioteca permitir | **feito, já na `onda1`** | `PAIRING.md` |
@@ -27,7 +27,7 @@ produziu documento, não código · **parado** = bloqueado, com a razão escrita
 | **J** segurança | revisão **antes de cada integração** | **documentado**, 5 achados, 1 corrigido | `SECURITY_REVIEW.md` |
 | **K** medir de novo | comparação antes/depois | **parado** — depende das frentes acima | `PERFORMANCE.md` |
 
-**Dez documentos de engenharia** foram escritos, que é o **Passo 0** do plano —
+**Onze documentos de engenharia** foram escritos, que é o **Passo 0** do plano —
 a investigação que o pedido mandava vir antes do código e que a `v2` entregou em
 zero arquivos.
 
@@ -94,6 +94,8 @@ Cada linha é da parte **J** do `FINAL_REPORT.md`, e nenhuma é "faltou tempo":
 | 8 | agendamento | **decisão do dono** sobre o contexto sintético | `SCHEDULER.md` §2 |
 | 9 | tela de concessões para o administrador | rotas existem, tela não | `UX_CHANGES.md` §7 |
 | 10 | renomear `casa` e `Pool` | frente B, e exige adaptador do nome antigo | `UX_CHANGES.md` §7 |
+| 11 | `configura menu` não alcança a numeração | `numbered` no enum `field` do schema, no `palavras` do vocabulário e no avaliador — mexe em validação de documento guardado, então é frente **J** | `MENU_COMO_AUTOMACAO.md` |
+| 12 | 13 campos de gatilho e condição sem descrição no schema | mesma forma das 46 já escritas | `LCN_FUNCTION_REFERENCE.md` |
 
 ## 5. O que foi recusado, e por quê
 

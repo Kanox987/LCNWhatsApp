@@ -46,6 +46,10 @@
         "menuDescription": {
           "type": "string"
         },
+        "menuHidden": {
+          "type": "boolean",
+          "description": "Tira este comando da lista do /menu. Sem isto, todo comando publicado na conversa aparece, inclusive o próprio menu — o rótulo cai no comando quando não há menuLabel, então apagar o rótulo não esconde nada."
+        },
         "family": {
           "type": "string",
           "minLength": 1,
@@ -780,6 +784,7 @@
               "description": "Só vale com \"folder\", e só quando a pasta tem mais de uma mídia. \"carrossel\" manda UMA mensagem com cards que a pessoa desliza; \"album\" deixa o aplicativo agrupar; \"separate\" manda uma por arquivo. O carrossel cai para álbum e o álbum para sequência quando não são aceitos."
             },
             "caption": {
+              "description": "Legenda que acompanha o arquivo enviado, aceitando variáveis interpoladas e não se aplicando a arquivos de texto puro.",
               "type": "string"
             },
             "viewOnce": {
@@ -787,6 +792,7 @@
               "description": "Envia a mídia (imagem, vídeo ou áudio) como visualização única. É um pedido ao aplicativo de quem recebe, não uma garantia: aplicativos modificados salvam a mídia de qualquer jeito, e o próprio sistema tem comandos (como o /x9) que recuperam o que outros mandam assim."
             },
             "notFoundText": {
+              "description": "Mensagem enviada na conversa caso o arquivo ou a pasta indicada não seja encontrada no acervo.",
               "type": "string"
             }
           }
@@ -818,10 +824,12 @@
           ],
           "properties": {
             "text": {
+              "description": "Código, fórmula matemática ou trecho a ser formatado e enviado na mensagem.",
               "type": "string",
               "minLength": 1
             },
             "richKind": {
+              "description": "Tipo de formatação rica: 'code' destaca sintaxe de código, 'latex' formata expressões matemáticas e 'text' formata texto.",
               "enum": [
                 "code",
                 "latex",
@@ -829,10 +837,12 @@
               ]
             },
             "language": {
+              "description": "Linguagem de programação (ex: javascript, python) usada para destacar a sintaxe do bloco quando richKind for 'code'.",
               "type": "string",
               "maxLength": 40
             },
             "fallbackText": {
+              "description": "Texto alternativo enviado como mensagem comum caso o cliente do WhatsApp não suporte ou recuse a formatação rica.",
               "type": "string"
             }
           }
@@ -906,12 +916,14 @@
           "additionalProperties": false,
           "properties": {
             "who": {
+              "description": "Define quem será removido do grupo: 'target' remove o alvo citado ou mencionado; 'sender' remove quem disparou o comando.",
               "enum": [
                 "sender",
                 "target"
               ]
             },
             "neverRemoveOwner": {
+              "description": "Quando true (padrão), impede a remoção de participantes que sejam donos do bot no banco; quando false, remove inclusive donos.",
               "type": "boolean"
             },
             "notFoundText": {
@@ -937,7 +949,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "who": { "enum": ["sender", "target"] },
+            "who": { "description": "Define quem é promovido a administrador: 'target' promove quem foi mencionado ou citado no comando; 'sender' promove quem enviou a mensagem.", "enum": ["sender", "target"] },
             "notFoundText": {
               "type": "string",
               "description": "Resposta quando o comando não indicou ninguém — sem menção e sem citação não existe alvo. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
@@ -980,7 +992,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "who": { "enum": ["sender", "target"] },
+            "who": { "description": "De quem buscar a foto de perfil: 'target' obtém a foto da pessoa marcada ou citada; 'sender' obtém a de quem enviou o comando.", "enum": ["sender", "target"] },
             "caption": { "type": "string", "description": "Legenda da mensagem que leva a foto." },
             "noPhotoText": {
               "type": "string",
@@ -1012,12 +1024,14 @@
           "additionalProperties": false,
           "properties": {
             "who": {
+              "description": "Define quem perde o cargo de admin: 'target' rebaixa o participante mencionado ou citado no comando; 'sender' rebaixa quem enviou a mensagem.",
               "enum": [
                 "sender",
                 "target"
               ]
             },
             "neverRemoveOwner": {
+              "description": "Quando true (padrão), impede o rebaixamento de administradores cadastrados como donos do bot; quando false, permite rebaixá-los.",
               "type": "boolean"
             },
             "notFoundText": {
@@ -1044,9 +1058,9 @@
           "additionalProperties": false,
           "required": ["scope", "key"],
           "properties": {
-            "scope": { "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global", "local"] },
-            "categoryKey": { "type": "string", "minLength": 1 },
-            "key": { "type": "string", "minLength": 1 },
+            "scope": { "description": "Onde armazenar o valor sorteado: 'local' retém apenas na execução atual; os demais escopos gravam no banco de dados.", "enum": ["chat", "sender", "group", "group_member", "target", "target_group_member", "category", "global", "local"] },
+            "categoryKey": { "description": "Identificador da categoria onde o valor sorteado será armazenado, aplicável quando o escopo for 'category'.", "type": "string", "minLength": 1 },
+            "key": { "description": "Nome da variável ou chave local que receberá o valor sorteado para uso posterior no fluxo.", "type": "string", "minLength": 1 },
             "minimo": { "type": "integer", "description": "O menor número que pode sair, incluído." },
             "maximo": { "type": "integer", "description": "O maior número que pode sair, incluído." },
             "entre": { "type": "string", "minLength": 1, "description": "Itens separados por vírgula; sai UM deles. Existe porque a linguagem não manipula lista: quem tem a coleção faz o trabalho." }
@@ -1578,13 +1592,16 @@
               "description": "Para onde a mídia recuperada vai. 'configured' lê o destino de uma variável (o campo destinationId aceita {{var...}}) e cai para as mensagens salvas enquanto ninguém configurou; 'fixed' exige um destino resolvido e avisa quando não há."
             },
             "destinationId": {
+              "description": "Número de telefone, JID ou variável com o endereço de destino da mídia quando o destino for 'fixed' ou 'configured'.",
               "type": "string",
               "minLength": 1
             },
             "caption": {
+              "description": "Texto ou legenda enviado junto com a mídia de visualização única recuperada, aceitando variáveis do contexto.",
               "type": "string"
             },
             "notFoundText": {
+              "description": "Mensagem enviada na conversa quando não há mídia de visualização única encontrada para recuperar ou o destino é inválido.",
               "type": "string"
             }
           }
@@ -1617,6 +1634,7 @@
           ],
           "properties": {
             "scope": {
+              "description": "Escopo ao qual o contador pertence no banco: chat, sender, group, group_member, target, target_group_member, category ou global.",
               "enum": [
                 "chat",
                 "sender",
@@ -1629,6 +1647,7 @@
               ]
             },
             "categoryKey": {
+              "description": "Identificador da categoria do contador, obrigatório quando o escopo configurado for 'category'.",
               "type": "string",
               "minLength": 1
             },
@@ -1639,6 +1658,7 @@
               "description": "Chave da variável. O prefixo __ é reservado do sistema (__owner__, __menu_config__) e é recusado aqui, na ação e na rota de atributos."
             },
             "by": {
+              "description": "Valor inteiro a ser somado ao contador no banco de dados, sendo que valores negativos realizam subtração.",
               "type": "integer",
               "minimum": -1000000,
               "maximum": 1000000
@@ -1730,6 +1750,7 @@
           ],
           "properties": {
             "scope": {
+              "description": "Onde o resultado é guardado: 'local' retém só nesta execução; os demais escopos gravam no banco por conversa, contato ou grupo.",
               "enum": [
                 "chat",
                 "sender",
@@ -1743,6 +1764,7 @@
               ]
             },
             "categoryKey": {
+              "description": "Identificador da categoria onde o resultado será gravado, obrigatório quando o escopo configurado for 'category'.",
               "type": "string",
               "minLength": 1
             },
@@ -1753,9 +1775,11 @@
               "description": "Chave da variável. O prefixo __ é reservado do sistema (__owner__, __menu_config__) e é recusado aqui, na ação e na rota de atributos."
             },
             "left": {
+              "description": "Primeiro operando do cálculo, podendo ser um número literal, uma variável ou um campo extraído do evento.",
               "$ref": "#/definitions/arithmeticOperand"
             },
             "operator": {
+              "description": "Operação matemática a executar: 'add' (soma), 'subtract' (subtração), 'multiply' (multiplicação) ou 'divide' (divisão).",
               "enum": [
                 "add",
                 "subtract",
@@ -1764,6 +1788,7 @@
               ]
             },
             "right": {
+              "description": "Segundo operando do cálculo, podendo ser um número literal, uma variável ou um campo extraído do evento.",
               "$ref": "#/definitions/arithmeticOperand"
             }
           },
@@ -1842,6 +1867,7 @@
           ],
           "properties": {
             "scope": {
+              "description": "Escopo ao qual a variável pertence no banco: chat, sender, group, group_member, target, target_group_member, category ou global.",
               "enum": [
                 "chat",
                 "sender",
@@ -1854,6 +1880,7 @@
               ]
             },
             "categoryKey": {
+              "description": "Identificador da categoria da variável, obrigatório quando o escopo configurado for 'category'.",
               "type": "string",
               "minLength": 1
             },
@@ -1864,6 +1891,7 @@
               "description": "Chave da variável. O prefixo __ é reservado do sistema (__owner__, __menu_config__) e é recusado aqui, na ação e na rota de atributos."
             },
             "value": {
+              "description": "Conteúdo que será interpolado com as variáveis do contexto e gravado no banco de dados.",
               "type": "string"
             }
           }
@@ -1894,14 +1922,17 @@
           ],
           "properties": {
             "text": {
+              "description": "Conteúdo enviado como resposta na conversa, interpolado com as variáveis do contexto da execução.",
               "type": "string",
               "minLength": 1
             },
             "mentions": {
+              "description": "Lista de números, JIDs ou variáveis separados por vírgula para mencionar (@) e notificar participantes na mensagem.",
               "type": "string",
               "minLength": 1
             },
             "forward": {
+              "description": "Quando true, adiciona o selo de mensagem encaminhada no cabeçalho da resposta enviada pelo WhatsApp.",
               "type": "boolean"
             },
             "numbered": {
@@ -1933,6 +1964,7 @@
           "additionalProperties": false,
           "properties": {
             "field": {
+              "description": "Propriedade do menu a alterar: 'header' (cabeçalho), 'footer' (rodapé), 'emptyText' (sem comandos), 'buttonTitle' (botão) ou 'format' (formato).",
               "enum": [
                 "header",
                 "footer",
@@ -1942,9 +1974,11 @@
               ]
             },
             "usageText": {
+              "description": "Mensagem de orientação enviada na conversa quando o comando de configuração do menu é acionado sem argumentos.",
               "type": "string"
             },
             "confirmText": {
+              "description": "Mensagem de confirmação enviada na conversa após atualizar com sucesso a configuração do menu, com padrão 'Menu atualizado'.",
               "type": "string"
             }
           }
@@ -1972,21 +2006,26 @@
           "additionalProperties": false,
           "properties": {
             "format": {
+              "description": "Formato de exibição do menu: 'text' envia uma lista em mensagem de texto comum e 'interactive' envia botões interativos.",
               "enum": [
                 "text",
                 "interactive"
               ]
             },
             "header": {
+              "description": "Texto de abertura exibido no cabeçalho antes da listagem dos comandos disponíveis na conversa.",
               "type": "string"
             },
             "footer": {
+              "description": "Texto exibido no rodapé do menu, inserido ao final da mensagem de texto ou na mensagem interativa.",
               "type": "string"
             },
             "emptyText": {
+              "description": "Mensagem exibida na conversa quando não há nenhum comando visível ou disponível para o usuário naquele chat.",
               "type": "string"
             },
             "buttonTitle": {
+              "description": "Texto do botão que abre a lista interativa de comandos no WhatsApp quando o formato configurado for 'interactive'.",
               "type": "string"
             },
             "numbered": {
@@ -2389,23 +2428,29 @@
           ],
           "properties": {
             "text": {
+              "description": "Mensagem principal exibida no corpo da conversa logo acima do botão da página, aceitando variáveis.",
               "type": "string"
             },
             "url": {
+              "description": "Endereço HTTP ou HTTPS da página a ser aberta pelo botão, suportando interpolação de variáveis.",
               "type": "string",
               "minLength": 1
             },
             "buttonLabel": {
+              "description": "Texto exibido como rótulo no botão interativo que abre a página web.",
               "type": "string",
               "minLength": 1
             },
             "footer": {
+              "description": "Texto curto e opcional exibido no rodapé da mensagem, posicionado abaixo do texto principal.",
               "type": "string"
             },
             "inApp": {
+              "description": "Se true (padrão), abre a página em janela interna no WhatsApp; se false, direciona para o navegador externo do aparelho.",
               "type": "boolean"
             },
             "forma": {
+              "description": "Modo do botão: 'link' (cta_url), 'janela' (open_webview em tela cheia) ou 'diagnóstico' (envia variações para teste).",
               "enum": [
                 "link",
                 "janela",

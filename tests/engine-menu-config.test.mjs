@@ -61,7 +61,7 @@ function eventoMenu (chatId) {
 }
 const menuDe = (chatId) => {
   const r = avaliarEvento(db, eventoMenu(chatId))
-  return r.results.find((x) => x.automationId === '__native_menu__')?.commands?.[0]
+  return r.results.find((x) => x.automationId === 'menu')?.commands?.[0]
 }
 
 publicarComando('so-testes', '/testar', { kind: 'group', id: GRUPO_TESTES }, '/testar', 'Só do grupo de testes')
@@ -97,7 +97,13 @@ check('cascata: campo que ninguém definiu cai no padrão do código', efetiva.f
 gravarConfigDeMenu(db, alvoDeConfig('group', GRUPO_TESTES), { format: 'interactive', buttonTitle: 'Abrir comandos' })
 const cmdInterativo = menuDe(GRUPO_TESTES)
 check('formato interativo gera comando whatsapp.menu', cmdInterativo.commandType === 'whatsapp.menu')
-check('comando interativo leva os itens estruturados', Array.isArray(cmdInterativo.payload.items) && cmdInterativo.payload.items[0].label === '/testar')
+check('comando interativo leva os itens estruturados', Array.isArray(cmdInterativo.payload.items) &&
+  cmdInterativo.payload.items.some((i) => i.label === '/testar'), JSON.stringify(cmdInterativo.payload.items))
+// O /MENU APARECE NA PRÓPRIA LISTA, e isso é o comportamento novo: ele é uma
+// automação comum publicada em qualquer lugar, não conteúdo privilegiado do
+// motor. Quem não quiser vê-lo escreve `menu: não` no .lcn dele.
+check('o próprio menu é um item como qualquer outro',
+  cmdInterativo.payload.items.some((i) => i.label === '/menu'), JSON.stringify(cmdInterativo.payload.items))
 check('comando interativo leva o título do botão configurado', cmdInterativo.payload.title === 'Abrir comandos')
 check('comando interativo SEMPRE leva o texto de reserva', typeof cmdInterativo.payload.fallbackText === 'string' && cmdInterativo.payload.fallbackText.includes('/testar'))
 check('os outros grupos continuam em texto', menuDe(GRUPO_CLIENTES).commandType === 'whatsapp.reply')

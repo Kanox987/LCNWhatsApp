@@ -967,7 +967,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
             SELECT a.id AS automation_id, r.doc_json
             FROM automations a
             JOIN automation_revisions r ON r.id = a.active_revision_id
-            WHERE a.active_revision_id IS NOT NULL AND a.native = 0
+            WHERE a.active_revision_id IS NOT NULL
           `).all()
           const automacoes = linhas.map((linha) => {
             let doc = null
@@ -2052,6 +2052,13 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
         })
         return 'success'
       }
+      // TEXTO VAZIO NÃO É MENSAGEM. Isso só acontece quando não há comando
+      // visível e o `quando não houver comando` daquela conversa está em
+      // branco — e aí o branco quer dizer "não responda nada", não "mande uma
+      // mensagem sem nada dentro", que o WhatsApp recusa. Era por onde o
+      // salvar do painel (ver menu-config.js) deixava o /menu mudo e
+      // engasgado em vez de mudo e limpo.
+      if (!menu.texto) return 'success'
       comandos.push({
         commandType: 'whatsapp.reply',
         payload: { chatId: evento.chat.id, text: menu.texto }
@@ -2354,33 +2361,36 @@ function inserirEvento (db, evento) {
 
 function candidatosPublicados (db) {
   return db.prepare(`
-    SELECT a.id AS automation_id, a.deployment_mode, a.native, r.id AS revision_id, r.doc_json
+    SELECT a.id AS automation_id, a.deployment_mode, r.id AS revision_id, r.doc_json
     FROM automations a
     JOIN automation_revisions r ON r.id = a.active_revision_id
     WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL
   `).all()
 }
 
-// Automações do próprio sistema (hoje só /menu, ver nativeAutomations.js)
-// pulam a checagem de escopo — a regra "scope.include vazio nunca casa
-// com tudo" existe pra conteúdo AUTORADO PELO USUÁRIO, nunca foi pensada
-// pra um comando nativo que precisa funcionar em qualquer chat.
-function passaEscopoPara (db, candidato, refs, chat) {
-  if (candidato.native) return true
-  return escopoCasa(db, refs, chat)
-}
+// NÃO EXISTE MAIS BYPASS DE ESCOPO. Automação do sistema pulava a checagem
+// porque "scope.include vazio nunca casa com tudo" foi pensado pra conteúdo
+// autorado pelo usuário, e o /menu nativo precisava responder em qualquer
+// chat. Agora o menu é automação comum e diz onde responde — o template já
+// nasce com `em qualquer lugar` (ver menuPadrao.js), que é a mesma coisa dita
+// pelas regras que valem pra todo mundo.
 
-// Lista as automações (não-nativas, publicadas, ao vivo, habilitadas)
-// visíveis no chat do evento — base do /menu nativo. Reusa exatamente a
-// mesma semântica de escopo (`escopoCasa`) que o avaliador já aplica pra
-// decidir se uma automação "roda" ali.
+// Lista as automações publicadas, ao vivo e habilitadas visíveis no chat do
+// evento — base do /menu. Reusa exatamente a mesma semântica de escopo
+// (`escopoCasa`) que o avaliador já aplica pra decidir se uma automação
+// "roda" ali.
+//
+// O MENU APARECE NA PRÓPRIA LISTA por padrão, e isso é proposital: ele é um
+// comando publicado naquela conversa como qualquer outro. Quem não quiser
+// vê-lo escreve `menu: não` no .lcn do menu — primitiva criada junto com esta
+// mudança, porque apagar o rótulo NÃO esconde (o rótulo cai no comando).
 function automacoesVisiveisEm (db, chatDoEvento) {
   const linhas = db.prepare(`
     SELECT a.id AS automation_id, a.active_revision_id, r.doc_json
     FROM automations a
     JOIN automation_revisions r ON r.id = a.active_revision_id
     WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL
-      AND a.native = 0 AND a.deployment_mode = 'live'
+      AND a.deployment_mode = 'live'
   `).all()
 
   const obterRefs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?')
@@ -2395,6 +2405,10 @@ function automacoesVisiveisEm (db, chatDoEvento) {
     // responde "estou desligado" — ou, em grupo, que não responde nada — seria
     // o menu mentindo sobre o que o bot faz naquele lugar.
     if (desligadoNaConversa(db, chatDoEvento, { automationId: linha.automation_id, documento }).desligado) continue
+    // `menu: não` no .lcn. É o único jeito de tirar um comando da lista,
+    // porque o rótulo cai no próprio comando quando menuLabel falta — apagar
+    // o rótulo troca o texto da linha, não some com ela.
+    if (documento.display?.menuHidden) continue
     const trigger = acharTrigger(documento)
     const rotulo = documento.display?.menuLabel || trigger?.config?.command
     // Regra automática (anti-link e afins) não é um comando que alguém digita,
@@ -2478,17 +2492,11 @@ export function avaliarEvento (db, evento) {
     const ordenados = [...candidatosPublicados(db)].sort((a, b) => {
       const peso = (c) => {
         const t = acharTrigger(jsonOuNull(c.doc_json))
-        if (t?.type !== 'trigger.command') return 2
-        // Comando DO DONO antes do comando NATIVO: é o nativo que cede, e para
-        // ceder ele precisa ser avaliado depois.
-        return c.native ? 1 : 0
+        return t?.type === 'trigger.command' ? 0 : 2
       }
       return peso(a) - peso(b)
     })
     let algumComandoCasou = false
-    // As palavras de comando que já casaram nesta mensagem, vindas de automação
-    // do dono. Serve ao nativo, logo abaixo.
-    const palavrasQueCasaram = new Set()
 
     for (const candidato of ordenados) {
       const existente = novo ? null : jaAvaliado(db, evento.eventId, candidato.revision_id)
@@ -2535,7 +2543,7 @@ export function avaliarEvento (db, evento) {
       } else if (documento && trigger) {
         const politica = estrutura.politica
         const refs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?').all(candidato.revision_id)
-        const passaEscopo = passaEscopoPara(db, candidato, refs, evento.chat)
+        const passaEscopo = escopoCasa(db, refs, evento.chat)
         const passaHistoria = politica.historyPolicy !== 'live_only' || evento.replay !== true
         const kindDoEvento = evento.message?.kind || (evento.group ? 'group' : null)
         const passaTipo = Boolean(kindDoEvento && politica.acceptedMessageKinds.includes(kindDoEvento))
@@ -2574,22 +2582,15 @@ export function avaliarEvento (db, evento) {
         const cedeAoComando = ehAutomatico && algumComandoCasou &&
           trigger.config.alsoOnCommands !== true
 
-        // O NATIVO CEDE AO COMANDO DO DONO com a mesma palavra.
+        // NÃO EXISTE MAIS "O NATIVO CEDE AO COMANDO DO DONO".
         //
-        // O /menu nativo existe para o /menu funcionar sem ninguém instalar
-        // nada. Quando o dono instala o dele, os dois respondiam — duas
-        // mensagens de menu para quem digitou uma palavra, sem nada explicando.
-        // Medido no sistema do dono, com o nativo e o instalado ligados.
-        //
-        // Cede por EVENTO, e não por existir: o comando do dono pode estar
-        // limitado a um grupo, e ali ele responde; nas outras conversas, onde
-        // ele nem casou, o nativo continua sendo o padrão que ele é.
-        const palavraDoGatilho = !ehAutomatico && !ehGrupo && typeof trigger.config.command === 'string'
-          ? trigger.config.command.trim().toLowerCase()
-          : null
-        const cedeAoDono = candidato.native === 1 && palavraDoGatilho && palavrasQueCasaram.has(palavraDoGatilho)
+        // Essa regra existia porque o /menu nativo respondia em todo chat sem
+        // ninguém instalar nada, então quem instalasse o seu via duas
+        // mensagens de menu. Agora há UM menu só, automação comum: dois
+        // comandos com a mesma palavra passam a ser conflito de verdade, e é
+        // `conflitos.js` que avisa — a tela, não um desempate escondido.
 
-        if (!cedeAoComando && !cedeAoDono && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
+        if (!cedeAoComando && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
           // DESLIGADO NESTA CONVERSA — e a conferência vem AQUI, depois de
           // casar, nunca antes.
           //
@@ -2611,7 +2612,6 @@ export function avaliarEvento (db, evento) {
             // de mesmo nome responderia no lugar dele, e a pessoa veria o bot
             // reagir a um comando que ela acabou de desligar.
             if (!ehAutomatico && !ehGrupo) algumComandoCasou = true
-            if (!ehAutomatico && !ehGrupo && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
             const aviso = avisoDeDesligado(evento.chat, desligamento)
             if (aviso && candidato.deployment_mode === 'live') {
               // O AVISO DE COMANDO DESLIGADO SAI COM A POLÍTICA DA AUTOMAÇÃO.
@@ -2634,7 +2634,6 @@ export function avaliarEvento (db, evento) {
           // mensagem. Só ao vivo aqui faria o mesmo evento se comportar
           // diferente conforme o modo de uma automação vizinha.
           if (!ehAutomatico && !ehGrupo) algumComandoCasou = true
-          if (!ehAutomatico && !ehGrupo && candidato.native !== 1 && palavraDoGatilho) palavrasQueCasaram.add(palavraDoGatilho)
           if (status === 'matched_live') {
             try {
               // Savepoint por automação (transação aninhada do better-sqlite3):

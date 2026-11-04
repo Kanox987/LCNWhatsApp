@@ -58,13 +58,31 @@ export async function renderMenuConfig ({ refresh }) {
     field('Qual conversa', campoDeId, 'O id do grupo ou do contato. Você acha na aba Dados.')
   ])
 
-  const formato = el('select', { className: 'input' }, FORMATOS.map(([v, t]) => el('option', { value: v, text: t })))
+  // A primeira opção, de valor vazio, é o que torna a cascata DIZÍVEL nesta
+  // tela: sem ela não havia como escolher "neste nível eu não mando no
+  // formato", e o select sempre entregava um formato para gravar.
+  const formato = el('select', { className: 'input' }, [
+    el('option', { value: '', text: 'Herdar — quem manda é o nível de cima' }),
+    ...FORMATOS.map(([v, t]) => el('option', { value: v, text: t }))
+  ])
+  // `numbered` sempre foi aceito pelo motor (menuConfig.js, limpar) e nunca
+  // teve controle aqui: quem quisesse numerar tinha de editar o documento da
+  // automação. Mesma forma tri-estado do formato.
+  const numerar = el('select', { className: 'input' }, [
+    el('option', { value: '', text: 'Herdar — quem manda é o nível de cima' }),
+    el('option', { value: 'sim', text: 'Numerar — 1, 2, 3 nos itens' }),
+    el('option', { value: 'nao', text: 'Não numerar — marcador simples' })
+  ])
   const cabecalho = el('input', { type: 'text', className: 'input' })
   const rodape = el('input', { type: 'text', className: 'input' })
   const textoVazio = el('input', { type: 'text', className: 'input' })
   const tituloDoBotao = el('input', { type: 'text', className: 'input' })
 
   const estado = el('p', { className: 'muted compact' })
+
+  // O que está GRAVADO neste nível, como o motor devolveu. Não é o que está
+  // na tela: é a referência para saber se um campo em branco é apagamento.
+  let gravado = {}
 
   const alvoAtual = () => ALVOS.find((a) => a.kind === seletorDeAlvo.value) || ALVOS[0]
   const idAtual = () => (alvoAtual().precisaDeId ? campoDeId.value.trim() : null)
@@ -78,18 +96,25 @@ export async function renderMenuConfig ({ refresh }) {
     estado.textContent = ''
     if (alvo.precisaDeId && !idAtual()) {
       for (const campo of [cabecalho, rodape, textoVazio, tituloDoBotao]) campo.value = ''
+      formato.value = ''
+      numerar.value = ''
+      gravado = {}
       estado.textContent = 'Escreva o id da conversa para ver o que está configurado nela.'
       return
     }
     try {
       const resposta = await api.menuConfig.get(alvo.kind, idAtual())
       const config = resposta?.config || {}
-      formato.value = config.format || 'text'
+      // Guardado para o salvar poder distinguir "em branco porque nada foi
+      // gravado neste nível" de "em branco porque a pessoa apagou".
+      gravado = config
+      formato.value = config.format || ''
+      numerar.value = typeof config.numbered === 'boolean' ? (config.numbered ? 'sim' : 'nao') : ''
       cabecalho.value = config.header ?? ''
       rodape.value = config.footer ?? ''
       textoVazio.value = config.emptyText ?? ''
       tituloDoBotao.value = config.buttonTitle ?? ''
-      const vazio = !config.header && !config.footer && !config.emptyText && !config.buttonTitle && !config.format
+      const vazio = !Object.keys(config).length
       estado.textContent = vazio
         ? 'Nada configurado neste nível — vale o que vier de cima na cascata.'
         : 'Configuração gravada neste nível.'
@@ -101,6 +126,38 @@ export async function renderMenuConfig ({ refresh }) {
   seletorDeAlvo.addEventListener('change', carregar)
   campoDeId.addEventListener('change', carregar)
 
+  // SÓ VAI O QUE ESTE NÍVEL DE FATO CONFIGURA.
+  //
+  // O salvar mandava os cinco campos sempre, e `carregar` preenche com vazio
+  // o que não está gravado. Então abrir a tela e clicar em Salvar gravava
+  // texto vazio por cima do que o nível de cima dizia — medido: um alvo com
+  // formato de lista, cabeçalho, rodapé, texto de vazio e título de botão
+  // ficava com os quatro textos em branco e o formato de volta em `text`. E
+  // `quando não houver comando` em branco fazia o motor enfileirar resposta
+  // com texto vazio.
+  //
+  // A regra é a que esta mesma tela já anuncia ao carregar: campo em branco
+  // significa "não configurado neste nível". Então campo em branco não entra
+  // no payload — EXCETO se este nível já guardava valor ali, porque aí o
+  // branco é a pessoa apagando aquele texto de propósito (rodapé vazio é
+  // configuração legítima, e o comando de dentro do WhatsApp também deixa).
+  //
+  // Consertar isso no serviço não resolveria: `''` é valor válido de gravar,
+  // então um merge lá continuaria apagando com campo em branco intocado.
+  //
+  // LACUNA REGISTRADA, não eliminada em silêncio: não há como dizer "aqui o
+  // rodapé é vazio" num nível que nunca guardou rodapé — o jeito é gravar
+  // algo, salvar, apagar e salvar de novo. Anotada no LCN_UX_AUDIT.
+  const montarPayload = () => {
+    const payload = {}
+    if (formato.value) payload.format = formato.value
+    if (numerar.value) payload.numbered = numerar.value === 'sim'
+    for (const [campo, chave] of [[cabecalho, 'header'], [rodape, 'footer'], [textoVazio, 'emptyText'], [tituloDoBotao, 'buttonTitle']]) {
+      if (campo.value !== '' || chave in gravado) payload[chave] = campo.value
+    }
+    return payload
+  }
+
   const salvar = button('Salvar', {
     variant: 'primary',
     onClick: async () => {
@@ -111,13 +168,7 @@ export async function renderMenuConfig ({ refresh }) {
       }
       setBusy(salvar, true)
       try {
-        await api.menuConfig.save(alvo.kind, idAtual(), {
-          format: formato.value,
-          header: cabecalho.value,
-          footer: rodape.value,
-          emptyText: textoVazio.value,
-          buttonTitle: tituloDoBotao.value
-        })
+        await api.menuConfig.save(alvo.kind, idAtual(), montarPayload())
         notify('Menu configurado.')
         await carregar()
       } catch (erro) {
@@ -189,6 +240,7 @@ export async function renderMenuConfig ({ refresh }) {
       blocoDeId,
       el('div', { className: 'form-grid' }, [
         field('Formato', formato, 'Texto funciona em qualquer aparelho. A lista para tocar depende do aplicativo de quem recebe desenhar.'),
+        field('Numeração', numerar, 'Mostra 1, 2, 3 nos itens. O toque continua acionando o mesmo comando.'),
         field('Título do botão', tituloDoBotao, 'Só aparece no formato de lista.')
       ]),
       field('Cabeçalho', cabecalho, 'A linha antes da lista de comandos.'),

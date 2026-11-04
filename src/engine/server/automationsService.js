@@ -54,7 +54,7 @@ function normalizarDocumento (documento, id, revision) {
   return documento
 }
 
-function salvarScopes (db, revisionId, documento) {
+export function salvarScopes (db, revisionId, documento) {
   db.prepare('DELETE FROM automation_scopes WHERE automation_revision_id = ?').run(revisionId)
   const inserir = db.prepare(`INSERT INTO automation_scopes
     (automation_revision_id, direction, kind, ref_id) VALUES (?, ?, ?, ?)`)

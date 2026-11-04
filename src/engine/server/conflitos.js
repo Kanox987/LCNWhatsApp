@@ -39,15 +39,17 @@ function palavrasDoDocumento (documento) {
 // Desligada não entra: ela não responde nada, e acusá-la faria a tela apontar
 // um problema que não existe.
 export function conflitosDeComando (db) {
-  // NATIVA FICA DE FORA, e não por ser invisível na lista: o motor já resolve
-  // esse encontro — o comando nativo cede ao do dono com a mesma palavra, por
-  // evento. Acusar aqui seria apontar um problema que o sistema já tratou, e
-  // mandar a pessoa consertar o que está certo.
+  // TODAS as automações publicadas entram, o /menu incluído. A consulta
+  // excluía `native = 0` porque o motor resolvia o encontro sozinho (o comando
+  // nativo cedia ao do dono), e acusar aqui seria apontar problema já tratado.
+  // Com o menu virando automação comum (ver menuPadrao.js) esse privilégio
+  // deixou de existir: se o dono publicar outro comando `/menu`, isso é
+  // conflito de verdade e a tela tem de dizer.
   const linhas = db.prepare(`
     SELECT a.id AS automation_id, r.doc_json
     FROM automations a
     JOIN automation_revisions r ON r.id = a.active_revision_id
-    WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL AND a.native = 0
+    WHERE a.enabled = 1 AND a.active_revision_id IS NOT NULL
   `).all()
 
   const porComando = new Map()

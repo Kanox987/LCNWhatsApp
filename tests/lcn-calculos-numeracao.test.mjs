@@ -34,7 +34,7 @@ db.prepare('INSERT INTO pools (id, label, created_at, updated_at) VALUES (?, ?, 
 const servico = criarServicoAutomacoes(db)
 let sequencia = 0
 let eventos = 0
-function documento (corpo, id = `calculo-${++sequencia}`) {
+function documento (corpo, id = `calculo-${++sequencia}`, extra = '') {
   return compilar(`automação ${id}
   id: ${id}
   revisão: 1
@@ -47,7 +47,7 @@ function documento (corpo, id = `calculo-${++sequencia}`) {
   acessa: texto
   casa: exato ou com argumentos
   quem: qualquer um
-
+${extra ? `  ${extra}\n` : ''}
 ${corpo.split('\n').map((l) => `  ${l}`).join('\n')}
 `)
 }
@@ -224,14 +224,12 @@ try {
   const oculto = publicar(documento('responde "oculto"', 'oculto'))
   db.prepare('UPDATE automations SET enabled = 0 WHERE id = ?').run(oculto.id)
   for (const formato of ['texto', 'com botões']) {
-    const doc = publicar(documento(`mostra menu\n  formato: ${formato}\n  numeração: sim\n  cabeçalho: "Escolha"\n  rodapé: "Fim"`))
-    // O menu não precisa listar a si próprio neste caso de apresentação.
-    db.prepare("UPDATE automation_scopes SET kind = 'contact', ref_id = ? WHERE automation_revision_id = (SELECT active_revision_id FROM automations WHERE id = ?)").run(OUTRO, doc.id)
+    // `menu: não` é como este menu sai da própria lista — a única forma, e a
+    // mesma que o /menu instalado usa quando o dono não quer vê-lo ali. Antes
+    // isto era `native = 1`, privilégio que o motor não tem mais.
+    const doc = publicar(documento(`mostra menu\n  formato: ${formato}\n  numeração: sim\n  cabeçalho: "Escolha"\n  rodapé: "Fim"`, undefined, 'menu: não'))
     const ev = evento(doc)
     const rev = db.prepare('SELECT active_revision_id AS id FROM automations WHERE id = ?').get(doc.id).id
-    // O gatilho fica nativo só para não usar seu destino como item do menu;
-    // este é o mesmo caminho de execução usado pelo /menu que vem instalado.
-    db.prepare('UPDATE automations SET native = 1 WHERE id = ?').run(doc.id)
     const r = avaliarEvento(db, ev).results.find((x) => x.automationId === doc.id)
     const p = r.commands[0].payload
     igual(`${formato}: cabeçalho e rodapé ficam fora da numeração`, p.fallbackText || p.text, 'Escolha\n1. /alfa\n2. /beta\n\nFim')
@@ -242,8 +240,7 @@ try {
     db.prepare('UPDATE automations SET enabled = 0 WHERE id = ?').run(doc.id)
   }
   db.prepare('UPDATE automations SET enabled = 0 WHERE id IN (?, ?)').run(a.id, b.id)
-  const vazio = publicar(documento('mostra menu\n  numeração: sim\n  vazio: "Sem itens"'))
-  db.prepare('UPDATE automations SET native = 1 WHERE id = ?').run(vazio.id)
+  const vazio = publicar(documento('mostra menu\n  numeração: sim\n  vazio: "Sem itens"', undefined, 'menu: não'))
   igual('menu vazio não ganha número', texto(rodar(vazio)), 'Sem itens')
 
   const catalogo = carregarCatalogo()

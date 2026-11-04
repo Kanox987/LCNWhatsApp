@@ -228,7 +228,7 @@ export function descompilar (documento, template = null) {
   const h = (texto) => linhas.push(`${IDENT}${texto}`)
 
   if (!template && documento.revision !== undefined) h(`revisão: ${documento.revision}`)
-  h(`nome: ${documento.name}`)
+  if (documento.name) h(`nome: ${documento.name}`)
 
   // O QUE ELA É, e o que a acorda — as duas primeiras coisas que se lê.
   h(`tipo: ${CLASSES[gatilho.type] || gatilho.type}`)
@@ -241,7 +241,8 @@ export function descompilar (documento, template = null) {
     h(`dispara com: ${comandoEscrito}`)
   }
   if (documento.display?.family) h(`família: ${documento.display.family}`)
-  if (documento.display?.menuLabel) {
+  if (documento.display?.menuHidden) h('menu: não')
+  else if (documento.display?.menuLabel) {
     const desc = documento.display.menuDescription
     h(`menu: ${documento.display.menuLabel}${desc ? ` — ${desc}` : ''}`)
   }
@@ -249,11 +250,16 @@ export function descompilar (documento, template = null) {
 
   for (const ref of documento.scope?.include || []) h(`onde: ${escreverDestino(ref)}`)
   for (const ref of documento.scope?.exclude || []) h(`menos: ${escreverDestino(ref)}`)
-  h(`pool: ${documento.responder?.poolId ?? ''}`)
+  // Linha de cabeçalho VAZIA é pior que linha ausente, pela mesma razão da
+  // política de fila mais abaixo: ela não decide nada e ainda confunde. E em
+  // `acessa:` é pior que confundir — recompilar `acessa: ` QUEBRA, com erro que
+  // nem nomeia o campo ("tipo de mensagem desconhecido: \"\""). Medido: para os
+  // três campos, omitir a linha devolve o MESMO documento que a linha vazia.
+  if (documento.responder?.poolId) h(`pool: ${documento.responder.poolId}`)
 
   if (gatilho.type !== 'trigger.group') {
     const tipos = documento.inputPolicy?.acceptedMessageKinds || []
-    h(`acessa: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
+    if (tipos.length) h(`acessa: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
   }
   if (documento.inputPolicy?.historyPolicy && documento.inputPolicy.historyPolicy !== 'live_only') {
     h(`histórico: ${documento.inputPolicy.historyPolicy}`)
@@ -274,8 +280,15 @@ export function descompilar (documento, template = null) {
 
   // A exigência e a mensagem de falta, lado a lado.
   const exige = documento.inputPolicy?.requires
-  if (exige) {
-    const onde = (exige.from || []).map((f) => ONDE_PROCURAR[f] || f).join(' ou ')
+  // Sem local onde procurar, a exigência não é escrevível: `precisa de um
+  // link: ` vazio QUEBRA ao recompilar (`não sei procurar ""`), igual ao
+  // `acessa:` de mais acima. E não dá para emitir só o `sem ele:`, porque o
+  // compilador exige que ele venha DEPOIS de um `precisa de ...`. Então o bloco
+  // inteiro é condicional. O schema já proíbe esse estado (`from` é required
+  // com `minItems: 1`), então aqui é a rede embaixo da rede.
+  const ondeProcurar = (exige?.from || []).map((f) => ONDE_PROCURAR[f] || f).join(' ou ')
+  if (exige && ondeProcurar) {
+    const onde = ondeProcurar
     h(`precisa de ${EXIGENCIAS[exige.kind] || exige.kind}: ${onde}`)
     if (exige.missingText) {
       // "ele" para link, "ela" para mídia — a linguagem é em português, e
