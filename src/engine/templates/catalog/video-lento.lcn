@@ -60,6 +60,9 @@ avisa exige
   Exige a conexão de efeitos configurada na aba Conexões. O serviço externo precisa expor a função velocidade_video recebendo { arquivo, fator, ajustar_audio } e devolvendo o arquivo de vídeo resultante.
 
 avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. O efeito de vídeo é feito por um serviço cadastrado na aba Conexões; sem ele, o comando não altera nada.
+
+avisa nota
   Reutiliza a função velocidade_video do serviço externo, configurada com fator multiplicador 0.5 para câmera lenta.
 
 avisa nota

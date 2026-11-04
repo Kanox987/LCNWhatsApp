@@ -55,3 +55,6 @@ configurável
 
 avisa exige
   Exige uma conexão configurada na aba Conexões com a função "previsao". A função deve receber o campo "cidade" (string com o nome da localidade informado no comando) e devolver uma string com o resumo meteorológico formatado para exibição em {{o resultado}}.
+
+avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. Sem um serviço de previsão cadastrado na aba Conexões, este comando não tem de onde tirar o tempo e responde que não foi possível.

@@ -346,9 +346,10 @@ export function planejarRemocao (db, installationId) {
   //
   // Existir não basta: apagada e recriada com o MESMO id por outra pessoa, ela
   // é outra automação, e despublicá-la desfaria o trabalho de quem não é o
-  // pacote. `automation_revisions.id` é AUTOINCREMENT (nunca se repete) e nada
-  // apaga revisões, então a revisão inicial registrada na instalação prova a
-  // geração: se ela não pertence mais àquele id, a automação atual não é nossa.
+  // pacote. Apagar a automação leva as revisões junto (ON DELETE CASCADE), mas
+  // `automation_revisions.id` é AUTOINCREMENT e nunca é reaproveitado: a recriada
+  // nasce com ids novos. Então a revisão inicial registrada na instalação prova
+  // a geração: se ela já não existe sob aquele id, a automação atual não é nossa.
   // Sem revisão inicial registrada (membro adotado, instalação antiga) não há
   // o que comparar, e o comportamento anterior se mantém.
   const existe = db.prepare('SELECT 1 AS ok FROM automations WHERE id = ?')

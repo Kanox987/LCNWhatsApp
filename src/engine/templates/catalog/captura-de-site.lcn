@@ -52,6 +52,9 @@ avisa exige
   Exige uma conexão configurada na aba Conexões. O serviço deve implementar a função "capturar", que recebe o campo "url" (string com o link a ser carregado) e devolve a mídia binária da imagem renderizada (PNG ou JPEG).
 
 avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. Sem um serviço de navegador cadastrado na aba Conexões, este comando não abre página nenhuma.
+
+avisa nota
   O carregamento e a captura podem levar alguns segundos dependendo do peso do site solicitado.
 
 avisa nota

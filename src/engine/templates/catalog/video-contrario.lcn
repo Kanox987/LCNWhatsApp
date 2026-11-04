@@ -56,4 +56,7 @@ avisa exige
   Exige a conexão de efeitos configurada na aba Conexões. O serviço externo precisa expor a função reverter_video recebendo { arquivo, reverter_audio } e devolvendo o arquivo de vídeo resultante.
 
 avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. O efeito de vídeo é feito por um serviço cadastrado na aba Conexões; sem ele, o comando não altera nada.
+
+avisa nota
   Reverter vídeo exige renderização completa de todos os quadros de trás para frente. Vídeos maiores podem demorar alguns segundos a mais.

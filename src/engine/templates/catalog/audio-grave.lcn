@@ -64,4 +64,7 @@ avisa exige
   Exige a conexão de efeitos configurada na aba Conexões. O serviço externo precisa expor a função tom_audio recebendo { arquivo, escala_semitons, reforco_graves, fator_tempo } e devolvendo o arquivo de áudio resultante.
 
 avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. O efeito de áudio é feito por um serviço cadastrado na aba Conexões; sem ele, o comando não altera nada.
+
+avisa nota
   Para usar, basta citar um áudio recebido e enviar o comando. É possível regular a intensidade da voz grossa ajustando o campo escalaSemitons em Programar.

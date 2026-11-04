@@ -60,6 +60,9 @@ avisa exige
   Exige a conexão de efeitos configurada na aba Conexões. O serviço externo precisa expor a função velocidade_audio recebendo { arquivo, fator, preservar_tom } e devolvendo o arquivo de áudio resultante.
 
 avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. O efeito de áudio é feito por um serviço cadastrado na aba Conexões; sem ele, o comando não altera nada.
+
+avisa nota
   Funciona citando qualquer mensagem de voz ou áudio recebido. O fator padrão 1.5 acelera a conversa mantendo a clareza total das palavras.
 
 avisa nota

@@ -61,4 +61,7 @@ avisa exige
   Exige uma conexão configurada na aba Conexões com a função "traduzir". A função deve receber os campos "texto" (conteúdo textual informado no comando) e "para" (código do idioma de destino) e devolver uma string com o texto traduzido para exibição em {{o resultado}}. Caso a conexão suporte identificar o idioma no próprio texto (ex: se o usuário digitar o código do idioma antes da frase), pode usá-lo preferencialmente sobre o campo "para".
 
 avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. Sem um serviço de tradução cadastrado na aba Conexões, este comando não traduz nada e responde que não foi possível.
+
+avisa nota
   A linguagem SABE dividir argumentos: pondo `argumentos: idioma / texto` no cabeçalho, `/traduzir es Bom dia` chegaria separado em {{argumentos.idioma}} e {{argumentos.texto}}. Este template não faz isso de propósito — com a divisão ligada, `/traduzir Good morning` viraria idioma="Good" e texto="morning", e a pessoa receberia lixo sem entender por quê. Quem quiser o idioma no comando pode ligar a divisão em Programar, aceitando essa troca.

@@ -54,3 +54,6 @@ configurável
 
 avisa exige
   Exige uma conexão configurada na aba Conexões com a função "encurtar". A função deve receber o campo "url" (o endereço web extraído da mensagem ou da mensagem citada) e devolver uma string com o link encurtado para exibição em {{o resultado}}.
+
+avisa nota
+  O LCN não tem acesso direto à web: ele só alcança o WhatsApp e as APIs conectadas pelo painel. Sem um serviço encurtador cadastrado na aba Conexões, este comando não gera link e responde que não foi possível.
