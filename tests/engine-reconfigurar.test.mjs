@@ -223,6 +223,33 @@ try {
     check('o rascunho continua lá, intacto',
       sobrou.draft.document.flow.nodes.find((n) => n.type === 'action.whatsapp.reply').config.text === 'rascunho ainda nao publicado')
   }
+  {
+    // Reconfigurar publica de novo, e publicar grava `enabled` a partir do
+    // documento renderizado (que nasce ligado). Sem preservar a chave, quem
+    // desligou um comando e só trocou um texto o via voltar ao ar sozinho.
+    // Parte de uma automação limpa: sem rascunho pendente e sem divergência.
+    await api.resolver('POST', '/templates/ping/install', contexto({
+      automationIds: { ping: 'ping-desligado' },
+      parameters: { ping: { command: '/desligado', poolId: 'p' } },
+      scope: { include: [{ kind: 'contact', id: '5511@s.whatsapp.net' }] }
+    }))
+    const lerEnabled = async (id) => (await api.resolver('GET', `/automations/${id}`, contexto())).enabled
+    await api.resolver('PUT', '/automations/ping-desligado/enabled', contexto({ enabled: false }))
+    check('pré-condição: a automação foi desligada', await lerEnabled('ping-desligado') === false)
+    await api.resolver('PUT', '/automations/ping-desligado/reconfigure', contexto({
+      parameters: { command: '/desligado2', poolId: 'p' }, confirmo: true
+    }))
+    check('reconfigurar NÃO religa automação desligada', await lerEnabled('ping-desligado') === false,
+      String(await lerEnabled('ping-desligado')))
+    const trocou = await api.resolver('GET', '/automations/ping-desligado', contexto())
+    check('e o valor novo foi aplicado mesmo assim', comandoDe(trocou.active_revision?.document ?? trocou.draft.document) === '/desligado2')
+
+    await api.resolver('PUT', '/automations/ping-desligado/enabled', contexto({ enabled: true }))
+    await api.resolver('PUT', '/automations/ping-desligado/reconfigure', contexto({
+      parameters: { command: '/desligado3', poolId: 'p' }, confirmo: true
+    }))
+    check('reconfigurar mantém ligada a automação ligada', await lerEnabled('ping-desligado') === true)
+  }
 } catch (erro) {
   falhas++
   console.error('❌ erro inesperado:', erro)

@@ -1284,6 +1284,49 @@ abertos salvando ao mesmo tempo (a transação serializa, o segundo recebe 409).
 
 **Bateria completa depois de D-46: `exit=0`, 5284 ✅, zero ❌.**
 
+## D-47 — Reprovisionar renova o que foi recriado, avisa o que não aplicou e recusa dependência ausente com mensagem de painel
+
+**Achados (revisão externa, cada um reproduzido por teste vermelho antes do conserto).**
+(3) Automação `criada` apagada por fora e republicada: o registro seguia apontando para a revisão
+antiga e o painel a chamava de "editada" sem ninguém ter tocado. (4/5) Reprovisionar com escopo ou
+modo diferentes devolvia 201 como se tivesse aplicado; o que já existe fica como está. (6)
+`conexoesDoMembro` lia `template.flow`, que não existe (os nós ficam em
+`documentTemplate.flow.nodes`): código morto, então o 409 amigável nunca disparava e quem barrava
+era só a validação de publicação, com um 422 genérico. (7) `reconfigurar` religava automação que o
+dono tinha desligado.
+
+**Decisão.** `reconciliarInstalacaoViva` troca `initial_revision_id` e `template_version` de item
+`criada` cuja revisão inicial mudou (id diferente = geração nova) e devolve `recriados`; a resposta
+de `POST /pacotes/provisionar` ganha `avisos` (`escopoDivergente`, `modoDivergente`, cada um com
+`automationId`); `conexoesDoMembro` lê os nós reais, resolve `{{params.x}}` pelo pedido
+(`parametrosComuns`, depois `parameters[templateId]`) e só então pelo padrão do template, e o 409
+cita a conexão e a aba Conexões; `reconfigurar` restaura `enabled=0` se estava desligada.
+Reprovisionar sobre automação editada à mão continua 409: é o portão de proveniência, afirmado
+no teste.
+
+**Prova de que detecta.** `conexoesDoMembro` devolvendo `[]`: 3 ❌ no caso 4; restaurada, zero.
+`tests/pacotes-reconciliacao.test.mjs` (novo, no `npm test`) cobre os quatro cenários; a conexão do
+caso "declarada" tem endereço e função no formato real, porque a validação de publicação rejeita
+conexão sem a função (segunda linha de defesa, comprovada pelo 422 antes do conserto).
+
+**Não consertado, de propósito.**
+- (2) não é destrutivo; registrado, sem mudança.
+- (8) dois `PUT reconfigure` seguidos: último vence. NÃO sondado nesta rodada; fica como limite de
+  desenho declarado, não como fato medido.
+- (1) instâncias simultâneas com pacotes distintos: `escopoDoMotor()` é constante; depende da
+  decisão do dono (D-22/D2-A). O décimo teste obrigatório da Frente D permanece sem cobertura
+  real por isso.
+
+**Mensagem de recusa.** O 409 (e o `motivo` de `GET /pacotes`) dizem que o recurso não é nativo: o
+LCN só alcança o WhatsApp e as APIs conectadas pelo painel, sem acesso direto à web. Vale para
+`clima`, `cotacao`, `traduzir` e todo comando que chama conexão.
+
+**Testes de `gemini-testesD` (225 linhas em `tests/pacotes-provisionamento.test.mjs`)** conferidos
+antes de entrar: 4 mutações em `provisionamento.js`, `registroDePacotes.js` e `templates/pacotes.js`
+derrubaram 5, 3, 5 e 7 verificações; arquivos de `src` restaurados.
+
+**Bateria completa depois de D-47: `exit=0`, 5332 ✅, zero ❌.**
+
 ## Consultas externas desta rodada
 
 ChatGPT web (conta logada, esforço High) sobre os três pontos acima; Gemini (agy) sobre o

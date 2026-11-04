@@ -134,7 +134,7 @@ export function registrarRotasPacotes (roteador, db, {
       instalavel: conexoesFaltando.length === 0,
       motivo: conexoesFaltando.length === 0
         ? null
-        : `Depende de conexão que não está declarada: ${conexoesFaltando.join(', ')}. Cadastre o endereço do serviço na aba Conexões antes de provisionar.`,
+        : textoConexaoAusente(conexoesFaltando),
       membros: resolvido.membros.map((m) => ({
         itemKey: m.itemKey, templateId: m.templateId, templateVersion: m.templateVersion, origem: m.origem
       })),
@@ -220,22 +220,39 @@ export function registrarRotasPacotes (roteador, db, {
       }
     }
     const membros = membrosDaLista(templateIds)
-    const faltando = faltamConexoes([...new Set(membros.flatMap((m) => conexoesDoMembro(m)))])
+    const faltando = faltamConexoes([...new Set(membros.flatMap((m) => conexoesDoMembro(m, body)))])
     if (faltando.length) {
-      throw new ErroHttp(409, `Depende de conexão que não está declarada: ${faltando.join(', ')}. Cadastre o endereço do serviço na aba Conexões antes de provisionar.`)
+      throw new ErroHttp(409, textoConexaoAusente(faltando))
     }
     // A seleção é o que a chave da instalação resume: a mesma lista pedida duas
     // vezes é a MESMA escolha, e provisionar de novo não cria instalação nova.
     return { escolha: { kind }, selecao: { templateIds: [...templateIds].sort() }, membros }
   }
 
-  function conexoesDoMembro (membro) {
+  // A conexão que o comando vai chamar sai do fluxo compilado do template. O
+  // `connectionRef` é `{{params.x}}`: vale o que o pedido escolheu para x
+  // (parâmetro do template, depois o comum) e, na falta, o padrão do template.
+  // O LCN não acessa a web: só o WhatsApp e as APIs conectadas pelo painel.
+  // Comando como /clima não é função nativa — é uma chamada a um serviço que
+  // o dono precisa ter conectado, e a recusa tem de dizer isso.
+  function textoConexaoAusente (faltando) {
+    return `Depende de conexão que não está declarada: ${faltando.join(', ')}. Isto não é uma função nativa: o LCN só alcança o WhatsApp e as APIs conectadas pelo painel, sem acesso direto à web. Cadastre o serviço na aba Conexões antes de provisionar.`
+  }
+
+  function conexoesDoMembro (membro, body) {
     const template = catalogo.get(membro.templateId)
-    const nodes = template?.flow?.nodes || []
-    return nodes
-      .filter((n) => n?.type === 'action.connection.call' || n?.type === 'action.http')
-      .map((n) => n.config?.connectionRef)
-      .filter((ref) => typeof ref === 'string' && ref)
+    const escolhidos = { ...(body?.parametrosComuns || {}), ...(body?.parameters?.[membro.templateId] || {}) }
+    const exigidas = new Set()
+    for (const no of template?.documentTemplate?.flow?.nodes || []) {
+      if (no.type !== 'action.connection.call') continue
+      const ref = no.config?.connectionRef
+      const parametro = typeof ref === 'string' ? /^\{\{params\.([A-Za-z0-9_]+)\}\}$/.exec(ref) : null
+      if (!parametro) { if (ref) exigidas.add(ref); continue }
+      const padrao = (template.parameters || []).find((p) => p.key === parametro[1])?.default
+      const efetivo = escolhidos[parametro[1]] || padrao
+      if (typeof efetivo === 'string' && efetivo) exigidas.add(efetivo)
+    }
+    return [...exigidas]
   }
 
   const provisionar = db.transaction((body) => {
@@ -349,11 +366,33 @@ export function registrarRotasPacotes (roteador, db, {
       membros: membrosDoRegistro.map(({ motivoDoVinculo, ...m }) => m)
     })
 
+    // Provisionar de novo NÃO reescreve o que já está no ar (a instalação é a
+    // identidade, não o pedido). Mas silenciar a diferença faria quem pede
+    // "agora só neste grupo" acreditar que o escopo mudou. O aviso nomeia a
+    // automação que ficou como estava; mudar de fato é reconfigurar.
+    const avisos = []
+    const pedidoScope = JSON.stringify({ include: scope?.include ?? [], exclude: Array.isArray(scope?.exclude) ? scope.exclude : [] })
+    for (const { automationId } of [...jaInstalados, ...restauradas.map((a) => ({ automationId: a.id }))]) {
+      const linha = leitores.lerAutomacao(automationId)
+      const documento = leitores.lerUltimoDocumento(automationId)
+      if (documento?.scope && membros.length) {
+        const gravado = JSON.stringify({ include: documento.scope.include ?? [], exclude: documento.scope.exclude ?? [] })
+        if (gravado !== pedidoScope) {
+          avisos.push({ codigo: 'escopoDivergente', automationId, mensagem: 'O escopo pedido é diferente do que já está instalado; o instalado foi mantido.' })
+        }
+      }
+      if (linha && linha.deployment_mode !== deploymentMode) {
+        avisos.push({ codigo: 'modoDivergente', automationId, mensagem: `O modo pedido (${deploymentMode}) é diferente do instalado (${linha.deployment_mode}); o instalado foi mantido.` })
+      }
+    }
+
     return {
       installationId: registro.installationId,
       jaExistia: registro.jaExistia,
       acrescentados: registro.acrescentados,
+      recriados: registro.recriados,
       ausentes: registro.ausentes,
+      avisos,
       kind: escolha.kind,
       packageId: escolha.packageId ?? null,
       installed: instaladas,

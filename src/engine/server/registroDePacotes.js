@@ -115,6 +115,17 @@ function reconciliarInstalacaoViva (db, installationId, lista, agora) {
   const jaTem = new Map(itensDaInstalacao(db, installationId).map((i) => [i.item_key, i]))
   const faltando = lista.filter((m) => !jaTem.has(m.itemKey))
   const ausentes = [...jaTem.keys()].filter((chave) => !lista.some((m) => m.itemKey === chave))
+  // Item que o registro já tem e que o pedido traz com OUTRA geração da mesma
+  // automação: foi apagada à mão e a rota a recriou. `automation_revisions.id`
+  // é AUTOINCREMENT, então id diferente é geração diferente. Sem atualizar a
+  // revisão inicial, a automação nova nasceria "editada" — comparada com a
+  // revisão da que já não existe — e o próximo reprovisionamento esbarraria no
+  // portão de proveniência por uma edição que ninguém fez.
+  const recriados = lista.filter((m) => {
+    const atual = jaTem.get(m.itemKey)
+    return atual && atual.binding === 'criada' && m.binding === 'criada' &&
+      m.initialRevisionId != null && m.initialRevisionId !== atual.initial_revision_id
+  })
 
   const reivindicada = db.prepare(`
     SELECT installation_id FROM package_installation_items AS item
@@ -138,16 +149,24 @@ function reconciliarInstalacaoViva (db, installationId, lista, agora) {
     }
   }
 
-  if (faltando.length > 0) {
+  if (faltando.length > 0 || recriados.length > 0) {
     const inserirItem = db.prepare(`
       INSERT INTO package_installation_items
         (installation_id, item_key, automation_id, template_id, template_version, origin, binding, initial_revision_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
+    const renovarRevisao = db.prepare(`
+      UPDATE package_installation_items
+         SET initial_revision_id = ?, template_version = ?
+       WHERE installation_id = ? AND item_key = ?
+    `)
     const gravar = db.transaction(() => {
       for (const m of faltando) {
         inserirItem.run(installationId, m.itemKey, m.automationId, m.templateId,
           m.templateVersion, m.origem, m.binding, m.initialRevisionId ?? null)
+      }
+      for (const m of recriados) {
+        renovarRevisao.run(m.initialRevisionId, m.templateVersion, installationId, m.itemKey)
       }
       db.prepare('UPDATE package_installations SET reconciled_at = ? WHERE installation_id = ?')
         .run(agora, installationId)
@@ -160,6 +179,7 @@ function reconciliarInstalacaoViva (db, installationId, lista, agora) {
     jaExistia: true,
     itens: itensDaInstalacao(db, installationId),
     acrescentados: faltando.map((m) => m.itemKey),
+    recriados: recriados.map((m) => m.itemKey),
     ausentes
   }
 }
@@ -222,6 +242,7 @@ export function registrarInstalacao (db, {
     jaExistia: false,
     itens: itensDaInstalacao(db, installationId),
     acrescentados: lista.map((m) => m.itemKey),
+    recriados: [],
     ausentes: []
   }
 }

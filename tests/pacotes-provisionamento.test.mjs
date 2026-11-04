@@ -16,6 +16,14 @@
 // descobrir a lista, porque `renderizarTemplate` recusa um de cada vez.
 import { abrirBanco } from '../src/engine/server/db.js'
 import { criarApi } from '../src/engine/server/api.js'
+import { decidirProvisionamento, classificarOrdem } from '../src/engine/server/provisionamento.js'
+import { carregarCatalogo } from '../src/engine/templates/catalog.js'
+import { carregarPacotes, resolverPacote } from '../src/engine/templates/pacotes.js'
+import { criarServicoAutomacoes } from '../src/engine/server/automationsService.js'
+import { leitoresDeClassificacao } from '../src/engine/server/provisionarMembros.js'
+import {
+  escopoDoMotor, registrarInstalacao, planejarRemocao
+} from '../src/engine/server/registroDePacotes.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -288,6 +296,223 @@ const provisionarBasico = (db, extra = {}) => chamar(db, 'POST', '/pacotes/provi
   const lista = await chamar(db, 'GET', '/pacotes/provisionamento')
   check('7d. com UMA instalação registrada e cinco itens vivos',
     lista.instalacoes.length === 1 && lista.instalacoes[0].itens.length === 5)
+  db.close()
+}
+
+// ---------------- 8. estado 'naoVerificavel': chamar de fato decidirProvisionamento
+//
+// §8 e DECISIONS.md: automação cuja procedência ou conteúdo não se pode provar
+// cai em `naoVerificavel`. O teste anterior não chamava `decidirProvisionamento`
+// de verdade para este estado. Aqui provamos:
+//   (1) a classificação como `naoVerificavel` de automação existente sem revisão;
+//   (2) a chamada direta a `decidirProvisionamento` afirmando a recusa (`podeInstalar: false`)
+//       e o membro nos impedimentos;
+//   (3) a recusa de ponta a ponta na rota `POST /pacotes/provisionar` com status 409.
+{
+  const db = abrirBanco(':memory:')
+  await criarPool(db)
+  const catalogo = carregarCatalogo()
+  const servicoAutomacoes = criarServicoAutomacoes(db)
+  const obterProvenance = db.prepare('SELECT * FROM automation_template_provenance WHERE automation_id = ?')
+  const leitores = leitoresDeClassificacao({ db, servicoAutomacoes, obterProvenance })
+
+  // Semeia linha REAL em `automations` e proveniência para 'ping', mas SEM revisão em
+  // `automation_revisions`: a automação existe no banco mas não tem revisão nenhuma.
+  const agora = new Date().toISOString()
+  db.prepare(`
+    INSERT INTO automations (id, schema_version, enabled, deployment_mode, created_at, updated_at)
+    VALUES ('ping', 1, 1, 'live', ?, ?)
+  `).run(agora, agora)
+  db.prepare(`
+    INSERT INTO automation_template_provenance (automation_id, template_id, template_version, parameters_json, installed_at)
+    VALUES ('ping', 'ping', 1, '{}', ?)
+  `).run(agora)
+
+  const classificacao = classificarOrdem({
+    ordem: ['ping'],
+    catalogo,
+    automationIds: {},
+    parametrosPorTemplate: { ping: { poolId: 'pool-comum' } },
+    ...leitores
+  })
+
+  check('8. classificarOrdem classifica automação sem revisão como naoVerificavel',
+    classificacao[0]?.estado === 'naoVerificavel', classificacao[0]?.estado)
+
+  // (a) Chama de fato decidirProvisionamento e afirma a decisão devolvida
+  const decisao = decidirProvisionamento(classificacao)
+  check('8. decidirProvisionamento RECUSA provisionamento com membro naoVerificavel',
+    decisao.podeInstalar === false, `podeInstalar=${decisao.podeInstalar}`)
+  check('8. e inclui o membro na lista de impedimentos com motivo explicado',
+    decisao.impedem?.length === 1 && decisao.impedem[0]?.estado === 'naoVerificavel' &&
+    typeof decisao.impedem[0]?.motivo === 'string' && /não tem revisão nenhuma/.test(decisao.impedem[0]?.motivo),
+    JSON.stringify(decisao.impedem))
+  check('8. nenhum membro é aprovado para instalação ou restauração',
+    decisao.aInstalar.length === 0 && decisao.aRestaurar.length === 0 && decisao.jaInstalados.length === 0)
+
+  // Provando a mesma trava pela rota real:
+  const r = await tentar(() => provisionarBasico(db))
+  check('8. rota POST /pacotes/provisionar é recusada com 409 devido a naoVerificavel',
+    r.erro?.status === 409, `status=${r.erro?.status}`)
+  check('8. erro da rota detalha o item como naoVerificavel',
+    r.erro?.detalhes?.itens?.find((i) => i.automationId === 'ping')?.estado === 'naoVerificavel')
+  check('8. nada novo foi publicado no banco', quantas(db) === 1)
+
+  db.close()
+}
+
+// ----------------- 9. remoção com linhas REAIS em automations (sem dados fabricados)
+//
+// O defeito corrigido: no registro de pacotes, a remoção com itens adotados ou compartilhados
+// era exercitada com dados fabricados (inserts manuais sem documentos nem revisões) ou mocks
+// em memória. Aqui semeamos automações REAIS publicadas (com revisões ativas e nós válidos),
+// registramos a instalação no banco real, planejamos a remoção e executamos a rota DELETE:
+// o item criado é despublicado no banco real (active_revision_id vira null) e o adotado
+// ('compartilhada') PERMANECE no ar com active_revision_id intacto.
+{
+  const db = abrirBanco(':memory:')
+  await criarPool(db)
+  const servicoAutomacoes = criarServicoAutomacoes(db)
+
+  const docValido = (id, comando) => ({
+    id,
+    schemaVersion: 1,
+    name: id,
+    enabled: true,
+    scope: ESCOPO,
+    inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
+    responder: { strategy: 'weighted_rendezvous', poolId: 'pool-comum' },
+    flow: {
+      nodes: [
+        { id: 'g', type: 'trigger.command', config: { command: comando, match: 'exact', allowFrom: 'any' } },
+        { id: 'r', type: 'action.whatsapp.reply', config: { text: 'ok' } }
+      ],
+      edges: [{ from: 'g', to: 'r', on: 'matched' }]
+    }
+  })
+
+  // Semeia automações REAIS e publicadas no banco
+  const criadaReal = servicoAutomacoes.criarEPublicar({ id: 'auto-criada', document: docValido('auto-criada', '/criada') })
+  const adotadaReal = servicoAutomacoes.criarEPublicar({ id: 'auto-adotada', document: docValido('auto-adotada', '/adotada') })
+
+  check('9. preparo: as duas automações reais estão no ar no banco',
+    noAr(db) === 2 && quantas(db) === 2)
+
+  const r = registrarInstalacao(db, {
+    escopo: escopoDoMotor(),
+    escolha: { kind: 'pacote', packageId: 'atendimento', packageVersion: 1 },
+    membros: [
+      {
+        itemKey: 'auto-criada',
+        automationId: 'auto-criada',
+        templateId: 'ping',
+        templateVersion: 1,
+        origem: 'pedido',
+        binding: 'criada',
+        initialRevisionId: criadaReal.activeRevisionId
+      },
+      {
+        itemKey: 'auto-adotada',
+        automationId: 'auto-adotada',
+        templateId: 'ajuda',
+        templateVersion: 1,
+        origem: 'pedido',
+        binding: 'compartilhada',
+        initialRevisionId: adotadaReal.activeRevisionId
+      }
+    ]
+  })
+
+  // Confere que planejarRemocao separa a que nasceu aqui da adotada
+  const plano = planejarRemocao(db, r.installationId)
+  check('9. planejarRemocao separa a criada para aRemover',
+    plano.aRemover.length === 1 && plano.aRemover[0].automation_id === 'auto-criada')
+  check('9. e solta a adotada com motivo naoNasceuAqui',
+    plano.aSoltar.length === 1 && plano.aSoltar[0].automation_id === 'auto-adotada' &&
+    plano.aSoltar[0].motivo === 'naoNasceuAqui')
+
+  // Remove o pacote através da rota real DELETE
+  const removido = await chamar(db, 'DELETE', `/pacotes/provisionamento/${r.installationId}`)
+  check('9. remoção via API relata auto-criada em removidas',
+    removido.removidas?.some((x) => x.automationId === 'auto-criada'), JSON.stringify(removido.removidas))
+  check('9. e relata auto-adotada em soltas com motivo naoNasceuAqui',
+    removido.soltas?.some((x) => x.automationId === 'auto-adotada' && x.motivo === 'naoNasceuAqui'),
+    JSON.stringify(removido.soltas))
+
+  // Efeito REAL nas tabelas de banco (não em estruturas de memória):
+  const ativaCriada = db.prepare('SELECT active_revision_id AS a FROM automations WHERE id = ?').get('auto-criada')?.a
+  const ativaAdotada = db.prepare('SELECT active_revision_id AS a FROM automations WHERE id = ?').get('auto-adotada')?.a
+  check('9. auto-criada teve active_revision_id zerado no banco (fora do ar)', ativaCriada === null)
+  check('9. auto-adotada PERMANECE ativa no banco real', ativaAdotada === adotadaReal.activeRevisionId)
+  check('9. exatamente uma automação continua no ar', noAr(db) === 1)
+  check('9. e as duas linhas continuam em automations (histórico preservado)', quantas(db) === 2)
+
+  db.close()
+}
+
+// ----------------- 10. resolverPacote de verdade no lugar do mock 'membro()'
+//
+// O mock 'membro()' fabricava objetos de membro manualmente, sem testar a resolução
+// de dependências transitivas, versões fixadas e derivação real de conexões.
+// Aqui exercitamos `resolverPacote` de verdade contra o catálogo real, e usamos a
+// composição resultante para registrar e persistir a instalação no banco.
+{
+  const db = abrirBanco(':memory:')
+  const catalogo = carregarCatalogo()
+  const pacotes = carregarPacotes()
+  const basicoManifesto = pacotes.get('basico')
+
+  // Chama resolverPacote de verdade
+  const resolvido = resolverPacote(catalogo, basicoManifesto)
+
+  check('10. resolverPacote devolve os metadados do pacote',
+    resolvido.packageId === 'basico' && resolvido.packageVersion === 1)
+  check('10. resolverPacote resolve 5 membros reais (4 pedidos + 1 dependência)',
+    resolvido.membros.length === 5, `n=${resolvido.membros.length}`)
+
+  // Prova que a dependência transitiva veio da resolução real, não de mock
+  const dep = resolvido.membros.find((m) => m.templateId === 'config-menu')
+  check('10. config-menu foi resolvido como dependencia transitiva de menu',
+    dep?.origem === 'dependencia')
+  check('10. dependência transitiva vem posicionada antes do template dependente',
+    resolvido.membros.findIndex((m) => m.templateId === 'config-menu') <
+    resolvido.membros.findIndex((m) => m.templateId === 'menu'))
+  check('10. cada membro resolvido possui contentHash canônico calculado',
+    resolvido.membros.every((m) => typeof m.contentHash === 'string' && m.contentHash.length === 64))
+
+  // Usa os membros reais resolvidos para registrar a instalação
+  const escopo = escopoDoMotor()
+  const escolha = { kind: 'pacote', packageId: resolvido.packageId, packageVersion: resolvido.packageVersion }
+  const membrosReais = resolvido.membros.map((m) => ({
+    itemKey: m.itemKey,
+    automationId: m.itemKey,
+    templateId: m.templateId,
+    templateVersion: m.templateVersion,
+    origem: m.origem,
+    binding: 'criada'
+  }))
+
+  const reg = registrarInstalacao(db, { escopo, escolha, membros: membrosReais })
+  check('10. registrarInstalacao aceita e grava os membros vindos de resolverPacote',
+    reg.itens.length === 5 && !reg.jaExistia)
+
+  const itemDep = db.prepare(
+    'SELECT origin, template_version FROM package_installation_items WHERE installation_id = ? AND item_key = ?'
+  ).get(reg.installationId, 'config-menu')
+  check('10. o banco gravou a dependência resolvida com origin dependencia',
+    itemDep?.origin === 'dependencia')
+
+  const itemMenu = db.prepare(
+    'SELECT origin, template_version FROM package_installation_items WHERE installation_id = ? AND item_key = ?'
+  ).get(reg.installationId, 'menu')
+  check('10. o item pedido gravou origin pedido e versão 2 do catálogo',
+    itemMenu?.origin === 'pedido' && itemMenu?.template_version === 2)
+
+  // Idempotência com membros resolvidos reais
+  const segunda = registrarInstalacao(db, { escopo, escolha, membros: membrosReais })
+  check('10. repetição com resolverPacote de verdade reconhece a instalação viva',
+    segunda.jaExistia === true && segunda.installationId === reg.installationId)
+
   db.close()
 }
 

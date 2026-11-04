@@ -263,8 +263,16 @@ export function registrarRotasTemplates (roteador, db, { catalogo = carregarCata
     } catch (erro) {
       throw new ErroHttp(400, erro.message)
     }
+    // Publicar grava `enabled` a partir do documento renderizado, que nasce
+    // ligado. A chave liga/desliga é decisão de quem opera (PUT /enabled), não
+    // do formulário: reconfigurar não pode religar o que foi desligado.
+    const estavaLigada = db.prepare('SELECT enabled FROM automations WHERE id = ?').get(automationId)?.enabled
     servicoAutomacoes.salvarRascunho(automationId, { document: novo })
-    const publicada = servicoAutomacoes.publicar(automationId)
+    let publicada = servicoAutomacoes.publicar(automationId)
+    if (estavaLigada === 0) {
+      db.prepare('UPDATE automations SET enabled = 0 WHERE id = ?').run(automationId)
+      publicada = { ...publicada, enabled: false }
+    }
     gravarProvenance.run(automationId, template.templateId, template.templateVersion,
       JSON.stringify(valoresNovos), proveniencia.installed_at)
     return publicada
