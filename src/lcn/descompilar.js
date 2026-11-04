@@ -12,6 +12,7 @@ import {
   PRIORIDADES, OPERACOES_ARITMETICAS, BLOCOS_DE_CONDICAO
 } from './vocabulario.js'
 import { conferirEstrutura, inferirEstrutura } from './estrutura.js'
+import { escreverTempo } from './tempo.js'
 
 const IDENT = '  '
 
@@ -232,7 +233,14 @@ export function descompilar (documento, template = null) {
 
   // O QUE ELA É, e o que a acorda — as duas primeiras coisas que se lê.
   h(`tipo: ${CLASSES[gatilho.type] || gatilho.type}`)
-  if (gatilho.type !== 'trigger.group') {
+  const agendado = gatilho.type === 'trigger.schedule'
+  if (agendado) {
+    // O relógio no lugar das linhas de mensagem. O fuso só aparece quando não é
+    // o padrão: o compilador repõe America/Sao_Paulo na volta.
+    h(`agenda: ${escreverTempo(cfg.schedule)}`)
+    if (cfg.timezone && cfg.timezone !== 'America/Sao_Paulo') h(`fuso: ${cfg.timezone}`)
+  }
+  if (gatilho.type !== 'trigger.group' && !agendado) {
     // O canônico primeiro, os atalhos depois e na ordem em que foram
     // declarados: é assim que o texto volta igual ao que entrou.
     const comandoEscrito = gatilho.type === 'trigger.command'
@@ -257,7 +265,7 @@ export function descompilar (documento, template = null) {
   // três campos, omitir a linha devolve o MESMO documento que a linha vazia.
   if (documento.responder?.poolId) h(`pool: ${documento.responder.poolId}`)
 
-  if (gatilho.type !== 'trigger.group') {
+  if (gatilho.type !== 'trigger.group' && !agendado) {
     const tipos = documento.inputPolicy?.acceptedMessageKinds || []
     if (tipos.length) h(`acessa: ${tipos.map((t) => TIPOS_DE_MENSAGEM[t] || t).join(', ')}`)
   }
@@ -309,7 +317,7 @@ export function descompilar (documento, template = null) {
     if (Array.isArray(cfg.actions) && cfg.actions.length) {
       h(`quando for: ${cfg.actions.map((a) => ACOES_DE_GRUPO[a] || a).join(', ')}`)
     }
-  } else {
+  } else if (!agendado) {
     if (cfg.containsLink === true) h('com link')
     if (cfg.mediaLinkOnly === true) h('só link de mídia')
     if (cfg.alsoOnCommands === true) h('também em comandos')
@@ -320,10 +328,10 @@ export function descompilar (documento, template = null) {
       h(`palavras: ${cfg.keywords.map(citar).join(', ')}`)
     }
   }
-  if (gatilho.type !== 'trigger.group') {
+  if (gatilho.type !== 'trigger.group' && !agendado) {
     h(`quem: ${ORIGENS[cfg.allowFrom] || cfg.allowFrom}`)
   }
-  if (cfg.requireOwner === true) h('só dono')
+  if (cfg.requireOwner === true && !agendado) h('só dono')
 
   linhas.push('')
 

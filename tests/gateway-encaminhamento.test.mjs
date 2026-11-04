@@ -138,7 +138,11 @@ const cfg = { hardware: {}, download: {} }
   const fs = await import('fs')
   const { TIPOS_QUE_CASAM } = await import('../src/engine/canonicalEvent.js')
   const schema = JSON.parse(fs.readFileSync(new URL('../src/engine/server/schema/automation.v1.schema.json', import.meta.url), 'utf8'))
+  // `schedule` é o único tipo que o gateway NUNCA vê: quem o fabrica é o relógio
+  // do próprio motor, para acordar um agendado. Fica fora da conta de propósito.
+  const SINTETICOS_DO_MOTOR = new Set(['schedule'])
   const doSchema = schema.properties.inputPolicy.properties.acceptedMessageKinds.items.enum
+    .filter((tipo) => !SINTETICOS_DO_MOTOR.has(tipo))
   check('os tipos que o gateway deixa passar são exatamente os que o motor aceita',
     JSON.stringify([...TIPOS_QUE_CASAM].sort()) === JSON.stringify([...doSchema].sort()),
     `gateway=${[...TIPOS_QUE_CASAM].sort().join(',')} schema=${[...doSchema].sort().join(',')}`)

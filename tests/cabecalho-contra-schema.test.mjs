@@ -51,6 +51,10 @@ const CLASSES = [
   {
     nome: 'porteiro',
     linhas: ['automação teste', '  tipo: porteiro', '  quando for: entrou', '', '  responde "oi"', '']
+  },
+  {
+    nome: 'agendado',
+    linhas: ['automação teste', '  tipo: agendado', '  agenda: todo dia às 08:00', '  fuso: America/Recife', '  onde: grupo 120363@g.us', '', '  responde "oi"', '']
   }
 ]
 
@@ -89,6 +93,16 @@ for (const classe of CLASSES) {
     // prende a lista escrita à mão em `compilar.js` ao `required` do schema.
     const chave = campos[0].chave
     const sem = classe.linhas.filter((l) => !l.trimStart().startsWith(`${chave}:`))
+    if (campos[0].padrao !== undefined) {
+      // Campo com padrão declarado (o fuso): a chave é obrigatória NO DOCUMENTO,
+      // mas a linha pode faltar — e então o compilador tem de escrever o padrão,
+      // não deixar a chave de fora nem recusar.
+      let semDoc = null
+      try { semDoc = compilar(sem.join('\n')) } catch { /* fica null */ }
+      const valor = semDoc?.flow?.nodes?.[0]?.config?.[chaveDoDoc]
+      check(`[${classe.nome}] sem "${chave}:" o compilador escreve o padrão`, sem.length < classe.linhas.length && valor === campos[0].padrao, String(valor))
+      continue
+    }
     check(`[${classe.nome}] sem "${chave}:" o compilador recusa`, sem.length < classe.linhas.length && recusa(sem) !== null)
   }
 }

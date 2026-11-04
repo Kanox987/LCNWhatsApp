@@ -91,7 +91,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Quais tipos de evento ou mensagem acordam a automação. 'group' só faz sentido para porteiro (trigger.group): eventos de grupo não trazem mensagem para o motor comparar, então declarar 'group' num comando digitado (trigger.command) é estado morto e é proibido pelo schema.",
+          "description": "Quais tipos de evento ou mensagem acordam a automação. 'group' só faz sentido para porteiro (trigger.group) e 'schedule' só para agendado (trigger.schedule): nenhum dos dois traz mensagem para o motor comparar, então declarar qualquer um num comando digitado (trigger.command) é estado morto.",
           "items": {
             "enum": [
               "text",
@@ -101,7 +101,8 @@
               "document",
               "view_once",
               "sticker",
-              "group"
+              "group",
+              "schedule"
             ]
           }
         },
@@ -182,6 +183,9 @@
               },
               {
                 "$ref": "#/definitions/triggerGroup"
+              },
+              {
+                "$ref": "#/definitions/triggerSchedule"
               },
               {
                 "$ref": "#/definitions/actionHttp"
@@ -716,6 +720,127 @@
             },
             "requireOwner": {
               "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "triggerSchedule": {
+      "description": "Gatilho de relógio: acorda por tempo (daqui N, data e hora, recorrência) e não por mensagem. O destino vem do escopo (onde), que o compilador exige ser um grupo ou contato específico.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "trigger.schedule"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "timezone",
+            "schedule"
+          ],
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Fuso IANA em que a data e a hora da agenda são lidas, como America/Sao_Paulo. O motor confere contra o banco de fusos na publicação."
+            },
+            "schedule": {
+              "oneOf": [
+                {
+                  "description": "Uma vez, daqui a um intervalo. A contagem começa quando a revisão entra no ar.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["tipo", "modo", "ms"],
+                  "properties": {
+                    "tipo": { "const": "unico" },
+                    "modo": { "const": "relativo" },
+                    "ms": { "type": "integer", "minimum": 1000, "maximum": 315360000000 }
+                  }
+                },
+                {
+                  "description": "Uma vez, numa data e hora de parede no fuso declarado (AAAA-MM-DDTHH:MM).",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["tipo", "modo", "local"],
+                  "properties": {
+                    "tipo": { "const": "unico" },
+                    "modo": { "const": "absoluto" },
+                    "local": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]$" }
+                  }
+                },
+                {
+                  "description": "Repetindo.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["tipo", "regra"],
+                  "properties": {
+                    "tipo": { "const": "recorrente" },
+                    "regra": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["freq", "ms"],
+                          "properties": {
+                            "freq": { "const": "intervalo" },
+                            "ms": { "type": "integer", "minimum": 1000, "maximum": 315360000000 }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["freq", "hora", "minuto"],
+                          "properties": {
+                            "freq": { "const": "diaria" },
+                            "hora": { "type": "integer", "minimum": 0, "maximum": 23 },
+                            "minuto": { "type": "integer", "minimum": 0, "maximum": 59 }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["freq", "dias", "hora", "minuto"],
+                          "properties": {
+                            "freq": { "const": "semanal" },
+                            "dias": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 7,
+                              "uniqueItems": true,
+                              "items": { "type": "integer", "minimum": 0, "maximum": 6 }
+                            },
+                            "hora": { "type": "integer", "minimum": 0, "maximum": 23 },
+                            "minuto": { "type": "integer", "minimum": 0, "maximum": 59 }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["freq", "dia", "hora", "minuto"],
+                          "properties": {
+                            "freq": { "const": "mensal" },
+                            "dia": { "type": "integer", "minimum": 1, "maximum": 31 },
+                            "hora": { "type": "integer", "minimum": 0, "maximum": 23 },
+                            "minuto": { "type": "integer", "minimum": 0, "maximum": 59 }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           }
         }

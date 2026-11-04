@@ -651,19 +651,27 @@ export const ONDE_PROCURAR = Object.freeze({
   quoted: 'na citada'
 })
 
-// As três CLASSES de automação, e a diferença não é detalhe de gatilho.
+// As quatro CLASSES de automação, e a diferença não é detalhe de gatilho.
 //
 // Um comando é acordado por alguém digitar. Um vigia fica ligado o tempo todo,
 // olhando a conversa — é o download automático, e é o "responder bom dia" que o
 // dono descreveu. Um porteiro vigia a porta do grupo — entradas, saídas,
-// promoções e rebaixamentos. Ele não tem mensagem para olhar.
+// promoções e rebaixamentos. Ele não tem mensagem para olhar. Um agendado é
+// acordado pelo RELÓGIO — "daqui 30 min", "23/08/2030 às 14:30", "todo dia às
+// 8h" — e também não tem mensagem, nem remetente: só o destino que o cabeçalho
+// declarou.
 //
 // A primeira coisa que se lê agora é o que a automação É.
 export const CLASSES = Object.freeze({
   'trigger.command': 'comando',
   'trigger.message': 'vigia',
-  'trigger.group': 'porteiro'
+  'trigger.group': 'porteiro',
+  'trigger.schedule': 'agendado'
 })
+
+// As classes que um relógio NÃO acorda: tudo menos o agendado. Campos que falam de
+// quem recebeu ou digitou algo (exceção do "onde", "só dono") valem só nelas.
+const SEM_RELOGIO = Object.freeze(['comando', 'vigia', 'porteiro'])
 
 // As 5 ações de grupo que o porteiro compreende.
 //
@@ -762,7 +770,7 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     vale: 'ambos',
     obrigatorio: true,
     palavras: CLASSES,
-    ajuda: 'O que a automação É, e é a primeira coisa a escrever: um comando acorda quando alguém digita; um vigia fica ligado olhando a conversa; um porteiro monitora a porta do grupo (entradas, saídas, moderações).'
+    ajuda: 'O que a automação É, e é a primeira coisa a escrever: um comando acorda quando alguém digita; um vigia fica ligado olhando a conversa; um porteiro monitora a porta do grupo (entradas, saídas, moderações); um agendado acorda pelo relógio (daqui 30 min, uma data e hora, todo dia às 8h).'
   },
   {
     chave: 'dispara com',
@@ -786,6 +794,20 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     // reserva de `prosaDoCampoDeGatilho`.
     doc: { vigia: 'messageKinds', porteiro: 'actions' },
     ajuda: 'Num vigia, os tipos de mensagem observados (texto, foto...). Num porteiro, as ações observadas no grupo (entrou, saiu, promoveu, rebaixou, mudou o nome).'
+  },
+  {
+    chave: 'agenda',
+    vale: 'agendado',
+    obrigatorio: true,
+    doc: 'schedule',
+    ajuda: 'Quando acordar. Uma vez: "daqui 30 minutos" (a contagem começa quando a automação entra no ar) ou "23/08/2030 às 14:30" (data e hora no fuso abaixo). Repetindo: "todo dia às 08:00", "toda segunda e quarta às 09:00", "todo dia 15 às 10:00", "a cada 2 horas".'
+  },
+  {
+    chave: 'fuso',
+    vale: 'agendado',
+    doc: 'timezone',
+    padrao: 'America/Sao_Paulo',
+    ajuda: 'O fuso horário em que a data e a hora da agenda são lidas, como "America/Sao_Paulo". Sem esta linha vale America/Sao_Paulo.'
   },
   {
     chave: 'acessa',
@@ -830,8 +852,8 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     vale: 'todos',
     ajuda: 'A que grupo de comandos este pertence — "download", "figurinha", "compra e venda". É texto livre: serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, em vez de comando por comando.'
   },
-  { chave: 'onde', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas".' },
-  { chave: 'menos', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
+  { chave: 'onde', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas". Num agendado é o DESTINO: cada linha precisa ser um grupo ou um contato, porque o relógio não tem conversa de onde herdar o lugar.' },
+  { chave: 'menos', vale: SEM_RELOGIO, palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },
   {
     chave: 'pool',
     vale: 'todos',
@@ -858,7 +880,7 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
 // presença da linha já é a resposta. "só dono" não tem como ser "só dono: não"
 // — essa linha seria uma maneira comprida de não escrever nada.
 export const MARCAS_DO_CABECALHO = Object.freeze([
-  { chave: 'só dono', vale: 'todos', doc: 'requireOwner' },
+  { chave: 'só dono', vale: SEM_RELOGIO, doc: 'requireOwner' },
   { chave: 'com link', vale: 'vigia', doc: 'containsLink' },
   { chave: 'só link de mídia', vale: 'vigia', doc: 'mediaLinkOnly' },
   { chave: 'também em comandos', vale: 'vigia', doc: 'alsoOnCommands' },

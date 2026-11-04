@@ -89,6 +89,28 @@ export const GATILHOS = Object.freeze([
         ajuda: 'Restringe a execução às ações geradas ou autorizadas pelo dono do bot.'
       }
     ]
+  },
+  {
+    tipo: 'trigger.schedule',
+    rotulo: 'Agendado: quando chega a hora',
+    resumo: 'A automação começa sozinha, no horário que você marcar: daqui a um tempo ("daqui 30 minutos"), numa data e hora ("23/08/2030 às 14:30") ou de tempos em tempos ("todo dia às 08:00").',
+    exemplo: 'Todo dia às 08:00 o bot manda "Bom dia, pessoal!" no grupo.',
+    ressalva: {
+      level: 'info',
+      text: 'Não existe mensagem de ninguém por trás de um agendado, então ele não lê {{message}}, {{sender}} nem argumentos — só o relógio. O destino (grupo ou contato) é obrigatório. "daqui N" conta a partir do momento em que a automação entra no ar, e editá-la reinicia a contagem.'
+    },
+    campos: [
+      {
+        chave: 'schedule',
+        rotulo: 'Quando',
+        ajuda: 'Uma vez: "daqui 30 minutos", "daqui 1 hora e 30 minutos", "23/08/2030 às 14:30". Repetindo: "a cada 30 minutos", "todo dia às 08:00", "toda segunda e quarta às 09:00", "todo dia 15 às 10:00". Uma data que já passou é recusada ao salvar.'
+      },
+      {
+        chave: 'timezone',
+        rotulo: 'Fuso horário',
+        ajuda: 'O relógio em que a data e a hora acima valem. Padrão: America/Sao_Paulo. Muda só se o grupo ou a pessoa estiver em outro fuso.'
+      }
+    ]
   }
 ])
 

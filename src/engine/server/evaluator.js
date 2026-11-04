@@ -2343,10 +2343,20 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
   return comandos
 }
 
+// A espécie do evento, num lugar só.
+//
+// O relógio é a terceira fonte de evento, ao lado da mensagem e do grupo, e só
+// o motor a produz — por isso o `schedule` vale como tipo mesmo sem
+// `message`. A ordem importa: um evento do relógio não carrega mensagem.
+function tipoDoEvento (evento) {
+  if (evento?.schedule) return 'schedule'
+  return evento?.message?.kind || (evento?.group ? 'group' : null)
+}
+
 function inserirEvento (db, evento) {
   const jaExiste = db.prepare('SELECT 1 FROM inbound_events WHERE id = ?').get(evento.eventId)
   if (jaExiste) return false
-  const messageKind = evento.message?.kind || (evento.group ? 'group' : null)
+  const messageKind = tipoDoEvento(evento)
   const messageText = evento.message?.text ?? (evento.group?.subject ?? null)
   db.prepare(`INSERT INTO inbound_events
     (id, account_id, chat_id, chat_kind, sender_id, message_kind, message_text, replay, raw_json, received_at)
@@ -2472,8 +2482,17 @@ function exporComando (row) {
 // duplica comando — devolve de novo o que já tinha sido decidido da
 // primeira vez (achado real do design: rede instável entre gateway e motor
 // pode causar retry do POST /events).
-export function avaliarEvento (db, evento) {
-  if (!evento?.eventId || !evento?.accountId || !evento?.chat?.id || (!evento?.message?.kind && !evento?.group?.action)) {
+//
+// O evento do RELÓGIO (`schedule`) só entra por dentro: `interno: true` é o
+// agendador do próprio motor. Quem chega por `POST /events` é o gateway ou um
+// cliente, e deixar qualquer um deles forjar um disparo faria o endpoint
+// virar a porta de "faça esta automação rodar agora, em qualquer conversa".
+export function avaliarEvento (db, evento, { interno = false } = {}) {
+  if (!interno && (evento?.schedule || evento?.message?.kind === 'schedule')) {
+    throw new ErroHttp(400, 'Evento de agendamento só é aceito do próprio motor.')
+  }
+  const temOrigem = Boolean(evento?.message?.kind || evento?.group?.action || (interno && evento?.schedule?.automationId))
+  if (!evento?.eventId || !evento?.accountId || !evento?.chat?.id || !temOrigem) {
     throw new ErroHttp(400, 'Evento canônico inválido: faltam campos obrigatórios.')
   }
 
@@ -2513,6 +2532,15 @@ export function avaliarEvento (db, evento) {
       const documento = jsonOuNull(candidato.doc_json)
       const trigger = documento && acharTrigger(documento)
 
+      // O relógio acorda UMA automação, a dona do disparo — nunca as outras
+      // quarenta que por acaso valem naquela conversa. E, no sentido
+      // contrário, o agendado não reage a mensagem nenhuma: ele só existe
+      // para o relógio. Sem gravar execução, pelo mesmo motivo do portão de
+      // grupo logo abaixo: ruído que esconde o que importa.
+      const ehAgendado = trigger?.type === 'trigger.schedule'
+      if (Boolean(evento.schedule) !== ehAgendado) continue
+      if (ehAgendado && evento.schedule.automationId !== candidato.automation_id) continue
+
       // Grupo não autorizado: nem avalia, e nem grava execução.
       //
       // Não gravar é de propósito. Com 166 grupos, registrar "não casou" para
@@ -2546,7 +2574,7 @@ export function avaliarEvento (db, evento) {
         const refs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?').all(candidato.revision_id)
         const passaEscopo = escopoCasa(db, refs, evento.chat)
         const passaHistoria = politica.historyPolicy !== 'live_only' || evento.replay !== true
-        const kindDoEvento = evento.message?.kind || (evento.group ? 'group' : null)
+        const kindDoEvento = tipoDoEvento(evento)
         const passaTipo = Boolean(kindDoEvento && politica.acceptedMessageKinds.includes(kindDoEvento))
         // Comando restrito é o canal de administração pelo WhatsApp, então
         // mensagem do PRÓPRIO número precisa passar mesmo com
@@ -2556,12 +2584,16 @@ export function avaliarEvento (db, evento) {
         const ehAdministrativo = trigger.config.requireOwner === true
         const ehAutomatico = trigger.type === 'trigger.message'
         const ehGrupo = trigger.type === 'trigger.group'
-        const passaAutor = ehGrupo || ehAdministrativo ||
+        const passaAutor = ehGrupo || ehAgendado || ehAdministrativo ||
           trigger.config.allowFrom !== 'external' || evento.sender.authoredBySelf !== true
         // inputPolicy.acceptedMessageKinds continua valendo nos três casos: é a
         // política de entrada da automação, anterior ao gatilho.
         const passaComando = passaTipo && (
-          ehGrupo
+          ehAgendado
+            // Já casado lá em cima, pelo dono do disparo: a pergunta "o texto
+            // é este comando?" não existe para quem não tem texto.
+            ? true
+            : ehGrupo
             ? eventoCasaGatilhoDeGrupo(evento, trigger.config)
             : ehAutomatico
               ? (barreiraDeGatilhoAutomatico(evento) && eventoCasaGatilhoDeMensagem(evento, trigger.config))
@@ -2612,7 +2644,7 @@ export function avaliarEvento (db, evento) {
             // O comando CASOU, e isso consome a palavra: sem marcar, o nativo
             // de mesmo nome responderia no lugar dele, e a pessoa veria o bot
             // reagir a um comando que ela acabou de desligar.
-            if (!ehAutomatico && !ehGrupo) algumComandoCasou = true
+            if (!ehAutomatico && !ehGrupo && !ehAgendado) algumComandoCasou = true
             const aviso = avisoDeDesligado(evento.chat, desligamento)
             if (aviso && candidato.deployment_mode === 'live') {
               // O AVISO DE COMANDO DESLIGADO SAI COM A POLÍTICA DA AUTOMAÇÃO.
@@ -2634,7 +2666,7 @@ export function avaliarEvento (db, evento) {
           // Vale para sombra também: o comando CASOU, e é isso que consome a
           // mensagem. Só ao vivo aqui faria o mesmo evento se comportar
           // diferente conforme o modo de uma automação vizinha.
-          if (!ehAutomatico && !ehGrupo) algumComandoCasou = true
+          if (!ehAutomatico && !ehGrupo && !ehAgendado) algumComandoCasou = true
           if (status === 'matched_live') {
             try {
               // Savepoint por automação (transação aninhada do better-sqlite3):

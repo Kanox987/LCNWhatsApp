@@ -13,6 +13,7 @@ import {
 } from './vocabulario.js'
 import { numeroDeCalculo } from '../engine/server/aritmetica.js'
 import { arestasDaEstrutura, precisaEstrutura } from './estrutura.js'
+import { interpretarTempo } from './tempo.js'
 
 export class ErroDeSintaxe extends Error {
   constructor (mensagem, linha) {
@@ -49,6 +50,35 @@ const INCOMPATIVEIS_COM_PORTEIRO = Object.freeze({
   'quem': '"quem" não se aplica a porteiro: eventos de grupo ocorrem sempre dentro do grupo.',
   'palavras': '"palavras" não se aplica a porteiro: eventos de grupo não contêm texto de conversa.'
 })
+
+// O agendado acorda pelo relógio: não há mensagem, remetente nem argumentos. Cada
+// campo que pressupõe um deles é recusado na linha, dizendo por quê — aceitar
+// calado produziria uma automação que nunca poderia casar.
+const SEM_MENSAGEM = 'um agendado acorda pelo relógio, sem mensagem de ninguém'
+const INCOMPATIVEIS_COM_AGENDADO = Object.freeze({
+  'com link': `"com link" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'só link de mídia': `"só link de mídia" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'também em comandos': `"também em comandos" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'dispara com': 'um agendado não usa "dispara com": ele acorda por "agenda:", como "agenda: daqui 30 minutos" ou "agenda: 23/08/2030 às 14:30"',
+  'acessa': `"acessa" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'argumentos': `"argumentos" não se aplica a agendado: ${SEM_MENSAGEM}, então não há texto para dividir.`,
+  'precisa de um link': `"precisa de um link" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'precisa de uma mídia': `"precisa de uma mídia" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'sem ele': `"sem ele" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'sem ela': `"sem ela" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'menu': '"menu" não se aplica a agendado: ninguém o digita, então não há o que listar.',
+  'histórico': '"histórico" não se aplica a agendado: ele acorda sempre em tempo real.',
+  'casa': '"casa" não se aplica a agendado: modo de casamento é exclusivo de comandos digitados.',
+  'quem': '"quem" não se aplica a agendado: não há quem acionar. Quem publicou a automação é quem responde por ela.',
+  'palavras': `"palavras" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'quando for': `"quando for" não se aplica a agendado: ${SEM_MENSAGEM}.`,
+  'menos': '"menos" não se aplica a agendado: ele fala só com os destinos de "onde".',
+  'só dono': `"só dono" não se aplica a agendado: ${SEM_MENSAGEM}.`
+})
+
+// Tudo que depende de uma mensagem, de quem a mandou ou do que veio depois do
+// comando. Num agendado esses marcadores nunca teriam valor.
+const DEPENDE_DE_MENSAGEM = /\{\{\s*(?:message|sender|args|quoted|link|media)[.\s}]/
 
 // Num TEMPLATE, onde a automação teria um valor fechado há um marcador
 // (`{{params.allowFrom}}`) — quem instala é que escolhe. Validar o enum aqui
@@ -657,7 +687,10 @@ function lerBlocosDeTemplate (linhas, inicio, template) {
   return i
 }
 
-export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUNDIDADE_CONDICOES ?? PROFUNDIDADE_CONDICOES_PADRAO } = {}) {
+// `agora` só serve para conferir a data do agendado; `permitirPassado` é para quem
+// RELÊ um texto já publicado (ida e volta, abrir no editor), que não pode deixar
+// de compilar só porque a data venceu. Quem escreve texto novo não passa nada.
+export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUNDIDADE_CONDICOES ?? PROFUNDIDADE_CONDICOES_PADRAO, agora = new Date(), permitirPassado = false } = {}) {
   const limite = Number(maxProfundidade)
   if (!['number', 'string'].includes(typeof maxProfundidade) || !Number.isSafeInteger(limite) || limite < 1) {
     throw new ErroDeSintaxe('maxProfundidade (LCN_MAX_PROFUNDIDADE_CONDICOES) precisa ser um inteiro positivo')
@@ -809,11 +842,14 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   }
 
   let versaoRequires = 0
+  const relogio = {}
   let temDisparaCom = false
   let temQuandoFor = false
 
   // 2. Percorrer os campos NA ORDEM DO ARQUIVO.
   for (const l of linhasCabecalho) {
+    const deAgendado = tipoDoGatilho === 'trigger.schedule' && INCOMPATIVEIS_COM_AGENDADO[l.texto]
+    if (deAgendado) throw new ErroDeSintaxe(deAgendado, l.n)
     if (l.texto === 'só dono') {
       gatilhoConfig.requireOwner = true
       continue
@@ -859,6 +895,10 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       const msg = INCOMPATIVEIS_COM_PORTEIRO[chave]
       if (msg) throw new ErroDeSintaxe(msg, l.n)
     }
+    if (tipoDoGatilho === 'trigger.schedule') {
+      const msg = INCOMPATIVEIS_COM_AGENDADO[chave]
+      if (msg) throw new ErroDeSintaxe(msg, l.n)
+    }
 
     // 4. Só se pertencer, validar o CONTEÚDO.
     switch (chave) {
@@ -897,6 +937,25 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
             )
           }
         }
+        break
+      }
+      case 'agenda':
+      case 'fuso': {
+        if (tipoDoGatilho !== 'trigger.schedule') {
+          throw new ErroDeSintaxe(
+            `"${chave}" é só de agendado — ${CLASSES[tipoDoGatilho] === 'comando' ? 'um comando acorda quando alguém o digita' : 'esta classe acorda por mensagem ou por evento do grupo'}, não pelo relógio.`,
+            l.n
+          )
+        }
+        if (relogio[chave]) {
+          throw new ErroDeSintaxe(`"${chave}:" aparece duas vezes (linha ${relogio[chave].n}). Escolha uma.`, l.n)
+        }
+        if (!valor) {
+          throw new ErroDeSintaxe(chave === 'agenda' ? 'falta dizer quando. Exemplos: daqui 30 minutos, 23/08/2030 às 14:30, todo dia às 08:00' : 'falta o fuso, como America/Sao_Paulo', l.n)
+        }
+        // Frase de tempo é lida depois do laço, quando o fuso já é conhecido
+        // seja qual for a ordem das linhas.
+        relogio[chave] = { valor, n: l.n }
         break
       }
       case 'precisa de um link':
@@ -1096,6 +1155,32 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
     // O porteiro observa a porta do grupo, recebendo eventos canônicos de grupo
     // em vez de mensagens normais de conversa.
     doc.inputPolicy.acceptedMessageKinds = ['group']
+  } else if (tipoDoGatilho === 'trigger.schedule') {
+    if (!relogio.agenda) {
+      throw new ErroDeSintaxe('falta "agenda:" — quando acordar. Exemplos: "agenda: daqui 30 minutos", "agenda: 23/08/2030 às 14:30", "agenda: todo dia às 08:00"', cabeca.n)
+    }
+    const fuso = relogio.fuso ? relogio.fuso.valor : 'America/Sao_Paulo'
+    const lido = interpretarTempo(relogio.agenda.valor, { agora, fuso, permitirPassado })
+    if (!lido.ok) {
+      // Erro de fuso é da linha do fuso; o resto é da linha da agenda.
+      const doFuso = /^Fuso desconhecido/.test(lido.erro) && relogio.fuso
+      throw new ErroDeSintaxe(lido.erro, doFuso ? relogio.fuso.n : relogio.agenda.n)
+    }
+    const { ok, fuso: _fuso, passado, ...agenda } = lido
+    gatilhoConfig.timezone = fuso
+    gatilhoConfig.schedule = agenda
+    // Um agendado só fala para onde "onde" mandar: não há conversa de origem.
+    // Sem destino certo ele não teria para quem enviar, e destino amplo
+    // (todos os grupos, todos os contatos) viraria disparo em massa por relógio.
+    const destinos = doc.scope.include
+    if (!destinos.length) {
+      throw new ErroDeSintaxe('falta "onde:" — um agendado precisa dizer para quem fala, como "onde: grupo 1203630@g.us" ou "onde: contato 5511999990000@s.whatsapp.net"', cabeca.n)
+    }
+    const ruim = destinos.find((d) => !['group', 'contact'].includes(d.kind) || !d.id)
+    if (ruim) {
+      throw new ErroDeSintaxe('"onde" de um agendado aceita só um grupo ou um contato específico — o relógio não deve disparar em massa', cabeca.n)
+    }
+    doc.inputPolicy.acceptedMessageKinds = ['schedule']
   }
 
   if (Object.keys(display).length) doc.display = display
@@ -1180,6 +1265,20 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   }
 
   const corpo = lerBloco(1, 0)
+
+  if (tipoDoGatilho === 'trigger.schedule') {
+    for (const no of nos.slice(1)) {
+      const bruto = JSON.stringify(no.config ?? {})
+      const marcador = bruto.match(DEPENDE_DE_MENSAGEM)
+      const evento = (bruto.match(/"source":"event","field":"(?:message|sender|args|quoted)[^"]*"/) || [])[0]
+      if (marcador || evento) {
+        throw new ErroDeSintaxe(
+          `um agendado não tem mensagem nem remetente: "${(marcador || [evento])[0].replace(/\\"/g, '"')}" nunca teria valor. Fale do grupo ou da hora com {{chat.…}} e {{now.…}}.`,
+          cabeca.n
+        )
+      }
+    }
+  }
 
   // Nomes: o rodapé manda, e o que faltar é gerado. Editar o texto não pode
   // exigir manter uma lista de ids em dia — quem escreve automação não pensa

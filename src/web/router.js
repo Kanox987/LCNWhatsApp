@@ -243,7 +243,10 @@ export function criarRoteadorWeb (aplicacao) {
     const texto = String(body?.texto ?? '')
     let compilado
     try {
-      compilado = compilar(texto)
+      // Um texto que já foi aceito pode ter uma data que passou desde então
+      // (agendado de execução única). Conferir enquanto se edita não pode
+      // travar por isso; quem decide se ainda vale agendar é o motor.
+      compilado = compilar(texto, { permitirPassado: true })
     } catch (erro) {
       if (!(erro instanceof ErroDeSintaxe)) throw erro
       // 200, e não 422: aqui o erro de escrita é o RESULTADO esperado da
@@ -294,7 +297,9 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.put('/api/v1/automations/:id/lcn', ({ params, body, req }) => {
     let documento
     try {
-      documento = compilar(String(body?.texto ?? ''))
+      // Editar uma automação que já existe não pode ser recusado porque a data
+      // da execução única passou; o motor revalida ao ativar.
+      documento = compilar(String(body?.texto ?? ''), { permitirPassado: true })
     } catch (erro) {
       if (!(erro instanceof ErroDeSintaxe)) throw erro
       // 422 com a linha: erro de escrita é do texto, não do servidor.
