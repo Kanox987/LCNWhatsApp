@@ -128,6 +128,21 @@ publicar('le-e-para', [
     r?.commands?.[0]?.payload?.encadeado === undefined, JSON.stringify(r?.commands?.[0]?.payload))
 }
 
+// =========================================================================
+// 5. LER O CONTEÚDO — só quando o fluxo pede
+// =========================================================================
+publicar('le-conteudo', [
+  gatilho('/conteudo'),
+  { id: 'ler', type: 'action.acervo.read', config: { path: 'precos.json', content: true } },
+  { id: 'diz', type: 'action.whatsapp.reply', config: { text: '{{resultado.dados.conteudo}}' } }
+], [{ from: 'g', to: 'ler', on: 'matched' }, { from: 'ler', to: 'diz', on: 'success' }])
+{
+  const r = rodar('le-conteudo', evento('/conteudo'))
+  check('com content ligado o comando pede o conteúdo', r?.commands?.[0]?.payload?.conteudo === true, JSON.stringify(r?.commands?.[0]?.payload))
+  const sem = rodar('vitrine', evento('/produto'))
+  check('sem content, nada de conteúdo no comando', sem?.commands?.[0]?.payload?.conteudo === undefined)
+}
+
 db.close()
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE MEMBROS E ACERVO LIDO PASSARAM')
 process.exit(falhas ? 1 : 0)

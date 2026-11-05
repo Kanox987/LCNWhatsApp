@@ -182,14 +182,15 @@ export const ACOES = Object.freeze([
     tipo: 'action.acervo.read',
     rotulo: 'Ler do acervo',
     familia: 'midia',
-    resumo: 'Lê o nome, a descrição, a pasta e o tamanho de um item guardado, para usar na resposta seguinte.',
+    resumo: 'Lê o nome, a descrição, a pasta e o tamanho de um item guardado — e, se você pedir, o texto dele — para usar na resposta seguinte.',
     exemplo: 'Mostrar o nome e o preço de um produto antes de perguntar se a pessoa quer comprar.',
-    ressalva: { level: 'note', text: 'É a única ação do acervo que LÊ — as outras quatro escrevem. Ela devolve METADADO, nunca o arquivo: para enviar o arquivo em si continua sendo "Enviar arquivo". Ponha uma ação depois desta, senão a leitura não serve para nada.' },
-    dependencias: 'O arquivo tem de existir no Acervo. Esta ação lê METADADO — nome, descrição, pasta, tipo, bytes —, nunca o conteúdo.',
-    resultado: 'Os dados caem em {{resultado.dados.*}} para a ação seguinte: {{resultado.dados.nome}}, {{resultado.dados.descricao}}, {{resultado.dados.bytes}}. Fora do fluxo que segue, não sobra nada.',
-    errosComuns: 'Esperar o conteúdo do arquivo em {{resultado.texto}}. Não vem: para mandar o arquivo use "Enviar um arquivo do acervo"; esta ação serve para decidir e para escrever sobre ele.',
+    ressalva: { level: 'note', text: 'É a única ação do acervo que LÊ — as outras escrevem. Por padrão devolve METADADO; ligando "Também ler o texto" devolve o conteúdo de arquivos de texto e JSON pequenos. Para enviar o arquivo em si continua sendo "Enviar arquivo". Ponha uma ação depois desta, senão a leitura não serve para nada.' },
+    dependencias: 'O arquivo tem de existir no Acervo. Por padrão lê METADADO — nome, descrição, pasta, tipo, bytes. O conteúdo só vem com "Também ler o texto", e só de texto simples e JSON.',
+    resultado: 'Os dados caem em {{resultado.dados.*}} para a ação seguinte: {{resultado.dados.nome}}, {{resultado.dados.descricao}}, {{resultado.dados.bytes}}. Com "Também ler o texto" ligado, {{resultado.dados.conteudo}} traz o texto do arquivo. Fora do fluxo que segue, não sobra nada.',
+    errosComuns: 'Esperar o conteúdo em {{resultado.texto}}. Não vem: o texto fica em {{resultado.dados.conteudo}} e só com a opção ligada. Arquivo acima do teto de leitura (64 KiB por padrão) é recusado inteiro, nunca cortado. Para mandar o arquivo use "Enviar um arquivo do acervo".',
     campos: [
       { chave: 'path', rotulo: 'Arquivo', ajuda: 'O caminho dentro do acervo, como "produtos/curso-python", ou só o nome quando não houver outro igual.' },
+      { chave: 'content', rotulo: 'Também ler o texto', ajuda: 'Devolve o texto do arquivo em {{resultado.dados.conteudo}}. Só texto simples e JSON; acima do teto de leitura a execução falha em vez de cortar.' },
       { chave: 'notFoundText', rotulo: 'Se o item não existir', ajuda: 'Enviado quando não há nada nesse caminho — por exemplo um produto tirado do ar depois de o comando ser publicado. Sem este texto a execução vira erro no histórico e ninguém recebe nada.' }
     ]
   },

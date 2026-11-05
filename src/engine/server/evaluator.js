@@ -1838,6 +1838,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
         payload: {
           chatId: evento.chat.id,
           caminho: interpolar(no.config.path, contexto),
+          ...(no.config?.content === true ? { conteudo: true } : {}),
           ...(temSucessor ? { encadeado: true, retomarDe: no.id, locais: contexto.local } : {}),
           ...(no.config?.notFoundText ? { notFoundText: interpolar(no.config.notFoundText, contexto) } : {}),
           replyTo: referenciaDoLink(evento)

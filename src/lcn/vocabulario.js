@@ -442,6 +442,7 @@ export const ACOES = Object.freeze([
     tipo: 'action.acervo.read',
     campos: [
       { chave: 'path', rotulo: 'arquivo', tipo: 'texto' },
+      { chave: 'content', rotulo: 'com o conteúdo', tipo: 'booleano' },
       { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' }
     ]
   },

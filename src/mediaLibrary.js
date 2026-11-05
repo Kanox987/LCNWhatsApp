@@ -76,6 +76,16 @@ export function limiteDeJson () {
   return Number.isSafeInteger(bruto) && bruto > 0 ? bruto : LIMITE_JSON_PADRAO_BYTES
 }
 
+// LER O CONTEÚDO PARA DENTRO DO FLUXO (`acervo.read` com `content`). O texto
+// atravessa para o motor e fica no histórico da execução, então o teto é bem
+// menor que o do arquivo. Padrão, não teto do sistema: sobe pela variável.
+export const LIMITE_LEITURA_PADRAO_BYTES = 64 * 1024
+export const TIPOS_LEGIVEIS_NO_FLUXO = Object.freeze(['text/plain', 'application/json'])
+export function limiteDeLeitura () {
+  const bruto = Number(process.env.LCN_ACERVO_LER_MAX_BYTES)
+  return Number.isSafeInteger(bruto) && bruto > 0 ? bruto : LIMITE_LEITURA_PADRAO_BYTES
+}
+
 // O que cada tipo precisa cumprir além de ser aceito. Hoje só o JSON: tem de
 // caber no limite dele e parsear. A mensagem diz o motivo, porque quem manda
 // pelo WhatsApp não vê o arquivo.
@@ -167,6 +177,48 @@ function caminhoDoArquivo (id, ext) {
   return dentro
 }
 
+// TRAVA ENTRE PROCESSOS. O painel (agent) e o gateway são processos diferentes
+// e os dois fazem ler-índice → mudar → gravar-índice. Sem trava, o último a
+// gravar apaga a mudança do outro (dois "adicionar item" viram um só). Um
+// diretório criado de forma exclusiva é a trava mais simples que vale entre
+// processos; a espera é curta e síncrona porque as funções daqui são síncronas.
+// Reentrante: quem já a segura (`reescrever` chamada por `modificarConteudo`)
+// passa direto.
+let segurandoTrava = 0
+const ESPERA_MAXIMA_DA_TRAVA_MS = 5000
+const TRAVA_ABANDONADA_MS = 15000
+
+function comTrava (fn) {
+  if (segurandoTrava > 0) return fn()
+  garantirPastas()
+  const trava = path.join(pastaBase(), '.lock')
+  const limite = Date.now() + ESPERA_MAXIMA_DA_TRAVA_MS
+  for (;;) {
+    try {
+      fs.mkdirSync(trava)
+      break
+    } catch (erro) {
+      if (erro.code !== 'EEXIST') throw erro
+      // Dono que morreu com a trava na mão não pode travar o acervo para sempre.
+      try {
+        if (Date.now() - fs.statSync(trava).mtimeMs > TRAVA_ABANDONADA_MS) {
+          fs.rmdirSync(trava)
+          continue
+        }
+      } catch {}
+      if (Date.now() > limite) throw new ErroDeAcervo('O acervo está ocupado; tente de novo em instantes.', 503)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15)
+    }
+  }
+  segurandoTrava++
+  try {
+    return fn()
+  } finally {
+    segurandoTrava--
+    try { fs.rmdirSync(trava) } catch {}
+  }
+}
+
 function lerIndice () {
   try {
     const bruto = JSON.parse(fs.readFileSync(arqIndice(), 'utf8'))
@@ -178,7 +230,7 @@ function lerIndice () {
 
 function gravarIndice (arquivos) {
   garantirPastas()
-  const temp = path.join(pastaBase(), `.index.${process.pid}.tmp`)
+  const temp = path.join(pastaBase(), `.index.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`)
   // Sem cota aqui: o índice é inventário do que existe, não configuração. O
   // teto vindo de um arquivo que o aplicativo escreve seria editável por dentro.
   const conteudo = { versao: 1, arquivos }
@@ -276,48 +328,50 @@ export async function lerConteudoAsync (id, limiteBytes = LIMITE_POR_ARQUIVO_BYT
 
 // Grava um arquivo novo. `nomeOriginal` é só rótulo — nunca vira caminho.
 export function guardar (buffer, { mimetype, name, description, folder } = {}) {
-  if (!Buffer.isBuffer(buffer) || !buffer.length) {
-    throw new ErroDeAcervo('Arquivo vazio.')
-  }
-  const tipo = TIPOS_ACEITOS[String(mimetype || '').toLowerCase()]
-  if (!tipo) {
-    throw new ErroDeAcervo(`Tipo de arquivo não aceito: ${mimetype || '(não informado)'}. Aceitos: ${Object.keys(TIPOS_ACEITOS).join(', ')}.`)
-  }
-  if (buffer.length > LIMITE_POR_ARQUIVO_BYTES) {
-    throw new ErroDeAcervo(`Arquivo grande demais: o limite por arquivo é ${Math.round(LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`)
-  }
-  validarConteudo(mimetype, buffer)
+  return comTrava(() => {
+    if (!Buffer.isBuffer(buffer) || !buffer.length) {
+      throw new ErroDeAcervo('Arquivo vazio.')
+    }
+    const tipo = TIPOS_ACEITOS[String(mimetype || '').toLowerCase()]
+    if (!tipo) {
+      throw new ErroDeAcervo(`Tipo de arquivo não aceito: ${mimetype || '(não informado)'}. Aceitos: ${Object.keys(TIPOS_ACEITOS).join(', ')}.`)
+    }
+    if (buffer.length > LIMITE_POR_ARQUIVO_BYTES) {
+      throw new ErroDeAcervo(`Arquivo grande demais: o limite por arquivo é ${Math.round(LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`)
+    }
+    validarConteudo(mimetype, buffer)
 
-  const atual = uso()
-  if (atual.quotaBytes !== null && atual.usedBytes + buffer.length > atual.quotaBytes) {
-    throw new ErroDeAcervo(
-      `Não cabe no acervo: falta espaço. Em uso ${atual.usedBytes} de ${atual.quotaBytes} bytes. Apague algo ou aumente o limite.`,
-      507
-    )
-  }
+    const atual = uso()
+    if (atual.quotaBytes !== null && atual.usedBytes + buffer.length > atual.quotaBytes) {
+      throw new ErroDeAcervo(
+        `Não cabe no acervo: falta espaço. Em uso ${atual.usedBytes} de ${atual.quotaBytes} bytes. Apague algo ou aumente o limite.`,
+        507
+      )
+    }
 
-  garantirPastas()
-  const id = crypto.randomBytes(12).toString('hex')
-  const caminho = caminhoDoArquivo(id, tipo.ext)
-  // 0600 e sem bit de execução: nada do acervo é executado em lugar nenhum,
-  // estes arquivos só são lidos para virar mensagem.
-  fs.writeFileSync(caminho, buffer, { mode: 0o600 })
+    garantirPastas()
+    const id = crypto.randomBytes(12).toString('hex')
+    const caminho = caminhoDoArquivo(id, tipo.ext)
+    // 0600 e sem bit de execução: nada do acervo é executado em lugar nenhum,
+    // estes arquivos só são lidos para virar mensagem.
+    fs.writeFileSync(caminho, buffer, { mode: 0o600 })
 
-  const registro = {
-    id,
-    name: rotuloSeguro(name) || `arquivo${tipo.ext}`,
-    folder: normalizarPasta(folder),
-    kind: tipo.kind,
-    mimetype: String(mimetype).toLowerCase(),
-    ext: tipo.ext,
-    sizeBytes: buffer.length,
-    description: typeof description === 'string' && description.trim() ? description.trim() : null,
-    createdAt: new Date().toISOString()
-  }
-  const arquivos = lerIndice()
-  arquivos.push(registro)
-  gravarIndice(arquivos)
-  return exporArquivo(registro)
+    const registro = {
+      id,
+      name: rotuloSeguro(name) || `arquivo${tipo.ext}`,
+      folder: normalizarPasta(folder),
+      kind: tipo.kind,
+      mimetype: String(mimetype).toLowerCase(),
+      ext: tipo.ext,
+      sizeBytes: buffer.length,
+      description: typeof description === 'string' && description.trim() ? description.trim() : null,
+      createdAt: new Date().toISOString()
+    }
+    const arquivos = lerIndice()
+    arquivos.push(registro)
+    gravarIndice(arquivos)
+    return exporArquivo(registro)
+  })
 }
 
 // PASTA É RÓTULO, NÃO DIRETÓRIO — e isso é decisão de segurança, não preguiça.
@@ -410,22 +464,26 @@ function rotuloSeguro (nome) {
 }
 
 export function remover (id) {
-  const arquivos = lerIndice()
-  const indice = arquivos.findIndex((a) => a.id === id)
-  if (indice === -1) return false
-  const [registro] = arquivos.splice(indice, 1)
-  try { fs.rmSync(caminhoDoArquivo(registro.id, registro.ext), { force: true }) } catch {}
-  gravarIndice(arquivos)
-  return true
+  return comTrava(() => {
+    const arquivos = lerIndice()
+    const indice = arquivos.findIndex((a) => a.id === id)
+    if (indice === -1) return false
+    const [registro] = arquivos.splice(indice, 1)
+    try { fs.rmSync(caminhoDoArquivo(registro.id, registro.ext), { force: true }) } catch {}
+    gravarIndice(arquivos)
+    return true
+  })
 }
 
 export function atualizarDescricao (id, description) {
-  const arquivos = lerIndice()
-  const registro = arquivos.find((a) => a.id === id)
-  if (!registro) return null
-  registro.description = typeof description === 'string' && description.trim() ? description.trim() : null
-  gravarIndice(arquivos)
-  return exporArquivo(registro)
+  return comTrava(() => {
+    const arquivos = lerIndice()
+    const registro = arquivos.find((a) => a.id === id)
+    if (!registro) return null
+    registro.description = typeof description === 'string' && description.trim() ? description.trim() : null
+    gravarIndice(arquivos)
+    return exporArquivo(registro)
+  })
 }
 
 // REESCREVER O CONTEÚDO, MANTENDO O ID.
@@ -441,51 +499,68 @@ export function atualizarDescricao (id, description) {
 // por um .png mudaria como o arquivo é ENVIADO (documento contra foto) sem
 // ninguém pedir, então a extensão e o mime continuam os do registro.
 export function reescrever (id, buffer) {
-  if (!Buffer.isBuffer(buffer) || !buffer.length) {
-    throw new ErroDeAcervo('Arquivo vazio.')
-  }
-  const arquivos = lerIndice()
-  const registro = arquivos.find((a) => a.id === id)
-  if (!registro) throw new ErroDeAcervo('Arquivo não encontrado no acervo.', 404)
+  return comTrava(() => {
+    if (!Buffer.isBuffer(buffer) || !buffer.length) {
+      throw new ErroDeAcervo('Arquivo vazio.')
+    }
+    const arquivos = lerIndice()
+    const registro = arquivos.find((a) => a.id === id)
+    if (!registro) throw new ErroDeAcervo('Arquivo não encontrado no acervo.', 404)
 
-  if (buffer.length > LIMITE_POR_ARQUIVO_BYTES) {
-    throw new ErroDeAcervo(`Arquivo grande demais: o limite por arquivo é ${Math.round(LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`)
-  }
-  validarConteudo(registro.mimetype, buffer)
-  // A cota conta o que o arquivo VAI ocupar, descontando o que ele já ocupa —
-  // senão reescrever um arquivo grande com um menor seria recusado por falta
-  // de espaço que ele mesmo está devolvendo.
-  const atual = uso()
-  const depois = atual.usedBytes - (registro.sizeBytes || 0) + buffer.length
-  if (atual.quotaBytes !== null && depois > atual.quotaBytes) {
-    throw new ErroDeAcervo(
-      `Não cabe no acervo: falta espaço. Ficaria com ${depois} de ${atual.quotaBytes} bytes. Apague algo antes.`,
-      507
-    )
-  }
+    if (buffer.length > LIMITE_POR_ARQUIVO_BYTES) {
+      throw new ErroDeAcervo(`Arquivo grande demais: o limite por arquivo é ${Math.round(LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`)
+    }
+    validarConteudo(registro.mimetype, buffer)
+    // A cota conta o que o arquivo VAI ocupar, descontando o que ele já ocupa —
+    // senão reescrever um arquivo grande com um menor seria recusado por falta
+    // de espaço que ele mesmo está devolvendo.
+    const atual = uso()
+    const depois = atual.usedBytes - (registro.sizeBytes || 0) + buffer.length
+    if (atual.quotaBytes !== null && depois > atual.quotaBytes) {
+      throw new ErroDeAcervo(
+        `Não cabe no acervo: falta espaço. Ficaria com ${depois} de ${atual.quotaBytes} bytes. Apague algo antes.`,
+        507
+      )
+    }
 
-  garantirPastas()
-  // Atômica: grava ao lado e renomeia. Um corte no meio da escrita deixava o
-  // arquivo pela metade, e para JSON isso é arquivo quebrado para sempre.
-  const destino = caminhoDoArquivo(registro.id, registro.ext)
-  const provisorio = `${destino}.${crypto.randomBytes(4).toString('hex')}.tmp`
-  fs.writeFileSync(provisorio, buffer, { mode: 0o600 })
-  fs.renameSync(provisorio, destino)
-  registro.sizeBytes = buffer.length
-  registro.updatedAt = new Date().toISOString()
-  gravarIndice(arquivos)
-  return exporArquivo(registro)
+    garantirPastas()
+    // Atômica: grava ao lado e renomeia. Um corte no meio da escrita deixava o
+    // arquivo pela metade, e para JSON isso é arquivo quebrado para sempre.
+    const destino = caminhoDoArquivo(registro.id, registro.ext)
+    const provisorio = `${destino}.${crypto.randomBytes(4).toString('hex')}.tmp`
+    fs.writeFileSync(provisorio, buffer, { mode: 0o600 })
+    fs.renameSync(provisorio, destino)
+    registro.sizeBytes = buffer.length
+    registro.updatedAt = new Date().toISOString()
+    gravarIndice(arquivos)
+    return exporArquivo(registro)
+  })
+}
+
+// LER → MUDAR → GRAVAR como uma operação só. `mudar` recebe o conteúdo atual
+// (Buffer) e devolve o novo; a trava vale para o conjunto, então dois "adicionar
+// item" em sequência (ou vindos de processos diferentes) somam em vez de um
+// apagar o outro. Se `mudar` devolver `null`, nada é gravado.
+export function modificarConteudo (id, mudar) {
+  return comTrava(() => {
+    const atual = lerConteudo(id)
+    const novo = mudar(atual)
+    if (novo === null || novo === undefined) return exporArquivo(obter(id))
+    return reescrever(id, novo)
+  })
 }
 
 // Mover é só trocar o rótulo: nenhum byte sai do lugar, porque não há lugar
 // para sair — o arquivo sempre esteve plano, gravado por id.
 export function moverPara (id, folder) {
-  const arquivos = lerIndice()
-  const registro = arquivos.find((a) => a.id === id)
-  if (!registro) return null
-  registro.folder = normalizarPasta(folder)
-  gravarIndice(arquivos)
-  return exporArquivo(registro)
+  return comTrava(() => {
+    const arquivos = lerIndice()
+    const registro = arquivos.find((a) => a.id === id)
+    if (!registro) return null
+    registro.folder = normalizarPasta(folder)
+    gravarIndice(arquivos)
+    return exporArquivo(registro)
+  })
 }
 
 export function _usarPastaParaTeste (pasta) {

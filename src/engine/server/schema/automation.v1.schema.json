@@ -1384,6 +1384,10 @@
             "notFoundText": {
               "type": "string",
               "description": "Resposta quando não há item nesse caminho. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            },
+            "content": {
+              "type": "boolean",
+              "description": "Também devolve o texto do arquivo em {{resultado.dados.conteudo}}. Só vale para texto simples e JSON, e só até o teto de leitura (64 KiB por padrão); arquivo maior é recusado inteiro, nunca cortado."
             }
           }
         }

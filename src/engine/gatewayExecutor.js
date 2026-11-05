@@ -1328,15 +1328,44 @@ async function executarLerDoAcervo (client, comando, deps) {
     throw new Error(`não há nada no acervo em "${p.caminho}"`)
   }
 
-  return {
-    texto: registro.description || registro.name || '',
-    dados: {
-      nome: registro.name || '',
-      descricao: registro.description || '',
-      pasta: registro.folder || '',
-      tipo: registro.ext || '',
-      bytes: Number.isFinite(registro.size) ? registro.size : 0
+  const dados = {
+    nome: registro.name || '',
+    descricao: registro.description || '',
+    pasta: registro.folder || '',
+    tipo: registro.mimetype || '',
+    bytes: Number.isFinite(registro.sizeBytes) ? registro.sizeBytes : 0
+  }
+  if (p.conteudo === true) dados.conteudo = await lerConteudoParaOFluxo(registro, deps)
+
+  return { texto: registro.description || registro.name || '', dados }
+}
+
+// O CONTEÚDO que atravessa para o motor. É a única brecha na regra "o motor só
+// vê metadado", e por isso é estreita: só texto simples e JSON, só até o teto
+// de leitura, o arquivo inteiro ou nada (JSON cortado deixa de ser JSON), e a
+// memória reservada no orçamento de mídia antes de ler. O texto segue como DADO:
+// o motor o interpola uma vez e não o reinterpreta como placeholder.
+async function lerConteudoParaOFluxo (registro, deps) {
+  const { acervo, orcamento } = deps
+  if (!acervo.TIPOS_LEGIVEIS_NO_FLUXO.includes(registro.mimetype)) {
+    throw new Error(`só dá para ler o texto de arquivos de texto simples ou JSON; "${registro.name}" é ${registro.mimetype || 'de tipo desconhecido'}`)
+  }
+  const limite = acervo.limiteDeLeitura()
+  const tamanho = Number.isFinite(registro.sizeBytes) ? registro.sizeBytes : 0
+  if (tamanho > limite) {
+    throw new Error(`o arquivo "${registro.name}" tem ${tamanho} bytes e o teto de leitura é ${limite}; ele não foi cortado nem lido`)
+  }
+  const reserva = Math.max(1, tamanho)
+  orcamento?.adquirir?.(reserva)
+  try {
+    const buffer = await acervo.lerConteudoAsync(registro.id, limite)
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+    } catch {
+      throw new Error(`o arquivo "${registro.name}" não é texto UTF-8 válido`)
     }
+  } finally {
+    orcamento?.liberar?.(reserva)
   }
 }
 
