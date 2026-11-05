@@ -41,6 +41,7 @@ const bruto = (conversa, id, texto) => ({
 
 // Cada `/play` vira uma recuperação de mídia cuja leitura pendura numa porta;
 // cada `/ping` vira uma resposta de texto.
+let cenarios = 0
 function ambiente ({ hardware = {} } = {}) {
   const cfg = { hardware: { admissaoConcorrencia: 8, maxPendentes: 512, admissaoLogJanelaMs: 20, ...hardware }, download: {} }
   const enviadas = []
@@ -62,13 +63,15 @@ function ambiente ({ hardware = {} } = {}) {
     },
     getCredentials: () => ({ meJid: '5599:1@s.whatsapp.net' })
   })
+  // Único entre cenários: o gateway lembra os comandos que já despachou.
+  const prefixo = `c${++cenarios}`
   let seq = 0
   const clienteEngine = {
     eventos: {
       enviar: async (evento) => {
         const texto = evento?.message?.text
         const chatId = evento.chat.id
-        const id = `cmd-${++seq}`
+        const id = `${prefixo}-cmd-${++seq}`
         if (texto === '/play') {
           const mediaRef = mediaRefCache.criar({ node: { fileLength: 3 }, tipo: 'image' })
           return { results: [{ commands: [{ id, status: 'pending', commandType: 'whatsapp.recover', payload: { mediaRef, destination: 'chat', destinationId: chatId } }] }] }
