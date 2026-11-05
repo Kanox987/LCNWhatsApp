@@ -185,8 +185,30 @@ function caminhoDoArquivo (id, ext) {
 // Reentrante: quem já a segura (`reescrever` chamada por `modificarConteudo`)
 // passa direto.
 let segurandoTrava = 0
-const ESPERA_MAXIMA_DA_TRAVA_MS = 5000
+// Quem segura a trava fica milissegundos (as funções daqui são síncronas); só um
+// dono que morreu a faz esperar, e a espera trava o laço de eventos de quem espera.
+const ESPERA_MAXIMA_DA_TRAVA_MS = 2000
 const TRAVA_ABANDONADA_MS = 15000
+
+// Dois processos podem ver a MESMA trava velha ao mesmo tempo; se os dois a
+// apagassem, o segundo apagaria a trava nova que o primeiro acabou de criar.
+// `rename` é atômico, então só um leva a trava velha; e como o que foi levado é
+// conferido DEPOIS, quem pegou por engano uma trava viva a devolve.
+function retomarTravaAbandonada (trava) {
+  const levada = `${trava}.velha.${process.pid}.${crypto.randomBytes(3).toString('hex')}`
+  try {
+    if (Date.now() - fs.statSync(trava).mtimeMs <= TRAVA_ABANDONADA_MS) return false
+    fs.renameSync(trava, levada)
+  } catch { return false }
+  try {
+    if (Date.now() - fs.statSync(levada).mtimeMs <= TRAVA_ABANDONADA_MS) {
+      try { fs.renameSync(levada, trava) } catch {}
+      return false
+    }
+    fs.rmdirSync(levada)
+  } catch {}
+  return true
+}
 
 function comTrava (fn) {
   if (segurandoTrava > 0) return fn()
@@ -200,12 +222,7 @@ function comTrava (fn) {
     } catch (erro) {
       if (erro.code !== 'EEXIST') throw erro
       // Dono que morreu com a trava na mão não pode travar o acervo para sempre.
-      try {
-        if (Date.now() - fs.statSync(trava).mtimeMs > TRAVA_ABANDONADA_MS) {
-          fs.rmdirSync(trava)
-          continue
-        }
-      } catch {}
+      if (retomarTravaAbandonada(trava)) continue
       if (Date.now() > limite) throw new ErroDeAcervo('O acervo está ocupado; tente de novo em instantes.', 503)
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15)
     }
