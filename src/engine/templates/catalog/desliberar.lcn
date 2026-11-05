@@ -1,0 +1,44 @@
+template desliberar v1
+  nome: Tirar pessoa da lista
+  descrição: Tira quem foi marcado com @, ou o autor da mensagem respondida, de uma lista nomeada — por padrão "autorizados". Outros comandos conferem essa lista com a condição "evento sender.lists.autorizados == true". Só o dono usa. Lista vazia não libera ninguém.
+  categoria: configuracoes
+
+automação
+  nome: Tirar pessoa da lista
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Tira alguém da lista (só o dono)
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  só dono
+
+  tira da lista
+    qual: {{params.lista}}
+    quem: quem foi marcado
+    sem alvo: "{{params.semAlvoText}}"
+    confirma: "{{params.confirmText}}"
+
+configurável
+  command: texto = "/desliberar"
+    rótulo: Comando
+    ajuda: A palavra que o dono digita. Funciona marcando com @ ou respondendo a mensagem de quem sai da lista.
+  lista: texto = "autorizados"
+    rótulo: Nome da lista
+    ajuda: Letras minúsculas, números e "_", começando por letra. Use o MESMO nome nos comandos que conferem a lista e no que tira alguém dela.
+  semAlvoText: texto = "Marque quem você quer tirar da lista, ou responda a mensagem dessa pessoa."
+    rótulo: Quando ninguém foi marcado
+    ajuda: Resposta para quem digitou o comando sozinho.
+  confirmText: texto = "Removido da lista: {{target.number}}."
+    rótulo: Confirmação
+    ajuda: Resposta depois de tirar a pessoa na lista.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando.
+
+avisa nota
+  Restrito ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número consegue usar este comando. Tirar quem não está na lista não dá erro.

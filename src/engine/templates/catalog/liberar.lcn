@@ -1,0 +1,44 @@
+template liberar v1
+  nome: Liberar pessoa (lista)
+  descrição: Põe quem foi marcado com @, ou o autor da mensagem respondida, numa lista nomeada — por padrão "autorizados". Outros comandos conferem essa lista com a condição "evento sender.lists.autorizados == true". Só o dono usa. Lista vazia não libera ninguém.
+  categoria: configuracoes
+
+automação
+  nome: Liberar pessoa (lista)
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Põe alguém na lista (só o dono)
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  só dono
+
+  põe na lista
+    qual: {{params.lista}}
+    quem: quem foi marcado
+    sem alvo: "{{params.semAlvoText}}"
+    confirma: "{{params.confirmText}}"
+
+configurável
+  command: texto = "/liberar"
+    rótulo: Comando
+    ajuda: A palavra que o dono digita. Funciona marcando com @ ou respondendo a mensagem de quem entra na lista.
+  lista: texto = "autorizados"
+    rótulo: Nome da lista
+    ajuda: Letras minúsculas, números e "_", começando por letra. Use o MESMO nome nos comandos que conferem a lista e no que tira alguém dela.
+  semAlvoText: texto = "Marque quem você quer liberar, ou responda a mensagem dessa pessoa."
+    rótulo: Quando ninguém foi marcado
+    ajuda: Resposta para quem digitou o comando sozinho.
+  confirmText: texto = "Liberado: {{target.number}}."
+    rótulo: Confirmação
+    ajuda: Resposta depois de pôr a pessoa na lista.
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando.
+
+avisa nota
+  Restrito ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número consegue usar este comando. A lista começa vazia, e lista vazia não libera ninguém.

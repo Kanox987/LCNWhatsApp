@@ -233,6 +233,12 @@
                 "$ref": "#/definitions/actionGroupPromote"
               },
               {
+                "$ref": "#/definitions/actionListAdd"
+              },
+              {
+                "$ref": "#/definitions/actionListRemove"
+              },
+              {
                 "$ref": "#/definitions/actionWhatsappReact"
               },
               {
@@ -1058,6 +1064,58 @@
             "ownerText": {
               "type": "string",
               "description": "Resposta quando o alvo é um DONO e a trava o protegeu. Sem este texto a trava age em silêncio: o comando casa, não envia nada, e quem digitou não entende por quê."
+            }
+          }
+        }
+      }
+    },
+    "actionListAdd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.list.add" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["list"],
+          "properties": {
+            "list": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Nome da lista (letras minúsculas, números e _, começando por letra, até 32). Maiúscula e acento são normalizados." },
+            "who": { "description": "Quem é posto na lista: 'target' é quem foi mencionado ou citado no comando; 'sender' é quem enviou a mensagem. Sem este campo vale 'target'.", "enum": ["sender", "target"] },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando o comando não indicou ninguém. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            },
+            "confirmText": {
+              "type": "string",
+              "description": "Resposta depois de editar a lista. Pode usar {{target.number}} e {{sender.name}}. Sem este texto a ação não responde nada."
+            }
+          }
+        }
+      }
+    },
+    "actionListRemove": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.list.remove" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["list"],
+          "properties": {
+            "list": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Nome da lista (letras minúsculas, números e _, começando por letra, até 32). Maiúscula e acento são normalizados." },
+            "who": { "description": "Quem é tirado da lista: 'target' é quem foi mencionado ou citado no comando; 'sender' é quem enviou a mensagem. Sem este campo vale 'target'.", "enum": ["sender", "target"] },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando o comando não indicou ninguém. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada."
+            },
+            "confirmText": {
+              "type": "string",
+              "description": "Resposta depois de editar a lista. Pode usar {{target.number}} e {{sender.name}}. Sem este texto a ação não responde nada."
             }
           }
         }

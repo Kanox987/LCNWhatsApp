@@ -344,6 +344,29 @@ export const ACOES = Object.freeze([
   // compilador não sabe quem é admin de onde, e fingir que sabe seria recusar
   // automação correta. Quem recusa é o WhatsApp, e o executor traduz a recusa
   // em mensagem legível.
+  // Listas nomeadas de pessoas (listas.js). Edição no motor, sem comando de
+  // gateway; a pergunta "está na lista?" é a condição comum
+  // `se evento sender.lists.<nome> == true`.
+  {
+    palavra: 'põe na lista',
+    tipo: 'action.list.add',
+    campos: [
+      { chave: 'list', rotulo: 'qual', tipo: 'palavra' },
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' },
+      { chave: 'confirmText', rotulo: 'confirma', tipo: 'texto' }
+    ]
+  },
+  {
+    palavra: 'tira da lista',
+    tipo: 'action.list.remove',
+    campos: [
+      { chave: 'list', rotulo: 'qual', tipo: 'palavra' },
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' },
+      { chave: 'confirmText', rotulo: 'confirma', tipo: 'texto' }
+    ]
+  },
   {
     palavra: 'promove no grupo',
     tipo: 'action.group.promote',

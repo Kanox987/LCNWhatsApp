@@ -11,6 +11,7 @@ import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
 import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
+import { adicionarNaLista, listasDa, normalizarNomeDeLista, removerDaLista } from './listas.js'
 import { criarServicoDeEnquetes } from './enquetesService.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
@@ -2121,6 +2122,51 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       return 'success'
     }
 
+    case 'action.list.add':
+    case 'action.list.remove': {
+      // Edita uma lista nomeada (listas.js). Roda no motor e não emite comando de
+      // gateway: lê e grava o banco que o avaliador já abre.
+      //
+      // O nome vem do documento e só passa pela validação do serviço; o alvo é
+      // sempre resolvido do evento, nunca de texto digitado — "/liberar @fulano"
+      // põe o fulano, e quem escreve outra coisa não escolhe a chave.
+      const adicionar = no.type === 'action.list.add'
+      const lista = interpolar(no.config?.list ?? '', contexto)
+      const quem = no.config?.who === 'sender' ? evento.sender?.id : resolverAlvo(evento)
+      if (!quem) {
+        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo(`Não há quem ${adicionar ? 'pôr na' : 'tirar da'} lista: o comando não indicou ninguém.`)
+      }
+      const feito = adicionar ? adicionarNaLista(db, lista, quem) : removerDaLista(db, lista, quem)
+      if (!feito.ok) {
+        throw new ErroDeFluxo(feito.motivo === 'nome'
+          ? `Nome de lista inválido: "${lista}". Use letras minúsculas, números e "_", começando por letra (até 32).`
+          : 'Não há quem pôr ou tirar da lista: a pessoa não foi identificada.')
+      }
+      // Quem já está no mapa do contexto vê a mudança na MESMA execução, como as
+      // variáveis: um "se" logo depois do "põe na lista" enxerga o resultado.
+      const dono = no.config?.who === 'sender' ? contexto.sender : contexto.target
+      const nome = normalizarNomeDeLista(lista)
+      if (dono?.id === quem && nome) {
+        dono.lists = dono.lists || {}
+        if (adicionar) dono.lists[nome] = true
+        else delete dono.lists[nome]
+      }
+      if (typeof no.config?.confirmText === 'string' && no.config.confirmText) {
+        comandos.push({
+          commandType: 'whatsapp.reply',
+          payload: { chatId: evento.chat.id, text: interpolar(no.config.confirmText, contexto) }
+        })
+      }
+      return 'success'
+    }
+
     case 'action.variable.set': {
       // Vira ErroDeFluxo: status 'error' visível na aba Execuções, com o motivo.
       // Ignorar em silêncio seria pior — quem escreveu a automação ficaria
@@ -2265,12 +2311,13 @@ function montarFluxo (db, documento, triggerId, evento, retomada = null) {
       : {}),
     // isOwner entra como campo do remetente (e não como variável de usuário)
     // porque é uma propriedade do evento, não algo que a automação grava.
-    sender: { ...evento.sender, isOwner: ehDono(db, evento.sender?.id), number: soDigitos(evento.sender?.id) },
+    // `lists`: as listas nomeadas em que a pessoa está, para `evento sender.lists.<nome> == true`.
+    sender: { ...evento.sender, isOwner: ehDono(db, evento.sender?.id), number: soDigitos(evento.sender?.id), lists: listasDa(db, evento.sender?.id) },
     chat: { ...evento.chat, number: soDigitos(evento.chat?.id) },
     // Sem menção nem citação não existe alvo — o ramo fica vazio e
     // {{target.id}} permanece literal no texto, sinalizando o erro de uso em
     // vez de mandar uma mensagem com um buraco no meio.
-    target: alvo ? { id: alvo, number: soDigitos(alvo) } : {},
+    target: alvo ? { id: alvo, number: soDigitos(alvo), lists: listasDa(db, alvo) } : {},
     // Quem escreveu a mensagem RESPONDIDA. `target` prefere a menção quando
     // existem as duas; aqui é sempre o autor da citação, que é o que um
     // comando tipo "/apagar" respondendo alguém precisa saber.

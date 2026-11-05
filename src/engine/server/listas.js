@@ -12,14 +12,16 @@
 //  - o nome é validado aqui, porque ele vira parte de uma chave.
 export const PREFIXO_LISTA = '__lista__'
 
-const NOME_VALIDO = /^[a-z0-9][a-z0-9_-]{0,31}$/
+// Sem hífen e começando por letra: o nome também é um pedaço de caminho,
+// `sender.lists.autorizados`, e o campo de evento do schema só aceita identificador.
+const NOME_VALIDO = /^[a-z][a-z0-9_]{0,31}$/
 
-// "Autorizados " e "autorizados" são a mesma lista; acento e espaço viram
-// letra simples e hífen, para o dono não errar por digitação.
+// "Autorizados " e "autorizados" são a mesma lista; acento vira letra simples e
+// espaço ou hífen viram "_", para o dono não errar por digitação.
 export function normalizarNomeDeLista (nome) {
   if (typeof nome !== 'string') return null
   const limpo = nome.normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .trim().toLowerCase().replace(/\s+/g, '-')
+    .trim().toLowerCase().replace(/[\s-]+/g, '_')
   return NOME_VALIDO.test(limpo) ? limpo : null
 }
 
@@ -78,4 +80,20 @@ export function listasExistentes (db) {
     GROUP BY key ORDER BY key`)
     .all(`${PREFIXO_LISTA.replace(/_/g, '\\_')}%`)
     .map((linha) => ({ nome: linha.key.slice(PREFIXO_LISTA.length), membros: linha.n }))
+}
+
+// As listas em que a pessoa está, como mapa `{ autorizados: true }`: é o que o
+// evento expõe em `sender.lists` e `target.lists`, para a condição comum
+// `evento sender.lists.autorizados == true` funcionar sem sintaxe nova.
+// Uma consulta indexada por (scope_kind, scope_id); quem não está em lista
+// nenhuma recebe um mapa vazio, e lista ausente é "não é membro".
+export function listasDa (db, pessoaId) {
+  const mapa = {}
+  if (!db || !idValido(pessoaId)) return mapa
+  const linhas = db.prepare("SELECT key, value_json FROM entity_attributes WHERE scope_kind = 'contact' AND scope_id = ? AND key LIKE ? ESCAPE '\\'")
+    .all(pessoaId, `${PREFIXO_LISTA.replace(/_/g, '\\_')}%`)
+  for (const linha of linhas) {
+    try { if (JSON.parse(linha.value_json) === true) mapa[linha.key.slice(PREFIXO_LISTA.length)] = true } catch {}
+  }
+  return mapa
 }

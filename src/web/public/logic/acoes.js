@@ -580,6 +580,40 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.list.add',
+    rotulo: 'Pôr numa lista',
+    familia: 'moderacao',
+    resumo: 'Coloca alguém numa lista nomeada, como "autorizados".',
+    exemplo: '/liberar @fulano põe o fulano na lista que o resto dos comandos consulta.',
+    ressalva: { level: 'requirement', text: 'Quem pode usar o comando que edita a lista é o que decide quem entra nela. Instale-o só para o dono, ou para quem você já confia: lista de permitidos aberta a todos não protege nada.' },
+    dependencias: 'Alguém marcado ou respondido (ou quem enviou, se você escolher). Funciona em conversa privada e em grupo, e não precisa de admin.',
+    resultado: 'A pessoa passa a constar na lista. Pôr de novo quem já está não muda nada.',
+    errosComuns: 'Escrever o nome da lista diferente em dois comandos: "autorizados" e "autorizado" são listas diferentes. Escolha o nome uma vez e copie.',
+    campos: [
+      { chave: 'list', rotulo: 'Qual lista', ajuda: 'O nome da lista, como "autorizados". Maiúscula e acento não importam; espaço vira "_". Uma lista que ninguém preencheu está vazia, e lista vazia não libera ninguém.' },
+      { chave: 'who', rotulo: 'Quem pôr', ajuda: 'quem foi marcado (o @mencionado, ou o autor da mensagem respondida) ou quem enviou a mensagem.' },
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' },
+      { chave: 'confirmText', rotulo: 'Confirmação', ajuda: 'O que o bot responde depois de editar a lista, por exemplo "Liberado.". Pode usar {{target.number}}. Sem este texto o comando edita a lista sem dizer nada.' }
+    ]
+  },
+  {
+    tipo: 'action.list.remove',
+    rotulo: 'Tirar de uma lista',
+    familia: 'moderacao',
+    resumo: 'Tira alguém de uma lista nomeada.',
+    exemplo: '/bloquear @fulano tira o fulano da lista de autorizados.',
+    ressalva: { level: 'requirement', text: 'Quem pode usar o comando que edita a lista é o que decide quem entra nela. Instale-o só para o dono, ou para quem você já confia: lista de permitidos aberta a todos não protege nada.' },
+    dependencias: 'Alguém marcado ou respondido (ou quem enviou, se você escolher). Funciona em conversa privada e em grupo, e não precisa de admin.',
+    resultado: 'A pessoa deixa de constar na lista. Tirar quem não estava não dá erro.',
+    errosComuns: 'Escrever o nome da lista diferente em dois comandos: "autorizados" e "autorizado" são listas diferentes. Escolha o nome uma vez e copie.',
+    campos: [
+      { chave: 'list', rotulo: 'Qual lista', ajuda: 'O nome da lista, como "autorizados". Maiúscula e acento não importam; espaço vira "_". Uma lista que ninguém preencheu está vazia, e lista vazia não libera ninguém.' },
+      { chave: 'who', rotulo: 'Quem tirar', ajuda: 'quem foi marcado (o @mencionado, ou o autor da mensagem respondida) ou quem enviou a mensagem.' },
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar nem responder ninguém. Sem este texto o comando não envia nada e a falta só aparece na aba Execuções.' },
+      { chave: 'confirmText', rotulo: 'Confirmação', ajuda: 'O que o bot responde depois de editar a lista, por exemplo "Liberado.". Pode usar {{target.number}}. Sem este texto o comando edita a lista sem dizer nada.' }
+    ]
+  },
+  {
     tipo: 'action.group.promote',
     rotulo: 'Promover a administrador',
     familia: 'moderacao',
