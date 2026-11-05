@@ -9,13 +9,14 @@ import { registrarRotasExecutions } from './routes/executions.js'
 import { registrarRotasEntities } from './routes/entities.js'
 import { registrarRotasTemplates } from './routes/templates.js'
 import { registrarRotasPacotes } from './routes/pacotes.js'
+import { registrarRotasPerfis } from './routes/perfis.js'
 import { registrarRotasOwners } from './routes/owners.js'
 import { registrarRotasMenu } from './routes/menu.js'
 import { registrarRotasRetencao } from './routes/retencao.js'
 import { registrarRotasEnquetes } from './routes/enquetes.js'
 import { criarServicoDeEnquetes } from './enquetesService.js'
 
-export function criarApi (db) {
+export function criarApi (db, opcoes = {}) {
   const roteador = criarRoteador()
   roteador.get('/health', () => ({ ok: true, status: 'ok', schemaVersion: 1 }))
   registrarRotasInstances(roteador, db)
@@ -28,7 +29,8 @@ export function criarApi (db) {
   registrarRotasExecutions(roteador, db)
   registrarRotasEntities(roteador, db)
   registrarRotasTemplates(roteador, db)
-  registrarRotasPacotes(roteador, db)
+  const { servico: provisionamento } = registrarRotasPacotes(roteador, db)
+  registrarRotasPerfis(roteador, db, { provisionamento, env: opcoes.env ?? process.env })
   registrarRotasRetencao(roteador, db)
   registrarRotasEnquetes(roteador, criarServicoDeEnquetes(db))
   registrarRotasMeta(roteador, db)
