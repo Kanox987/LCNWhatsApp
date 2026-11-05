@@ -135,6 +135,20 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       obter: (id) => requisitar('GET', caminho('/templates', id)),
       instalar: (id, dados) => requisitar('POST', `${caminho('/templates', id)}/install`, dados)
     },
+    // Provisionamento: o que a instância já nasce tendo. `provisionar` recebe a
+    // escolha crua (`kind`, `packageId`/`templateIds`, `scope`, parâmetros); o
+    // perfil de provisionamento é o arquivo que a descreve inteira.
+    pacotes: {
+      listar: () => requisitar('GET', '/pacotes'),
+      provisionar: (escolha) => requisitar('POST', '/pacotes/provisionar', escolha),
+      provisionamento: () => requisitar('GET', '/pacotes/provisionamento')
+    },
+    perfis: {
+      // `validar` roda o caminho real e desfaz: o plano e os erros são os de verdade.
+      validar: (perfil, opcoes) => requisitar('POST', '/perfis/validar', { perfil, ...opcoes }),
+      aplicar: (perfil, opcoes) => requisitar('POST', '/perfis/aplicar', { perfil, ...opcoes }),
+      estado: () => requisitar('GET', '/perfis/estado')
+    },
     pools: {
       listar: () => requisitar('GET', '/pools'),
       criar: (dados) => requisitar('POST', '/pools', dados),
@@ -175,6 +189,8 @@ export const enquetes = clientePadrao.enquetes
 export const entidades = clientePadrao.entidades
 export const automacoes = clientePadrao.automacoes
 export const templates = clientePadrao.templates
+export const pacotes = clientePadrao.pacotes
+export const perfis = clientePadrao.perfis
 export const pools = clientePadrao.pools
 export const instancias = clientePadrao.instancias
 export const conexoes = clientePadrao.conexoes
