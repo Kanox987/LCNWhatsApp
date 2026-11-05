@@ -179,7 +179,7 @@ function passaAcessoDoGatilho (db, evento, config) {
   const lista = typeof config?.requireList === 'string' ? config.requireList : null
   if (!exigeAdmin && !lista) return true
   const quem = evento?.sender?.id
-  if (podeUsarComandoRestrito(db, quem, { souEuMesmo: evento?.sender?.authoredBySelf === true })) return true
+  if (podeUsarComandoRestrito(db, quem, { souEuMesmo: evento?.sender?.authoredBySelf === true && evento?.sender?.authoredByBot !== true })) return true
   if (exigeAdmin && evento?.sender?.isAdmin !== true) return false
   if (lista && !estaNaLista(db, lista, quem)) return false
   return true

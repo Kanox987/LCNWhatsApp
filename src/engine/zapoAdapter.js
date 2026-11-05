@@ -26,8 +26,11 @@ import * as enviadas from '../enviadas.js'
 // existe. `connection.js:162` já decidia assim ao registrar contato; o
 // adaptador era o único lugar fora dessa regra.
 function resolverSenderId (key) {
-  if (key.isGroup) return key.participantAlt || key.participant || undefined
-  return key.participantAlt || key.remoteJidAlt || key.participant || key.remoteJid
+  // Sem o par na própria chave, o mapa LID→telefone ainda pode conhecê-lo:
+  // quem foi autorizado pelo número não pode ser recusado por chegar como LID.
+  const doMapa = (jid) => (jid ? lidMap.paraTelefone(jid) || jid : jid)
+  if (key.isGroup) return doMapa(key.participantAlt || key.participant) || undefined
+  return doMapa(key.participantAlt || key.remoteJidAlt || key.participant || key.remoteJid)
 }
 
 function resolverChatKind (key) {

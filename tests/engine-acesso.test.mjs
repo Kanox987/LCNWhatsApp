@@ -41,12 +41,12 @@ function publicar (id, extra) {
   db.prepare('UPDATE automations SET active_revision_id = ? WHERE id = ?').run(rev.lastInsertRowid, id)
 }
 let n = 0
-const evento = (sender, texto, { admin, proprio = false } = {}) => {
+const evento = (sender, texto, { admin, proprio = false, bot = false } = {}) => {
   n++
   return {
     provider: 'zapo', accountId: 'acc-1', eventId: `acc-1:${CHAT}:${sender}:m${n}`, occurredAt: agora, replay: false,
     chat: { id: CHAT, kind: 'direct' },
-    sender: { id: sender, authoredBySelf: proprio, ...(admin === undefined ? {} : { isAdmin: admin }) },
+    sender: { id: sender, authoredBySelf: proprio, authoredByBot: bot, ...(admin === undefined ? {} : { isAdmin: admin }) },
     message: { kind: 'text', text: texto, mentions: [] },
     providerRef: { provider: 'zapo', remoteJid: CHAT, id: `m${n}` }
   }
@@ -64,6 +64,7 @@ check('admins: não administrador é ignorado', !casou(avaliarEvento(db, evento(
 check('admins: sem isAdmin no evento, fechado', !casou(avaliarEvento(db, evento(ANA, '/adm')), 'adm'))
 check('admins: o dono passa mesmo sem ser administrador', casou(avaliarEvento(db, evento(DONO, '/adm', { admin: false })), 'adm'))
 check('admins: o próprio número do bot passa', casou(avaliarEvento(db, evento(CHAT, '/adm', { proprio: true })), 'adm'))
+check('admins: mensagem que o PRÓPRIO bot enviou não vale como o número dele', !casou(avaliarEvento(db, evento(CHAT, '/adm', { proprio: true, bot: true })), 'adm'))
 check('lista vazia não libera ninguém', !casou(avaliarEvento(db, evento(ANA, '/vip')), 'vip'))
 adicionarNaLista(db, 'vip', ANA)
 check('lista: quem foi posto passa', casou(avaliarEvento(db, evento(ANA, '/vip')), 'vip'))

@@ -81,6 +81,19 @@ const eventoDesconhecido = construirEventoDeMensagem({
 }, { accountId: 'acc-1', recebidoEmMs: Date.now() })
 check('menção de quem nunca falou volta como veio (sem inventar telefone)', eventoDesconhecido.message.mentions?.[0] === '555444333222111@lid')
 
+// Chave SEM o par, mas o mapa já conhece: quem foi autorizado pelo número não
+// pode ser recusado por chegar como LID (lista de acesso, dono).
+const semPar = construirEventoDeMensagem({
+  key: { remoteJid: '120000000000000001@g.us', isGroup: true, id: 'msg-4', participant: LID },
+  message: { conversation: '/x' }
+}, { accountId: 'acc-1', recebidoEmMs: Date.now() })
+check('LID sem participantAlt é resolvido pelo mapa para o telefone', semPar.sender.id === TELEFONE, semPar.sender.id)
+const semParDesconhecido = construirEventoDeMensagem({
+  key: { remoteJid: '120000000000000001@g.us', isGroup: true, id: 'msg-5', participant: '777666555444333@lid' },
+  message: { conversation: '/x' }
+}, { accountId: 'acc-1', recebidoEmMs: Date.now() })
+check('LID que o mapa não conhece segue como LID (nunca inventa número)', semParDesconhecido.sender.id === '777666555444333@lid')
+
 // --- persistência ----------------------------------------------------------
 lidMap.gravarAgora()
 const existe = fs.existsSync(arquivoTeste)

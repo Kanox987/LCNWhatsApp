@@ -133,6 +133,32 @@ const cLid = clienteFake({ metadata: metadataPadrao })
 const eLid = await groupInfo.enriquecerEvento(cLid, evento('111111111111111@lid'))
 check('admin é reconhecido mesmo quando o evento traz o LID', eLid.sender.isAdmin === true)
 
+// --- rebaixamento durante uma consulta em voo ----------------------------
+// A consulta começou ANTES do rebaixamento e termina DEPOIS da invalidação:
+// o resultado velho não pode voltar para o cache.
+groupInfo.limparTudo()
+{
+  let rebaixado = false
+  const chamadas = []
+  const cRace = { group: { queryGroupMetadata: async () => {
+    const estavaRebaixado = rebaixado
+    chamadas.push(estavaRebaixado)
+    if (!estavaRebaixado) await new Promise((r) => setTimeout(r, 30))
+    return {
+      ...metadataPadrao,
+      participants: metadataPadrao.participants.map((p) => (p.jid === ANA ? { ...p, isAdmin: !estavaRebaixado } : p))
+    }
+  } } }
+  const emVoo = groupInfo.enriquecerEvento(cRace, evento(ANA))
+  await new Promise((r) => setTimeout(r, 5))
+  rebaixado = true
+  groupInfo.invalidar(GRUPO)
+  const durante = await emVoo
+  check('consulta velha não devolve admin depois do rebaixamento', durante.sender.isAdmin !== true, `chamadas=${chamadas.join(',')}`)
+  const depois = await groupInfo.enriquecerEvento(cRace, evento(ANA))
+  check('o cache não foi regravado com o estado de antes', depois.sender.isAdmin !== true)
+}
+
 lidMap._reiniciarParaTeste()
 fs.rmSync(pastaTeste, { recursive: true, force: true })
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE DADOS DE GRUPO PASSARAM')

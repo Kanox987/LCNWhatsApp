@@ -47,14 +47,24 @@ function podar () {
   }
 }
 
+// Uma consulta já em voo quando o grupo é invalidado traz o estado ANTERIOR à
+// mudança (um rebaixamento, por exemplo). Sem este contador ela terminava
+// depois e regravava o cache com o admin que acabou de deixar de ser.
+const geracoes = new Map()
+const geracaoDe = (alvo) => geracoes.get(alvo) || 0
+
 export function invalidar (groupJid) {
   const alvo = normalizar(groupJid)
-  if (alvo) cache.delete(alvo)
+  if (!alvo) return
+  cache.delete(alvo)
+  emVoo.delete(alvo)
+  geracoes.set(alvo, geracaoDe(alvo) + 1)
 }
 
 export function limparTudo () {
   cache.clear()
   emVoo.clear()
+  geracoes.clear()
 }
 
 // Os participantes vêm com jid, lid e phoneNumber na MESMA linha — é a fonte
@@ -138,9 +148,16 @@ export async function obter (client, groupJid, { agoraMs = Date.now() } = {}) {
   const jaIndo = emVoo.get(alvo)
   if (jaIndo) return jaIndo
 
+  const geracao = geracaoDe(alvo)
   const busca = comTimeout(Promise.resolve().then(() => client.group.queryGroupMetadata(alvo)), TIMEOUT_MS)
-    .then((metadados) => guardar(alvo, resumir(metadados)))
+    .then((metadados) => {
+      // Invalidado no meio do voo: o que chegou é velho. Não grava e consulta
+      // de novo, em vez de devolver permissão que já mudou.
+      if (geracaoDe(alvo) !== geracao) return obter(client, groupJid, { agoraMs })
+      return guardar(alvo, resumir(metadados))
+    })
     .catch(() => {
+      if (geracaoDe(alvo) !== geracao) return null
       // FALHA NÃO APAGA O QUE JÁ SE SABIA.
       //
       // Guardar `null` aqui era o pior defeito do desenho anterior: uma queda
@@ -154,7 +171,7 @@ export async function obter (client, groupJid, { agoraMs = Date.now() } = {}) {
       podar()
       return anterior
     })
-    .finally(() => emVoo.delete(alvo))
+    .finally(() => { if (emVoo.get(alvo) === busca) emVoo.delete(alvo) })
 
   emVoo.set(alvo, busca)
   return busca
