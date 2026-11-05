@@ -2,6 +2,9 @@ import { api, ApiError } from '../api.js'
 import { avisoInline } from './variables.js'
 import { badge, button, el, emptyState, errorState, field, loading, notify, setBusy, setPageHeader } from '../ui.js'
 import { TYPE_LABELS, criarControleParametro, valorParametro } from '../logic/parametros.js'
+import {
+  OPCOES_DE_ESCOPO, montarEscopo, descreverEscopo, escopoExigeBusca, escopoExigeVariavel, escopoAceitaExcecao
+} from '../logic/escopo.js'
 
 const CATEGORY_LABELS = {
   utilitarios: 'Utilitários',
@@ -93,6 +96,10 @@ function painelCodigo (template) {
 function painelInstalacao ({ templates, rootTemplateId, pools, instances, navigate }) {
   const templateFields = new Map()
   const selectedTarget = { value: null }
+  // O que a pessoa escolheu sobre ONDE: o destino (um dos seis do motor), a marca
+  // quando o destino é "conversas marcadas" e as conversas que ficam de fora.
+  // Começa em "um contato" para que nada nasça liberado para todos por esquecimento.
+  const escopo = { modo: 'contact', variavel: '', excecoes: [] }
   const targetArea = el('div')
   const summaryArea = el('div', { className: 'review-card panel' })
   const resultArea = el('div')
@@ -107,9 +114,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
       })
       return `Criar “${id}” a partir de ${template.name}${values.length ? `, com ${values.join('; ')}` : ''}.`
     })
-    lines.push(selectedTarget.value
-      ? `Autorizar somente ${selectedTarget.value.label || selectedTarget.value.id} (${selectedTarget.value.kind === 'group' ? 'grupo' : 'contato'}).`
-      : 'Escolher um contato ou grupo é obrigatório antes de instalar.')
+    lines.push(descreverEscopo({ ...escopo, alvo: selectedTarget.value }))
     summaryArea.replaceChildren(
       el('div', { className: 'panel-heading' }, [
         el('div', {}, [el('h3', { text: 'Revise antes de instalar' }), el('p', { text: 'Confira cada ponto antes de publicar o comando.' })])
@@ -143,13 +148,56 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
   for (const instance of instances) {
     instanceSelect.append(el('option', { value: instance.instanceId, text: `${instance.label || instance.instanceId} · ${instance.instanceId}` }))
   }
+  // Onde o comando pode executar: os seis destinos que o motor aceita.
+  const modoEscopoSelect = el('select', {}, OPCOES_DE_ESCOPO.map((opcao) => el('option', { value: opcao.id, text: opcao.rotulo })))
+  const modoAjuda = el('p', { className: 'muted compact' })
+  const variavelInput = el('input', { type: 'text', placeholder: 'Ex.: vip' })
   const kindSelect = el('select', {}, [
     el('option', { value: 'contact', text: 'Contatos' }),
     el('option', { value: 'group', text: 'Grupos' })
   ])
+  // O que a busca procura: o destino de contato/grupo e os destinos "todos os
+  // contatos"/"todos os grupos" já dizem; só os outros precisam perguntar.
+  const tipoDaBusca = () => (escopo.modo === 'all_contacts' ? 'contact' : escopo.modo === 'all_groups' ? 'group' : escopo.modo === 'contact' || escopo.modo === 'group' ? escopo.modo : kindSelect.value)
+  const excecoesArea = el('div')
   const searchInput = el('input', { type: 'search', placeholder: 'Digite um nome para buscar', disabled: !instances.length })
   const directoryResults = el('div', { className: 'directory-results' })
   let searchTimer = null
+
+  const campoDoTipoDaBusca = field('Buscar em', kindSelect, 'Qual tipo de conversa você quer deixar de fora.')
+  const campoDaMarca = field('Nome da marca', variavelInput, 'A conversa precisa ter esta variável preenchida (a mesma que a aba Dados mostra, como vip).')
+  const campoDaBusca = field('Buscar por nome', searchInput, 'A busca acontece automaticamente depois que você para de digitar.')
+  const areaDoDestino = el('div', {}, [el('p', { className: 'overline', text: 'Destino escolhido' }), targetArea])
+  const areaDasExcecoes = el('div', {}, [el('p', { className: 'overline', text: 'Fica de fora (opcional)' }), excecoesArea])
+
+  function renderizarExcecoes () {
+    excecoesArea.replaceChildren(...(escopo.excecoes.length
+      ? escopo.excecoes.map((item) => el('div', { className: 'scope-chip' }, [
+        badge(item.kind === 'group' ? 'Grupo' : 'Contato', 'warning'),
+        el('span', {}, [el('strong', { text: item.label || item.id }), el('small', { className: 'mono', text: ` · ${item.id}` })]),
+        button('Voltar a incluir', { variant: 'quiet', onClick: () => {
+          escopo.excecoes = escopo.excecoes.filter((outro) => !(outro.kind === item.kind && outro.id === item.id))
+          renderizarExcecoes()
+          atualizarResumo()
+        } })
+      ]))
+      : [el('p', { className: 'muted compact', text: 'Nenhuma. Escolha na busca acima para tirar uma conversa do alcance.' })]))
+  }
+
+  // Mostra só o que o destino escolhido pede: busca para contato/grupo, o nome
+  // da marca para "marcadas", e a busca de exceções para os abrangentes.
+  function ajustarCamposDoEscopo () {
+    const busca = escopoExigeBusca(escopo.modo)
+    const excecao = escopoAceitaExcecao(escopo.modo)
+    modoAjuda.textContent = OPCOES_DE_ESCOPO.find((opcao) => opcao.id === escopo.modo)?.ajuda || ''
+    campoDaMarca.hidden = !escopoExigeVariavel(escopo.modo)
+    campoDoTipoDaBusca.hidden = !(escopo.modo === 'everywhere' || escopo.modo === 'tagged')
+    campoDaBusca.hidden = !(busca || excecao)
+    directoryResults.hidden = !(busca || excecao)
+    areaDoDestino.hidden = !busca
+    areaDasExcecoes.hidden = !excecao
+    campoDaBusca.querySelector('label').textContent = busca ? 'Buscar por nome' : 'Buscar conversa para deixar de fora'
+  }
 
   function renderizarDestino () {
     const target = selectedTarget.value
@@ -178,7 +226,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     }
     directoryResults.replaceChildren(el('p', { className: 'muted', text: 'Buscando…' }))
     try {
-      const result = await api.instances.directory(instanceSelect.value, { kind: kindSelect.value, q: searchInput.value.trim(), limit: 30 })
+      const result = await api.instances.directory(instanceSelect.value, { kind: tipoDaBusca(), q: searchInput.value.trim(), limit: 30 })
       if (!result.items.length) {
         directoryResults.replaceChildren(el('p', { className: 'muted', text: 'Nenhum resultado encontrado.' }))
         return
@@ -186,8 +234,14 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
       directoryResults.replaceChildren(...result.items.map((item) => button(`${item.label} · ${item.id}`, {
         variant: 'result',
         onClick: () => {
-          selectedTarget.value = { ...item, kind: item.kind || kindSelect.value }
-          renderizarDestino()
+          const escolhida = { ...item, kind: item.kind || tipoDaBusca() }
+          if (escopoExigeBusca(escopo.modo)) {
+            selectedTarget.value = escolhida
+            renderizarDestino()
+          } else if (!escopo.excecoes.some((outra) => outra.kind === escolhida.kind && outra.id === escolhida.id)) {
+            escopo.excecoes = [...escopo.excecoes, escolhida]
+            renderizarExcecoes()
+          }
           atualizarResumo()
         }
       })))
@@ -203,6 +257,19 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
   searchInput.addEventListener('input', agendarBusca)
   instanceSelect.addEventListener('change', buscarDiretorio)
   kindSelect.addEventListener('change', buscarDiretorio)
+  variavelInput.addEventListener('input', () => { escopo.variavel = variavelInput.value; atualizarResumo() })
+  modoEscopoSelect.addEventListener('change', () => {
+    escopo.modo = modoEscopoSelect.value
+    // O que foi escolhido para um destino não vale para outro: um grupo
+    // escolhido não pode sobreviver à troca para "contato".
+    if (selectedTarget.value && selectedTarget.value.kind !== escopo.modo) selectedTarget.value = null
+    if (!escopoAceitaExcecao(escopo.modo)) escopo.excecoes = []
+    ajustarCamposDoEscopo()
+    renderizarDestino()
+    renderizarExcecoes()
+    atualizarResumo()
+    if (escopoExigeBusca(escopo.modo) || escopoAceitaExcecao(escopo.modo)) buscarDiretorio()
+  })
 
   function problemaLocal () {
     const usedIds = new Set()
@@ -218,8 +285,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
         if (definition.type === 'number' && !Number.isFinite(Number(control.value))) return `Informe um número válido em “${definition.label}”.`
       }
     }
-    if (!selectedTarget.value) return 'Escolha pelo menos um contato ou grupo. Uma lista vazia nunca significa todos.'
-    return null
+    return montarEscopo({ ...escopo, alvo: selectedTarget.value }).problema
   }
 
   // Em que modo a automação nasce.
@@ -249,10 +315,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
       automationIds,
       parameters,
       deploymentMode: modoSelect.value,
-      scope: {
-        include: [{ kind: selectedTarget.value.kind, id: selectedTarget.value.id }],
-        exclude: []
-      }
+      scope: montarEscopo({ ...escopo, alvo: selectedTarget.value }).escopo
     }
   }
 
@@ -301,6 +364,8 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
   })
 
   renderizarDestino()
+  renderizarExcecoes()
+  ajustarCamposDoEscopo()
   atualizarResumo()
   if (instances.length) buscarDiretorio()
   else directoryResults.replaceChildren(el('p', { className: 'muted', text: 'Cadastre uma instância antes de escolher o destino.' }))
@@ -316,12 +381,14 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
       el('h3', { text: 'Onde o comando pode executar?' }),
       el('div', { className: 'form-grid' }, [
         field('Diretório da instância', instanceSelect, 'A instância define em qual agenda a busca será feita.'),
-        field('Tipo de destino', kindSelect, 'Escolha entre contatos e grupos.')
+        field('Alcance', modoEscopoSelect, 'Nada fica liberado para todos por padrão: “todos” só vale se você escolher.')
       ]),
-      field('Buscar por nome', searchInput, 'A busca acontece automaticamente depois que você para de digitar.'),
+      modoAjuda,
+      el('div', { className: 'form-grid' }, [campoDaMarca, campoDoTipoDaBusca]),
+      campoDaBusca,
       directoryResults,
-      el('p', { className: 'overline', text: 'Destino escolhido' }),
-      targetArea
+      areaDoDestino,
+      areaDasExcecoes
     ]),
     summaryArea,
     el('section', { className: 'catalog-template-form' }, [
