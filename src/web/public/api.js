@@ -146,7 +146,9 @@ export const api = {
     get: (nome) => request(`/listas/${segment(nome)}`),
     add: (nome, contactId) => request(`/listas/${segment(nome)}/membros`, { method: 'POST', body: { contactId } }),
     remove: (nome, contactId) => request(`/listas/${segment(nome)}/membros/${segment(contactId)}`, { method: 'DELETE' }),
-    clear: (nome) => request(`/listas/${segment(nome)}`, { method: 'DELETE' })
+    clear: (nome) => request(`/listas/${segment(nome)}`, { method: 'DELETE' }),
+    export: (nome) => request(`/listas/${segment(nome)}/exportar`),
+    import: (nome, corpo) => request(`/listas/${segment(nome)}/importar`, { method: 'POST', body: corpo })
   },
   // A cascata do menu: config da conversa > padrão do tipo > padrão do código.
   // `effective` devolve o que de fato vale, já resolvido.

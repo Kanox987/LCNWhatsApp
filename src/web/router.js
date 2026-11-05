@@ -338,6 +338,10 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.post('/api/v1/listas/:nome/membros', ({ params, body }) => listas().adicionar(params.nome, body?.contactId))
   roteador.delete('/api/v1/listas/:nome/membros/:contactId', ({ params }) => listas().remover(params.nome, params.contactId))
   roteador.delete('/api/v1/listas/:nome', ({ params }) => listas().limpar(params.nome))
+  roteador.get('/api/v1/listas/:nome/exportar', ({ params }) => listas().exportar(params.nome))
+  roteador.post('/api/v1/listas/:nome/importar', ({ params, body }) => listas().importar(params.nome, {
+    dados: body?.dados, modo: body?.modo, simular: body?.simular, estado: body?.estado
+  }))
 
   // --- configuração do menu ---
   //

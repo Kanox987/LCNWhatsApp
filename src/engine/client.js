@@ -97,7 +97,9 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       ver: (nome) => requisitar('GET', `/listas/${encodeURIComponent(nome)}`),
       adicionar: (nome, contactId) => requisitar('POST', `/listas/${encodeURIComponent(nome)}/membros`, { contactId }),
       remover: (nome, contactId) => requisitar('DELETE', `/listas/${encodeURIComponent(nome)}/membros/${encodeURIComponent(contactId)}`),
-      limpar: (nome) => requisitar('DELETE', `/listas/${encodeURIComponent(nome)}`)
+      limpar: (nome) => requisitar('DELETE', `/listas/${encodeURIComponent(nome)}`),
+      exportar: (nome) => requisitar('GET', `/listas/${encodeURIComponent(nome)}/exportar`),
+      importar: (nome, corpo) => requisitar('POST', `/listas/${encodeURIComponent(nome)}/importar`, corpo)
     },
     menu: {
       obterEfetivo: (chatId, chatKind) => requisitar('GET', `/menu-config/effective?chatId=${encodeURIComponent(chatId)}&chatKind=${encodeURIComponent(chatKind || 'direct')}`),
