@@ -36,6 +36,15 @@ export const PADRAO = {
     // sem painel alcançável, conectava por ali. Padrão não é teto — quem
     // precisa liga, sabendo o que está pondo no arquivo.
     credencialNoLog: false,
+    // A vaga de admissão é uma por conversa, e um `/play` esperando a API de
+    // download a segurava: o `/ping` seguinte da mesma conversa ficava atrás
+    // dele (32 s medidos), e oito downloads travados recusavam as outras
+    // conversas. Com `true`, a vaga é devolvida quando o evento chega ao
+    // primeiro comando que espera serviço externo (download, conexão, mídia
+    // do acervo). Custo: dois eventos pesados da mesma conversa podem rodar
+    // juntos. Padrão não é teto — `false` volta a uma conversa por vez, do
+    // início ao fim do evento.
+    liberarVagaEmTrabalhoLongo: true,
     // Tamanho do cache em memória do SQLite do motor central (db.js), em MB.
     // O better-sqlite3 adota aproximadamente 16 MiB por conexão por padrão.
     // No SQLite, valor NEGATIVO no pragma significa KiB e POSITIVO páginas.

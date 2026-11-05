@@ -31,7 +31,7 @@ import { emitirDesconhecidoDebug, emitirEventoDebug } from './engine/eventSink.j
 import { criarClienteEngine } from './engine/client.js'
 import { enviarEventoAoMotor } from './engine/gatewaySink.js'
 import * as groupInfo from './engine/groupInfo.js'
-import { executarComandos } from './engine/gatewayExecutor.js'
+import { executarComandos, COMANDOS_LONGOS } from './engine/gatewayExecutor.js'
 import { APARELHOS, resolverAparelho } from './aparelho.js'
 import * as lidMap from './lidMap.js'
 
@@ -107,6 +107,9 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
   let publicacao = null
   let encerramento = null
   const eventos = new Set()
+  // Trabalho que já devolveu a vaga mas ainda não terminou. O desligamento
+  // continua drenando isto: vaga solta não pode virar trabalho solto.
+  const caudas = new Set()
   let cancelandoExternos = false
   const escrever = (texto) => { try { registrar(texto) } catch {} }
   const fila = criarFila({
@@ -139,11 +142,23 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
     }
   })
   return {
+    // `tarefa` recebe `soltar`: chamá-lo devolve a vaga (a ordem por conversa)
+    // sem encerrar o evento. Serve a quem vai passar minutos esperando um
+    // serviço externo — um `/play` — e não deve segurar o `/ping` que vem depois
+    // na mesma conversa. O evento continua vivo até o fim: conta em
+    // `eventosAtivos`, é alcançado por `cancelarExternos` e `encerrar` o espera.
     admitir (chave, tarefa) {
       // Ainda não existe automação avaliada: toda entrada tem urgência normal
       // e recusa local. Sem promessa para recusada, sem aviso no WhatsApp.
       let controle
-      const trabalho = fila.tentarExecutar(() => comEvento(controle, tarefa), { chave, prioridade: 'normal' })
+      let fimDoTrabalho
+      const trabalho = fila.tentarExecutar(() => new Promise((resolver, rejeitar) => {
+        // O primeiro entre `soltar()` e o fim da tarefa libera a vaga.
+        fimDoTrabalho = new Promise((resolverTarefa) => {
+          resolverTarefa(comEvento(controle, () => tarefa(() => resolver())))
+        })
+        fimDoTrabalho.then(resolver, rejeitar)
+      }), { chave, prioridade: 'normal' })
       if (!trabalho) {
         // Uma recusa só alcança trabalho já disparado pelo MESMO evento.
         // As 2.865.000 recusas do soak não devem criar sinais nem promessas.
@@ -153,14 +168,24 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
       controle = new AbortController()
       if (cancelandoExternos) controle.abort(erroDeCancelamento('desligamento'))
       eventos.add(controle)
-      return trabalho.catch((erro) => {
+      // A mesma falha pode chegar pela vaga e pela cauda: registra uma vez.
+      let falhaRegistrada = false
+      const registrarFalha = (erro) => {
+        if (falhaRegistrada) return
+        falhaRegistrada = true
         if (erro?.code === 'LCN_SEM_VAGA' || erro?.code === 'LCN_TIMEOUT') {
           controle.abort(erroDeCancelamento('recusa_admissao', erro.recurso || 'admissao'))
         }
         if (erro?.code !== 'LCN_SEM_VAGA' && erro?.code !== 'LCN_TIMEOUT') {
           escrever(`[engine] evento admitido falhou: ${erro?.message || erro}`)
         }
-      }).finally(() => eventos.delete(controle))
+      }
+      const cauda = trabalho
+        .then(() => fimDoTrabalho)
+        .catch(registrarFalha)
+        .finally(() => { eventos.delete(controle); caudas.delete(cauda) })
+      caudas.add(cauda)
+      return cauda
     },
     encerrar ({ cancelarExternos = false } = {}) {
       // Encerrar a fila continua sendo drenar. O desligamento pede também o
@@ -168,6 +193,8 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
       cancelandoExternos ||= cancelarExternos
       if (!encerramento) {
         encerramento = fila.encerrar().then(async () => {
+          // As caudas já devolveram a vaga, mas o desligamento ainda as espera.
+          while (caudas.size) await Promise.allSettled([...caudas])
           // O último resumo também precisa sair no desligamento. Esperar o
           // timer preserva a janela mínima em vez de despejar duas linhas juntas.
           if (timer) { timer.ref?.(); await publicacao }
@@ -196,7 +223,10 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
       try { invalidarGrupo(chatIdDoEvento(event)) } catch {}
     }
     const { cfg, accountId } = obterContexto()
-    return admissao.admitir(chatIdDoEvento(event), () => {
+    // Interruptor de emergência: `false` devolve o comportamento de segurar a
+    // vaga do início ao fim do evento.
+    const liberaVaga = cfg?.hardware?.liberarVagaEmTrabalhoLongo !== false
+    return admissao.admitir(chatIdDoEvento(event), (soltar) => {
       const opcoes = { accountId, recebidoEmMs, botId: jidProprio(client) }
       let eventoCanonico
       if (tipo === 'group') {
@@ -219,7 +249,7 @@ export function registrarEntradaDeEventos (client, clienteEngine, {
         if (eventoCanonico?.message?.kind === 'unknown') emitirDesconhecidoDebug(event, cfg, registrar)
       }
       emitirEventoDebug(eventoCanonico, cfg, registrar)
-      return encaminhar(client, clienteEngine, eventoCanonico, cfg, registrar)
+      return encaminhar(client, clienteEngine, eventoCanonico, cfg, registrar, liberaVaga ? soltar : undefined)
     })
   }
   // Os listeners são síncronos: o recebimento nunca aguarda o motor. Até a
@@ -298,7 +328,7 @@ function anotarEnqueteCriada (event, clienteEngine) {
   }
 }
 
-export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log) {
+export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log, soltar) {
   // Esboço não vai ao motor.
   //
   // A mesma mensagem chega duas vezes: primeiro sem conteúdo decifrado
@@ -349,7 +379,16 @@ export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, 
       // conexão, e segurando a vaga ele fazia um `/ping` esperar atrás de um
       // download. A fila mudou para onde está a disputa de verdade — o envio e
       // o upload, em gatewayExecutor.js.
-      if (comandos.length) await executarComandos(client, comandos, clienteEngine, { cfg })
+      //
+      // A vaga de admissão (uma por conversa) tinha o mesmo defeito, e o
+      // `/ping` de 32 s do dono foi isso. Ela é devolvida no PRIMEIRO comando
+      // longo do lote: o que vem antes dele (o "baixando…") sai em ordem, o que
+      // vem depois já não segura a conversa.
+      if (!comandos.length) continue
+      const primeiroLongo = soltar ? comandos.findIndex((comando) => COMANDOS_LONGOS.has(comando?.commandType)) : -1
+      if (primeiroLongo > 0) await executarComandos(client, comandos.slice(0, primeiroLongo), clienteEngine, { cfg })
+      if (primeiroLongo >= 0) soltar()
+      await executarComandos(client, primeiroLongo > 0 ? comandos.slice(primeiroLongo) : comandos, clienteEngine, { cfg })
     }
   // Engolir o erro aqui deixou o bot mudo por duas horas sem uma linha de log:
   // o comando ficava `pending` para sempre e não havia onde olhar. Continua

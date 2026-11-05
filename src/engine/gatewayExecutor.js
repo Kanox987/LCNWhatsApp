@@ -2230,6 +2230,62 @@ async function tratarSemVaga (client, comando, erro, filas) {
   return resultado
 }
 
+const EXECUTORES = {
+  'whatsapp.reply': executarResposta,
+  'whatsapp.buttons': executarBotoes,
+  'whatsapp.carousel': executarCarrossel,
+  'whatsapp.webview': executarPagina,
+  'whatsapp.recover': executarRecover,
+  'whatsapp.menu': executarMenu,
+  'whatsapp.delete': executarApagar,
+  'whatsapp.react': executarReagir,
+  'whatsapp.pin': executarFixarMensagem,
+  'whatsapp.poll': executarEnquete,
+  'whatsapp.profilePicture': executarFotoDePerfil,
+  'group.remove': executarRemoverDoGrupo,
+  'group.promote': executarPromoverNoGrupo,
+  'group.demote': executarRebaixarNoGrupo,
+  'group.add': executarAdicionarNoGrupo,
+  'group.setSubject': executarMudarNomeDoGrupo,
+  'group.setDescription': executarMudarDescricaoDoGrupo,
+  'group.setAnnounce': executarConfigurarAnuncioDoGrupo,
+  'group.inviteCode': executarLinkDoGrupo,
+  'group.members': executarFalarComOsMembros,
+  'whatsapp.rich': executarMensagemRica,
+  'whatsapp.sendFile': executarEnvioDeArquivo,
+  'media.download': executarDownload,
+  'connection.call': executarChamadaDeConexao,
+  'acervo.save': executarGuardarNoAcervo,
+  'acervo.delete': executarApagarDoAcervo,
+  'acervo.read': executarLerDoAcervo,
+  'acervo.createText': executarCriarTextoNoAcervo,
+  'acervo.rewrite': executarSobrescreverNoAcervo,
+  'whatsapp.stickerPack': executarPacoteDeFigurinhas
+}
+
+// Cada commandType do executor pertence a UMA das duas classes abaixo, e um
+// teste falha se uma ação nova entrar na tabela sem classe.
+//
+// "Longo" é o que passa a maior parte do tempo ESPERANDO FORA do processo —
+// serviço de download, API de conexão, CDN do WhatsApp — sem tocar na conexão.
+// Segurar a vaga de admissão (que é por conversa) durante essa espera fazia um
+// `/ping` ficar atrás de um `/play`, e oito downloads travados recusarem as
+// outras conversas. "Curto" é envio, moderação e leitura local: a ordem entre
+// eles dentro da conversa continua garantida pela vaga.
+export const COMANDOS_LONGOS = new Set([
+  'media.download', 'connection.call', 'whatsapp.recover', 'acervo.save', 'acervo.rewrite'
+])
+export const COMANDOS_CURTOS = new Set([
+  'whatsapp.reply', 'whatsapp.buttons', 'whatsapp.carousel', 'whatsapp.webview', 'whatsapp.menu',
+  'whatsapp.delete', 'whatsapp.react', 'whatsapp.pin', 'whatsapp.poll', 'whatsapp.profilePicture',
+  'whatsapp.rich', 'whatsapp.sendFile', 'whatsapp.stickerPack',
+  'group.remove', 'group.promote', 'group.demote', 'group.add', 'group.setSubject',
+  'group.setDescription', 'group.setAnnounce', 'group.inviteCode', 'group.members',
+  'acervo.delete', 'acervo.read', 'acervo.createText'
+])
+
+export const TIPOS_DE_COMANDO = Object.keys(EXECUTORES)
+
 export async function executarComandos (client, comandos, clienteEngine, deps = {}) {
   const filas = deps.filas || obterFilasDoGateway(client, deps.cfg)
   registrarFonteDeRecursos(() => ({ ...filas.estado, memoria: (deps.orcamento || orcamentoDoGateway)?.estado() || null }))
@@ -2241,38 +2297,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         filas.registrarPoliticaInvalida()
         console.warn(`[engine] Política sem vaga inválida (${politica.kind}) no comando ${comando.id}; o compilador deveria ter barrado. Tratando como discard, sem repetir.`)
       }
-      const executor = {
-        'whatsapp.reply': executarResposta,
-        'whatsapp.buttons': executarBotoes,
-        'whatsapp.carousel': executarCarrossel,
-        'whatsapp.webview': executarPagina,
-        'whatsapp.recover': executarRecover,
-        'whatsapp.menu': executarMenu,
-        'whatsapp.delete': executarApagar,
-        'whatsapp.react': executarReagir,
-        'whatsapp.pin': executarFixarMensagem,
-        'whatsapp.poll': executarEnquete,
-        'whatsapp.profilePicture': executarFotoDePerfil,
-        'group.remove': executarRemoverDoGrupo,
-        'group.promote': executarPromoverNoGrupo,
-        'group.demote': executarRebaixarNoGrupo,
-        'group.add': executarAdicionarNoGrupo,
-        'group.setSubject': executarMudarNomeDoGrupo,
-        'group.setDescription': executarMudarDescricaoDoGrupo,
-        'group.setAnnounce': executarConfigurarAnuncioDoGrupo,
-        'group.inviteCode': executarLinkDoGrupo,
-        'group.members': executarFalarComOsMembros,
-        'whatsapp.rich': executarMensagemRica,
-        'whatsapp.sendFile': executarEnvioDeArquivo,
-        'media.download': executarDownload,
-        'connection.call': executarChamadaDeConexao,
-        'acervo.save': executarGuardarNoAcervo,
-        'acervo.delete': executarApagarDoAcervo,
-        'acervo.read': executarLerDoAcervo,
-        'acervo.createText': executarCriarTextoNoAcervo,
-        'acervo.rewrite': executarSobrescreverNoAcervo,
-        'whatsapp.stickerPack': executarPacoteDeFigurinhas
-      }[comando?.commandType]
+      const executor = EXECUTORES[comando?.commandType]
       let resultado = null
       if (!executor) {
         console.warn(`[engine] Tipo de comando desconhecido; execução recusada: ${comando?.commandType || '(ausente)'}`)
