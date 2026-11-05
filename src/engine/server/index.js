@@ -4,6 +4,7 @@ import path from 'path'
 import { abrirBanco } from './db.js'
 import { fecharPendentesAntigos } from './evaluator.js'
 import { iniciarVarredura } from './retencao.js'
+import { iniciarAgendador } from './agendador.js'
 import { criarApi } from './api.js'
 import { iniciarTransport } from './transport.js'
 import { ARQ_DB, ARQ_PID_ENGINE, PASTA_RUN, SOCKET_PATH } from '../paths.js'
@@ -36,6 +37,9 @@ async function main () {
   // encosta em comando pendente, e fechar primeiro é o que deixa o comando de
   // ontem caber na passada de hoje.
   const varredura = iniciarVarredura(db)
+  // O relógio das automações `agendado`. Fica no motor, nunca no gateway: o
+  // gateway relata o que viu, o motor é quem decide e grava.
+  const agendador = iniciarAgendador(db)
   let transport
   try {
     transport = await iniciarTransport(criarApi(db), { socketPath: SOCKET_PATH })
@@ -52,6 +56,7 @@ async function main () {
     encerrando = true
     try {
       varredura.parar()
+      agendador.parar()
       await transport.fechar()
       db.close()
       removerPidProprio()
