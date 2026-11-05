@@ -155,9 +155,10 @@ export function criarServicoDePerfis (db, { provisionamento, politica = () => nu
         registrar('applied')
         return { ...identidade(lido), acao: 'aplicado', ...resultado }
       } catch (erro) {
-        // A imutabilidade não é falha DESTA tentativa: gravá-la por cima
-        // apagaria o registro do que foi aplicado de verdade.
-        if (!erro.imutabilidade) registrar(classificarFalha(erro), erro)
+        // Não se registra o que não é falha do perfil: a imutabilidade (gravá-la
+        // por cima apagaria o registro do que foi aplicado de verdade) e a falha
+        // de ambiente marcada `semRegistro` (política ilegível).
+        if (!erro.imutabilidade && !erro.semRegistro) registrar(classificarFalha(erro), erro)
         throw erro
       }
     }

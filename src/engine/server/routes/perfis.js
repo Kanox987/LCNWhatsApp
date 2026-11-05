@@ -14,8 +14,13 @@ function leitorDePolitica (env) {
     try {
       return lerPolitica(lerArquivoRegular(caminho, LIMITE_DO_ARQUIVO))
     } catch (erro) {
-      if (erro instanceof ErroHttp) throw erro
-      throw new ErroHttp(409, `A política de provisionamento não pôde ser lida: ${erro.message} O perfil não foi aplicado.`)
+      // Problema do AMBIENTE (arquivo ausente, ilegível, ainda não montado),
+      // não do perfil: não gasta o registro do perfil. Marcado `semRegistro`
+      // para que, corrigido o caminho, o próximo reinício aplique em vez de
+      // pular um perfil dado como bloqueado.
+      const falha = erro instanceof ErroHttp ? erro : new ErroHttp(409, `A política de provisionamento não pôde ser lida: ${erro.message} O perfil não foi aplicado.`)
+      falha.semRegistro = true
+      throw falha
     }
   }
 }

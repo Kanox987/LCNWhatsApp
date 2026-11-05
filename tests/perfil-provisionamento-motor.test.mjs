@@ -151,6 +151,7 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
   const db = abrirBanco(':memory:'); const api = criarApi(db, { env: { LCN_PROVISION_POLICY: arquivo } })
   const fora = await tentar(() => aplicar(api, perfil()))
   check('10. template fora da política recusa o perfil inteiro (409)', fora.erro?.status === 409 && fora.erro.detalhes?.politica === true)
+  check('10. e o perfil fica blocked (a política negou de verdade)', estados(db)[0]?.status === 'blocked')
   check('10. nada foi instalado', contar(db, 'automations') === 0 && !temPool(db, 'principal'))
   const dentro = await aplicar(api, perfil({ profileId: 'so-x9', templateIds: ['x9'] }))
   check('10. o que a política permite passa', dentro.acao === 'aplicado')
@@ -160,6 +161,10 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
   const ilegivel = await tentar(() => aplicar(apiB, perfil()))
   check('10. política ilegível recusa a aplicação (falha fechada)', ilegivel.erro?.status === 409 || ilegivel.erro?.status === 400, String(ilegivel.erro?.status))
   check('10. e não instala nada', contar(dbB, 'automations') === 0)
+  check('10. e NÃO gasta o registro do perfil (corrigida a política, o próximo boot aplica)', estados(dbB).length === 0)
+  fs.writeFileSync(arquivo, JSON.stringify({ schemaVersion: 1 }))
+  const corrigida = await aplicar(apiB, perfil())
+  check('10. política corrigida: o mesmo perfil aplica', corrigida.acao === 'aplicado')
   const saude = await chamar(apiB, 'GET', '/health')
   check('10. o motor segue de pé', saude.ok === true)
 
@@ -189,6 +194,29 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
   await aplicar(api, JSON.parse(fs.readFileSync(path.join(pasta, 'recuperar-x9.json'), 'utf8')))
   const ids = db.prepare('SELECT id FROM automations').all().map((r) => r.id)
   check('11. recuperar-x9 instala as seis automações', ids.length === 6, ids.join())
+  db.close()
+}
+
+// ------------------------------------------------ 12. número recém-conectado atende
+// "A pessoa só conecta o número e funciona": o pool é só um NOME que precisa
+// existir (os membros não decidem a entrega), então um perfil sem nenhuma
+// instância já tem que responder ao primeiro evento.
+{
+  const db = abrirBanco(':memory:'); const api = criarApi(db)
+  await aplicar(api, { schemaVersion: 1, profileId: 'vivo', profileVersion: 1, templateIds: ['ping'], scope: TUDO, parametrosComuns: { poolId: 'padrao', allowFrom: 'any' } })
+  const semRevisao = db.prepare('SELECT COUNT(*) AS n FROM automations WHERE active_revision_id IS NULL').get().n
+  check('12. toda automação do perfil está publicada', semRevisao === 0 && contar(db, 'automations') > 0)
+  const { avaliarEvento } = await import('../src/engine/server/evaluator.js')
+  const CHAT = '5511900000001@s.whatsapp.net'
+  const r = avaliarEvento(db, {
+    provider: 'zapo', accountId: 'conta-nova', eventId: 'conta-nova:1', occurredAt: new Date().toISOString(), replay: false,
+    chat: { id: CHAT, kind: 'direct' },
+    sender: { id: CHAT, authoredBySelf: false, authoredByBot: false, name: 'Pessoa' },
+    message: { kind: 'text', text: '/ping' },
+    providerRef: { provider: 'zapo', id: 'm1', remoteJid: CHAT }
+  })
+  const feito = (r.results || []).find((x) => x.status === 'matched_live')
+  check('12. o primeiro /ping de um número novo é respondido', !!feito && /pong/.test(feito.commands?.[0]?.payload?.text ?? ''), JSON.stringify(r.results?.map((x) => x.status)))
   db.close()
 }
 
