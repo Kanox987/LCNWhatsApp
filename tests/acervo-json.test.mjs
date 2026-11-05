@@ -22,6 +22,8 @@ check('JSON é enviado como documento, não despejado em texto', ok.kind === 'do
 check('JSON inválido é recusado com o motivo', /JSON inválido/.test(tenta(() => acervo.guardar(Buffer.from('{quebrado'), { mimetype: 'application/json', name: 'x.json' })) || ''))
 check('"null" e números são JSON válido', tenta(() => acervo.guardar(Buffer.from('42'), { mimetype: 'application/json', name: 'n.json' })) === null)
 
+check('UTF-8 inválido dentro do JSON é recusado, como a leitura faria', /JSON inválido/.test(tenta(() => acervo.guardar(Buffer.concat([Buffer.from('["a'), Buffer.from([0xff]), Buffer.from('"]')]), { mimetype: 'application/json', name: 'u.json' })) || ''))
+
 process.env.LCN_ACERVO_JSON_MAX_BYTES = '20'
 check('acima do limite próprio é recusado', /JSON grande demais/.test(tenta(() => acervo.guardar(Buffer.from(JSON.stringify(['x'.repeat(30)])), { mimetype: 'application/json', name: 'g.json' })) || ''))
 check('o limite é configurável, não teto', acervo.limiteDeJson() === 20)

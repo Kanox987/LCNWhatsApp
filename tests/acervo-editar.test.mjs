@@ -98,6 +98,15 @@ const fila = acervo.guardar(Buffer.from('[]'), { mimetype: 'application/json', n
 await Promise.all(Array.from({ length: 20 }, (_, i) => editar('fila.json', 'jsonAdd', `p${i}`)))
 check('20 pedidos juntos viram 20 itens', JSON.parse(conteudo(fila)).length === 20, String(JSON.parse(conteudo(fila)).length))
 
+// o limite de edição vale para o que será gravado, não para o tamanho velho do índice
+process.env.LCN_ACERVO_JSON_MAX_BYTES = '40'
+const quase = acervo.guardar(Buffer.from('x'.repeat(35)), { mimetype: 'text/plain', name: 'quase.txt' })
+r = await editar('quase.txt', 'appendLine', 'uma linha que estoura')
+check('linha que faria o arquivo passar do limite é recusada', r.status === 'failed' && conteudo(quase) === 'x'.repeat(35), conteudo(quase).length + ' bytes')
+r = await editar('quase.txt', 'appendLine', 'ok')
+check('e uma que cabe continua entrando', r.status === 'sent' && conteudo(quase).includes('\nok'), conteudo(quase))
+delete process.env.LCN_ACERVO_JSON_MAX_BYTES
+
 check('a reserva de memória é devolvida', orcamento.estado().reservados === 0)
 
 console.warn = origWarn

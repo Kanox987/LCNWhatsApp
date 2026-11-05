@@ -48,6 +48,22 @@ const velho = new Date(Date.now() - 60000)
 fs.utimesSync(path.join(pasta, '.lock'), velho, velho)
 check('trava abandonada não prende o acervo', (() => { try { acervo.modificarConteudo(arq.id, (b) => b); return true } catch { return false } })())
 
+// Quem perdeu a trava por demora não apaga a trava de quem a pegou depois.
+{
+  const trava = path.join(pasta, '.lock')
+  let intacta = false
+  acervo.modificarConteudo(arq.id, (b) => {
+    // Enquanto este "processo" trabalha, a trava é retomada por outro dono.
+    fs.rmSync(trava, { recursive: true, force: true })
+    fs.mkdirSync(trava)
+    fs.writeFileSync(path.join(trava, 'dono'), 'outro-processo')
+    return null
+  })
+  intacta = fs.existsSync(trava) && fs.readFileSync(path.join(trava, 'dono'), 'utf8') === 'outro-processo'
+  check('quem perdeu a trava não apaga a de quem a pegou depois', intacta)
+  fs.rmSync(trava, { recursive: true, force: true })
+}
+
 // Devolver null não grava nada.
 const antes = acervo.obter(arq.id).updatedAt
 acervo.modificarConteudo(arq.id, () => null)

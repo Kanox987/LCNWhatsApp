@@ -96,7 +96,9 @@ function validarConteudo (mimetype, buffer) {
     throw new ErroDeAcervo(`JSON grande demais: o limite é ${limite} bytes.`)
   }
   try {
-    JSON.parse(buffer.toString('utf8'))
+    // Estrito, como em `acervo.read`: `toString('utf8')` troca byte inválido por
+    // U+FFFD e deixaria passar um arquivo que a leitura depois recusa.
+    JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer))
   } catch (erro) {
     throw new ErroDeAcervo(`JSON inválido: ${erro.message}`)
   }
@@ -205,9 +207,19 @@ function retomarTravaAbandonada (trava) {
       try { fs.renameSync(levada, trava) } catch {}
       return false
     }
-    fs.rmdirSync(levada)
+    fs.rmSync(levada, { recursive: true, force: true })
   } catch {}
   return true
+}
+
+// Só solta a trava que ainda é sua: se ela foi retomada como abandonada enquanto
+// este processo trabalhava, quem a tem agora é outro e apagá-la quebraria a
+// exclusão dele.
+function liberarTrava (trava, dono) {
+  try {
+    if (fs.readFileSync(path.join(trava, 'dono'), 'utf8') !== dono) return
+    fs.rmSync(trava, { recursive: true, force: true })
+  } catch {}
 }
 
 function comTrava (fn) {
@@ -215,9 +227,11 @@ function comTrava (fn) {
   garantirPastas()
   const trava = path.join(pastaBase(), '.lock')
   const limite = Date.now() + ESPERA_MAXIMA_DA_TRAVA_MS
+  const dono = `${process.pid}.${crypto.randomBytes(6).toString('hex')}`
   for (;;) {
     try {
       fs.mkdirSync(trava)
+      try { fs.writeFileSync(path.join(trava, 'dono'), dono) } catch {}
       break
     } catch (erro) {
       if (erro.code !== 'EEXIST') throw erro
@@ -232,7 +246,7 @@ function comTrava (fn) {
     return fn()
   } finally {
     segurandoTrava--
-    try { fs.rmdirSync(trava) } catch {}
+    liberarTrava(trava, dono)
   }
 }
 

@@ -1663,11 +1663,18 @@ async function executarEditarNoAcervo (client, comando, deps) {
   try {
     resumo = { total: 0, mudou: false }
     acervo.modificarConteudo(registro.id, (buffer) => {
+      if (buffer.length > limite) throw new Error(`"${registro.name}" passa de ${limite} bytes, o limite para editar sem reescrever tudo`)
       let texto
       try { texto = new TextDecoder('utf-8', { fatal: true }).decode(buffer) } catch { throw new Error('o arquivo não é texto UTF-8 válido') }
       const r = mudarArquivoDoAcervo(p.modo, texto, valor, p.comoNumero === true)
       resumo = { total: r.total, mudou: r.mudou }
-      return r.novo === null ? null : Buffer.from(r.novo, 'utf8')
+      if (r.novo === null) return null
+      // O limite vale para o que será GRAVADO, conferido aqui dentro da trava:
+      // o `sizeBytes` do índice lá em cima pode estar velho, e a linha nova
+      // pode ser justamente a que passa do teto.
+      const novo = Buffer.from(r.novo, 'utf8')
+      if (novo.length > limite) throw new Error(`"${registro.name}" passaria de ${limite} bytes com esta edição`)
+      return novo
     })
   } catch (erro) {
     if (erro?.code === 'LCN_SEM_VAGA') throw erro
