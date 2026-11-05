@@ -229,6 +229,20 @@ export const ACOES = Object.freeze([
       { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
     ]
   },
+  {
+    palavra: 'edita no acervo',
+    tipo: 'action.acervo.edit',
+    campos: [
+      { chave: 'path', inline: true, tipo: 'texto' },
+      { chave: 'mode', rotulo: 'modo', tipo: 'palavra', palavras: { jsonAdd: 'adicionando item', jsonRemove: 'tirando item', appendLine: 'acrescentando linha' } },
+      { chave: 'value', rotulo: 'valor', tipo: 'texto' },
+      { chave: 'asNumber', rotulo: 'como número', tipo: 'booleano' },
+      { chave: 'okText', rotulo: 'confirma', tipo: 'texto' },
+      { chave: 'unchangedText', rotulo: 'sem mudança', tipo: 'texto' },
+      { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' },
+      { chave: 'errorText', rotulo: 'erro', tipo: 'texto' }
+    ]
+  },
   // Mostrar o que de fato chegou na mensagem: id, quem mandou, o que ela
   // responde, e o toque no botão por inteiro. Não tem campo nenhum — o que ele
   // mostra é o evento, e o evento não se configura.

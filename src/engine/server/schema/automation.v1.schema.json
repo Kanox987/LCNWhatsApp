@@ -305,6 +305,9 @@
                 "$ref": "#/definitions/actionAcervoRewrite"
               },
               {
+                "$ref": "#/definitions/actionAcervoEdit"
+              },
+              {
                 "$ref": "#/definitions/actionWhatsappButtons"
               },
               {
@@ -2428,6 +2431,56 @@
             "errorText": {
               "type": "string",
               "description": "Mensagem enviada se a reescrita falhar."
+            }
+          }
+        }
+      }
+    },
+    "actionAcervoEdit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.acervo.edit" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "mode", "value"],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Caminho do arquivo no acervo (pasta/nome). Aceita variáveis."
+            },
+            "mode": {
+              "enum": ["jsonAdd", "jsonRemove", "appendLine"],
+              "description": "jsonAdd e jsonRemove mexem num arquivo JSON que é uma lista de textos ou números; appendLine acrescenta uma linha a um arquivo de texto."
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "description": "O item (ou a linha). Aceita variáveis. Em appendLine não pode ter quebra de linha."
+            },
+            "asNumber": {
+              "type": "boolean",
+              "description": "Só em jsonAdd e jsonRemove: trata o valor como número em vez de texto. Texto e número nunca se confundem: \"5\" e 5 são itens diferentes."
+            },
+            "okText": {
+              "type": "string",
+              "description": "Confirmação enviada depois de mudar o arquivo. Aceita {{caminho}}, {{id}}, {{nome}} e {{total}} (itens ou linhas que ficaram)."
+            },
+            "unchangedText": {
+              "type": "string",
+              "description": "Resposta quando nada mudou: o item já estava na lista (jsonAdd) ou não estava (jsonRemove). Sem este texto vale o de confirmação."
+            },
+            "notFoundText": {
+              "type": "string",
+              "description": "Resposta quando o arquivo não existe no acervo."
+            },
+            "errorText": {
+              "type": "string",
+              "description": "Resposta quando a edição é recusada (tipo errado, arquivo grande demais, JSON que não é lista, acervo cheio). {{erro}} vira o motivo."
             }
           }
         }

@@ -547,15 +547,34 @@ Compreende 12 ações voltadas para gerenciamento de arquivos no acervo, captura
 
 #### 12. `lê do acervo`
 - **Nome técnico**: `action.acervo.read`
-- **O que faz**: Lê metadados de um arquivo do acervo (nome, pasta, tamanho, descrição) disponibilizando-os para as próximas ações do fluxo.
+- **O que faz**: Lê metadados de um arquivo do acervo (nome, pasta, tipo, tamanho, descrição) disponibilizando-os para as próximas ações do fluxo. Com `com o conteúdo`, entrega também o texto de arquivos `text/plain` e JSON, só se couberem inteiros no limite de leitura (64 KiB por padrão); se não couberem, o fluxo segue sem o texto.
 - **Parâmetros**:
   - `path` (*string*, obrigatório, rótulo: `arquivo`): Caminho do arquivo a consultar.
+  - `content` (*boolean*, opcional, rótulo: `com o conteúdo`): Também ler o texto do arquivo.
   - `notFoundText` (*string*, opcional, rótulo: `sem arquivo`): Resposta enviada se o item não existir no acervo.
 - **Exemplo real (.lcn)**:
   ```lcn
   lê do acervo
   ```
   *(Ação suportada no runtime; exemplo canônico conforme `tests/membros-e-acervo-lido.test.mjs`)*
+
+#### 12b. `edita no acervo`
+- **Nome técnico**: `action.acervo.edit`
+- **O que faz**: Muda UM item de um arquivo sem reescrever o resto. Em JSON que é lista de textos (ou números), acrescenta ou tira um item; em texto, acrescenta uma linha no fim. A leitura, a mudança e a gravação acontecem juntas no gateway, então vários pedidos ao mesmo tempo somam em vez de um apagar o outro.
+- **Parâmetros**:
+  - `path` (*string*, obrigatório, inline): Caminho do arquivo (ou id de 24 caracteres).
+  - `mode` (*enum: `jsonAdd`, `jsonRemove`, `appendLine`*, obrigatório, rótulo: `modo`, valores: `adicionando item`, `tirando item`, `acrescentando linha`): O que fazer. Os modos de JSON exigem arquivo `application/json`; `appendLine` exige `text/plain`.
+  - `value` (*string*, obrigatório, rótulo: `valor`): O item ou a linha. Até 4096 bytes; para linha, sem quebra de linha.
+  - `asNumber` (*boolean*, opcional, rótulo: `como número`): Trata o valor como número (`3` e `"3"` são itens diferentes).
+  - `okText` (*string*, opcional, rótulo: `confirma`): Resposta quando mudou. Aceita `{{total}}`, `{{caminho}}`, `{{nome}}`, `{{id}}`.
+  - `unchangedText` (*string*, opcional, rótulo: `sem mudança`): Resposta quando o item já estava (ou não estava) lá.
+  - `notFoundText` (*string*, opcional, rótulo: `sem arquivo`): Resposta se o arquivo não existir.
+  - `errorText` (*string*, opcional, rótulo: `erro`): Resposta em caso de falha.
+- **Exemplo real (.lcn)**:
+  ```lcn
+  edita no acervo "{{params.caminho}}"
+  ```
+  *(Citado de: `src/engine/templates/catalog/acervo-adicionar-item.lcn`)*
 
 #### 13. `apaga do acervo`
 - **Nome técnico**: `action.acervo.delete`

@@ -1061,6 +1061,46 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
     // O id é a chave de sobrevivência das automações que já apontam para este
     // arquivo. Pode receber novo texto pelo comando ou nova mídia pelo WhatsApp
     // (anexada ou citada).
+    // EDITAR UM ARQUIVO SEM APAGAR O QUE JÁ ESTAVA.
+    //
+    // `rewrite` troca o conteúdo inteiro; para somar um item ou uma linha o
+    // fluxo teria de ler, montar o texto e escrever — e dois comandos ao mesmo
+    // tempo perderiam um deles. Aqui o gateway lê, muda e grava numa operação
+    // só, sob a trava do acervo. O motor não vê o arquivo, só manda o pedido.
+    case 'action.acervo.edit': {
+      const caminho = interpolar(no.config?.path || '', contexto).trim()
+      const valor = interpolar(no.config?.value ?? '', contexto)
+      const responder = (texto) => comandos.push({
+        commandType: 'whatsapp.reply',
+        payload: { chatId: evento.chat.id, text: texto, replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento) }
+      })
+      if (!caminho) throw new ErroDeFluxo('Não há arquivo indicado para editar: informe o caminho.')
+      if (!String(valor).trim()) {
+        if (typeof no.config?.errorText === 'string' && no.config.errorText) {
+          responder(interpolar(no.config.errorText, contexto).replaceAll('{{erro}}', 'valor vazio'))
+          return 'success'
+        }
+        throw new ErroDeFluxo('Valor vazio para editar o arquivo do acervo.')
+      }
+      const texto = (campo) => (typeof no.config?.[campo] === 'string' && no.config[campo] ? { [campo]: interpolar(no.config[campo], contexto) } : {})
+      comandos.push({
+        commandType: 'acervo.edit',
+        payload: {
+          chatId: evento.chat.id,
+          replyTo: referenciaDaPropria(evento) || referenciaDoLink(evento),
+          caminho,
+          modo: no.config.mode,
+          valor,
+          ...(no.config?.asNumber === true ? { comoNumero: true } : {}),
+          ...texto('okText'),
+          ...texto('unchangedText'),
+          ...texto('notFoundText'),
+          ...texto('errorText')
+        }
+      })
+      return 'success'
+    }
+
     case 'action.acervo.rewrite': {
       const caminho = no.config?.path ? interpolar(no.config.path, contexto) : null
       const fileId = no.config?.fileId ? interpolar(no.config.fileId, contexto) : null

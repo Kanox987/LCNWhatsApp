@@ -1,0 +1,41 @@
+template acervo-tirar-item v1
+  nome: Tirar item de uma lista do acervo
+  descrição: Remove um texto de uma lista guardada em JSON no acervo, sem mexer nos outros itens.
+  categoria: utilitarios
+
+automação
+  nome: Tirar item de uma lista do acervo
+  tipo: comando
+  dispara com: {{params.command}}
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
+
+  edita no acervo "{{params.caminho}}"
+    modo: tirando item
+    valor: "{{message.args}}"
+    confirma: "Tirado. A lista tem {{total}} item(ns)."
+    sem mudança: "Esse item não estava na lista ({{total}} no total)."
+    sem arquivo: "Não achei o arquivo {{caminho}} no acervo."
+    erro: "Não consegui editar o arquivo: {{erro}}"
+
+configurável
+  command: texto = "/tiraritem"
+    rótulo: Comando
+    ajuda: A palavra que a pessoa digita; o item vem depois dela.
+  caminho: texto = "listas/itens.json"
+    rótulo: Arquivo no acervo
+    ajuda: "Arquivo JSON do acervo que é uma lista de textos."
+  allowFrom: texto = "external"
+    rótulo: Quem pode acionar
+    ajuda: "any" responde também às SUAS próprias mensagens; "external" ignora o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que responderá a este comando.
+  acesso: texto = "dono"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta. Aqui o padrão é dono, porque o comando muda um arquivo.
+
+# nós: gatilho-comando, edita-acervo

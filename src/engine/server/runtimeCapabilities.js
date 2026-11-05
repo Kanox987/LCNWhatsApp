@@ -109,6 +109,9 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.acervo.delete',
   'action.acervo.createText',
   'action.acervo.rewrite',
+  // Acrescentar/tirar item de um arquivo do acervo sem apagar o que já estava:
+  // lê, muda e grava dentro do gateway, sob a trava do acervo.
+  'action.acervo.edit',
   // LER o acervo, e é a única das cinco que não escreve.
   //
   // As outras quatro gravam, apagam e sobrescrevem; nenhuma devolvia dado. Sem

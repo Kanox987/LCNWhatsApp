@@ -261,6 +261,30 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.acervo.edit',
+    rotulo: 'Editar no acervo',
+    familia: 'midia',
+    resumo: 'Acrescenta ou tira um item de uma lista guardada em JSON, ou acrescenta uma linha a um arquivo de texto, sem apagar o que já estava lá.',
+    exemplo: 'edita no acervo "loja/clientes.json" adicionando item "{{sender.id}}".',
+    ressalva: {
+      level: 'note',
+      text: 'Quem pode usar o comando passa a poder mudar o arquivo. Se o arquivo importa, deixe o comando só para você ou para uma lista. Dois pedidos ao mesmo tempo somam — nenhum se perde.'
+    },
+    dependencias: 'O arquivo tem de existir no Acervo: JSON que seja uma LISTA de textos ou números (para adicionar e tirar item) ou texto simples (para acrescentar linha). O arquivo é lido e regravado inteiro, por isso tem o mesmo limite de tamanho do JSON (1 MiB por padrão).',
+    resultado: 'O arquivo muda e ganha (ou perde) só aquele item. Adicionar um item que já está na lista, ou tirar um que não está, não muda nada e responde o texto "Sem mudança".',
+    errosComuns: 'Misturar texto e número: "5" e 5 são itens diferentes, e a opção "como número" decide qual dos dois entra e qual sai. E usar linha com quebra de linha: acrescentar linha recusa texto com mais de uma linha.',
+    campos: [
+      { chave: 'path', rotulo: 'Arquivo', ajuda: 'O caminho no acervo, como "loja/clientes.json". Aceita variáveis.' },
+      { chave: 'mode', rotulo: 'O que fazer', ajuda: 'Adicionar item e tirar item mexem num JSON que é uma lista; acrescentar linha mexe num arquivo de texto.' },
+      { chave: 'value', rotulo: 'Valor', ajuda: 'O item ou a linha. Aceita variáveis como {{message.args}} e {{sender.id}}.' },
+      { chave: 'asNumber', rotulo: 'Tratar como número', ajuda: 'Só para JSON. Desligado, o valor é texto.' },
+      { chave: 'okText', rotulo: 'Confirmação', ajuda: '{{total}} vira quantos itens (ou linhas) o arquivo tem agora · {{caminho}} · {{id}} · {{nome}}.' },
+      { chave: 'unchangedText', rotulo: 'Se nada mudou', ajuda: 'O item já estava na lista (ao adicionar) ou não estava (ao tirar). Sem este texto vale a confirmação.' },
+      { chave: 'notFoundText', rotulo: 'Se o arquivo não existir', ajuda: 'Resposta quando não há arquivo nesse caminho.' },
+      { chave: 'errorText', rotulo: 'Se falhar', ajuda: '{{erro}} vira o motivo: tipo errado, JSON que não é lista, arquivo grande demais, acervo cheio.' }
+    ]
+  },
+  {
     tipo: 'action.connection.call',
     rotulo: 'Consultar um serviço externo',
     familia: 'midia',

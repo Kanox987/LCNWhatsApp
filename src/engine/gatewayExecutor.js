@@ -1566,6 +1566,122 @@ async function executarSobrescreverNoAcervo (client, comando, deps) {
   return atualizado
 }
 
+// EDITAR UM ARQUIVO DO ACERVO SEM APAGAR O QUE JÁ ESTAVA.
+//
+// jsonAdd / jsonRemove: o arquivo é um JSON que é uma LISTA de textos ou
+// números finitos. Nada de objeto: não há chave para forjar (`__proto__`) nem
+// estrutura para adivinhar. Item igual não entra duas vezes, e texto e número
+// nunca se confundem. appendLine: uma linha por vez num arquivo de texto.
+//
+// Ler → mudar → gravar acontece dentro de `modificarConteudo`, que segura a
+// trava do acervo: dois pedidos juntos (ou o painel mexendo no mesmo arquivo)
+// somam em vez de um apagar o outro. O arquivo é lido inteiro, então vale o
+// mesmo limite do JSON para os dois tipos.
+const TAMANHO_MAXIMO_DO_VALOR_BYTES = 4096
+
+function mudarArquivoDoAcervo (modo, texto, valor, comoNumero) {
+  if (modo === 'appendLine') {
+    if (/[\r\n\u0000]/.test(valor)) throw new Error('a linha não pode ter quebra de linha')
+    const base = texto === '' || texto.endsWith('\n') ? texto : `${texto}\n`
+    const novo = `${base}${valor}\n`
+    return { novo, total: novo.split('\n').length - 1, mudou: true }
+  }
+  let lista
+  try { lista = JSON.parse(texto) } catch { throw new Error('o arquivo não é um JSON válido') }
+  if (!Array.isArray(lista) || !lista.every((i) => typeof i === 'string' || (typeof i === 'number' && Number.isFinite(i)))) {
+    throw new Error('o arquivo JSON precisa ser uma lista só de textos ou números')
+  }
+  let item = valor
+  if (comoNumero) {
+    item = Number(valor)
+    if (valor.trim() === '' || !Number.isFinite(item)) throw new Error(`"${valor}" não é um número`)
+  }
+  const existe = lista.includes(item)
+  if (modo === 'jsonAdd') {
+    if (existe) return { novo: null, total: lista.length, mudou: false }
+    lista.push(item)
+    return { novo: JSON.stringify(lista), total: lista.length, mudou: true }
+  }
+  if (!existe) return { novo: null, total: lista.length, mudou: false }
+  const restante = lista.filter((i) => i !== item)
+  return { novo: JSON.stringify(restante), total: restante.length, mudou: true }
+}
+
+async function executarEditarNoAcervo (client, comando, deps) {
+  const { acervo, orcamento } = deps
+  const p = comando.payload
+  const avisar = criarAvisador(client, comando, { chatId: p.chatId, replyTo: p.replyTo, errorText: p.errorText })
+  const responder = (texto, registro, total) => comTimeout(
+    () => enviarERegistrar(client, p.chatId, {
+      type: 'text',
+      text: texto
+        .replaceAll('{{caminho}}', registro.path || '')
+        .replaceAll('{{id}}', registro.id)
+        .replaceAll('{{nome}}', registro.name)
+        .replaceAll('{{total}}', String(total))
+    }, opcoesDeCitacao(p.replyTo)),
+    TIMEOUT_ENVIO_MS,
+    `timeout ao confirmar a edição do comando ${comando.id}`
+  )
+
+  const registro = p.caminho ? (acervo.porCaminho(p.caminho) || (/^[0-9a-f]{24}$/i.test(p.caminho) ? acervo.obter(p.caminho) : null)) : null
+  if (!registro) {
+    if (p.notFoundText) {
+      await comTimeout(
+        () => enviarERegistrar(client, p.chatId, { type: 'text', text: p.notFoundText }, opcoesDeCitacao(p.replyTo)),
+        TIMEOUT_ENVIO_MS,
+        `timeout ao avisar do arquivo ausente no comando ${comando.id}`
+      )
+    }
+    throw new Error(`arquivo não encontrado no acervo: ${p.caminho}`)
+  }
+
+  const falhar = async (mensagem) => {
+    await avisar(mensagem)
+    throw new Error(mensagem)
+  }
+
+  const tipoEsperado = p.modo === 'appendLine' ? 'text/plain' : 'application/json'
+  if (!['jsonAdd', 'jsonRemove', 'appendLine'].includes(p.modo)) await falhar(`modo de edição desconhecido: ${p.modo}`)
+  if (registro.mimetype !== tipoEsperado) {
+    await falhar(`"${registro.name}" é ${registro.mimetype}; esta edição só vale para ${tipoEsperado}`)
+  }
+  const valor = typeof p.valor === 'string' ? p.valor : ''
+  if (!valor.trim()) await falhar('valor vazio para editar o arquivo')
+  if (Buffer.byteLength(valor, 'utf8') > TAMANHO_MAXIMO_DO_VALOR_BYTES) {
+    await falhar(`o valor passa de ${TAMANHO_MAXIMO_DO_VALOR_BYTES} bytes`)
+  }
+  const limite = acervo.limiteDeJson()
+  if ((registro.sizeBytes || 0) > limite) {
+    await falhar(`"${registro.name}" passa de ${limite} bytes, o limite para editar sem reescrever tudo`)
+  }
+
+  // O arquivo é lido inteiro na memória do gateway: a reserva cobre ele e o valor.
+  const reserva = Math.max(1, (registro.sizeBytes || 0) + Buffer.byteLength(valor, 'utf8') * 2)
+  orcamento?.adquirir?.(reserva)
+  let resumo
+  try {
+    resumo = { total: 0, mudou: false }
+    acervo.modificarConteudo(registro.id, (buffer) => {
+      let texto
+      try { texto = new TextDecoder('utf-8', { fatal: true }).decode(buffer) } catch { throw new Error('o arquivo não é texto UTF-8 válido') }
+      const r = mudarArquivoDoAcervo(p.modo, texto, valor, p.comoNumero === true)
+      resumo = { total: r.total, mudou: r.mudou }
+      return r.novo === null ? null : Buffer.from(r.novo, 'utf8')
+    })
+  } catch (erro) {
+    if (erro?.code === 'LCN_SEM_VAGA') throw erro
+    await avisar(erro?.message || 'não consegui editar o arquivo')
+    throw erro
+  } finally {
+    orcamento?.liberar?.(reserva)
+  }
+
+  const texto = resumo.mudou ? p.okText : (p.unchangedText || p.okText)
+  if (texto) await responder(texto, { ...registro, path: acervo.caminhoLogico(registro) }, resumo.total)
+  return { id: registro.id, name: registro.name, changed: resumo.mudou, total: resumo.total }
+}
+
 // A entrega de mídias, compartilhada pelo download e pela chamada de conexão.
 //
 // Estava embutida no download; virou função porque agora são dois caminhos que
@@ -2289,6 +2405,7 @@ const EXECUTORES = {
   'acervo.read': executarLerDoAcervo,
   'acervo.createText': executarCriarTextoNoAcervo,
   'acervo.rewrite': executarSobrescreverNoAcervo,
+  'acervo.edit': executarEditarNoAcervo,
   'whatsapp.stickerPack': executarPacoteDeFigurinhas
 }
 
@@ -2310,7 +2427,7 @@ export const COMANDOS_CURTOS = new Set([
   'whatsapp.rich', 'whatsapp.sendFile', 'whatsapp.stickerPack',
   'group.remove', 'group.promote', 'group.demote', 'group.add', 'group.setSubject',
   'group.setDescription', 'group.setAnnounce', 'group.inviteCode', 'group.members',
-  'acervo.delete', 'acervo.read', 'acervo.createText'
+  'acervo.delete', 'acervo.read', 'acervo.createText', 'acervo.edit'
 ])
 
 export const TIPOS_DE_COMANDO = Object.keys(EXECUTORES)
