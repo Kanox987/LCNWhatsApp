@@ -57,10 +57,40 @@ export const TIPOS_ACEITOS = Object.freeze({
   // o ARQUIVO: quem recebe salva, abre no navegador, e o que ele faz dali em
   // diante — inclusive falar com alguma API — é com quem escreveu a página,
   // não com o bot.
-  'text/html': { kind: 'document', ext: '.html' }
+  'text/html': { kind: 'document', ext: '.html' },
+  // JSON entra como DOCUMENTO, pela mesma razão do HTML: o que se envia é o
+  // arquivo, não o conteúdo despejado na conversa. Só entra JSON que PARSEIA
+  // (ver `validarConteudo`), para que quem lê depois não tenha de tratar
+  // arquivo quebrado.
+  'application/json': { kind: 'document', ext: '.json' }
 })
 
 export const LIMITE_POR_ARQUIVO_BYTES = 32 * 1024 * 1024
+
+// JSON é lido e reescrito INTEIRO, então tem um limite próprio, bem abaixo do
+// de mídia. É padrão e não teto do sistema: quem precisa de mais sobe pela
+// variável de ambiente.
+export const LIMITE_JSON_PADRAO_BYTES = 1024 * 1024
+export function limiteDeJson () {
+  const bruto = Number(process.env.LCN_ACERVO_JSON_MAX_BYTES)
+  return Number.isSafeInteger(bruto) && bruto > 0 ? bruto : LIMITE_JSON_PADRAO_BYTES
+}
+
+// O que cada tipo precisa cumprir além de ser aceito. Hoje só o JSON: tem de
+// caber no limite dele e parsear. A mensagem diz o motivo, porque quem manda
+// pelo WhatsApp não vê o arquivo.
+function validarConteudo (mimetype, buffer) {
+  if (String(mimetype || '').toLowerCase() !== 'application/json') return
+  const limite = limiteDeJson()
+  if (buffer.length > limite) {
+    throw new ErroDeAcervo(`JSON grande demais: o limite é ${limite} bytes.`)
+  }
+  try {
+    JSON.parse(buffer.toString('utf8'))
+  } catch (erro) {
+    throw new ErroDeAcervo(`JSON inválido: ${erro.message}`)
+  }
+}
 export const COTA_PADRAO_BYTES = 512 * 1024 * 1024
 
 // A COTA NÃO É EDITÁVEL PELO PAINEL, de propósito.
@@ -256,6 +286,7 @@ export function guardar (buffer, { mimetype, name, description, folder } = {}) {
   if (buffer.length > LIMITE_POR_ARQUIVO_BYTES) {
     throw new ErroDeAcervo(`Arquivo grande demais: o limite por arquivo é ${Math.round(LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`)
   }
+  validarConteudo(mimetype, buffer)
 
   const atual = uso()
   if (atual.quotaBytes !== null && atual.usedBytes + buffer.length > atual.quotaBytes) {
@@ -420,6 +451,7 @@ export function reescrever (id, buffer) {
   if (buffer.length > LIMITE_POR_ARQUIVO_BYTES) {
     throw new ErroDeAcervo(`Arquivo grande demais: o limite por arquivo é ${Math.round(LIMITE_POR_ARQUIVO_BYTES / 1024 / 1024)} MB.`)
   }
+  validarConteudo(registro.mimetype, buffer)
   // A cota conta o que o arquivo VAI ocupar, descontando o que ele já ocupa —
   // senão reescrever um arquivo grande com um menor seria recusado por falta
   // de espaço que ele mesmo está devolvendo.
@@ -433,7 +465,12 @@ export function reescrever (id, buffer) {
   }
 
   garantirPastas()
-  fs.writeFileSync(caminhoDoArquivo(registro.id, registro.ext), buffer, { mode: 0o600 })
+  // Atômica: grava ao lado e renomeia. Um corte no meio da escrita deixava o
+  // arquivo pela metade, e para JSON isso é arquivo quebrado para sempre.
+  const destino = caminhoDoArquivo(registro.id, registro.ext)
+  const provisorio = `${destino}.${crypto.randomBytes(4).toString('hex')}.tmp`
+  fs.writeFileSync(provisorio, buffer, { mode: 0o600 })
+  fs.renameSync(provisorio, destino)
   registro.sizeBytes = buffer.length
   registro.updatedAt = new Date().toISOString()
   gravarIndice(arquivos)
