@@ -327,6 +327,18 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.post('/api/v1/owners', ({ body }) => donos().adicionar(body?.contactId))
   roteador.delete('/api/v1/owners/:contactId', ({ params }) => donos().remover(params.contactId))
 
+  // --- listas de pessoas ---
+  //
+  // Quem entra numa lista passa a valer em todo comando com `acesso: lista X`.
+  // Editar a lista é, portanto, dar permissão: por isso só o painel local e o
+  // dono (pela ação do motor) escrevem aqui.
+  const listas = () => aplicacao.motor.listas
+  roteador.get('/api/v1/listas', () => listas().listar())
+  roteador.get('/api/v1/listas/:nome', ({ params }) => listas().ver(params.nome))
+  roteador.post('/api/v1/listas/:nome/membros', ({ params, body }) => listas().adicionar(params.nome, body?.contactId))
+  roteador.delete('/api/v1/listas/:nome/membros/:contactId', ({ params }) => listas().remover(params.nome, params.contactId))
+  roteador.delete('/api/v1/listas/:nome', ({ params }) => listas().limpar(params.nome))
+
   // --- configuração do menu ---
   //
   // Mesma história: CRUD pronto no motor (`routes/menu.js`), incluindo a

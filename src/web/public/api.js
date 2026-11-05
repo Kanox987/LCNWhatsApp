@@ -139,6 +139,15 @@ export const api = {
     add: (contactId) => request('/owners', { method: 'POST', body: { contactId } }),
     remove: (contactId) => request(`/owners/${segment(contactId)}`, { method: 'DELETE' })
   },
+  // Listas de pessoas autorizadas (`acesso: lista X`). Lista vazia não libera
+  // ninguém; a lista nasce quando entra o primeiro membro.
+  listas: {
+    list: () => request('/listas'),
+    get: (nome) => request(`/listas/${segment(nome)}`),
+    add: (nome, contactId) => request(`/listas/${segment(nome)}/membros`, { method: 'POST', body: { contactId } }),
+    remove: (nome, contactId) => request(`/listas/${segment(nome)}/membros/${segment(contactId)}`, { method: 'DELETE' }),
+    clear: (nome) => request(`/listas/${segment(nome)}`, { method: 'DELETE' })
+  },
   // A cascata do menu: config da conversa > padrão do tipo > padrão do código.
   // `effective` devolve o que de fato vale, já resolvido.
   menuConfig: {

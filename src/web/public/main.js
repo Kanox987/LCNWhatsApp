@@ -8,6 +8,7 @@ import { renderCatalog } from './pages/catalog.js'
 import { renderVariables } from './pages/variables.js'
 import { renderAcervo } from './pages/acervo.js'
 import { renderOwners } from './pages/owners.js'
+import { renderListas } from './pages/listas.js'
 import { renderPools } from './pages/pools.js'
 import { renderMenuConfig } from './pages/menu-config.js'
 import { button, emptyState, errorState, loading, setPageHeader } from './ui.js'
@@ -28,6 +29,7 @@ function matchRoute (pathname) {
   if (pathname === '/variables') return { render: renderVariables, section: '/variables' }
   if (pathname === '/acervo') return { render: renderAcervo, section: '/acervo' }
   if (pathname === '/owners') return { render: renderOwners, section: '/owners' }
+  if (pathname === '/listas') return { render: renderListas, section: '/listas' }
   if (pathname === '/pools') return { render: renderPools, section: '/pools' }
   if (pathname === '/menu') return { render: renderMenuConfig, section: '/menu' }
   return null
