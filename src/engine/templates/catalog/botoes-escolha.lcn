@@ -13,6 +13,7 @@ automação
   acessa: texto
   casa: exato
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
 
   responde com botões "{{params.texto}}"
     botão "{{params.botao1}}": "{{params.comando1}}"
@@ -61,6 +62,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool que vai responder este comando.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa nota
   O BOTÃO VOLTA COMO MENSAGEM DE TEXTO COMUM. Quem toca no botão não executa uma ação mágica interna: o aplicativo do usuário envia uma mensagem de texto comum para o bot contendo o comando associado ao botão (o id do quick_reply). O bot recebe essa mensagem exatamente como se o usuário tivesse digitado aquele comando e dispara a automação cujo gatilho case com ele. Crie os comandos de destino antes de montar o fluxo.

@@ -12,6 +12,7 @@ automação
   acessa: texto, foto, vídeo, áudio, documento, figurinha
   casa: exato
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
 
   mostra metadados
 
@@ -25,6 +26,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa nota
   Mostra o que o COMANDO consegue ler — o mesmo objeto que {{message.…}} enxerga —, e não o pacote cru do WhatsApp. O pacote cru carrega a chave de download da mídia, e publicá-lo numa conversa entregaria a quem estivesse lendo a capacidade de baixar a mídia de outra pessoa. O que aparece aqui é o que dá para escrever num comando, que é justamente o que se quer saber.

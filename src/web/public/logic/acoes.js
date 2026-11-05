@@ -46,6 +46,8 @@ export const GATILHOS = Object.freeze([
       },
       { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'só externos = o bot ignora as próprias mensagens (padrão seguro) · qualquer um = responde também quando VOCÊ manda do número onde o bot roda, que é o normal para comando de uso pessoal.' },
       { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número do bot passa — é assim que se cadastra o primeiro.' },
+      { chave: 'requireAdmin', rotulo: 'Só administradores do grupo', ajuda: 'Só quem é administrador do grupo aciona; no privado ninguém é. O dono do bot também passa. Quem não pode é ignorado, sem resposta.' },
+      { chave: 'requireList', rotulo: 'Só quem está na lista', ajuda: 'Só quem foi posto nesta lista (ação "põe na lista") aciona. Lista vazia não libera ninguém. O dono do bot também passa. Quem não pode é ignorado, sem resposta.' },
       { chave: 'args', rotulo: 'Partes do que vem depois', ajuda: 'Divide o texto que a pessoa escreve depois do comando em partes com nome, separadas por um símbolo que você escolhe. Com "pacote / autor", quem digitar "/rename Meu Pacote / Zé" entrega as duas partes separadas, cada uma disponível como {{argumentos.pacote}} e {{argumentos.autor}}. A última parte leva o resto, então o separador pode aparecer dentro dela. Sem isto, o texto inteiro só existe como {{message.args}}.' }
     ]
   },
@@ -65,7 +67,9 @@ export const GATILHOS = Object.freeze([
       { chave: 'alsoOnCommands', rotulo: 'Reagir também a comandos', ajuda: 'Normalmente esta regra CEDE quando a mensagem já virou um comando: "/dow <link>" é comando e é mensagem com link ao mesmo tempo, e sem isso o mesmo link era baixado duas vezes. Quem digita um comando endereçou o bot; a regra automática existe para a mensagem que ninguém endereçou a ele. Ligue só se a regra precisa ver tudo que passa — uma automação de auditoria, por exemplo.' },
       { chave: 'keywords', rotulo: 'Contém alguma destas palavras', ajuda: 'Dispara se o texto tiver qualquer uma delas, sem diferenciar maiúscula.' },
       { chave: 'allowFrom', rotulo: 'Quem pode acionar', ajuda: 'A barreira acima vale de qualquer jeito.' },
-      { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot.' }
+      { chave: 'requireOwner', rotulo: 'Só o dono', ajuda: 'Restringe ao dono do bot.' },
+      { chave: 'requireAdmin', rotulo: 'Só administradores do grupo', ajuda: 'Só quem é administrador do grupo aciona; no privado ninguém é. O dono do bot também passa. Quem não pode é ignorado, sem resposta.' },
+      { chave: 'requireList', rotulo: 'Só quem está na lista', ajuda: 'Só quem foi posto nesta lista (ação "põe na lista") aciona. Lista vazia não libera ninguém. O dono do bot também passa. Quem não pode é ignorado, sem resposta.' }
     ]
   },
   {

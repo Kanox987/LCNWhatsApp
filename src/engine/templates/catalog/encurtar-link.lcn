@@ -13,6 +13,7 @@ automação
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
   precisa de um link: na mensagem ou na citada
   sem ele: "{{params.semLinkText}}"
 
@@ -51,6 +52,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa exige
   Exige uma conexão configurada na aba Conexões com a função "encurtar". A função deve receber o campo "url" (o endereço web extraído da mensagem ou da mensagem citada) e devolver uma string com o link encurtado para exibição em {{o resultado}}.

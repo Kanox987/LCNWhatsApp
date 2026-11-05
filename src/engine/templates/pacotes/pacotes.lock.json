@@ -10,77 +10,77 @@
           "templateId": "promover",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "227761484252919700d24920bd295000a705da23986b41aed8b30ee6b444182a"
+          "contentHash": "3612d270b483936d322681cc2986af3e53ae877ad57ef59c21799aa5daaf1266"
         },
         {
           "itemKey": "rebaixar",
           "templateId": "rebaixar",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "a10727513c1b071dc6df67a94bca122504c7a6035e75b266e130ab9a4176906b"
+          "contentHash": "2bae4a09554d56e4db3d1946ce6821092ea2f0d41f33d7715471c7173057e866"
         },
         {
           "itemKey": "banir",
           "templateId": "banir",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "419bcc04bca2d0f2f06338666e51958b3feb8071666eb21a7dab3f27adb4fd1f"
+          "contentHash": "188418ba4afc665016e73fab984204d9239f25e3dde5751a095fd88320326976"
         },
         {
           "itemKey": "silenciar",
           "templateId": "silenciar",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "5fe4d13e2856cafa07364b98d50f86f5720b4f3cb9fdea7d18edac4ede5590d8"
+          "contentHash": "a27c22ad8cfa15144e2f28112c167e3ce646c206b2e03177e1780486768fac70"
         },
         {
           "itemKey": "dessilenciar",
           "templateId": "dessilenciar",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "4589edcb80857dd0bfb9eb5b0fde354071c910c6103a2a937885188fc0e8ac7c"
+          "contentHash": "6f159cf808dabf382301f0c28d20d876d17fbdd1a41bfb07a5510dee823f52b7"
         },
         {
           "itemKey": "nome-do-grupo",
           "templateId": "nome-do-grupo",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "5ff696321bb897c58a423e3cce474a070168cacd1aa904cdee74b04e3b3f79f7"
+          "contentHash": "a28579726f7aaa6a034c0863681a48391ccd50bea1ede2f6ad0e67572d9a5ddf"
         },
         {
           "itemKey": "descricao-do-grupo",
           "templateId": "descricao-do-grupo",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "0343a1d8a9abe8f5390a3c2c9016a0b77a340e2171957ab595420e8d2cbcac7a"
+          "contentHash": "af0ed4376371362c5eb91690ec1e8230b4c8f4ab8ffc57fa3e456e23f2130ebc"
         },
         {
           "itemKey": "trancar-grupo",
           "templateId": "trancar-grupo",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "7c46780a6b5de9fd80c411b520c83a12953563624b135c5866c3564f0743d550"
+          "contentHash": "20caa0b944c4b3322ac382b2f628f8e0bb662b777884749ca1b77013bc98f5c6"
         },
         {
           "itemKey": "link-do-grupo",
           "templateId": "link-do-grupo",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "3f01ce76e0d7aafbe8f2433bdf3fa0578f0c57364e684c94cc406c9d53d4cd56"
+          "contentHash": "43c852d0cfb50538cbd936ec462974c43a8a55485e712e1aaa0e2dc067f3e5da"
         },
         {
           "itemKey": "membros",
           "templateId": "membros",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "a1b71e965ebd1898288a5a43aca8d7308e77edd35632370f5a30a40bb2b026ac"
+          "contentHash": "feb554ee0666d8b424b3a60c811a98c0b3b4cf1aa175841163c7446685cb29c8"
         },
         {
           "itemKey": "marcar-todos",
           "templateId": "marcar-todos",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "bb0dcbf3a88530c530155f2ddfc8478ef45786d62345a4a03c55f067591e2136"
+          "contentHash": "8b6e9d62f45f777921e9c663c70dfc2917c5814e9946441dacec4a03076c16ed"
         }
       ]
     },
@@ -100,42 +100,42 @@
           "templateId": "atendimento",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "7e09f7567e9340400b8ff70fdb2f290a99a456997c811d237cc153c1763d140c"
+          "contentHash": "0e63824163b18296bcad81d47d89adb8d7f388bdf9884a9bf93baeb662094c7c"
         },
         {
           "itemKey": "ver-produto",
           "templateId": "ver-produto",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "4fd412f0b5a1e3dadc66f921ec62d940c3482e2cb101d441c6636b179babbdef"
+          "contentHash": "8c5b7eb3122011329afcd28ecca2f3d0012636e713651c3a48290938cad7ad2b"
         },
         {
           "itemKey": "enviar-do-acervo",
           "templateId": "enviar-do-acervo",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "80e631806d320186702e2b2e3d2f9be5db73617e7df3cd421c599ccffb8e55aa"
+          "contentHash": "438ad954d99cb1161897ec58594170d4a7ab68bb0d210af6a2ae0ecb2471aab3"
         },
         {
           "itemKey": "botoes-escolha",
           "templateId": "botoes-escolha",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "f2596bdc1c23ecab43bf1044fe4cdf49c00a80c811ae564755af4d259d61be5d"
+          "contentHash": "04259b2b9713739931d62ee01a1b47f565eac24efe76e4c82e4734205868db9e"
         },
         {
           "itemKey": "lista-numerada",
           "templateId": "lista-numerada",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "baa4b8ed8997a11841517e20f49818aceee5c7a5e82b28a38af7d6b29a071f19"
+          "contentHash": "d7e33aefb1a2b83c1db40ce9acaf2140defb328dcc6225e14d72a1b5e8b6372a"
         },
         {
           "itemKey": "comunicado",
           "templateId": "comunicado",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "c1767882c995482644b0444fb90868a7a0a2bd5989563663ceae7ef42f9ef293"
+          "contentHash": "b651704064ba224b7e0f2e2105f19d153a902c3d2f1c05265de788bc0435fa10"
         }
       ]
     },
@@ -155,28 +155,28 @@
           "templateId": "menu",
           "templateVersion": 2,
           "origem": "pedido",
-          "contentHash": "495ceb198a038f6ebe64b6fcf4fc63d21e8ed481380d58ca7c17ec6c918f092e"
+          "contentHash": "0ac6038ca23eea489ec5dd4d0d9d92186d1388de1286e5c0fce6c717c3d16a75"
         },
         {
           "itemKey": "ajuda",
           "templateId": "ajuda",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "540b015e77cf7db3b42060b23e6143dcd4ee0a677b2be4222fb73af118b94f4b"
+          "contentHash": "f9e3538acd4dcc512ad4adfbc7f05c7bf43f72eac7e9a26ac1984a2c31b4d0ae"
         },
         {
           "itemKey": "ping",
           "templateId": "ping",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "37d2832c36695731682090d35147dc03d64b4c3a1936b78d16182dfb4b72fc92"
+          "contentHash": "c7f449132d5291e0f5e60410b40eb0a0961c58e93a6e100cdb87aee1dcdd8d06"
         },
         {
           "itemKey": "meu-id",
           "templateId": "meu-id",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "fcad194097105a7593e81dd46f0ed6d053ef1c0e4d21d156e4cc2a2220e97509"
+          "contentHash": "04a13536e97a253b004d76cbefb5a0f547a36861a1af9f02e62f96104d104f57"
         }
       ]
     },
@@ -210,7 +210,7 @@
           "templateId": "advertir",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "007d77419658ead122cc5443ffd441ca03fc574c81a58bdb0ee4b29efdc51b61"
+          "contentHash": "f9977518112a6f676e86b7206b279b7cafd52ace669ee93d41f502f352664991"
         },
         {
           "itemKey": "antifake",
@@ -231,7 +231,7 @@
           "templateId": "regras-do-grupo",
           "templateVersion": 1,
           "origem": "pedido",
-          "contentHash": "a02504e80994a9a9de2abed0818747a8ec38870ec6ac50ffde3426e1663e4bf4"
+          "contentHash": "84ffb6adaea9f13b771b3676fcf53bb8846a2abc7fd70750a528646c316a7c2e"
         }
       ]
     }

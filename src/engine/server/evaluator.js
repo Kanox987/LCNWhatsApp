@@ -11,7 +11,7 @@ import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
 import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
-import { adicionarNaLista, listasDa, normalizarNomeDeLista, removerDaLista } from './listas.js'
+import { adicionarNaLista, estaNaLista, listasDa, normalizarNomeDeLista, removerDaLista } from './listas.js'
 import { criarServicoDeEnquetes } from './enquetesService.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
@@ -165,6 +165,24 @@ function valorDaMarca (db, chat, chave) {
   ).get(kindDoEscopo(chat), chat.id, chave)
   if (!linha) return null
   try { return JSON.parse(linha.value_json) } catch { return null }
+}
+
+// "Quem pode usar" além do dono: administrador do grupo ou membro de uma lista.
+//
+// O dono (e o próprio número do bot, como nos comandos de dono) sempre passa (ele mesmo edita as listas, então travá-lo fora só criaria
+// um beco). Quem não passa é ignorado em silêncio, como no comando de dono — o
+// comando que quiser responder "você não pode" usa a condição no fluxo.
+// Sem `isAdmin` no evento (lista do grupo ainda não carregada) ou sem remetente
+// identificado, a resposta é não: na dúvida, fechado.
+function passaAcessoDoGatilho (db, evento, config) {
+  const exigeAdmin = config?.requireAdmin === true
+  const lista = typeof config?.requireList === 'string' ? config.requireList : null
+  if (!exigeAdmin && !lista) return true
+  const quem = evento?.sender?.id
+  if (podeUsarComandoRestrito(db, quem, { souEuMesmo: evento?.sender?.authoredBySelf === true })) return true
+  if (exigeAdmin && evento?.sender?.isAdmin !== true) return false
+  if (lista && !estaNaLista(db, lista, quem)) return false
+  return true
 }
 
 function grupoBloqueado (db, evento, trigger) {
@@ -2690,6 +2708,7 @@ export function avaliarEvento (db, evento, { interno = false } = {}) {
         // vale a lista.
         const passaDono = trigger.config.requireOwner !== true ||
           podeUsarComandoRestrito(db, evento.sender.id, { souEuMesmo: evento.sender.authoredBySelf === true })
+        const passaAcesso = passaAcessoDoGatilho(db, evento, trigger.config)
 
         // A mensagem que virou COMANDO já foi endereçada ao bot; regra automática
         // existe para a mensagem que ninguém endereçou a ele. Sem isto, o
@@ -2708,7 +2727,7 @@ export function avaliarEvento (db, evento, { interno = false } = {}) {
         // comandos com a mesma palavra passam a ser conflito de verdade, e é
         // `conflitos.js` que avisa — a tela, não um desempate escondido.
 
-        if (!cedeAoComando && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono) {
+        if (!cedeAoComando && passaEscopo && passaHistoria && passaAutor && passaComando && passaDono && passaAcesso) {
           // DESLIGADO NESTA CONVERSA — e a conferência vem AQUI, depois de
           // casar, nunca antes.
           //

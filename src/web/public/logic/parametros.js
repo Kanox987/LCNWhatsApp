@@ -6,6 +6,7 @@
 // de contato — duas cópias que divergem no primeiro tipo novo, e uma delas
 // passa a mentir.
 import { el } from '../ui.js'
+import { MODOS_DE_ACESSO, acessoDoFormulario, acessoParaFormulario, ehParametroDeAcesso } from './acesso.js'
 
 export const TYPE_LABELS = {
   string: 'Texto',
@@ -65,6 +66,28 @@ export function ehCampoDeVariasLinhas (definition, valor) {
   return String(valor ?? '').includes('\n')
 }
 
+// Escolha + nome da lista, num só controle. `value` devolve o texto que o motor
+// lê, então `valorParametro` e o resto do formulário tratam como qualquer campo.
+function criarControleDeAcesso (inicial) {
+  const { modo, lista } = acessoParaFormulario(inicial)
+  const escolha = el('select', {}, MODOS_DE_ACESSO.map((m) => el('option', { value: m.id, selected: m.id === modo, text: m.rotulo })))
+  const nome = el('input', { type: 'text', value: lista, placeholder: 'Nome da lista, por exemplo autorizados' })
+  const atualizar = () => { nome.hidden = escolha.value !== 'lista' }
+  escolha.addEventListener('change', atualizar)
+  atualizar()
+  const raiz = el('div', { className: 'stack' }, [escolha, nome])
+  Object.defineProperty(raiz, 'value', {
+    get: () => acessoDoFormulario({ modo: escolha.value, lista: nome.value }),
+    set: (valor) => {
+      const novo = acessoParaFormulario(valor)
+      escolha.value = novo.modo
+      nome.value = novo.lista
+      atualizar()
+    }
+  })
+  return raiz
+}
+
 export function criarControleParametro (definition, pools = [], valorAtual) {
   const inicial = valorInicial(definition, valorAtual)
   const temInicial = inicial !== undefined
@@ -83,6 +106,7 @@ export function criarControleParametro (definition, pools = [], valorAtual) {
     }
     return control
   }
+  if (ehParametroDeAcesso(definition)) return criarControleDeAcesso(inicial)
   if (definition.type === 'boolean') {
     return el('input', { type: 'checkbox', checked: temInicial ? Boolean(inicial) : false })
   }

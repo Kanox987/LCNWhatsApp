@@ -804,6 +804,12 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
   },
   { chave: 'casa', vale: 'comando', palavras: CASAMENTOS, doc: 'match' },
   { chave: 'quem', vale: ['comando', 'vigia'], palavras: ORIGENS, doc: 'allowFrom' },
+  {
+    chave: 'acesso',
+    vale: ['comando', 'vigia'],
+    doc: 'requireAdmin',
+    ajuda: 'Quem pode usar, além do "quem" acima: "todos" (padrão, sem trava), "dono", "admins" (administradores do grupo) ou "lista autorizados" (quem foi posto nessa lista com "põe na lista"). O dono sempre passa. Quem não pode é ignorado, sem resposta; lista vazia não libera ninguém.'
+  },
   { chave: 'argumentos', vale: 'comando', doc: 'args' },
   { chave: 'palavras', vale: 'vigia', doc: 'keywords' },
   {

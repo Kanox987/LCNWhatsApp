@@ -14,6 +14,7 @@ automação
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
 
   define chat atendimento_humano = "{{now.iso}}"
   responde "{{params.confirmaText}}"
@@ -34,6 +35,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa exige
   Depois deste comando, NENHUMA automação responde nesta conversa — nem comando, nem vigia, nem porteiro. A única coisa que ainda funciona é um comando marcado como "só dono", e é por isso que o par deste template é o "Devolver ao bot". Instale os dois juntos, ou a conversa fica muda até alguém apagar a marca na aba Dados.

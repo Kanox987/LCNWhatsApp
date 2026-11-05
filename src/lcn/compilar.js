@@ -12,6 +12,7 @@ import {
   acaoPorPalavra, inverter
 } from './vocabulario.js'
 import { numeroDeCalculo } from '../engine/server/aritmetica.js'
+import { interpretarAcesso } from '../engine/server/acesso.js'
 import { arestasDaEstrutura, precisaEstrutura } from './estrutura.js'
 import { interpretarTempo } from './tempo.js'
 
@@ -1125,6 +1126,19 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
       case 'casa':
         gatilhoConfig.match = traduzir(CASAMENTO_POR_PALAVRA, valor, 'modo de casamento', l.n)
         break
+      case 'acesso': {
+        // Num template o valor é um parâmetro ("{{params.acesso}}"): só quem
+        // instala sabe qual é, e `renderizarTemplate` o expande depois.
+        if (ehMarcador(valor)) { gatilhoConfig.access = valor; break }
+        const acesso = interpretarAcesso(valor)
+        if (!acesso) {
+          throw new ErroDeSintaxe(
+            `"acesso" aceita todos, dono, admins ou lista <nome> (letras minúsculas, números e "_", começando por letra) — veio "${valor}"`, l.n
+          )
+        }
+        Object.assign(gatilhoConfig, acesso.config)
+        break
+      }
       case 'quem':
         gatilhoConfig.allowFrom = traduzir(ORIGEM_POR_PALAVRA, valor, 'quem pode acionar', l.n)
         break

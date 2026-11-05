@@ -332,6 +332,9 @@ export function descompilar (documento, template = null) {
     h(`quem: ${ORIGENS[cfg.allowFrom] || cfg.allowFrom}`)
   }
   if (cfg.requireOwner === true && !agendado) h('só dono')
+  if (typeof cfg.access === 'string' && !agendado) h(`acesso: ${cfg.access}`)
+  if (cfg.requireAdmin === true && !agendado) h('acesso: admins')
+  if (typeof cfg.requireList === 'string' && !agendado) h(`acesso: lista ${cfg.requireList}`)
 
   linhas.push('')
 

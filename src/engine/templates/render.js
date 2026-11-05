@@ -9,6 +9,8 @@
 // no documento gerado — ex.: `{{latencyMs}}`, `{{var.chat.vip}}` — nunca casa
 // com `params.` e chega intacto no avaliador de verdade, pra ser resolvido
 // em tempo de execução como já acontece hoje).
+import { interpretarAcesso } from '../server/acesso.js'
+
 const PLACEHOLDER_EXATO = /^\{\{params\.([^{}.]+)\}\}$/
 const PLACEHOLDER_QUALQUER = /\{\{params\.([^{}.]+)\}\}/g
 
@@ -73,9 +75,26 @@ function substituirEmValor (valor, parametros) {
   return valor
 }
 
+// "acesso: {{params.acesso}}" chega aqui como `access` (texto) no gatilho; vira
+// as chaves que o motor lê. Um valor que não é nenhuma das quatro formas
+// derruba a renderização, com a frase do que vale: instalar não escolhe por ele.
+function expandirAcesso (documento, template) {
+  for (const no of documento?.flow?.nodes || []) {
+    const config = no?.config
+    if (!config || !Object.hasOwn(config, 'access')) continue
+    const acesso = interpretarAcesso(config.access)
+    if (!acesso) {
+      throw new Error(`Valor de acesso inválido em "${template?.templateId}": "${config.access}". Use todos, dono, admins ou lista <nome>.`)
+    }
+    delete config.access
+    Object.assign(config, acesso.config)
+  }
+}
+
 export function renderizarTemplate (template, parametrosFornecidos = {}) {
   const parametros = resolverParametros(template, parametrosFornecidos)
   const documento = substituirEmValor(structuredClone(template.documentTemplate), parametros)
+  expandirAcesso(documento, template)
   // A CATEGORIA DO TEMPLATE VIRA A FAMÍLIA DO COMANDO.
   //
   // Antes ela morria aqui: servia para agrupar a vitrine do catálogo e não

@@ -12,6 +12,7 @@ automação
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
 
   recupera
     para: esta conversa
@@ -34,6 +35,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai executar este comando.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa nota
   Reenvia NA CONVERSA onde o comando foi usado. Num grupo, todo mundo vê — é essa a intenção do comando. Se você quer receber em silêncio, use o /recover.

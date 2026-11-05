@@ -14,6 +14,7 @@ automação
   acessa: texto
   casa: exato ou com argumentos
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
 
   se evento target.id contém "@"
     se evento message.args contém "/"
@@ -49,6 +50,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa nota
   As duas guardas são escritas pelo lado POSITIVO de propósito, e isso não é estilo. Comparar com vazio não protege: quando o valor não existe, `compararValores` devolve falso (evaluator.js:576), a condição cai no `senão` e o comando grava mesmo sem alvo. Escrito como `contém`, o caso ausente cai no aviso, que é onde ele tem de cair. Quem editar este comando em Programar e trocar por `== ""` reabre esse buraco.

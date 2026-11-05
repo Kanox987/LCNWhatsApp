@@ -13,6 +13,7 @@ automação
   acessa: texto
   casa: exato
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
 
   monta o ranking
     de quem: dos membros deste grupo
@@ -50,6 +51,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa exige
   Este comando só ORDENA — ele não conta nada sozinho. É preciso existir antes um comando ou vigia que SOME no mesmo contador, no escopo "de quem enviou, NESTE grupo". Sem isso o ranking fica vazio para sempre, e a causa não aparece em lugar nenhum.

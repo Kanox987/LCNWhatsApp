@@ -584,6 +584,15 @@
             "requireOwner": {
               "type": "boolean"
             },
+            "requireAdmin": {
+              "type": "boolean",
+              "description": "Só administradores do grupo acionam. No privado ninguém é administrador, então não responde. O dono do bot também passa. Quem não pode é ignorado, sem resposta."
+            },
+            "requireList": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$",
+              "description": "Só quem está nesta lista nomeada aciona (ver 'põe na lista'). Lista vazia ou inexistente não libera ninguém. O dono do bot também passa. Quem não pode é ignorado, sem resposta."
+            },
             "args": {
               "type": "object",
               "additionalProperties": false,
@@ -685,6 +694,15 @@
             },
             "requireOwner": {
               "type": "boolean"
+            },
+            "requireAdmin": {
+              "type": "boolean",
+              "description": "Só administradores do grupo acionam. No privado ninguém é administrador, então não responde. O dono do bot também passa. Quem não pode é ignorado, sem resposta."
+            },
+            "requireList": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$",
+              "description": "Só quem está nesta lista nomeada aciona (ver 'põe na lista'). Lista vazia ou inexistente não libera ninguém. O dono do bot também passa. Quem não pode é ignorado, sem resposta."
             }
           }
         }

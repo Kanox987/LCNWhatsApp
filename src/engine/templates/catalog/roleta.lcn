@@ -13,6 +13,7 @@ automação
   acessa: texto
   casa: exato
   quem: {{params.allowFrom}}
+  acesso: {{params.acesso}}
 
   sorteia local escolhido = entre "{{params.lista}}"
   responde "{{params.formato}}"
@@ -36,6 +37,9 @@ configurável
   poolId: texto
     rótulo: Pool que responde
     ajuda: Identificador do pool de números que vai responder este comando. Crie um na aba Pools antes de instalar, se ainda não tiver.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
 
 avisa nota
   A linguagem não manipula lista nem índice, e continua não manipulando: quem percorre os itens é a ação de sortear, de uma vez só. É a mesma forma do sorteio de membro do grupo — quem tem a coleção faz o trabalho, e o comando apenas pede.
