@@ -73,6 +73,15 @@ export function membrosDaLista (db, nome) {
     .filter((id) => estaNaLista(db, nome, id))
 }
 
+// Esvazia a lista inteira. Uma lista vazia não libera ninguém, então "limpar" é
+// o jeito seguro de fechar o acesso de todos de uma vez.
+export function limparLista (db, nome) {
+  const chave = chaveDaLista(nome)
+  if (!chave) return { ok: false, motivo: 'nome' }
+  const r = db.prepare("DELETE FROM entity_attributes WHERE scope_kind = 'contact' AND key = ?").run(chave)
+  return { ok: true, removidos: r.changes }
+}
+
 // Listas que têm pelo menos uma pessoa, com a contagem.
 export function listasExistentes (db) {
   return db.prepare(`SELECT key, COUNT(*) AS n FROM entity_attributes

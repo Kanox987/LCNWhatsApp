@@ -11,6 +11,7 @@ import { registrarRotasTemplates } from './routes/templates.js'
 import { registrarRotasPacotes } from './routes/pacotes.js'
 import { registrarRotasPerfis } from './routes/perfis.js'
 import { registrarRotasOwners } from './routes/owners.js'
+import { registrarRotasListas } from './routes/listas.js'
 import { registrarRotasMenu } from './routes/menu.js'
 import { registrarRotasRetencao } from './routes/retencao.js'
 import { registrarRotasEnquetes } from './routes/enquetes.js'
@@ -21,6 +22,7 @@ export function criarApi (db, opcoes = {}) {
   roteador.get('/health', () => ({ ok: true, status: 'ok', schemaVersion: 1 }))
   registrarRotasInstances(roteador, db)
   registrarRotasOwners(roteador, db)
+  registrarRotasListas(roteador, db)
   registrarRotasMenu(roteador, db)
   registrarRotasPools(roteador, db)
   registrarRotasConnections(roteador, db)
