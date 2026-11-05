@@ -71,6 +71,29 @@ const cfg = { hardware: {}, download: {} }
   check('comando que já saiu não é enviado de novo', c.enviadas.length === 0)
 }
 
+// --- o mesmo evento chegando de novo não executa o comando de novo -------
+// O motor devolve os comandos ainda `pending` do run já avaliado; sem a
+// lembrança do gateway, um evento duplicado pelo WhatsApp rodava a ação duas
+// vezes (duas linhas no arquivo, dois itens no JSON).
+{
+  const pendente = { ...comandoPendente, id: 'cmd-duplicado' }
+  const c = cenario([pendente])
+  await encaminharEventoAoMotor(c.client, c.clienteEngine, evento, cfg, () => {})
+  await encaminharEventoAoMotor(c.client, c.clienteEngine, evento, cfg, () => {})
+  check('evento repetido com o comando ainda pendente executa uma vez só', c.enviadas.length === 1, `enviadas=${c.enviadas.length}`)
+  const outro = cenario([{ ...pendente, id: 'cmd-outro' }])
+  await encaminharEventoAoMotor(outro.client, outro.clienteEngine, evento, cfg, () => {})
+  check('um comando de outro id continua sendo executado', outro.enviadas.length === 1)
+}
+{
+  const { criarRegistroDeDespachados } = await import('../src/connection.js')
+  const r = criarRegistroDeDespachados(2)
+  check('registro: a primeira vez passa, a segunda não', r.reivindicar('a') === true && r.reivindicar('a') === false)
+  r.reivindicar('b'); r.reivindicar('c')
+  check('registro: passado o limite esquece o mais antigo, sem crescer sem fim', r.reivindicar('a') === true)
+  check('registro: id vazio nunca é barrado', r.reivindicar('') === true && r.reivindicar('') === true)
+}
+
 // --- falhar aberto, mas DIZENDO ------------------------------------------
 // Falha aqui não pode derrubar o emissor de eventos da conexão. Mas silêncio
 // foi o que custou duas horas de bot mudo: agora o erro tem que aparecer.

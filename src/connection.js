@@ -328,6 +328,31 @@ function anotarEnqueteCriada (event, clienteEngine) {
   }
 }
 
+// Quem já foi despachado por ESTE processo.
+//
+// O motor é idempotente por (evento, revisão): quando o WhatsApp entrega o
+// mesmo evento duas vezes, ele devolve o que decidiu na primeira — inclusive
+// os comandos que ainda estão `pending`, porque a primeira entrega pode estar
+// no meio de um download ou de uma edição de arquivo. Sem esta lembrança o
+// gateway executava o mesmo comando duas vezes (duas linhas acrescentadas, dois
+// itens no JSON). Quem reinicia perde a lembrança, mas aí os pendentes viram
+// `outcome_unknown` em `fecharOrfaos`, então nada é reenviado.
+const LIMITE_DE_DESPACHADOS = 5000
+export function criarRegistroDeDespachados (limite = LIMITE_DE_DESPACHADOS) {
+  const vistos = new Set()
+  return {
+    // true na primeira vez que vê o id, false nas seguintes.
+    reivindicar (id) {
+      if (!id) return true
+      if (vistos.has(id)) return false
+      vistos.add(id)
+      if (vistos.size > limite) vistos.delete(vistos.values().next().value)
+      return true
+    }
+  }
+}
+const despachados = criarRegistroDeDespachados()
+
 export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, cfg, log, soltar) {
   // Esboço não vai ao motor.
   //
@@ -368,7 +393,7 @@ export function encaminharEventoAoMotor (client, clienteEngine, eventoCanonico, 
       return
     }
     for (const avaliacao of resultado.results || []) {
-      const comandos = (avaliacao.commands || []).filter((comando) => comando.status === 'pending')
+      const comandos = (avaliacao.commands || []).filter((comando) => comando.status === 'pending' && despachados.reivindicar(comando.id))
       // O `cfg` chega ao executor porque ações como o download leem
       // configuração (endereço do serviço, token, limite de tamanho). Era a
       // lacuna que também travava a transcrição.
