@@ -92,6 +92,15 @@ check('lista mudou depois da prévia: 409 mesmo com igual número de saídas', !
 
 const nova = (await importar('autorizados', { dados: [BIA, DEA], modo: 'replace' })).dado
 r = await importar('autorizados', { dados: [BIA, DEA], modo: 'replace', simular: false, estado: nova.estado })
+// a prévia é do ARQUIVO: simular um e aplicar outro com o mesmo estado é recusado
+{
+  const antes = JSON.stringify(membrosDaLista(db, 'autorizados').sort())
+  const a = (await importar('autorizados', { dados: [BIA, DEA], modo: 'replace' })).dado
+  const rb = await importar('autorizados', { dados: [BIA, CAI], modo: 'replace', simular: false, estado: a.estado })
+  check('prévia de um arquivo não aplica outro arquivo (replace)', !rb.ok && rb.status === 409 && JSON.stringify(membrosDaLista(db, 'autorizados').sort()) === antes)
+  const rm = await importar('autorizados', { dados: [BIA, CAI], modo: 'merge', simular: false, estado: a.estado })
+  check('nem no acrescentar, quando o estado vem', !rm.ok && rm.status === 409)
+}
 const finais = membrosDaLista(db, 'autorizados').sort()
 check('replace com o estado certo deixa a lista exatamente como o arquivo', r.ok && r.dado.applied === true && JSON.stringify(finais) === JSON.stringify([BIA, DEA].sort()), JSON.stringify(finais))
 check('replace não mexe em outras listas', estaNaLista(db, 'novos', ANA) && estaNaLista(db, 'digitos', DEA))

@@ -211,6 +211,10 @@ export async function renderListas ({ refresh }) {
     }
   })
   aplicarImport.hidden = true
+  // A prévia vale para aquele nome, modo e arquivo: mexer em qualquer um a descarta.
+  const descartarPrevia = () => { pendente = null; aplicarImport.hidden = true; previa.replaceChildren() }
+  for (const campo of [importNome, importModo, importArquivo]) campo.addEventListener('change', descartarPrevia)
+  importNome.addEventListener('input', descartarPrevia)
 
   const verMudancas = button('Ver o que muda', {
     onClick: async () => {

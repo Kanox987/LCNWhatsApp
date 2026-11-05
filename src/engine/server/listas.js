@@ -142,6 +142,15 @@ export function estadoDaLista (db, nome) {
   return createHash('sha256').update(membros.join('\n')).digest('hex').slice(0, 16)
 }
 
+// A impressão digital da IMPORTAÇÃO: a lista de agora, o modo e as pessoas do
+// arquivo. Assim a prévia só vale para aquele arquivo — simular o A e aplicar o
+// B devolve outro número e é recusado.
+function estadoDaImportacao (db, nome, membros, modo) {
+  return createHash('sha256')
+    .update(`${modo}\n${estadoDaLista(db, nome)}\n${[...membros].sort().join('\n')}`)
+    .digest('hex').slice(0, 16)
+}
+
 const rotuloDaEntrada = (entrada) => (typeof entrada === 'string' ? `"${entrada.slice(0, 40)}"` : String(typeof entrada))
 
 // { ok:true, membros, repetidos } ou { ok:false, erros }. Aceita o arquivo
@@ -190,7 +199,7 @@ export function planejarImportacao (db, nome, membros, modo) {
     jaEstavam,
     remover: remover.length,
     totalFinal: modo === 'replace' ? novos.size : atuais.size + adicionar.length,
-    estado: estadoDaLista(db, nome),
+    estado: estadoDaImportacao(db, nome, membros, modo),
     _adicionar: adicionar,
     _remover: remover
   }
@@ -200,7 +209,8 @@ export function planejarImportacao (db, nome, membros, modo) {
 export function aplicarImportacao (db, nome, membros, modo, { estado } = {}) {
   const gravar = db.transaction(() => {
     const plano = planejarImportacao(db, nome, membros, modo)
-    if (modo === 'replace' && estado !== plano.estado) return { ok: false, motivo: 'mudou' }
+    // Substituir exige o estado da prévia; acrescentar só o confere se vier.
+    if ((modo === 'replace' || estado !== undefined) && estado !== plano.estado) return { ok: false, motivo: 'mudou' }
     for (const jid of plano._remover) removerDaLista(db, nome, jid)
     for (const jid of plano._adicionar) adicionarNaLista(db, nome, jid)
     return { ok: true, plano }
