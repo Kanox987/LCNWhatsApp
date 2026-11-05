@@ -11,6 +11,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { abrirBanco } from '../src/engine/server/db.js'
 import { criarApi } from '../src/engine/server/api.js'
 
@@ -170,6 +171,25 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
   check('10. sem LCN_PROVISION_POLICY permite tudo', semPolitica.acao === 'aplicado')
   fs.rmSync(pasta, { recursive: true, force: true })
   db.close(); dbB.close(); dbC.close()
+}
+
+// ------------------------------------------------ 11. os exemplos publicados funcionam
+{
+  const pasta = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'deployment', 'perfis')
+  const arquivos = fs.readdirSync(pasta).filter((f) => f.endsWith('.json'))
+  check('11. há exemplos publicados', arquivos.length >= 3, String(arquivos.length))
+  for (const arquivo of arquivos) {
+    const db = abrirBanco(':memory:'); const api = criarApi(db)
+    const r = await tentar(() => aplicar(api, JSON.parse(fs.readFileSync(path.join(pasta, arquivo), 'utf8'))))
+    check(`11. ${arquivo} aplica num motor limpo, sem avisos`,
+      r.ok?.acao === 'aplicado' && r.ok.escolhas.every((e) => e.avisos.length === 0), r.erro?.message)
+    db.close()
+  }
+  const db = abrirBanco(':memory:'); const api = criarApi(db)
+  await aplicar(api, JSON.parse(fs.readFileSync(path.join(pasta, 'recuperar-x9.json'), 'utf8')))
+  const ids = db.prepare('SELECT id FROM automations').all().map((r) => r.id)
+  check('11. recuperar-x9 instala as seis automações', ids.length === 6, ids.join())
+  db.close()
 }
 
 console.log(falhas === 0

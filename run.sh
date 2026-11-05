@@ -33,6 +33,20 @@ NOME=LCNWhatsApp
 [ -f config.json ] || cp config.example.json config.json
 mkdir -p sessao midia data modelos
 
+# --profile <arquivo>: perfil de provisionamento (o que a instância já nasce
+# tendo). Monta a PASTA do arquivo, somente leitura, e passa só o caminho por
+# variável de ambiente. Montar o arquivo direto faria o Docker criar um
+# diretório com esse nome se ele não existisse.
+PERFIL=""
+if [ "${1:-}" = "--profile" ]; then
+  PERFIL="${2:-}"
+  if [ -z "$PERFIL" ] || [ ! -f "$PERFIL" ]; then
+    echo "--profile precisa de um arquivo que exista (recebi: '${PERFIL}')."
+    exit 1
+  fi
+  shift 2
+fi
+
 # Lê runtime.json (Dockerfile, --memory/--cpus, mount de ./modelos) via o
 # helper Node — shell não tem parser JSON confiável, e o projeto já assume
 # Node no fluxo docker. 1ª linha = Dockerfile; resto = args extras pro run.
@@ -80,6 +94,13 @@ set -- "$@" \
   -v "$(pwd)/midia:/app/midia" \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/config.json:/app/config.json"
+
+if [ -n "$PERFIL" ]; then
+  PASTA_DO_PERFIL=$(cd "$(dirname "$PERFIL")" && pwd)
+  set -- "$@" \
+    -v "${PASTA_DO_PERFIL}:/run/lcn/provisioning:ro" \
+    -e "LCN_PROVISION_PROFILE=/run/lcn/provisioning/$(basename "$PERFIL")"
+fi
 
 set -- "$@" "$IMAGE_TAG"
 "$ENGINE" "$@"

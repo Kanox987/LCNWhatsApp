@@ -17,8 +17,15 @@ services:
     restart: unless-stopped
     stdin_open: true                  # permite login por QR/código nos logs
     tty: true
+    environment:
+      # Caminho (dentro do container) do perfil a aplicar na primeira subida.
+      # Vazio = instância limpa. Ex.: /run/lcn/provisioning/perfis/recuperar-x9.json
+      LCN_PROVISION_PROFILE: ${LCN_PROVISION_PROFILE:-}
     volumes:
       - ./sessao:/app/sessao
       - ./midia:/app/midia
       - ./data:/app/data
       - ./config.json:/app/config.json
+      # Perfis de provisionamento (o que a instância já nasce tendo). A pasta
+      # existe no repositório, então o mount nunca cria diretório no host.
+      - ./deployment:/run/lcn/provisioning:ro

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "profileId": "administracao-protecao",
+  "profileVersion": 1,
+  "packageIds": ["administracao", "protecao"],
+  "scope": { "include": [{ "kind": "all_groups" }], "exclude": [] },
+  "parametrosComuns": { "poolId": "padrao" }
+}

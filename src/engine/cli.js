@@ -13,6 +13,7 @@ import { spawn, spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import { PASTA_ENGINE, ARQ_PID_ENGINE, SOCKET_PATH, ARQ_LOG_ENGINE } from './paths.js'
 import { criarClienteEngine } from './client.js'
+import { executarProvisionar } from './provisionarCli.js'
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const ARQ_SERVIDOR = path.join(RAIZ, 'src', 'engine', 'server', 'index.js')
@@ -133,17 +134,24 @@ async function comandoStatus () {
   }
 }
 
+async function comandoProvisionar (argv) {
+  const cliente = criarClienteEngine({ socketPath: SOCKET_PATH })
+  process.exitCode = await executarProvisionar(argv, { cliente })
+}
+
 function uso () {
   console.log('Uso: lcn engine <install|start|stop|status>')
+  console.log('     lcn engine provisionar --perfil <arquivo.json> [--check] [--reconcile] [--retry] [--aguardar <segundos>]')
 }
 
 async function main () {
-  const [comando] = process.argv.slice(2)
+  const [comando, ...resto] = process.argv.slice(2)
   switch (comando) {
     case 'install': return comandoInstall()
     case 'start': return comandoStart()
     case 'stop': return comandoStop()
     case 'status': return comandoStatus()
+    case 'provisionar': return comandoProvisionar(resto)
     case 'help':
     case '--help':
     case '-h': return uso()

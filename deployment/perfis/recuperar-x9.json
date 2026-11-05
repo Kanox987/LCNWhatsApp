@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "profileId": "recuperar-x9",
+  "profileVersion": 1,
+  "templateIds": [
+    "x9",
+    "auto-recover",
+    "config-auto-recover",
+    "recuperar-visu-unica",
+    "config-recover",
+    "apagar"
+  ],
+  "scope": { "include": [{ "kind": "everywhere" }], "exclude": [] },
+  "parametrosComuns": { "poolId": "padrao" },
+  "parameters": {
+    "recuperar-visu-unica": { "allowFrom": "any" },
+    "apagar": { "allowFrom": "any" }
+  }
+}

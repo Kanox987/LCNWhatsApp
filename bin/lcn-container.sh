@@ -44,6 +44,21 @@ if [ ! -S "$SOCKET" ]; then
 fi
 log "motor no ar"
 
+# Perfil de provisionamento: o que esta instância já nasce tendo. Só roda se o
+# operador apontou um arquivo (LCN_PROVISION_PROFILE, um CAMINHO — o conteúdo
+# nunca viaja por variável de ambiente). O motor decide se é a primeira vez:
+# na segunda subida o perfil já está registrado e nada muda.
+#
+# A falha do perfil NÃO derruba o container. Um perfil errado derrubando o
+# container viraria laço de reinício; o motor e o gateway têm que ficar de pé
+# para o dono ver o motivo no log e corrigir.
+if [ -n "${LCN_PROVISION_PROFILE:-}" ]; then
+  log "perfil de provisionamento: ${LCN_PROVISION_PROFILE}"
+  node src/engine/cli.js provisionar --perfil "$LCN_PROVISION_PROFILE" --aguardar 30
+  STATUS_PERFIL=$?
+  [ "$STATUS_PERFIL" -eq 0 ] || log "perfil não aplicado (código ${STATUS_PERFIL}) — o container segue sem ele; o motivo está acima"
+fi
+
 # O painel é opcional para o funcionamento, mas é a única janela para ver
 # Execuções — sem ele, diagnosticar é ler log cru.
 # Mantém um processo de pé sem derrubar o resto.
