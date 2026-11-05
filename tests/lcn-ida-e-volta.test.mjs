@@ -373,5 +373,22 @@ ${extra}
 }
 
 
+// --- ids de nó: únicos, estáveis e sem custo quadrático --------------------
+// Gerar o menor sufixo livre relendo de 2 a cada nó repetido levava 16 s para
+// 20 mil respostas num comando só.
+{
+  const cab = 'automação\n  nome: x\n  tipo: comando\n  dispara com: /x\n  acessa: texto\n  casa: exato\n  quem: qualquer um\n\n'
+  const n = 20000
+  const t0 = Date.now()
+  const doc = compilar(cab + Array.from({ length: n }, (_, i) => `  responde "linha ${i}"`).join('\n'))
+  const ms = Date.now() - t0
+  const ids = doc.flow.nodes.map((no) => no.id)
+  check(`${n} respostas compilam em menos de 3 s`, ms < 3000, `${ms} ms`)
+  check('todos os ids de nó são únicos', new Set(ids).size === ids.length)
+  check('o primeiro mantém o nome base e os demais ganham -2, -3…',
+    ids.includes('reply') && ids.includes('reply-2') && ids.includes('reply-3') && ids.includes(`reply-${n}`))
+}
+
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DA LINGUAGEM PASSARAM')
 process.exit(falhas ? 1 : 0)

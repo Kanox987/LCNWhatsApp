@@ -11,7 +11,18 @@
 import crypto from 'crypto'
 
 const TTL_MS = 5 * 60 * 1000
+// Cada entrada guarda a mensagem inteira por 5 min. Só o TTL não limita a
+// quantidade: um grupo que despeja mídia mais rápido do que ela expira faz o
+// cache crescer sem teto. O padrão cobre ~66 mídias/s sustentadas; passou
+// disso, sai a mais antiga (a mais perto de expirar de qualquer jeito) e o
+// comando que a pedir recebe a mesma resposta de "mídia expirou".
+const MAX_ENTRADAS_PADRAO = 20000
 const cache = new Map() // token -> { valor, expiraEm }
+
+function maxEntradas () {
+  const n = Number(process.env.LCN_MAX_MEDIAREFS)
+  return Number.isInteger(n) && n > 0 ? n : MAX_ENTRADAS_PADRAO
+}
 
 let intervaloVarredura = null
 
@@ -39,6 +50,9 @@ export function criar (valor, ttlMs = TTL_MS, aoDescartar = null) {
   iniciarVarredura()
   const token = crypto.randomUUID()
   cache.set(token, { valor, expiraEm: Date.now() + ttlMs, aoDescartar })
+  const teto = maxEntradas()
+  // O Map preserva a ordem de inserção: a primeira chave é a mais antiga.
+  while (cache.size > teto) descartar(cache.keys().next().value)
   return token
 }
 
@@ -50,6 +64,10 @@ export function resolver (token) {
     return null
   }
   return entrada.valor
+}
+
+export function _tamanho () {
+  return cache.size
 }
 
 // Só pra teste — evita que o setInterval real vaze estado entre casos.

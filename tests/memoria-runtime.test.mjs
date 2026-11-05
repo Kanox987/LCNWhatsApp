@@ -190,6 +190,30 @@ try {
     recebida.liberar(); recebida.liberar()
     check('liberação é idempotente e remove a referência ao buffer', orcamento.estado().reservados === 0 && recebida.buffer === null)
   }
+  // Fluxo real: o servidor declara 4 bytes e manda mais. A leitura aborta no
+  // primeiro byte excedente e cancela o corpo, em vez de alocar tudo antes.
+  {
+    const orcamento = criarOrcamentoDeMidia(8)
+    let enviados = 0
+    let cancelado = false
+    const fluxo = new ReadableStream({
+      pull (c) {
+        if (enviados >= 1000) return c.close()
+        enviados++
+        c.enqueue(new Uint8Array(4))
+      },
+      cancel () { cancelado = true }
+    })
+    const mentirosa = new Response(fluxo, { headers: { 'content-length': '4' } })
+    const erro = await capturar(() => lerRespostaDeMidia(mentirosa, { limiteBytes: 8, orcamento }))
+    check('corpo maior que o Content-Length é abortado no excedente, sem ler o resto', !!erro && enviados < 10 && cancelado && orcamento.estado().reservados === 0)
+    const honesta = new Response(new Uint8Array([1, 2, 3, 4]), { headers: { 'content-length': '4' } })
+    const ok = await lerRespostaDeMidia(honesta, { limiteBytes: 8, orcamento })
+    check('corpo do tamanho declarado, em fluxo real, chega inteiro', ok.buffer.length === 4 && ok.buffer[3] === 4 && orcamento.estado().reservados === 4)
+    ok.liberar()
+    const curta = new Response(new Uint8Array([1, 2]), { headers: { 'content-length': '4' } })
+    check('corpo menor que o declarado também é recusado e devolve a reserva', !!await capturar(() => lerRespostaDeMidia(curta, { limiteBytes: 8, orcamento })) && orcamento.estado().reservados === 0)
+  }
   for (const caminho of ['downloader', 'arquivos', 'capas']) {
     for (const motivo of ['soma', 'sem-tamanho', 'leitura-falha']) {
       const orcamento = criarOrcamentoDeMidia(7)

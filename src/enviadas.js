@@ -20,18 +20,26 @@
 // — o evento antigo não se repete sozinho.
 const TTL_MS = 10 * 60 * 1000
 
+// Varrer o Map inteiro a cada envio custava O(n) por mensagem: com 50 mil ids
+// vivos na janela de 10 min, o registro sozinho levava 16 s. A consulta já
+// confere o vencimento de cada id, então a varredura só precisa limitar a
+// memória — uma vez por intervalo basta.
+const INTERVALO_LIMPEZA_MS = 30 * 1000
+
 const enviadas = new Map()
+let proximaLimpeza = 0
 
 function limpar (agora) {
   for (const [id, expiraEm] of enviadas) {
     if (expiraEm <= agora) enviadas.delete(id)
   }
+  proximaLimpeza = agora + INTERVALO_LIMPEZA_MS
 }
 
 export function registrar (id, ttlMs = TTL_MS) {
   if (typeof id !== 'string' || !id) return
   const agora = Date.now()
-  limpar(agora)
+  if (agora >= proximaLimpeza) limpar(agora)
   enviadas.set(id, agora + ttlMs)
 }
 
@@ -54,4 +62,5 @@ export function _tamanho () {
 
 export function _limparTudo () {
   enviadas.clear()
+  proximaLimpeza = 0
 }

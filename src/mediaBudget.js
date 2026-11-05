@@ -86,6 +86,37 @@ function midiaReservada (buffer, bytes, orcamento) {
   return midia
 }
 
+// Lê o corpo em fluxo para dentro de um buffer do tamanho JÁ reservado. Um
+// servidor que declara menos do que envia estoura a reserva: aqui a leitura é
+// abortada no primeiro byte excedente, em vez de `arrayBuffer()` alocar tudo
+// e só então a conferência de tamanho reclamar. Resposta sem fluxo legível
+// (dublê de teste) cai no caminho antigo.
+async function lerCorpoLimitado (resposta, bytes) {
+  const leitor = resposta.body?.getReader?.()
+  if (!leitor) {
+    const corpo = await resposta.arrayBuffer()
+    return Buffer.isBuffer(corpo) ? corpo : Buffer.from(corpo)
+  }
+  const buffer = Buffer.allocUnsafe(bytes)
+  let lidos = 0
+  try {
+    for (;;) {
+      const { done, value } = await leitor.read()
+      if (done) break
+      if (lidos + value.byteLength > bytes) {
+        throw new Error('O tamanho recebido difere do Content-Length; a reserva declarada pelo serviço não é confiável.')
+      }
+      buffer.set(value, lidos)
+      lidos += value.byteLength
+    }
+  } catch (erro) {
+    // Com o fluxo preso ao leitor, `body.cancel()` falha: cancelar é por aqui.
+    try { await leitor.cancel() } catch { /* a recusa original explica a falha */ }
+    throw erro
+  }
+  return lidos === bytes ? buffer : buffer.subarray(0, lidos)
+}
+
 export async function lerRespostaDeMidia (resposta, { limiteBytes, orcamento }) {
   let bytes = 0
   let reservou = false
@@ -108,11 +139,7 @@ export async function lerRespostaDeMidia (resposta, { limiteBytes, orcamento }) 
     }
     orcamento.adquirir(bytes)
     reservou = true
-    // Este passo reserva pelo tamanho declarado. Leitura em fluxo com aborto
-    // por estouro é o próximo passo, AINDA NÃO implementado: um servidor que
-    // mente no Content-Length só será detectado depois de arrayBuffer().
-    const corpo = await resposta.arrayBuffer()
-    const buffer = Buffer.isBuffer(corpo) ? corpo : Buffer.from(corpo)
+    const buffer = await lerCorpoLimitado(resposta, bytes)
     if (buffer.length !== bytes) throw new Error('O tamanho recebido difere do Content-Length; a reserva declarada pelo serviço não é confiável.')
     return midiaReservada(buffer, bytes, orcamento)
   } catch (erro) {

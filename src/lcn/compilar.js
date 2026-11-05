@@ -1284,12 +1284,17 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
   // exigir manter uma lista de ids em dia — quem escreve automação não pensa
   // em id de nó.
   const usados = new Set()
+  // `usados` só cresce, então todo sufixo abaixo da última dica já está
+  // ocupado: retomar dali dá o mesmo menor livre sem reler de 2 a cada nó
+  // repetido (20 mil respostas custavam 16 s de laço).
+  const proximoSufixo = new Map()
   nos.forEach((no, idx) => {
     const doRodape = nomes && nomes[idx]
     let nome = doRodape || (no.type.startsWith('trigger.') ? 'gatilho' : no.type.split('.').pop())
     if (usados.has(nome)) {
-      let n = 2
+      let n = proximoSufixo.get(nome) ?? 2
       while (usados.has(`${nome}-${n}`)) n++
+      proximoSufixo.set(nome, n + 1)
       nome = `${nome}-${n}`
     }
     usados.add(nome)

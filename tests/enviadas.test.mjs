@@ -41,6 +41,20 @@ registrar('NOVO')
 check('a limpeza não leva junto o que ainda vale', foiEnviadaPorNos('LONGO') === true)
 check('o expirado sumiu', foiEnviadaPorNos('CURTO') === false)
 
+// --- registrar não pode custar O(n) por envio -----------------------------
+// A varredura completa a cada envio levava 16 s para 50 mil ids vivos. Num
+// relógio fixo, o custo total de N registros tem de crescer ~linear.
+{
+  _limparTudo()
+  const N = 50000
+  const t0 = Date.now()
+  for (let i = 0; i < N; i++) registrar(`id${i}`)
+  const ms = Date.now() - t0
+  check(`${N} registros em janela cheia cabem em 2 s`, ms < 2000, `${ms} ms`)
+  check('todos continuam sendo nossos', foiEnviadaPorNos('id0') && foiEnviadaPorNos(`id${N - 1}`))
+  _limparTudo()
+}
+
 // --- a barreira do gatilho automático -------------------------------------
 // É aqui que a distinção vira comportamento.
 {
