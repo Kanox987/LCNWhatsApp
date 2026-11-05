@@ -17,7 +17,7 @@
 import { limitesDeMidia } from '../mediaLimits.js'
 import { executoresDeRecursos } from './filasDeRecursos.js'
 import { combinarComEvento, erroDeTimeoutExterno, dormirComSinal, esperarNoEvento } from './cancelamento.js'
-import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, lerBase64DeMidia, descartarResposta } from '../mediaBudget.js'
+import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, lerBase64DeMidia, descartarResposta, lerJsonLimitado } from '../mediaBudget.js'
 import { resolverDestino, TIPOS_DE_ENVIO } from './server/conexoes/declaracao.js'
 
 const TIMEOUT_REQUISICAO_MS = 20000
@@ -308,7 +308,7 @@ export function criarExecutorDeConexao ({
   async function textoDoErro (resposta, campoDoErro) {
     if (!campoDoErro) return null
     try {
-      const corpo = await resposta.json()
+      const corpo = await lerJsonLimitado(resposta)
       const frase = porCaminho(corpo, campoDoErro)
       return typeof frase === 'string' && frase.trim() ? frase.trim() : null
     } catch {
@@ -331,7 +331,7 @@ export function criarExecutorDeConexao ({
       )
     }
     try {
-      return await resposta.json()
+      return await lerJsonLimitado(resposta)
     } catch {
       throw new ErroDeConexao(`O serviço devolveu uma resposta inesperada ao ${oQue}.`, { paraPessoa: FALHA_NOSSA })
     }

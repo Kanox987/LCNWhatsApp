@@ -183,6 +183,28 @@ function lerOperando (bruto, linha) {
   throw new ErroDeSintaxe(`não entendi o operando "${texto}"`, linha)
 }
 
+// O operador é a primeira ocorrência FORA de aspas. Procurá-lo no texto todo
+// recusava `evento mensagem == "isto contém aquilo"`: a palavra dentro do
+// literal ganhava do `==` por ser a mais longa, e o operando virava lixo.
+const SIMBOLOS_POR_TAMANHO = Object.values(OPERADORES).sort((a, b) => b.length - a.length)
+
+function acharOperador (corpo) {
+  let dentro = false
+  for (let k = 0; k < corpo.length; k++) {
+    const c = corpo[k]
+    if (dentro) {
+      if (c === '\\') k++
+      else if (c === '"') dentro = false
+      continue
+    }
+    if (c === '"') { dentro = true; continue }
+    if (c !== ' ') continue
+    const simbolo = SIMBOLOS_POR_TAMANHO.find((s) => corpo.startsWith(`${s} `, k + 1))
+    if (simbolo) return { simbolo, pos: k }
+  }
+  return null
+}
+
 function lerDestino (bruto, linha) {
   const texto = bruto.trim()
   for (const [palavra, kind] of Object.entries(DESTINO_POR_PALAVRA)) {
@@ -1197,11 +1219,9 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
     }
     const prefixo = encadeada ? BLOCOS_DE_CONDICAO.senaoSe : BLOCOS_DE_CONDICAO.se
     const corpo = l.texto.slice(prefixo.length).trim()
-    const simbolo = Object.values(OPERADORES)
-      .sort((a, b) => b.length - a.length)
-      .find((s) => corpo.includes(` ${s} `))
-    if (!simbolo) throw new ErroDeSintaxe('a condição precisa de um operador', l.n)
-    const pos = corpo.indexOf(` ${simbolo} `)
+    const achado = acharOperador(corpo)
+    if (!achado) throw new ErroDeSintaxe('a condição precisa de um operador', l.n)
+    const { simbolo, pos } = achado
     const no = {
       type: 'condition.compare',
       config: {

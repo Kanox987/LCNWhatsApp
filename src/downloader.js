@@ -18,7 +18,7 @@ import path from 'path'
 import { limitesDeMidia } from './mediaLimits.js'
 import { executoresDeRecursos } from './engine/filasDeRecursos.js'
 import { comEvento, combinarComEvento, erroDeTimeoutExterno, dormirComSinal, esperarNoEvento } from './engine/cancelamento.js'
-import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, descartarResposta } from './mediaBudget.js'
+import { criarOrcamentoDeMidia, criarLoteDeMidias, lerRespostaDeMidia, descartarResposta, lerJsonLimitado } from './mediaBudget.js'
 
 const ESPERA_ENTRE_CONSULTAS_MS = 1500
 // A espera entre consultas cresce com o tempo: um download longo não precisa
@@ -214,7 +214,7 @@ export function criarBaixador ({ cfg, orcamento = criarOrcamentoDeMidia(limitesD
       throw new ErroDeDownload(`O serviço de download respondeu ${resposta.status} ao ${oQue}.`, { paraPessoa: FALHA_NOSSA })
     }
     try {
-      return await resposta.json()
+      return await lerJsonLimitado(resposta)
     } catch {
       throw new ErroDeDownload(`O serviço de download devolveu uma resposta inesperada ao ${oQue}.`, { paraPessoa: FALHA_NOSSA })
     }

@@ -79,9 +79,14 @@ function destinos (db, revisionId) {
  */
 export function reconciliar (db, agora = new Date()) {
   const iso = agora.toISOString()
+  // O relógio bate a cada 15 s e antes lia e parseava o documento de TODA
+  // automação ligada, quase sempre para descobrir que nenhuma é agendada. O
+  // filtro por texto é conservador (só descarta quem não cita o gatilho; quem
+  // cita passa e `agendaDoDocumento` confere de verdade), então não perde
+  // nenhuma agendada e tira o parse do caminho de quem nunca usou o relógio.
   const vivas = db.prepare(`SELECT a.id AS automation_id, r.id AS revision_id, r.revision, r.doc_json
     FROM automations a JOIN automation_revisions r ON r.id = a.active_revision_id
-    WHERE a.enabled = 1`).all()
+    WHERE a.enabled = 1 AND instr(r.doc_json, '"trigger.schedule"') > 0`).all()
   // `cancelado` não conta como semeado: desligar e religar uma automação a
   // retoma (o diário volta a disparar; o "daqui N" recomeça a contar).
   const existe = db.prepare("SELECT 1 FROM schedule_jobs WHERE automation_id = ? AND revision = ? AND chat_id = ? AND status != 'cancelado' LIMIT 1")

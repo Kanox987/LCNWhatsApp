@@ -90,6 +90,23 @@ export function gravarRetencao (db, { horas }) {
   return { horas: limpo.horas, padrao: false }
 }
 
+// Disparos do relógio que já cumpriram o papel E têm um irmão mais novo na
+// mesma série (mesma automação, revisão e conversa). É o que separa série
+// recorrente de disparo único: a série sempre deixa o próximo atrás, então o
+// histórico dela sai; o único (`daqui 30 minutos`, data marcada) é uma linha só
+// e NUNCA entra aqui, porque `reconciliar` usa a existência dela para saber que
+// já disparou — apagá-la faria o mesmo disparo semear de novo e repetir.
+// `pending`, `claimed` e `cancelado` ficam: os dois primeiros ainda vão
+// acontecer, e o `cancelado` é reaberto ao religar a automação.
+const AGENDAMENTOS_VENCIDOS = `FROM schedule_jobs
+  WHERE status IN ('done', 'perdido', 'ignorado', 'erro')
+    AND scheduled_for < ?
+    AND EXISTS (SELECT 1 FROM schedule_jobs n
+                WHERE n.automation_id = schedule_jobs.automation_id
+                  AND n.revision = schedule_jobs.revision
+                  AND n.chat_id = schedule_jobs.chat_id
+                  AND n.scheduled_for > schedule_jobs.scheduled_for)`
+
 // O que existe hoje, para a tela mostrar o tamanho do problema antes de a
 // pessoa decidir a janela — e para a varredura poder ser conferida depois.
 export function contar (db, { agora = Date.now(), horas = null } = {}) {
@@ -97,9 +114,10 @@ export function contar (db, { agora = Date.now(), horas = null } = {}) {
   const total = {
     eventos: db.prepare('SELECT COUNT(*) n FROM inbound_events').get().n,
     execucoes: db.prepare('SELECT COUNT(*) n FROM automation_runs').get().n,
-    comandos: db.prepare('SELECT COUNT(*) n FROM outbound_commands').get().n
+    comandos: db.prepare('SELECT COUNT(*) n FROM outbound_commands').get().n,
+    agendamentos: db.prepare('SELECT COUNT(*) n FROM schedule_jobs').get().n
   }
-  if (!janela) return { horas: janela, total, vencidos: { eventos: 0, execucoes: 0, comandos: 0 } }
+  if (!janela) return { horas: janela, total, vencidos: { eventos: 0, execucoes: 0, comandos: 0, agendamentos: 0 } }
   const limite = new Date(agora - janela * 3600 * 1000).toISOString()
   return {
     horas: janela,
@@ -107,7 +125,8 @@ export function contar (db, { agora = Date.now(), horas = null } = {}) {
     vencidos: {
       eventos: db.prepare('SELECT COUNT(*) n FROM inbound_events WHERE received_at < ?').get(limite).n,
       execucoes: db.prepare('SELECT COUNT(*) n FROM automation_runs WHERE created_at < ?').get(limite).n,
-      comandos: db.prepare("SELECT COUNT(*) n FROM outbound_commands WHERE created_at < ? AND status != 'pending'").get(limite).n
+      comandos: db.prepare("SELECT COUNT(*) n FROM outbound_commands WHERE created_at < ? AND status != 'pending'").get(limite).n,
+      agendamentos: db.prepare(`SELECT COUNT(*) n ${AGENDAMENTOS_VENCIDOS}`).get(limite).n
     }
   }
 }
@@ -117,7 +136,7 @@ export function contar (db, { agora = Date.now(), horas = null } = {}) {
 // ao abrir a linha.
 export function varrer (db, { agora = Date.now(), horas = null } = {}) {
   const janela = horas === null ? lerRetencao(db).horas : validarHoras(horas)
-  if (!janela) return { horas: 0, comandos: 0, execucoes: 0, eventos: 0 }
+  if (!janela) return { horas: 0, comandos: 0, execucoes: 0, eventos: 0, agendamentos: 0 }
   const limite = new Date(agora - janela * 3600 * 1000).toISOString()
 
   const passada = db.transaction(() => {
@@ -137,7 +156,8 @@ export function varrer (db, { agora = Date.now(), horas = null } = {}) {
        WHERE received_at < ?
          AND NOT EXISTS (SELECT 1 FROM automation_runs ar WHERE ar.event_id = inbound_events.id)`
     ).run(limite).changes
-    return { comandos, execucoes, eventos }
+    const agendamentos = db.prepare(`DELETE ${AGENDAMENTOS_VENCIDOS}`).run(limite).changes
+    return { comandos, execucoes, eventos, agendamentos }
   })
 
   return { horas: janela, ...passada() }
@@ -187,10 +207,11 @@ export function iniciarVarredura (db, { intervaloMs = INTERVALO_MS, aoVarrer = n
   const passada = () => {
     try {
       const resultado = varrer(db)
-      if (resultado.eventos || resultado.execucoes || resultado.comandos) {
+      if (resultado.eventos || resultado.execucoes || resultado.comandos || resultado.agendamentos) {
         console.log(
           `[engine] retenção (${resultado.horas}h): ${resultado.eventos} evento(s), ` +
-          `${resultado.execucoes} execução(ões) e ${resultado.comandos} comando(s) apagados`
+          `${resultado.execucoes} execução(ões), ${resultado.comandos} comando(s) e ` +
+          `${resultado.agendamentos} disparo(s) do relógio apagados`
         )
       }
       if (aoVarrer) aoVarrer(resultado)

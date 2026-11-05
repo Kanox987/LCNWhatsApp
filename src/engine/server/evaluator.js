@@ -2369,6 +2369,46 @@ function inserirEvento (db, evento) {
   return true
 }
 
+// O documento de uma revisão publicada é imutável, mas era reparseado a CADA
+// evento — duas vezes por automação (uma na ordenação, outra no laço). Com 40
+// automações ligadas isso são 80 `JSON.parse` por mensagem recebida, no caminho
+// quente da admissão. Aqui o parse acontece uma vez por revisão.
+//
+// A chave confere o TEXTO bruto, não só o id: ids de revisão se repetem entre
+// bancos (testes, restauração) e um documento adulterado no banco precisa ser
+// relido. O cache é por banco e só guarda as revisões que ainda estão
+// publicadas, então o tamanho nunca passa do número de automações ligadas.
+// Congelado de propósito: quem mutar o documento compartilhado falha alto, em
+// vez de vazar a alteração para o evento seguinte.
+const cacheDeRevisoes = new WeakMap()
+
+function congelarEmProfundidade (valor) {
+  if (valor && typeof valor === 'object' && !Object.isFrozen(valor)) {
+    Object.freeze(valor)
+    for (const filho of Object.values(valor)) congelarEmProfundidade(filho)
+  }
+  return valor
+}
+
+function revisaoLida (db, candidato) {
+  let porRevisao = cacheDeRevisoes.get(db)
+  if (!porRevisao) cacheDeRevisoes.set(db, porRevisao = new Map())
+  const quente = porRevisao.get(candidato.revision_id)
+  if (quente && quente.bruto === candidato.doc_json) return quente
+  const documento = congelarEmProfundidade(jsonOuNull(candidato.doc_json))
+  const trigger = documento ? acharTrigger(documento) : null
+  const lida = { bruto: candidato.doc_json, documento, trigger }
+  porRevisao.set(candidato.revision_id, lida)
+  return lida
+}
+
+function esquecerRevisoesDespublicadas (db, candidatos) {
+  const porRevisao = cacheDeRevisoes.get(db)
+  if (!porRevisao || porRevisao.size <= candidatos.length) return
+  const vivas = new Set(candidatos.map((c) => c.revision_id))
+  for (const id of porRevisao.keys()) if (!vivas.has(id)) porRevisao.delete(id)
+}
+
 function candidatosPublicados (db) {
   return db.prepare(`
     SELECT a.id AS automation_id, a.deployment_mode, r.id AS revision_id, r.doc_json
@@ -2509,11 +2549,10 @@ export function avaliarEvento (db, evento, { interno = false } = {}) {
     // vezes e respondia duas vezes. O at-most-once não pega isso: ele é por
     // (evento, revisão), e são revisões diferentes — o que faltava era alguém
     // ter dito quem tem precedência.
-    const ordenados = [...candidatosPublicados(db)].sort((a, b) => {
-      const peso = (c) => {
-        const t = acharTrigger(jsonOuNull(c.doc_json))
-        return t?.type === 'trigger.command' ? 0 : 2
-      }
+    const publicados = candidatosPublicados(db)
+    esquecerRevisoesDespublicadas(db, publicados)
+    const ordenados = publicados.sort((a, b) => {
+      const peso = (c) => (revisaoLida(db, c).trigger?.type === 'trigger.command' ? 0 : 2)
       return peso(a) - peso(b)
     })
     let algumComandoCasou = false
@@ -2529,8 +2568,7 @@ export function avaliarEvento (db, evento, { interno = false } = {}) {
         continue
       }
 
-      const documento = jsonOuNull(candidato.doc_json)
-      const trigger = documento && acharTrigger(documento)
+      const { documento, trigger } = revisaoLida(db, candidato)
 
       // O relógio acorda UMA automação, a dona do disparo — nunca as outras
       // quarenta que por acaso valem naquela conversa. E, no sentido

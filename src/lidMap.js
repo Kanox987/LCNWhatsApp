@@ -25,6 +25,14 @@ function normalizar (jid) {
   return jid.replace(/:\d+@/, '@')
 }
 
+// Padrão sensato, não teto: um grupo grande conhece milhares de pessoas, e
+// cada par custa poucas centenas de bytes. O mapa se reconstrói sozinho, então
+// passar do limite só faz as pessoas MAIS ANTIGAS voltarem a ser aprendidas na
+// próxima mensagem. Quem hospeda muita gente muda por LCN_LID_MAP_MAX.
+const LIMITE_PADRAO = 50000
+const limiteDoAmbiente = Number.parseInt(process.env.LCN_LID_MAP_MAX, 10)
+let limite = Number.isSafeInteger(limiteDoAmbiente) && limiteDoAmbiente > 0 ? limiteDoAmbiente : LIMITE_PADRAO
+
 let mapa = null
 let sujo = false
 let timerFlush = null
@@ -43,11 +51,20 @@ function carregar () {
     for (const [lid, telefone] of Object.entries(bruto?.lidParaTelefone || {})) {
       if (ehLid(lid) && ehTelefone(telefone)) mapa.set(lid, telefone)
     }
+    aparar()
   } catch {
     // Arquivo ausente ou corrompido é normal: o mapa se reconstrói sozinho
     // conforme as mensagens chegam. Nunca é motivo para derrubar o bot.
   }
   return mapa
+}
+
+// O Map lembra a ordem de inserção, então o primeiro é o menos recente.
+function aparar () {
+  for (const lid of mapa.keys()) {
+    if (mapa.size <= limite) break
+    mapa.delete(lid)
+  }
 }
 
 function agendarGravacao () {
@@ -65,7 +82,9 @@ export function gravarAgora () {
     fs.mkdirSync(pasta(), { recursive: true })
     const lidParaTelefone = Object.fromEntries(mapa)
     const temp = path.join(pasta(), `.lid-map.${process.pid}.tmp`)
-    fs.writeFileSync(temp, JSON.stringify({ versao: 1, lidParaTelefone }, null, 2) + '\n', { mode: 0o600 })
+    // Sem indentação: o custo é o stringify, que bloqueia o laço de eventos, e
+    // com 50 mil pares a forma indentada levava quase o dobro do tempo.
+    fs.writeFileSync(temp, JSON.stringify({ versao: 1, lidParaTelefone }) + '\n', { mode: 0o600 })
     fs.renameSync(temp, arquivo())
     sujo = false
   } catch {
@@ -86,8 +105,16 @@ export function registrarPar (umJid, outroJid) {
   if (!lid || !telefone) return false
 
   const atual = carregar()
-  if (atual.get(lid) === telefone) return false
+  if (atual.get(lid) === telefone) {
+    // Quem continua falando é o último a sair: reposiciona no fim da ordem de
+    // inserção, sem sujar o arquivo.
+    atual.delete(lid)
+    atual.set(lid, telefone)
+    return false
+  }
+  atual.delete(lid)
   atual.set(lid, telefone)
+  aparar()
   sujo = true
   agendarGravacao()
   return true
@@ -113,6 +140,19 @@ export function paraTelefone (jid) {
 
 export function tamanho () {
   return carregar().size
+}
+
+// Troca o limite em execução (config do painel, teste). Valor inválido é
+// ignorado; baixar o limite apara na hora.
+export function definirLimite (novo) {
+  if (!Number.isSafeInteger(novo) || novo <= 0) return limite
+  limite = novo
+  if (mapa) {
+    const antes = mapa.size
+    aparar()
+    if (mapa.size !== antes) { sujo = true; agendarGravacao() }
+  }
+  return limite
 }
 
 // Só para teste: descarta o estado em memória e força releitura do disco.

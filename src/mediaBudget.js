@@ -117,6 +117,50 @@ async function lerCorpoLimitado (resposta, bytes) {
   return lidos === bytes ? buffer : buffer.subarray(0, lidos)
 }
 
+// `resposta.json()` lê o corpo INTEIRO antes de entregar qualquer coisa: um
+// serviço (ou um endereço apontado por engano) que devolve centenas de MB
+// aloca tudo no heap do gateway. Aqui o corpo é lido em fluxo e abortado no
+// primeiro byte além do limite. O padrão cobre com folga qualquer resposta de
+// controle (ids, estados, frases de erro); quem declara uma conexão que
+// devolve JSON maior muda `LCN_JSON_MAX_BYTES`. Sem fluxo legível (dublê de
+// teste) cai no `json()` de sempre.
+export const LIMITE_JSON_PADRAO = 2 * 1024 * 1024
+
+function limiteDeJson () {
+  const configurado = Number(process.env.LCN_JSON_MAX_BYTES)
+  return Number.isSafeInteger(configurado) && configurado > 0 ? configurado : LIMITE_JSON_PADRAO
+}
+
+export async function lerJsonLimitado (resposta, limite = limiteDeJson()) {
+  const excedeu = () => {
+    const erro = new Error(`A resposta do serviço passou de ${limite} bytes; ela não foi lida inteira.`)
+    erro.code = 'LCN_JSON_GRANDE'
+    return erro
+  }
+  const declarado = resposta.headers?.get?.('content-length')
+  if (declarado && /^\d+$/.test(String(declarado)) && Number(declarado) > limite) {
+    await descartarResposta(resposta)
+    throw excedeu()
+  }
+  const leitor = resposta.body?.getReader?.()
+  if (!leitor) return resposta.json()
+  const pedacos = []
+  let lidos = 0
+  try {
+    for (;;) {
+      const { done, value } = await leitor.read()
+      if (done) break
+      lidos += value.byteLength
+      if (lidos > limite) throw excedeu()
+      pedacos.push(value)
+    }
+  } catch (erro) {
+    try { await leitor.cancel() } catch { /* a recusa original explica a falha */ }
+    throw erro
+  }
+  return JSON.parse(Buffer.concat(pedacos).toString('utf8'))
+}
+
 export async function lerRespostaDeMidia (resposta, { limiteBytes, orcamento }) {
   let bytes = 0
   let reservou = false

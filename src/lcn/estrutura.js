@@ -87,24 +87,46 @@ export function inferirEstrutura (flow, gatilhoId) {
     saidas.set(chave, e.to)
   }
   const seguir = (id, on) => saidas.get(JSON.stringify([id, on])) ?? null
-  const posteriores = new Map([[null, new Set([null])]])
+  // O ponto onde dois ramos voltam a se encontrar é o primeiro passo por onde
+  // TODO caminho até o fim passa (o pós-dominador imediato). Guardamos só esse
+  // pai, uma árvore com raiz no fim. Guardar o conjunto inteiro de passos
+  // posteriores de cada nó custava O(n²) de memória numa cadeia linear (93 MB
+  // com 2 mil passos), e a recursão estourava a pilha perto de 5 mil.
+  const pai = new Map([[null, null]])
+  const fundura = new Map([[null, 0]])
   const ativos = new Set()
-  function destinos (id) {
-    if (posteriores.has(id)) return posteriores.get(id)
-    if (ativos.has(id)) throw new Error('O fluxo não pode conter ciclo.')
-    const no = mapa.get(id)
-    if (!no) throw new Error(`Nó inexistente no fluxo: ${id}`)
-    ativos.add(id)
-    const rotulos = no.type === 'condition.compare' ? ['true', 'false'] : ['success']
-    const caminhos = rotulos.map((on) => destinos(seguir(id, on)))
-    const comuns = new Set([...caminhos[0]].filter((p) => caminhos.every((c) => c.has(p))))
-    comuns.add(id)
-    posteriores.set(id, comuns)
-    ativos.delete(id)
-    return comuns
+  const encontroDe = (a, b) => {
+    while (a !== b) {
+      if (fundura.get(a) >= fundura.get(b)) a = pai.get(a)
+      else b = pai.get(b)
+    }
+    return a
+  }
+  function calcular (inicio) {
+    const pilha = [inicio]
+    while (pilha.length) {
+      const id = pilha[pilha.length - 1]
+      if (pai.has(id)) { pilha.pop(); continue }
+      const no = mapa.get(id)
+      if (!no) throw new Error(`Nó inexistente no fluxo: ${id}`)
+      ativos.add(id)
+      const rotulos = no.type === 'condition.compare' ? ['true', 'false'] : ['success']
+      const proximos = rotulos.map((on) => seguir(id, on))
+      const pendente = proximos.find((p) => !pai.has(p))
+      if (pendente !== undefined) {
+        if (ativos.has(pendente)) throw new Error('O fluxo não pode conter ciclo.')
+        pilha.push(pendente)
+        continue
+      }
+      const encontro = proximos.length === 1 ? proximos[0] : encontroDe(proximos[0], proximos[1])
+      pai.set(id, encontro)
+      fundura.set(id, fundura.get(encontro) + 1)
+      ativos.delete(id)
+      pilha.pop()
+    }
   }
   const primeiro = seguir(gatilhoId, 'matched')
-  destinos(primeiro)
+  calcular(primeiro)
   const vistos = new Set([gatilhoId])
   function bloco (inicio, fim) {
     const itens = []
@@ -117,8 +139,7 @@ export function inferirEstrutura (flow, gatilhoId) {
         // O primeiro nó inevitável nos dois caminhos é a continuação comum.
         // Interseção de alcançáveis não basta: poderia puxar para fora uma
         // ação que só acontece em parte das combinações de condições internas.
-        const comuns = [...posteriores.get(id)].filter((p) => p !== id)
-        const encontro = comuns.sort((a, b) => posteriores.get(b).size - posteriores.get(a).size)[0] ?? null
+        const encontro = pai.get(id)
         const item = { nodeId: id, true: bloco(seguir(id, 'true'), encontro) }
         const falso = bloco(seguir(id, 'false'), encontro)
         if (falso.length) item.false = falso
