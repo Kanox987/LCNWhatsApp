@@ -85,6 +85,10 @@ export function reconciliar (db, agora = new Date()) {
   // `cancelado` não conta como semeado: desligar e religar uma automação a
   // retoma (o diário volta a disparar; o "daqui N" recomeça a contar).
   const existe = db.prepare("SELECT 1 FROM schedule_jobs WHERE automation_id = ? AND revision = ? AND chat_id = ? AND status != 'cancelado' LIMIT 1")
+  // Série recorrente: só uma linha viva prova que há próximo disparo. As feitas
+  // e perdidas ficam como histórico e não impedem de recomeçar depois de
+  // desligar e religar.
+  const existeVivo = db.prepare("SELECT 1 FROM schedule_jobs WHERE automation_id = ? AND revision = ? AND chat_id = ? AND status IN ('pending', 'claimed') LIMIT 1")
   // Mesma ocorrência cancelada antes (data absoluta, por exemplo): reabre a
   // linha em vez de esbarrar na chave única e ficar sem disparo para sempre.
   const inserir = db.prepare(`INSERT INTO schedule_jobs
@@ -103,7 +107,8 @@ export function reconciliar (db, agora = new Date()) {
         // Qualquer linha viva da série (pendente, feita, perdida) prova que esta
         // revisão já foi semeada: não semeia de novo, senão "daqui 30 minutos"
         // recomeçaria a cada reinício e um disparo único voltaria a ocorrer.
-        if (existe.get(viva.automation_id, viva.revision, d.chatId)) continue
+        const semeada = a.agenda.tipo === 'recorrente' ? existeVivo : existe
+        if (semeada.get(viva.automation_id, viva.revision, d.chatId)) continue
         const quando = primeiro(a.agenda, a.fuso, agora)
         if (!quando) continue
         criados += inserir.run(viva.automation_id, viva.revision, d.chatId, d.chatKind, quando.toISOString(), iso, iso, iso).changes
@@ -208,7 +213,10 @@ export function tick (db, agora = new Date(), { toleranciaMs = TOLERANCIA_PADRAO
         sender: { id: REMETENTE_DO_RELOGIO },
         schedule: { id: `job-${job.id}`, automationId: job.automation_id, firedAt: iso, scheduledFor: job.scheduled_for }
       }, { interno: true })
-      if (resultado.results.length === 0) { marcar('ignorado', 'portão fechado (grupo não ativo, atendimento humano ou fora do escopo)'); resumo.ignorados++ } else { marcar('done'); resumo.disparados++ }
+      // O que conta é o run DESTA automação: o avaliador devolve uma linha por
+      // automação candidata, e "rodou" só vale quando o fluxo de fato correu.
+      const run = resultado.results.find((r) => r.automationId === job.automation_id)
+      if (!run) { marcar('ignorado', 'portão fechado (grupo não ativo, atendimento humano ou fora do escopo)'); resumo.ignorados++ } else if (run.status === 'error') { marcar('erro', 'o fluxo da automação falhou ao rodar (ver o run)'); resumo.erros++ } else if (run.status === 'desligado' || run.status === 'no_match') { marcar('ignorado', run.status === 'desligado' ? 'comando desligado nesta conversa' : 'o gatilho não casou'); resumo.ignorados++ } else { marcar('done', run.status === 'matched_shadow' ? 'modo sombra: rodou sem enviar' : null); resumo.disparados++ }
     } catch (erro) {
       marcar('erro', String(erro?.message ?? erro).slice(0, 300))
       resumo.erros++

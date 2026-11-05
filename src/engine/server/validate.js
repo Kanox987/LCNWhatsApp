@@ -99,6 +99,16 @@ export function validarAutomacao (db, documento) {
     erros.push({ path: '/flow/nodes', message: `o fluxo só aceita um gatilho, mas tem ${gatilhos.length}` })
   }
 
+  // O schema promete que o fuso é conferido contra o banco de fusos. Sem isto,
+  // um JSON enviado direto à API com "Marte/Olympus" publicava e o agendador
+  // nunca achava a próxima ocorrência: zero disparos, sem erro em lugar nenhum.
+  nodes.forEach((node, indice) => {
+    if (node?.type !== 'trigger.schedule' || typeof node.config?.timezone !== 'string') return
+    try { new Intl.DateTimeFormat('pt-BR', { timeZone: node.config.timezone }) } catch {
+      erros.push({ path: `/flow/nodes/${indice}/config/timezone`, message: `fuso desconhecido: ${node.config.timezone} (use um nome IANA, como America/Sao_Paulo)` })
+    }
+  })
+
   // Cada tipo de nó só pode sair pelas arestas que ele de fato produz. Sem
   // isso dá pra publicar uma condição ligada por 'success' (que nunca
   // dispara) ou uma ação ligada por 'true' — fluxo que morre calado.

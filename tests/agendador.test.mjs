@@ -8,6 +8,7 @@
 import { abrirBanco } from '../src/engine/server/db.js'
 import { tick, reconciliar, reivindicar, contaDoDisparo, eventIdDoDisparo, TOLERANCIA_PADRAO_MS } from '../src/engine/server/agendador.js'
 import { compilar } from '../src/lcn/compilar.js'
+import { validarAutomacao } from '../src/engine/server/validate.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -136,6 +137,20 @@ const comandos = (db) => db.prepare('SELECT COUNT(*) AS n FROM outbound_commands
   check('diário desligado e religado volta a disparar na próxima 08:00', r.disparados === 1 && comandos(db) === 1, JSON.stringify(r))
 }
 {
+  // O mesmo erro, depois de a série já ter disparado: sobra uma linha `done` e
+  // ela não pode contar como "semeado" para uma série recorrente.
+  const db = novoBanco()
+  publicar(db, 'dia', agendado('dia', 'todo dia às 08:00', GRUPO))
+  tick(db, T0)
+  const r1 = tick(db, new Date('2026-11-05T11:00:00Z'))
+  db.prepare('UPDATE automations SET enabled = 0 WHERE id = ?').run('dia')
+  tick(db, new Date('2026-11-05T11:01:00Z'))
+  db.prepare('UPDATE automations SET enabled = 1 WHERE id = ?').run('dia')
+  tick(db, new Date('2026-11-05T11:02:00Z'))
+  const r2 = tick(db, new Date('2026-11-06T11:00:00Z'))
+  check('diário que já disparou, desligado e religado, volta a disparar no dia seguinte', r1.disparados === 1 && r2.disparados === 1 && comandos(db) === 2, JSON.stringify([r1, r2]))
+}
+{
   // Data absoluta: desligar e religar antes da data reabre a MESMA ocorrência.
   const db = novoBanco()
   publicar(db, 'abs', agendado('abs', '23/08/2030 às 14:30', GRUPO))
@@ -251,6 +266,25 @@ const comandos = (db) => db.prepare('SELECT COUNT(*) AS n FROM outbound_commands
   tick(db, T0)
   const r = tick(db, mais(T0, 15 * MIN), { avaliar: () => { throw new Error('falha de teste') } })
   check('avaliador que lança: job vira erro, motor segue e a série continua', r.erros === 1 && jobs(db, 'int').some((j) => j.status === 'erro' && /falha de teste/.test(j.detail)) && jobs(db, 'int').some((j) => j.status === 'pending'))
+}
+{
+  // O run da automação decide o estado do job: erro de fluxo não pode virar `done`.
+  for (const [status, esperado] of [['error', 'erro'], ['desligado', 'ignorado'], ['no_match', 'ignorado'], ['matched_live', 'done'], ['matched_shadow', 'done']]) {
+    const db = novoBanco()
+    publicar(db, 'x', agendado('x', 'daqui 5 minutos', GRUPO))
+    tick(db, T0)
+    tick(db, mais(T0, 5 * MIN), { avaliar: (_db, ev) => ({ eventId: ev.eventId, results: [{ automationId: 'x', status, commands: [] }] }) })
+    check(`run com status ${status} marca o job como ${esperado}`, jobs(db, 'x')[0].status === esperado, jobs(db, 'x')[0].status)
+  }
+}
+{
+  // JSON enviado direto à API não passa pelo compilador: o fuso precisa ser conferido no motor.
+  const bom = compilar(agendado('v', 'daqui 5 minutos', GRUPO), { agora: T0 })
+  const no = (d) => d.flow.nodes.find((n) => n.type === 'trigger.schedule')
+  const comFuso = (fuso) => { const d = structuredClone(bom); no(d).config.timezone = fuso; return d }
+  const errosDoFuso = (d) => validarAutomacao(null, d).filter((e) => /timezone/.test(e.path))
+  check('fuso IANA válido passa na validação do motor', errosDoFuso(bom).length === 0)
+  check('fuso inexistente é recusado na publicação', errosDoFuso(comFuso('Marte/Olympus')).length === 1)
 }
 
 // --- o eventId é determinístico --------------------------------------------------
