@@ -11,7 +11,7 @@
 // uma segunda lista.
 import {
   OPCOES_DE_ESCOPO, montarEscopo, descreverEscopo,
-  escopoExigeBusca, escopoExigeVariavel, escopoAceitaExcecao
+  escopoExigeBusca, escopoExigeVariavel, escopoAceitaExcecao, excecoesDoAlcance, escopoEhAbrangente
 } from '../src/web/public/logic/escopo.js'
 import { lerPerfil } from '../src/engine/server/perfilDeProvisionamento.js'
 
@@ -79,6 +79,22 @@ check('qualquer conversa: diz QUALQUER', /QUALQUER conversa/.test(descreverEscop
 check('marcadas: diz a marca', /marcadas com “vip”/.test(descreverEscopo({ modo: 'tagged', variavel: 'vip' })))
 check('a frase lista o que fica de fora', /Menos: Time \(grupo\)/.test(descreverEscopo({ modo: 'all_groups', excecoes: [grupo] })))
 check('sem escolha, a frase diz que é obrigatório', /obrigatório/.test(descreverEscopo({ modo: 'group' })) && /obrigatório/.test(descreverEscopo({})))
+
+check('alvo de tipo errado (grupo num alcance de contato) é recusado',
+  montarEscopo({ modo: 'contact', alvo: grupo }).escopo === null && montarEscopo({ modo: 'group', alvo: contato }).escopo === null)
+check('alvo de tipo errado não é descrito como escolhido', /obrigatório/.test(descreverEscopo({ modo: 'contact', alvo: grupo })))
+
+// Exceção que não pode ter efeito não vira restrição de mentira no resumo.
+check('"todos os contatos" descarta exceção de grupo (inócua)',
+  montarEscopo({ modo: 'all_contacts', excecoes: [grupo, contato] }).escopo.exclude.length === 1 &&
+  montarEscopo({ modo: 'all_contacts', excecoes: [grupo] }).escopo.exclude.length === 0 &&
+  !/Menos/.test(descreverEscopo({ modo: 'all_contacts', excecoes: [grupo] })))
+check('"todos os grupos" descarta exceção de contato; "qualquer conversa" guarda as duas',
+  montarEscopo({ modo: 'all_groups', excecoes: [contato] }).escopo.exclude.length === 0 &&
+  excecoesDoAlcance('everywhere', [grupo, contato]).length === 2)
+check('só os alcances amplos pedem confirmação',
+  ['all_contacts', 'all_groups', 'everywhere'].every(escopoEhAbrangente) &&
+  ['contact', 'group', 'tagged'].every((m) => !escopoEhAbrangente(m)))
 
 console.log(falhas === 0 ? '\nO SELETOR OFERECE O QUE O MOTOR ACEITA, E NADA FICA "TODOS" POR ESQUECIMENTO\n' : `\n${falhas} FALHA(S)\n`)
 process.exit(falhas === 0 ? 0 : 1)

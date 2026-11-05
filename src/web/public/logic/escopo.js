@@ -21,6 +21,17 @@ export const escopoExigeVariavel = (modo) => modo === 'tagged'
 // "Todos os grupos MENOS este": só faz sentido onde o destino é abrangente.
 export const escopoAceitaExcecao = (modo) => ABRANGENTES.has(modo)
 
+// A exceção só conta onde ela pode ter efeito: "todos os contatos" nunca inclui
+// grupo, então um grupo de fora ali seria uma restrição inócua que o resumo
+// faria parecer real.
+export function excecoesDoAlcance (modo, excecoes) {
+  const doTipo = modo === 'all_contacts' ? 'contact' : modo === 'all_groups' ? 'group' : null
+  return normalizarExcecoes(excecoes).filter((item) => !doTipo || item.kind === doTipo)
+}
+
+// "Todos" de propósito: a tela pede uma confirmação a mais só para estes.
+export const escopoEhAbrangente = (modo) => modo === 'all_contacts' || modo === 'all_groups' || modo === 'everywhere'
+
 const rotuloDe = (alvo) => alvo?.label || alvo?.id || ''
 const tipoDe = (kind) => (kind === 'group' ? 'grupo' : 'contato')
 
@@ -43,27 +54,29 @@ export function montarEscopo ({ modo, alvo = null, variavel = '', excecoes = [] 
     return { escopo: null, problema: 'Escolha onde o comando pode executar.' }
   }
   if (escopoExigeBusca(modo)) {
-    if (!alvo?.id) return { escopo: null, problema: `Escolha ${modo === 'group' ? 'um grupo' : 'um contato'} na busca.` }
+    // O tipo do alvo tem que ser o do alcance: um grupo vindo de uma busca antiga
+    // não vira "contato" só porque tem id.
+    if (!alvo?.id || alvo.kind !== modo) return { escopo: null, problema: `Escolha ${modo === 'group' ? 'um grupo' : 'um contato'} na busca.` }
     return { escopo: { include: [{ kind: modo, id: alvo.id }], exclude: [] }, problema: null }
   }
   if (escopoExigeVariavel(modo)) {
     const nome = String(variavel ?? '').trim()
     if (!nome) return { escopo: null, problema: 'Informe o nome da marca que identifica as conversas (por exemplo, vip).' }
-    return { escopo: { include: [{ kind: 'tagged', id: nome }], exclude: montarExclusoes(excecoes) }, problema: null }
+    return { escopo: { include: [{ kind: 'tagged', id: nome }], exclude: montarExclusoes(modo, excecoes) }, problema: null }
   }
-  return { escopo: { include: [{ kind: modo }], exclude: montarExclusoes(excecoes) }, problema: null }
+  return { escopo: { include: [{ kind: modo }], exclude: montarExclusoes(modo, excecoes) }, problema: null }
 }
 
-const montarExclusoes = (excecoes) => normalizarExcecoes(excecoes).map(({ kind, id }) => ({ kind, id }))
+const montarExclusoes = (modo, excecoes) => excecoesDoAlcance(modo, excecoes).map(({ kind, id }) => ({ kind, id }))
 
 // A frase de "Revise antes de instalar": o alcance, sem eufemismo.
 export function descreverEscopo ({ modo, alvo = null, variavel = '', excecoes = [] } = {}) {
-  const menos = normalizarExcecoes(excecoes)
+  const menos = excecoesDoAlcance(modo, excecoes)
   const sufixo = menos.length ? ` Menos: ${menos.map((e) => `${rotuloDe(e)} (${tipoDe(e.kind)})`).join(', ')}.` : ''
   switch (modo) {
     case 'contact':
     case 'group':
-      return alvo?.id
+      return alvo?.id && alvo.kind === modo
         ? `Autorizar somente ${rotuloDe(alvo)} (${tipoDe(modo)}).`
         : `Escolher ${modo === 'group' ? 'um grupo' : 'um contato'} é obrigatório antes de instalar.`
     case 'all_contacts': return `Autorizar em TODOS os contatos no privado.${sufixo}`

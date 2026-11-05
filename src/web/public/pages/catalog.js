@@ -3,7 +3,8 @@ import { avisoInline } from './variables.js'
 import { badge, button, el, emptyState, errorState, field, loading, notify, setBusy, setPageHeader } from '../ui.js'
 import { TYPE_LABELS, criarControleParametro, valorParametro } from '../logic/parametros.js'
 import {
-  OPCOES_DE_ESCOPO, montarEscopo, descreverEscopo, escopoExigeBusca, escopoExigeVariavel, escopoAceitaExcecao
+  OPCOES_DE_ESCOPO, montarEscopo, descreverEscopo, escopoExigeBusca, escopoExigeVariavel, escopoAceitaExcecao,
+  excecoesDoAlcance, escopoEhAbrangente
 } from '../logic/escopo.js'
 
 const CATEGORY_LABELS = {
@@ -115,6 +116,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
       return `Criar “${id}” a partir de ${template.name}${values.length ? `, com ${values.join('; ')}` : ''}.`
     })
     lines.push(descreverEscopo({ ...escopo, alvo: selectedTarget.value }))
+    lines.push(modoSelect.value === 'shadow' ? 'Modo sombra: só registra o que faria, sem enviar nada.' : 'Modo ao vivo: o comando responde de verdade assim que for instalado.')
     summaryArea.replaceChildren(
       el('div', { className: 'panel-heading' }, [
         el('div', {}, [el('h3', { text: 'Revise antes de instalar' }), el('p', { text: 'Confira cada ponto antes de publicar o comando.' })])
@@ -219,14 +221,21 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     }
   }
 
+  // Só a última busca pode desenhar resultado: uma resposta lenta de "grupo"
+  // não pode chegar depois da troca para "contato" e virar o alvo errado.
+  let buscaAtual = 0
+
   async function buscarDiretorio () {
+    const minha = ++buscaAtual
     if (!instanceSelect.value) {
       directoryResults.replaceChildren(el('p', { className: 'muted', text: 'Cadastre uma instância antes de procurar contatos ou grupos.' }))
       return
     }
     directoryResults.replaceChildren(el('p', { className: 'muted', text: 'Buscando…' }))
     try {
-      const result = await api.instances.directory(instanceSelect.value, { kind: tipoDaBusca(), q: searchInput.value.trim(), limit: 30 })
+      const tipo = tipoDaBusca()
+      const result = await api.instances.directory(instanceSelect.value, { kind: tipo, q: searchInput.value.trim(), limit: 30 })
+      if (minha !== buscaAtual) return
       if (!result.items.length) {
         directoryResults.replaceChildren(el('p', { className: 'muted', text: 'Nenhum resultado encontrado.' }))
         return
@@ -234,7 +243,8 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
       directoryResults.replaceChildren(...result.items.map((item) => button(`${item.label} · ${item.id}`, {
         variant: 'result',
         onClick: () => {
-          const escolhida = { ...item, kind: item.kind || tipoDaBusca() }
+          const escolhida = { ...item, kind: item.kind || tipo }
+          if (escolhida.kind !== tipoDaBusca()) return
           if (escopoExigeBusca(escopo.modo)) {
             selectedTarget.value = escolhida
             renderizarDestino()
@@ -246,7 +256,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
         }
       })))
     } catch (error) {
-      directoryResults.replaceChildren(errorState(error))
+      if (minha === buscaAtual) directoryResults.replaceChildren(errorState(error))
     }
   }
 
@@ -255,7 +265,15 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     searchTimer = window.setTimeout(buscarDiretorio, 320)
   }
   searchInput.addEventListener('input', agendarBusca)
-  instanceSelect.addEventListener('change', buscarDiretorio)
+  // O diretório é de UMA instância: o que foi escolhido na anterior não vale na nova.
+  instanceSelect.addEventListener('change', () => {
+    selectedTarget.value = null
+    escopo.excecoes = []
+    renderizarDestino()
+    renderizarExcecoes()
+    atualizarResumo()
+    buscarDiretorio()
+  })
   kindSelect.addEventListener('change', buscarDiretorio)
   variavelInput.addEventListener('input', () => { escopo.variavel = variavelInput.value; atualizarResumo() })
   modoEscopoSelect.addEventListener('change', () => {
@@ -263,7 +281,9 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     // O que foi escolhido para um destino não vale para outro: um grupo
     // escolhido não pode sobreviver à troca para "contato".
     if (selectedTarget.value && selectedTarget.value.kind !== escopo.modo) selectedTarget.value = null
-    if (!escopoAceitaExcecao(escopo.modo)) escopo.excecoes = []
+    escopo.excecoes = escopoAceitaExcecao(escopo.modo) ? excecoesDoAlcance(escopo.modo, escopo.excecoes) : []
+    // A marca de "conversas marcadas" não acompanha a pessoa para os outros alcances.
+    if (!escopoExigeVariavel(escopo.modo)) { escopo.variavel = ''; variavelInput.value = '' }
     ajustarCamposDoEscopo()
     renderizarDestino()
     renderizarExcecoes()
@@ -319,6 +339,8 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     }
   }
 
+  modoSelect.addEventListener('change', atualizarResumo)
+
   const botaoInstalar = button('Instalar', {
     variant: 'primary',
     onClick: async (event) => {
@@ -330,6 +352,9 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
         notify(problem, 'danger')
         return
       }
+      // "Todos" só vale se a pessoa escolheu: uma confirmação com o alcance em
+      // palavras separa escolher de clicar sem querer.
+      if (escopoEhAbrangente(escopo.modo) && !window.confirm(`${descreverEscopo({ ...escopo, alvo: selectedTarget.value })}\n\nInstalar com este alcance?`)) return
       setBusy(control, true, 'Instalando…')
       try {
         const result = await api.templates.install(rootTemplateId, montarCorpo())
