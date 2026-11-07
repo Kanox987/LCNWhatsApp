@@ -41,6 +41,14 @@ VOLUME ["/app/sessao", "/app/midia", "/app/data", "/home/node/.local/share/lcnwh
 
 ENV NODE_ENV=production
 
+# O processo roda como root (a imagem não troca de usuário), e o HOME dele seria
+# /root: o motor gravaria em /root/.local/share/lcnwhatsapp, que NENHUM volume
+# cobre, e as automações publicadas sumiriam a cada atualização. Fixar o HOME
+# aqui faz o caminho do VOLUME acima ser o que o motor realmente usa. Vem
+# DEPOIS do npm install, que usa o cache em /root/.npm.
+ENV HOME=/home/node
+RUN mkdir -p /home/node/.local/share/lcnwhatsapp
+
 # Sobe motor + painel + gateway. Rodar só o `index.js` deixa o gateway sem
 # motor: ele recebe mensagem, não decide nada, e fica mudo no WhatsApp sem
 # erro visível no app.

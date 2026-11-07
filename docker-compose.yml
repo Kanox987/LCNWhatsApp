@@ -21,11 +21,16 @@ services:
       # Caminho (dentro do container) do perfil a aplicar na primeira subida.
       # Vazio = instância limpa. Ex.: /run/lcn/provisioning/perfis/recuperar-x9.json
       LCN_PROVISION_PROFILE: ${LCN_PROVISION_PROFILE:-}
+      # Teto do administrador (JSON). Vazio = nenhuma concessão, só os padrões.
+      LCN_CONCESSOES: ${LCN_CONCESSOES:-}
     volumes:
       - ./sessao:/app/sessao
       - ./midia:/app/midia
       - ./data:/app/data
       - ./config.json:/app/config.json
+      # Banco do motor (automações publicadas, listas, donos) e acervo. Fora
+      # daqui, atualizar o sistema recria o container e o cliente perde tudo.
+      - ./estado:/home/node/.local/share/lcnwhatsapp
       # Perfis de provisionamento (o que a instância já nasce tendo). A pasta
       # existe no repositório, então o mount nunca cria diretório no host.
       - ./deployment:/run/lcn/provisioning:ro

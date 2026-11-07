@@ -11,7 +11,7 @@ MIN_NODE_MAJOR=22
 TARGET_NODE_MAJOR=24
 
 # Nunca rodar via sudo de um usuário normal — cria runtime.json, config.json,
-# sessao/, midia/, data/, node_modules e o venv do faster-whisper com dono
+# sessao/, midia/, data/, estado/, node_modules e o venv do faster-whisper com dono
 # root à toa. Só operações pontuais do sistema usam sudo/doas.
 if [ "$(id -u)" = "0" ] && [ -n "$SUDO_USER" ]; then
   echo "Não rode este instalador com sudo — ele não precisa, e isso deixaria"
@@ -264,7 +264,7 @@ else
 fi
 
 [ -f config.json ] || cp config.example.json config.json
-mkdir -p sessao midia data modelos
+mkdir -p sessao midia data modelos estado
 
 if [ "$MODE" = "docker" ]; then
   if command -v node >/dev/null 2>&1; then

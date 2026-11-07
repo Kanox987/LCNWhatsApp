@@ -28,6 +28,17 @@ ENV LCN_WHISPER_MODELS_DIR=/opt/lcn-modelos
 
 COPY . .
 
-VOLUME ["/app/sessao", "/app/midia", "/app/data", "/opt/lcn-modelos"]
+RUN chmod +x /app/bin/lcn-container.sh /app/bin/lock-and-run.sh /app/bin/lcn
+
+# Mesma razão do Dockerfile base: o banco do motor mora em
+# $HOME/.local/share/lcnwhatsapp, e sem HOME fixo isso cairia em /root, fora de
+# qualquer volume.
+VOLUME ["/app/sessao", "/app/midia", "/app/data", "/opt/lcn-modelos", "/home/node/.local/share/lcnwhatsapp"]
 ENV NODE_ENV=production
-CMD ["/app/bin/lock-and-run.sh", "/app/data/instance.lock", "node", "index.js"]
+ENV HOME=/home/node
+RUN mkdir -p /home/node/.local/share/lcnwhatsapp
+
+# Sobe motor + painel + gateway, como o Dockerfile base. O comando anterior
+# subia só o gateway: sem motor ele recebe mensagem, não decide nada e fica
+# mudo no WhatsApp sem erro visível.
+CMD ["/app/bin/lcn-container.sh"]

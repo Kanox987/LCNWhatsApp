@@ -31,7 +31,7 @@ NOME=LCNWhatsApp
 
 # garante config e pastas locais pros binds
 [ -f config.json ] || cp config.example.json config.json
-mkdir -p sessao midia data modelos
+mkdir -p sessao midia data modelos estado
 
 # --profile <arquivo>: perfil de provisionamento (o que a instância já nasce
 # tendo). Monta a PASTA do arquivo, somente leitura, e passa só o caminho por
@@ -70,6 +70,22 @@ if [ "$DOCKERFILE" = "Dockerfile.whisper" ]; then
     || echo ">> aviso: não consegui preparar o modelo agora — a 1ª transcrição real tenta de novo (pode demorar)."
 fi
 
+# Antes de recriar o container: versões antigas gravavam o banco do motor
+# (automações publicadas, listas, donos) DENTRO dele, em /root, onde nenhum
+# volume alcançava — recriar apagava tudo. Se ./estado ainda está vazio e o
+# container antigo existe, resgata o que houver antes do `rm -f`. Parado antes
+# de copiar, para o SQLite não ser copiado no meio de uma escrita.
+if [ -z "$(ls -A estado 2>/dev/null)" ] && "$ENGINE" inspect "$NOME" >/dev/null 2>&1; then
+  echo ">> resgatando o estado do motor do container anterior para ./estado ..."
+  "$ENGINE" stop -t 20 "$NOME" >/dev/null 2>&1 || true
+  for ORIGEM in /home/node/.local/share/lcnwhatsapp /root/.local/share/lcnwhatsapp; do
+    if "$ENGINE" cp "$NOME:$ORIGEM/." estado/ >/dev/null 2>&1 && [ -n "$(ls -A estado 2>/dev/null)" ]; then
+      echo ">> estado resgatado de $ORIGEM"
+      break
+    fi
+  done
+fi
+
 echo ">> (re)subindo container $NOME"
 "$ENGINE" rm -f "$NOME" >/dev/null 2>&1 || true
 
@@ -93,7 +109,14 @@ set -- "$@" \
   -v "$(pwd)/sessao:/app/sessao" \
   -v "$(pwd)/midia:/app/midia" \
   -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/config.json:/app/config.json"
+  -v "$(pwd)/config.json:/app/config.json" \
+  -v "$(pwd)/estado:/home/node/.local/share/lcnwhatsapp"
+
+# Teto do administrador (concessões). Só vai se estiver definido no ambiente de
+# quem roda o run.sh: vazio = nenhuma concessão, a instância fica com os padrões.
+if [ -n "${LCN_CONCESSOES:-}" ]; then
+  set -- "$@" -e "LCN_CONCESSOES=$LCN_CONCESSOES"
+fi
 
 if [ -n "$PERFIL" ]; then
   PASTA_DO_PERFIL=$(cd "$(dirname "$PERFIL")" && pwd)

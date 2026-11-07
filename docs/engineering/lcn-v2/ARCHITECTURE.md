@@ -203,7 +203,8 @@ O banco de dados central (`engine.sqlite`) reside estritamente sob a convenção
   * `src/engine/paths.js:7`: `PASTA_ENGINE = path.join(os.homedir(), '.local', 'share', 'lcnwhatsapp', 'engine')`
   * `src/engine/paths.js:8`: `ARQ_DB = path.join(PASTA_ENGINE, 'engine.sqlite')`
 * **Caminho real no Host**: `~/.local/share/lcnwhatsapp/engine/engine.sqlite`.
-* **Caminho dentro do Container**: `/home/node/.local/share/lcnwhatsapp/engine/engine.sqlite` (onde `node` é o usuário do container).
+* **Caminho dentro do Container**: `/home/node/.local/share/lcnwhatsapp/engine/engine.sqlite`. A imagem não troca de usuário (roda como root), então o `Dockerfile` e o `Dockerfile.whisper` fixam `ENV HOME=/home/node`; sem isso o motor gravaria em `/root/...`, fora de qualquer volume.
+* **Persistência no host**: `run.sh` e `docker-compose.yml` montam `./estado` nesse caminho (banco do motor, listas, donos, acervo). O `run.sh` resgata o estado de um container antigo para `./estado` antes de recriá-lo, uma única vez, quando `./estado` está vazio.
 
 ### 5.2. Caminhos que NÃO Devem ser Usados e Comentários sobre Volumes
 * **O banco NÃO mora em `/app/...`**:
@@ -215,6 +216,7 @@ O banco de dados central (`engine.sqlite`) reside estritamente sob a convenção
   # automações publicadas somem a cada recriação do container.
   VOLUME ["/app/sessao", "/app/midia", "/app/data", "/home/node/.local/share/lcnwhatsapp"]
   ```
+  (O trecho vale também para o `Dockerfile.whisper`, que agora sobe o mesmo `bin/lcn-container.sh`. Antes ele subia só o gateway, sem motor.)
   Colocar o banco de dados dentro de `/app/data`, `/app/sessao`, `/app/midia` ou diretórios locais como um suposto `/app/engine-home` é terminantemente proibido.
 * **Isolamento de Instâncias e Quadlet**:
   Conforme estabelecido em `src/paths.js:23-26`, o motor é unificado e central para que comandos e automações sejam compartilhados entre diferentes instâncias. Nas configurações de container do Podman/Quadlet (`src/instances/quadlet.js:62-66`), o container da instância monta apenas `sessao`, `midia`, `data`, `config.json` e o socket de comunicação (`PASTA_RUN_ENGINE:/run/lcn-engine`). O container do gateway **nunca** recebe acesso direto ao arquivo `engine.sqlite`.

@@ -131,7 +131,7 @@ else
 fi
 
 printf '\nDiretórios e permissões\n'
-for d in sessao midia data; do
+for d in sessao midia data estado; do
   if [ ! -d "$d" ]; then
     warn "$d/ não existe ainda."
   elif [ -w "$d" ]; then
