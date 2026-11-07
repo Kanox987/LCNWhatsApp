@@ -37,6 +37,7 @@ export async function fecharOrfaos (client, clienteEngine, accountId, { log, avi
   let fechados = 0
   let avisados = 0
   let completo = false
+  let houveFalha = false
   for (let lote = 0; lote < MAXIMO_DE_LOTES; lote++) {
     let pendentes
     try {
@@ -48,7 +49,7 @@ export async function fecharOrfaos (client, clienteEngine, accountId, { log, avi
       break
     }
     const lista = Array.isArray(pendentes) ? pendentes : []
-    if (!lista.length) { completo = true; break }
+    if (!lista.length) { completo = !houveFalha; break }
 
     let fechadosNoLote = 0
     for (const comando of lista) {
@@ -66,6 +67,7 @@ export async function fecharOrfaos (client, clienteEngine, accountId, { log, avi
         fechadosNoLote++
       } catch (erro) {
         log?.(`[engine] não consegui fechar o comando ${comando.id}: ${erro?.message || erro}`)
+        houveFalha = true
         continue
       }
 
@@ -83,9 +85,11 @@ export async function fecharOrfaos (client, clienteEngine, accountId, { log, avi
         }
       }
     }
-    // Falha parcial não é limpeza concluída: o que sobrou fica para a próxima conexão.
-    if (fechadosNoLote !== lista.length) break
-    if (lista.length < LOTE) { completo = true; break }
+    // Um comando que nunca fecha não trava os lotes seguintes (a drenagem segue
+    // enquanto houver progresso), mas a falha impede declarar a limpeza completa:
+    // o que sobrou fica para a próxima conexão.
+    if (!fechadosNoLote) break
+    if (lista.length < LOTE) { completo = !houveFalha; break }
   }
 
   if (fechados) log?.(`[engine] ${fechados} comando(s) interrompido(s) foram fechados, ${avisados} aviso(s) enviado(s)`)

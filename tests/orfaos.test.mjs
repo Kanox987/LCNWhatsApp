@@ -226,5 +226,18 @@ const download = (extra = {}) => ({
   check('quem não foi fechado não recebe aviso (evita aviso repetido)', enviadas.join() === 'c0@s.whatsapp.net,c2@s.whatsapp.net', enviadas.join())
 }
 
+// --- um comando que nunca fecha não trava os lotes seguintes -----------------
+{
+  const banco = [{ id: 'preso', commandType: 'whatsapp.reply', status: 'pending', payload: {} }]
+  for (let i = 0; i < 70; i++) banco.push({ id: `ok-${i}`, commandType: 'whatsapp.reply', status: 'pending', payload: {} })
+  const clienteEngine = { execucoes: {
+    pendentes: async (_c, limite) => banco.filter((x) => x.status === 'pending').slice(0, limite),
+    confirmar: async (id) => { if (id === 'preso') throw new Error('recusa sempre'); banco.find((x) => x.id === id).status = 'outcome_unknown' }
+  } }
+  const r = await fecharOrfaos({ message: { send: async () => ({}) } }, clienteEngine, 'conta', { log: () => {} })
+  check('drena os 70 mesmo com um preso na frente', r.fechados === 70 && banco.filter((x) => x.status === 'pending').map((x) => x.id).join() === 'preso', JSON.stringify(r))
+  check('mas não declara completo, para tentar o preso de novo', r.completo === false)
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE COMANDO ÓRFÃO PASSARAM')
 process.exit(falhas ? 1 : 0)
