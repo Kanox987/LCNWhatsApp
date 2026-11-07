@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { criarFila, normalizarPrioridade } from './fila.js'
 import { limitesDeMidia } from '../mediaLimits.js'
+import { maxPendentesEfetivo } from '../agent/concessoes.js'
 import { sinalDoEvento, cancelarTrabalhoExterno } from './cancelamento.js'
 
 // Paralelo ao relógio do envio: o cabeçalho acompanha toda a execução sem
@@ -23,7 +24,7 @@ export function criarFilasDeRecursos (cfg = {}, { aoMudar, agora } = {}) {
   const hardware = cfg?.hardware || {}
   const limites = limitesDeMidia(cfg)
   const opcoes = {
-    maxPendentes: hardware.maxPendentes, agingMs: hardware.agingMs,
+    maxPendentes: maxPendentesEfetivo(cfg), agingMs: hardware.agingMs,
     esperaMaximaMs: hardware.esperaMaximaMs, agora, aoMudar
   }
   const filas = Object.fromEntries(Object.entries({

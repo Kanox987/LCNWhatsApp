@@ -11,6 +11,7 @@
 import crypto from 'crypto'
 import { ErroHttp } from './transport.js'
 import { validarAutomacao } from './validate.js'
+import { limiteAdministrativo } from '../../agent/concessoes.js'
 import { ACOES_SUPORTADAS, CONDICOES_SUPORTADAS, GATILHOS_SUPORTADOS } from './runtimeCapabilities.js'
 
 function jsonOuNull (valor) {
@@ -100,6 +101,13 @@ export function criarServicoAutomacoes (db) {
     const idLimpo = id.trim()
     const documento = normalizarDocumento(documentoRecebido, idLimpo, 1)
     const agora = new Date().toISOString()
+    // Cota do administrador (0 = sem limite), no único caminho que cria
+    // automação: editor, modelo do catálogo e perfil passam por aqui. Só barra
+    // id NOVO; as existentes seguem editáveis e apagáveis.
+    const maximo = limiteAdministrativo('limites.maxAutomacoes')
+    if (maximo > 0 && !obterAutomation.get(idLimpo) && db.prepare('SELECT COUNT(*) AS n FROM automations').get().n >= maximo) {
+      throw new ErroHttp(409, `Limite de automações atingido (${maximo}). Apague uma para criar outra.`)
+    }
     try {
       db.prepare(`INSERT INTO automations
         (id, schema_version, enabled, active_revision_id, created_at, updated_at)

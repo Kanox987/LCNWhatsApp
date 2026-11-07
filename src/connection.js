@@ -24,6 +24,7 @@ import { EXIT_QUARANTINED } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel, construirEventoDeGrupo, chatIdDoEvento } from './engine/zapoAdapter.js'
 import { criarFila } from './engine/fila.js'
+import { maxPendentesEfetivo } from './agent/concessoes.js'
 import { comEvento, cancelarTrabalhoExterno, erroDeCancelamento } from './engine/cancelamento.js'
 import { tipoPodeCasar } from './engine/canonicalEvent.js'
 import { fecharOrfaos } from './engine/orfaos.js'
@@ -115,7 +116,7 @@ export function criarAdmissaoDeEventos (cfg = {}, { registrar = log, aoMudar } =
   const fila = criarFila({
     recurso: 'admissao',
     limite: positivo(hardware.admissaoConcorrencia, ADMISSAO_CONCORRENCIA_PADRAO),
-    maxPendentes: hardware.maxPendentes,
+    maxPendentes: maxPendentesEfetivo(cfg),
     agingMs: hardware.agingMs,
     esperaMaximaMs: hardware.esperaMaximaMs,
     aoMudar: (estado) => {

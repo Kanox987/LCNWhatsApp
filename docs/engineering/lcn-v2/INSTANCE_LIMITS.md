@@ -154,6 +154,63 @@ São quatro regras distintas, e em dois casos `Math.min` dá a resposta errada:
 | ao reduzir a quota | O valor configurado é preservado; o efetivo é cortado na leitura, nunca abaixo do mínimo obrigatório. |
 | efeito prático | Mais alto consulta mais rápido e custa RAM por processo. |
 
+### `hardware.maxPendentes`
+
+**Fila de ação** — Quantas ações podem esperar vaga em cada fila (socket, rede, CPU, admissão) antes de a nova ser recusada. Aqui 0 não é ilimitado: é nenhuma espera, recusa quando não há vaga.
+
+| | |
+|---|---|
+| tipo | inteiro |
+| padrão | `256` (de `src/config.js`) |
+| intervalo válido | inteiro entre 0 e o teto concedido (sem concessão, sem teto) |
+| regra de resolução | `teto com piso` |
+| fonte do limite | a administração desta instalação |
+| quem altera a concessão | administração, por `PUT /api/v1/instances/:id/grants` |
+| quem altera o valor | o cliente, por `PUT /api/v1/instances/:id/optimization` |
+| herança | nenhuma; só a entrada de `grants` desta instância |
+| validação no backend | Recusa valor acima do teto concedido. O mínimo obrigatório vence tanto a preferência do cliente quanto a concessão: conceder abaixo do mínimo é recusado na origem, porque a instância não conseguiria obedecer. |
+| enforcement no runtime | src/engine/fila.js, pelo valor efetivo que filasDeRecursos.js e connection.js passam |
+| ao reduzir a quota | O valor configurado é preservado; o efetivo é cortado na leitura, nunca abaixo do mínimo obrigatório. |
+| efeito prático | Mais alto aguenta rajada maior e segura mais memória; acima do limite a ação é recusada em vez de acumular. |
+
+### `limites.maxConexoes`
+
+**Conexões externas** — Quantas conexões externas a instância mantém cadastradas, contando as que já vêm prontas. 0 = sem limite.
+
+| | |
+|---|---|
+| tipo | inteiro |
+| padrão | `0` (de `src/config.js`) |
+| intervalo válido | inteiro ≥ 0; 0 significa SEM LIMITE |
+| regra de resolução | `teto onde zero é ilimitado` |
+| fonte do limite | a administração desta instalação |
+| quem altera a concessão | administração, por `PUT /api/v1/instances/:id/grants` |
+| quem altera o valor | o cliente, por `PUT /api/v1/instances/:id/optimization` |
+| herança | nenhuma; só a entrada de `grants` desta instância |
+| validação no backend | Recusa valor acima do teto. **Zero não passa por comparação de grandeza**: como zero quer dizer "sem limite", `Math.min(0, teto)` devolveria 0 e ELEVARIA o limite a infinito passando por uma checagem que parece correta. Pedir zero contra um teto concedido é tratado como tentativa de elevação e vira o teto. |
+| enforcement no runtime | src/engine/server/routes/connections.js (POST /connections) |
+| ao reduzir a quota | O valor configurado é preservado; o efetivo é cortado na leitura. Se o cliente tinha 0 (sem limite), passa a valer o teto concedido. |
+| efeito prático | Acima do limite o cadastro de uma nova conexão é recusado; as existentes continuam funcionando. |
+
+### `limites.maxAutomacoes`
+
+**Automações** — Quantas automações a instância mantém cadastradas, de qualquer origem (editor, modelo ou perfil). 0 = sem limite.
+
+| | |
+|---|---|
+| tipo | inteiro |
+| padrão | `0` (de `src/config.js`) |
+| intervalo válido | inteiro ≥ 0; 0 significa SEM LIMITE |
+| regra de resolução | `teto onde zero é ilimitado` |
+| fonte do limite | a administração desta instalação |
+| quem altera a concessão | administração, por `PUT /api/v1/instances/:id/grants` |
+| quem altera o valor | o cliente, por `PUT /api/v1/instances/:id/optimization` |
+| herança | nenhuma; só a entrada de `grants` desta instância |
+| validação no backend | Recusa valor acima do teto. **Zero não passa por comparação de grandeza**: como zero quer dizer "sem limite", `Math.min(0, teto)` devolveria 0 e ELEVARIA o limite a infinito passando por uma checagem que parece correta. Pedir zero contra um teto concedido é tratado como tentativa de elevação e vira o teto. |
+| enforcement no runtime | src/engine/server/automationsService.js (criar), caminho único de toda automação nova |
+| ao reduzir a quota | O valor configurado é preservado; o efetivo é cortado na leitura. Se o cliente tinha 0 (sem limite), passa a valer o teto concedido. |
+| efeito prático | Acima do limite criar outra é recusado; as existentes continuam funcionando e podem ser editadas ou apagadas. |
+
 ### `hardware.modoEconomia`
 
 **Modo economia** — Reduz trabalho de fundo e verbosidade.

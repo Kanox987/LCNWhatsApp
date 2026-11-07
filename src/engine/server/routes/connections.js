@@ -5,6 +5,7 @@ import { ARQ_CONFIG } from '../../../paths.js'
 import { ErroDeDeclaracao, validarConfiguracao } from '../conexoes/declaracao.js'
 import { CONEXOES_PRONTAS } from '../conexoes/prontas.js'
 import { ID_GLOBAL } from '../attributeScopes.js'
+import { limiteAdministrativo } from '../../../agent/concessoes.js'
 
 function jsonOuNull (valor) {
   if (valor == null) return null
@@ -263,6 +264,14 @@ export function registrarRotasConnections (roteador, db) {
     const config = configuracaoValidada(kind, body.config)
     const secret = segredoValidado(body.secret)
     const agora = new Date().toISOString()
+    // Cota do administrador (0 = sem limite). Só barra cadastro NOVO: as que já
+    // existem seguem funcionando, e o 409 de id repetido continua valendo. Conta o
+    // TOTAL (as prontas também): isentar por id deixaria apagar uma pronta e
+    // recriar outra no lugar, e o que protege o hardware é o total.
+    const maximo = limiteAdministrativo('limites.maxConexoes')
+    if (maximo > 0 && !obter.get(id) && db.prepare('SELECT COUNT(*) AS n FROM connections').get().n >= maximo) {
+      throw new ErroHttp(409, `Limite de conexões externas atingido (${maximo}). Remova uma para cadastrar outra.`)
+    }
     try {
       db.prepare(`INSERT INTO connections (id, kind, config_json, secret_json, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)`)

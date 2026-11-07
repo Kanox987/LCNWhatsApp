@@ -43,6 +43,7 @@
 // precisar reconfigurar. Em troca, a tela tem de mostrar os dois números —
 // é o que `explicar()` serve.
 import { APARELHOS } from '../aparelho.js'
+import { MAX_PENDENTES_PADRAO } from '../engine/fila.js'
 
 const NAVEGADORES = APARELHOS.map((a) => a.id)
 
@@ -58,6 +59,7 @@ export const PARAMETROS = {
     regra: 'teto onde zero é ilimitado',
     minimo: 0,
     significado: 'Quanto a instância pode baixar por segundo. 0 = sem limite.',
+    unidade: 'B/s',
     efeito: 'Download mais lento, memória e rede mais previsíveis.',
     enforcement: { onde: 'src/bandwidth.js, pelo valor efetivo que obterOtimizacao devolve', concessaoChega: true }
   },
@@ -68,6 +70,7 @@ export const PARAMETROS = {
     regra: 'teto onde zero é ilimitado',
     minimo: 0,
     significado: 'Quanto a instância pode enviar por segundo. 0 = sem limite.',
+    unidade: 'B/s',
     efeito: 'Envio mais lento, socket menos sujeito a engasgo.',
     enforcement: { onde: 'src/bandwidth.js, pelo valor efetivo que obterOtimizacao devolve', concessaoChega: true }
   },
@@ -100,6 +103,38 @@ export const PARAMETROS = {
     significado: 'Páginas de banco que cada conexão mantém em memória.',
     efeito: 'Mais alto consulta mais rápido e custa RAM por processo.',
     enforcement: { onde: 'src/engine/server/db.js (abrirBanco), pelo teto que chega no ambiente LCN_CONCESSOES', concessaoChega: true }
+  },
+  'hardware.maxPendentes': {
+    rotulo: 'Fila de ação',
+    tipo: 'inteiro',
+    padrao: MAX_PENDENTES_PADRAO,
+    regra: 'teto com piso',
+    minimo: 0,
+    significado: 'Quantas ações podem esperar vaga em cada fila (socket, rede, CPU, admissão) antes de a nova ser recusada. Aqui 0 não é ilimitado: é nenhuma espera, recusa quando não há vaga.',
+    efeito: 'Mais alto aguenta rajada maior e segura mais memória; acima do limite a ação é recusada em vez de acumular.',
+    enforcement: { onde: 'src/engine/fila.js, pelo valor efetivo que filasDeRecursos.js e connection.js passam', concessaoChega: true }
+  },
+  'limites.maxConexoes': {
+    rotulo: 'Conexões externas',
+    tipo: 'inteiro',
+    padrao: 0,
+    regra: 'teto onde zero é ilimitado',
+    minimo: 0,
+    unidade: 'conexões',
+    significado: 'Quantas conexões externas a instância mantém cadastradas, contando as que já vêm prontas. 0 = sem limite.',
+    efeito: 'Acima do limite o cadastro de uma nova conexão é recusado; as existentes continuam funcionando.',
+    enforcement: { onde: 'src/engine/server/routes/connections.js (POST /connections)', concessaoChega: true }
+  },
+  'limites.maxAutomacoes': {
+    rotulo: 'Automações',
+    tipo: 'inteiro',
+    padrao: 0,
+    regra: 'teto onde zero é ilimitado',
+    minimo: 0,
+    unidade: 'automações',
+    significado: 'Quantas automações a instância mantém cadastradas, de qualquer origem (editor, modelo ou perfil). 0 = sem limite.',
+    efeito: 'Acima do limite criar outra é recusado; as existentes continuam funcionando e podem ser editadas ou apagadas.',
+    enforcement: { onde: 'src/engine/server/automationsService.js (criar), caminho único de toda automação nova', concessaoChega: true }
   },
   'hardware.modoEconomia': {
     rotulo: 'Modo economia',
@@ -198,6 +233,7 @@ export function resolverCampo (chave, configurado, concedido) {
 
   if (spec.regra === 'teto onde zero é ilimitado') {
     const temTeto = Number.isFinite(concedido) && concedido > 0
+    const unidade = spec.unidade ? ` ${spec.unidade}` : ''
     if (!temTeto) {
       return { ...base, efetivo: numero, origem: 'preferência do cliente', motivo: null }
     }
@@ -210,8 +246,8 @@ export function resolverCampo (chave, configurado, concedido) {
         efetivo: concedido,
         origem: 'concessão do administrador',
         motivo: numero === 0
-          ? `Sem limite não está liberado; a administração concedeu ${concedido} B/s.`
-          : `A administração concedeu até ${concedido} B/s.`
+          ? `Sem limite não está liberado; a administração concedeu ${concedido}${unidade}.`
+          : `A administração concedeu até ${concedido}${unidade}.`
       }
     }
     return { ...base, efetivo: numero, origem: 'preferência do cliente', motivo: null }
@@ -348,6 +384,20 @@ export function explicar (configurado = {}, concessoes = {}) {
 // chamada, e `limitesDeMidia` é chamado por operação de mídia.
 export function valorEfetivo (chave, configurado = {}, concessoes = {}) {
   return resolverCampo(chave, pegar(configurado, chave), concessoes[chave]).efetivo
+}
+
+// Valor inválido na config volta ao padrão (como a fila sempre fez) antes de o
+// teto concedido entrar; negativo não pode virar "sem espera" pela porta dos fundos.
+export function maxPendentesEfetivo (cfg, concessoes = concessoesDoProcesso()) {
+  const pedido = cfg?.hardware?.maxPendentes
+  const valido = Number.isSafeInteger(pedido) && pedido >= 0 ? pedido : undefined
+  return valorEfetivo('hardware.maxPendentes', { hardware: { maxPendentes: valido } }, concessoes)
+}
+
+// Cota administrativa de criação: 0 = sem limite. Não há preferência do
+// cliente aqui (ele não escolhe quantas conexões quer), só o teto concedido.
+export function limiteAdministrativo (chave, concessoes = concessoesDoProcesso()) {
+  return valorEfetivo(chave, {}, concessoes)
 }
 
 // ---------------------------------------------------------------------------
