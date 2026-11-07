@@ -1437,23 +1437,26 @@ container e não tem terminal.
 
 **Por quê:** sem a rota, não há o que elevar; o limite é imposto por quem cria o container.
 
-## D-57 — Frente I: teto por remetente não será implementado agora
+## D-57 — Frente I: teto por remetente — não implementado, em aberto para o dono
 
-**Decidido (07/11/2026), após reler a frente contra o que o dono pediu:** não entra teto por remetente na admissão.
-O que protege hoje: profundidade de recursão limitada; regex de usuário recusada; cada fila tem `maxPendentes`
-(configurável pelo administrador, 0 nunca é "sem fila") e recusa relatada, nunca descarte silencioso (D-13);
-cotas de conexões e automações por concessão. O abuso que um teto por remetente resolveria (uma pessoa enchendo a
-fila de um grupo) já aparece limitado pela serialização por conversa da admissão e pelo `maxPendentes`.
+**Estado em 07/11/2026:** nada implementado. O que existe: profundidade de recursão limitada; regex de usuário
+recusada; cada fila tem `maxPendentes` (configurável pelo administrador) com recusa relatada, nunca descarte
+silencioso (D-13); cotas de conexões e automações por concessão.
 
-**Por quê:** um número fixo no código tiraria a capacidade de quem usa o bot em grupo grande de propósito ("padrão não
-é teto"). Sem um caso medido de abuso, qualquer valor seria chute.
+**Consulta (Gemini, duas contas, 07/11):** as duas disseram "vale fazer". O abuso concreto: **um remetente disparando
+comandos pesados em vários grupos ao mesmo tempo**. A serialização é por conversa e `maxPendentes` é por fila, então
+nada limita quanto UM remetente ocupa da fila no todo; ele esgota o `maxPendentes` e quem recebe a recusa são os
+outros. Uma primeira versão deste registro dizia que isso já estava coberto; **estava errado**, a serialização por
+conversa não cobre o caso entre conversas.
 
-**Quando reabrir:** se um soak ou produção mostrar um remetente esgotando `maxPendentes` de uma conversa. A forma
-será configurável (concessão do administrador + preferência), em `filasDeRecursos.js`, com recusa relatada ao
-remetente.
+**Contra, e por que não entrou sem pergunta:** mexe no coração da admissão (`fila.js`), onde o projeto já errou
+uma vez; a tentativa antiga (`senderRateLimiter`) descartava mensagem legítima em silêncio, era singleton e tinha
+`Map` sem limite. Nada foi medido em produção que mostre esse abuso.
 
-**Consulta:** o Gemini foi consultado sobre o desenho; a resposta não chegou a tempo e a decisão acima não depende
-dela.
+**Desenho mínimo se o dono quiser:** chave `limites.maxPendentesPorRemetente` (0 = sem limite, padrão 0, concessão do
+administrador + preferência do cliente, como `maxPendentes`); contagem dos pendentes por remetente dentro da própria
+fila, liberada quando a tarefa sai (sem `Map` global que cresce); acima do limite, recusa relatada ao remetente com
+o motivo. Nenhum número fixo no código.
 
 ## D-58 — Estado do motor sai da camada gravável do container
 
