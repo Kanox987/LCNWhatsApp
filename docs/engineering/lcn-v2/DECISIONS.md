@@ -116,6 +116,8 @@ que o sistema aceita, e aí a tela estaria decidindo.
 
 ## D-10. O agendamento não entra até o dono decidir o contexto sintético
 
+> **Superada em 04/11/2026 pela D-48.** O dono decidiu; o agendador existe no motor. O texto abaixo fica como registro de por que a frente esperou.
+
 **Decidido:** frente G **parada**, documentada em `SCHEDULER.md`.
 
 **Alternativa recusada:** escrever o worker agora, decidindo o contexto no meio.
@@ -131,6 +133,8 @@ como a `v2` produziu seis defeitos numa frente que nunca rodou.
 
 ## D-11. `setTimeout` por agendamento está fora, mesmo quando a frente G voltar
 
+> **Continua valendo:** o agendador (D-48) é fila em tabela, reconciliada e reivindicada por `UPDATE`, sem temporizador por compromisso.
+
 **Decidido:** fila e tabela, nunca temporizador vivo.
 
 **Alternativa recusada:** um `setTimeout` por compromisso.
@@ -141,6 +145,8 @@ na fila por 10 mil temporizadores vivos, e **perde a tentativa num reinício**.
 
 ## D-12. `sem vaga: tenta de novo` fica fora da v1 da linguagem
 
+> **Continua valendo** depois do agendador.
+
 **Decidido:** o compilador **recusa** a palavra, com erro que diz por quê.
 
 **Alternativa recusada:** aceitar e reenfileirar.
@@ -150,6 +156,8 @@ na fila por 10 mil temporizadores vivos, e **perde a tentativa num reinício**.
 o motor não sabe representar.
 
 ## D-13. O teto por remetente não vem da `v2`
+
+> **Em aberto em 06/11/2026:** nenhum teto por remetente na admissão. Só existe a profundidade de recursão. Ver D-57.
 
 **Decidido:** entra em `src/engine/filasDeRecursos.js` e `fila.js`, por conta,
 com a recusa **relatada** — frente I.
@@ -1326,6 +1334,114 @@ antes de entrar: 4 mutações em `provisionamento.js`, `registroDePacotes.js` e 
 derrubaram 5, 3, 5 e 7 verificações; arquivos de `src` restaurados.
 
 **Bateria completa depois de D-47: `exit=0`, 5332 ✅, zero ❌.**
+
+## D-48 — O agendador é do motor, com remetente sintético que não é dono nem admin
+
+**Decidido (04/11/2026):** `src/engine/server/agendador.js`, migração 015, classe `agendado` na linguagem. Disparo
+acorda só a automação dona, com remetente `__schedule__` (sem `isAdmin`), destinos fixos do `onde:`, conta
+pelo `responder` (pool: membro ligado de maior peso; sem pool: a única instância; ambíguo = `ignorado` com motivo).
+Atraso até 5 min dispara; além vira `perdido`; recorrente nunca dispara em rajada.
+
+**Alternativa recusada:** forjar o dono como remetente; escolher conta ao acaso; poll do gateway no banco do motor.
+
+**Por quê:** permissão não se decide com dado de um momento que passou; o gateway relata e o motor grava;
+mandar pelo número errado é pior que não mandar. Detalhes em `SCHEDULER.md`.
+
+## D-49 — Perfil de provisionamento: o container nasce com o que o operador escolheu, e falha de perfil não derruba o container
+
+**Decidido (05/11/2026):** arquivo JSON (`deployment/perfis/`), aplicado na primeira subida por
+`bin/lcn-container.sh` (`lcn engine provisionar`), numa transação só (serviço extraído de `routes/pacotes.js`,
+D-40), com estado em `provisioning_profile_applications` (migração 016) e hash canônico. Aditivo e idempotente;
+mesma versão com hash diferente é erro; política administrativa opcional (`LCN_PROVISION_POLICY`), ausente = permite tudo.
+
+**Alternativa recusada:** reaplicar a cada reinício; falhar fechado no boot; uma chamada por pacote.
+
+**Por quê:** reinício em laço por perfil ruim é pior que instância vazia; sem transação única um rollback
+deixaria pools órfãos.
+
+## D-50 — Listas de pessoas são atributos de entidade, não tabela nova
+
+**Decidido (05/11/2026):** lista = linha de `entity_attributes` (`__lista__<nome>`), como os donos. Sem migração 017.
+A pergunta "está na lista?" é `sender.lists.<nome>` / `target.lists.<nome>` na condição comum; nós novos só para
+escrever (`action.list.add/remove`). Importar/exportar por arquivo no acervo, importação tudo-ou-nada com prévia.
+
+**Alternativa recusada:** tabelas `lists/list_entries`; nó `condition.list.member`.
+
+**Por quê:** herda a trava de `__`, o CRUD da aba Dados e o índice; menos camadas tocadas. LID x telefone é tratado
+na borda pelo `lidMap`, como nos donos.
+
+## D-51 — "Quem pode usar" é o campo `acesso` do gatilho
+
+**Decidido (05/11/2026):** `acesso: todos | dono | admins | lista <nome>`; param `acesso` nos modelos; controle
+próprio no painel. Cache de admin com geração (rebaixado não ressuscita), LID resolvido pelo mapa, mensagem do
+próprio bot não vale como dono.
+
+**Alternativa recusada:** tipo novo de `allowFrom`.
+
+**Por quê:** `allowFrom` só decide external/any; quem pode é outra pergunta.
+
+## D-52 — Escopo `listed` ficou de fora; a restrição por lista vive no gatilho
+
+**Decidido (05/11/2026):** não existe escopo "contatos da lista X". O dono aprovou fazer por último (06/11); a reavaliação do risco de autorização dinâmica fica registrada aqui quando sair.
+
+**Por quê:** escopo por lista seria autorização dinâmica sobre automação publicada (risco apontado na revisão
+externa); `acesso: lista X` já cobre "quem".
+
+## D-53 — Acervo aceita JSON e texto editável sob trava entre processos
+
+**Decidido (05/11/2026):** JSON validado com limite próprio; `acervo.read` devolve conteúdo só de `text/plain` e
+`application/json`, reservando bytes no orçamento antes de ler; `action.acervo.edit` (`jsonAdd`/`jsonRemove`/
+`appendLine`) lê-modifica-grava sob trava de arquivo (painel e gateway são processos distintos); trava só é solta
+por quem a tem.
+
+**Alternativa recusada:** nunca ler conteúdo; caminho arbitrário em disco.
+
+**Por quê:** é a exceção mínima à fronteira "o motor não vê bytes", limitada a dois tipos e a um teto.
+
+## D-54 — Catálogo oferece os seis alcances do motor
+
+**Decidido (05/11/2026):** o formulário de instalação passa a oferecer um contato, um grupo, todos os contatos,
+todos os grupos, qualquer conversa e conversas marcadas; "todos" pede confirmação; busca antiga não vale.
+
+**Por quê:** o motor e a linguagem já aceitavam; só o painel escondia.
+
+## D-55 — Cotas administrativas: valem na criação, nunca desfazem o existente
+
+**Decidido (06/11/2026):** `limites.maxConexoes`, `limites.maxAutomacoes` e `hardware.maxPendentes` entram por
+`LCN_CONCESSOES` (0 = sem limite; só a fila de ação tem valor padrão). Só bloqueiam criação nova (409); reduzir
+não apaga nem despublica. Padrão não é teto: nada fixo no código.
+
+**Alternativa recusada:** teto no código; cortar o que já existe.
+
+**Por quê:** é a regra do dono desde a frente E.
+
+## D-56 — Painel dentro do container não tem a rota de concessões; a segurança é o container, não o login
+
+**Decidido (06/11/2026):** `GET/PUT /instances/:id/grants` não são registradas quando `dentroDeContainer()`
+(`/.dockerenv`, `/run/.containerenv` ou `LCN_INCONTAINER=1`); a rota some (404). O painel do administrador, no
+host, mantém. A Frente J (login do painel) foi **descartada** pelo dono: o cliente só vê o painel do próprio
+container e não tem terminal.
+
+**Alternativa recusada:** login, papel e sessão no painel.
+
+**Por quê:** sem a rota, não há o que elevar; o limite é imposto por quem cria o container.
+
+## D-57 — Frente I: teto por remetente continua não feito
+
+**Estado em 06/11/2026:** existe profundidade de recursão; regex de usuário segue recusada; nenhum teto por
+remetente na admissão. Se vier, será configurável (padrão não é teto), em `filasDeRecursos.js`, com recusa
+relatada, nunca descarte silencioso (D-13).
+
+## D-58 — Estado do motor sai da camada gravável do container
+
+**Decidido (06/11/2026):** o banco do motor ficava em `$HOME/.local/share/lcnwhatsapp/engine`; a imagem rodava
+como root (HOME=/root), fora de qualquer volume, então atualizar o container apagava listas, automações e perfil.
+Agora `ENV HOME=/home/node`, montagem `./estado` nesse caminho (`run.sh`, compose, install, check-deps), o
+`Dockerfile.whisper` sobe o motor via `lcn-container.sh`, e `run.sh` resgata uma vez o estado de um container
+antigo (`cp` de `/home/node` ou `/root`) quando `estado/` está vazio. `LCN_CONCESSOES` é repassada ao container.
+
+**Por quê:** perder as informações do cliente numa atualização é o pior defeito possível para este produto.
+
 
 ## Consultas externas desta rodada
 
