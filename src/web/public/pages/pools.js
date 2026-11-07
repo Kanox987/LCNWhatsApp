@@ -22,7 +22,7 @@ export async function renderPools ({ refresh }) {
   setPageHeader({
     eyebrow: 'Quem atende',
     title: 'Pools de números',
-    description: 'O conjunto de números que pode responder por um comando. Todo comando do catálogo pede um — é aqui que ele nasce.',
+    description: 'O conjunto de números que pode responder por um comando. Todo comando do catálogo pede um — é aqui que ele nasce. Pool agrupa números; ele não dá permissão. Quem pode usar o comando é o campo "Quem pode usar" do próprio comando, e onde ele vale é o alcance escolhido na instalação.',
     actions: [button('Atualizar', { onClick: () => refresh?.() })]
   })
 
