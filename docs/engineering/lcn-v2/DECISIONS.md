@@ -1437,11 +1437,23 @@ container e não tem terminal.
 
 **Por quê:** sem a rota, não há o que elevar; o limite é imposto por quem cria o container.
 
-## D-57 — Frente I: teto por remetente continua não feito
+## D-57 — Frente I: teto por remetente não será implementado agora
 
-**Estado em 06/11/2026:** existe profundidade de recursão; regex de usuário segue recusada; nenhum teto por
-remetente na admissão. Se vier, será configurável (padrão não é teto), em `filasDeRecursos.js`, com recusa
-relatada, nunca descarte silencioso (D-13).
+**Decidido (07/11/2026), após reler a frente contra o que o dono pediu:** não entra teto por remetente na admissão.
+O que protege hoje: profundidade de recursão limitada; regex de usuário recusada; cada fila tem `maxPendentes`
+(configurável pelo administrador, 0 nunca é "sem fila") e recusa relatada, nunca descarte silencioso (D-13);
+cotas de conexões e automações por concessão. O abuso que um teto por remetente resolveria (uma pessoa enchendo a
+fila de um grupo) já aparece limitado pela serialização por conversa da admissão e pelo `maxPendentes`.
+
+**Por quê:** um número fixo no código tiraria a capacidade de quem usa o bot em grupo grande de propósito ("padrão não
+é teto"). Sem um caso medido de abuso, qualquer valor seria chute.
+
+**Quando reabrir:** se um soak ou produção mostrar um remetente esgotando `maxPendentes` de uma conversa. A forma
+será configurável (concessão do administrador + preferência), em `filasDeRecursos.js`, com recusa relatada ao
+remetente.
+
+**Consulta:** o Gemini foi consultado sobre o desenho; a resposta não chegou a tempo e a decisão acima não depende
+dela.
 
 ## D-58 — Estado do motor sai da camada gravável do container
 
