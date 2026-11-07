@@ -338,15 +338,25 @@ function anotarEnqueteCriada (event, clienteEngine) {
 // itens no JSON). Quem reinicia perde a lembrança, mas aí os pendentes viram
 // `outcome_unknown` em `fecharOrfaos`, então nada é reenviado.
 const LIMITE_DE_DESPACHADOS = 5000
-export function criarRegistroDeDespachados (limite = LIMITE_DE_DESPACHADOS) {
-  const vistos = new Set()
+// Um id só é esquecido depois de uma hora (a mesma régua de `fecharOrfaos`): até
+// lá o comando ainda pode estar em andamento, e expulsá-lo só porque a lista
+// encheu deixaria o evento repetido executá-lo de novo. O teto duro existe para
+// a memória não crescer sem fim numa enxurrada.
+const VALIDADE_DO_DESPACHO_MS = 60 * 60 * 1000
+export function criarRegistroDeDespachados (limite = LIMITE_DE_DESPACHADOS, { agora = Date.now, validadeMs = VALIDADE_DO_DESPACHO_MS } = {}) {
+  const vistos = new Map() // id -> quando foi despachado (ordem de inserção = ordem do tempo)
   return {
     // true na primeira vez que vê o id, false nas seguintes.
     reivindicar (id) {
       if (!id) return true
       if (vistos.has(id)) return false
-      vistos.add(id)
-      if (vistos.size > limite) vistos.delete(vistos.values().next().value)
+      const t = agora()
+      vistos.set(id, t)
+      while (vistos.size > limite) {
+        const [maisAntigo, quando] = vistos.entries().next().value
+        if (t - quando < validadeMs && vistos.size <= limite * 10) break
+        vistos.delete(maisAntigo)
+      }
       return true
     }
   }
@@ -533,6 +543,8 @@ export async function iniciar () {
   let clienteAtual = null
   let reiniciando = false
   let desligando = false
+  let orfaosFechados = false
+  let orfaosEmCurso = false
   // Handle do setTimeout(conectar, espera) do retry transiente — guardado
   // pra poder cancelar se um fechamento TERMINAL (logout/conflito/
   // fatal_account/quarentena) chegar logo depois de um retry já agendado.
@@ -701,7 +713,19 @@ export async function iniciar () {
         // `pending` morreu no meio. O caso que dói é o download: ele promete
         // "⏳ Baixando…" antes de baixar, e sem isto a pessoa fica esperando
         // para sempre uma mídia que nunca vem.
-        fecharOrfaos(client, clienteEngine, accountId, { log }).catch(() => {})
+        //
+        // SÓ NA PRIMEIRA CONEXÃO DO PROCESSO (ou até uma limpeza completa). O
+        // evento `open` volta a cada reconexão do WhatsApp, e nessa hora este
+        // processo continua vivo, com downloads de verdade em andamento:
+        // fechá-los como "interrompidos" mentiria e ainda mandaria o aviso de
+        // "o serviço reiniciou" para quem esperava uma mídia a caminho.
+        if (!orfaosFechados && !orfaosEmCurso) {
+          orfaosEmCurso = true
+          fecharOrfaos(client, clienteEngine, accountId, { log })
+            .then((r) => { if (r?.completo) orfaosFechados = true })
+            .catch(() => {})
+            .finally(() => { orfaosEmCurso = false })
+        }
         state.definirConexao({
           conectado: true,
           numero: jid ? jid.split('@')[0].split(':')[0] : null,

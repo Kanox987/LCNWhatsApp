@@ -87,10 +87,14 @@ const cfg = { hardware: {}, download: {} }
 }
 {
   const { criarRegistroDeDespachados } = await import('../src/connection.js')
-  const r = criarRegistroDeDespachados(2)
+  let relogio = 0
+  const r = criarRegistroDeDespachados(2, { agora: () => relogio, validadeMs: 1000 })
   check('registro: a primeira vez passa, a segunda não', r.reivindicar('a') === true && r.reivindicar('a') === false)
   r.reivindicar('b'); r.reivindicar('c')
-  check('registro: passado o limite esquece o mais antigo, sem crescer sem fim', r.reivindicar('a') === true)
+  check('registro: passado o limite MAS ainda dentro da validade, ninguém é expulso', r.reivindicar('a') === false)
+  relogio = 5000
+  r.reivindicar('d')
+  check('registro: velho e acima do limite, o mais antigo é esquecido', r.reivindicar('a') === true)
   check('registro: id vazio nunca é barrado', r.reivindicar('') === true && r.reivindicar('') === true)
 }
 

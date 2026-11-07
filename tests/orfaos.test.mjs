@@ -147,5 +147,33 @@ const download = (extra = {}) => ({
   check('comando recente NÃO é tocado', lido('recente').status === 'pending')
 }
 
+// --- queda grande: mais pendentes do que cabe numa consulta -----------------
+{
+  const todos = Array.from({ length: 130 }, (_, i) => ({ id: `p${i}`, commandType: 'whatsapp.reply', status: 'pending', payload: {} }))
+  const fechados = new Set()
+  let consultas = 0
+  const clienteEngine = {
+    execucoes: {
+      pendentes: async (_conta, limite) => { consultas++; return todos.filter((c) => !fechados.has(c.id)).slice(0, limite) },
+      confirmar: async (id) => { fechados.add(id) }
+    }
+  }
+  const r = await fecharOrfaos({ message: { send: async () => ({}) } }, clienteEngine, 'conta', { log: () => {} })
+  check('130 pendentes: todos são fechados, não só o primeiro lote', fechados.size === 130 && r.fechados === 130, `fechados=${fechados.size}`)
+  check('e a limpeza se diz completa', r.completo === true)
+  check('em poucas consultas', consultas <= 4, `consultas=${consultas}`)
+}
+{
+  let consultas = 0
+  const clienteEngine = {
+    execucoes: {
+      pendentes: async () => { consultas++; return [{ id: 'teimoso', commandType: 'whatsapp.reply', status: 'pending', payload: {} }] },
+      confirmar: async () => { throw new Error('motor recusou') }
+    }
+  }
+  const r = await fecharOrfaos({ message: { send: async () => ({}) } }, clienteEngine, 'conta', { log: () => {} })
+  check('motor que recusa fechar não faz a limpeza girar para sempre', consultas === 1 && r.fechados === 0 && r.completo === false, `consultas=${consultas}`)
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE COMANDO ÓRFÃO PASSARAM')
 process.exit(falhas ? 1 : 0)

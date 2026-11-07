@@ -147,7 +147,7 @@ export function estadoDaLista (db, nome) {
 // B devolve outro número e é recusado.
 function estadoDaImportacao (db, nome, membros, modo) {
   return createHash('sha256')
-    .update(`${modo}\n${estadoDaLista(db, nome)}\n${[...membros].sort().join('\n')}`)
+    .update(`${nome}\n${modo}\n${estadoDaLista(db, nome)}\n${[...membros].sort().join('\n')}`)
     .digest('hex').slice(0, 16)
 }
 

@@ -24,49 +24,65 @@ function prometeuAlgo (comando) {
 
 const AVISO_PADRAO = '⚠️ Não consegui terminar o download — o serviço reiniciou no meio. Mande o link de novo.'
 
-export async function fecharOrfaos (client, clienteEngine, accountId, { log, avisar = true, agora = Date.now(), idadeMaximaMs = 60 * 60 * 1000 } = {}) {
-  if (!accountId) return { fechados: 0, avisados: 0 }
+// A rota entrega no máximo 50 por vez, então 30 pendentes de uma queda grande
+// não cabiam numa consulta só. Cada lote fechado sai da lista, e a próxima
+// consulta traz os seguintes. Para quando não há mais nada, quando um lote não
+// fechou ninguém (o motor recusa; insistir giraria para sempre) ou no teto.
+const LOTE = 50
+const MAXIMO_DE_LOTES = 20
 
-  let pendentes
-  try {
-    pendentes = await clienteEngine.execucoes.pendentes(accountId)
-  } catch (erro) {
-    // Falha aqui não pode impedir o gateway de subir: ficar sem fechar órfão é
-    // ruim, não subir é pior.
-    log?.(`[engine] não consegui listar comandos pendentes: ${erro?.message || erro}`)
-    return { fechados: 0, avisados: 0 }
-  }
+export async function fecharOrfaos (client, clienteEngine, accountId, { log, avisar = true, agora = Date.now(), idadeMaximaMs = 60 * 60 * 1000 } = {}) {
+  if (!accountId) return { fechados: 0, avisados: 0, completo: true }
 
   let fechados = 0
   let avisados = 0
-  for (const comando of Array.isArray(pendentes) ? pendentes : []) {
-    // Aviso só para o que caiu há pouco. Ressuscitar uma conversa de ontem
-    // para dizer que um download falhou não ajuda ninguém — mas o registro é
-    // fechado de qualquer jeito, senão continua invisível.
-    const recente = !comando.createdAt || (agora - new Date(comando.createdAt).getTime()) < idadeMaximaMs
+  let completo = false
+  for (let lote = 0; lote < MAXIMO_DE_LOTES; lote++) {
+    let pendentes
+    try {
+      pendentes = await clienteEngine.execucoes.pendentes(accountId, LOTE)
+    } catch (erro) {
+      // Falha aqui não pode impedir o gateway de subir: ficar sem fechar órfão é
+      // ruim, não subir é pior.
+      log?.(`[engine] não consegui listar comandos pendentes: ${erro?.message || erro}`)
+      break
+    }
+    const lista = Array.isArray(pendentes) ? pendentes : []
+    if (!lista.length) { completo = true; break }
 
-    if (avisar && recente && prometeuAlgo(comando) && comando.payload?.chatId) {
+    let fechadosNoLote = 0
+    for (const comando of lista) {
+      // Aviso só para o que caiu há pouco. Ressuscitar uma conversa de ontem
+      // para dizer que um download falhou não ajuda ninguém — mas o registro é
+      // fechado de qualquer jeito, senão continua invisível.
+      const recente = !comando.createdAt || (agora - new Date(comando.createdAt).getTime()) < idadeMaximaMs
+
+      if (avisar && recente && prometeuAlgo(comando) && comando.payload?.chatId) {
+        try {
+          await client.message.send(comando.payload.chatId, {
+            type: 'text',
+            text: comando.payload.errorText
+              ? String(comando.payload.errorText).replaceAll('{{erro}}', 'o serviço reiniciou no meio do download')
+              : AVISO_PADRAO
+          })
+          avisados++
+        } catch (erro) {
+          log?.(`[engine] não consegui avisar sobre o comando ${comando.id}: ${erro?.message || erro}`)
+        }
+      }
+
       try {
-        await client.message.send(comando.payload.chatId, {
-          type: 'text',
-          text: comando.payload.errorText
-            ? String(comando.payload.errorText).replaceAll('{{erro}}', 'o serviço reiniciou no meio do download')
-            : AVISO_PADRAO
-        })
-        avisados++
+        await clienteEngine.execucoes.confirmar(comando.id, { status: 'outcome_unknown' })
+        fechados++
+        fechadosNoLote++
       } catch (erro) {
-        log?.(`[engine] não consegui avisar sobre o comando ${comando.id}: ${erro?.message || erro}`)
+        log?.(`[engine] não consegui fechar o comando ${comando.id}: ${erro?.message || erro}`)
       }
     }
-
-    try {
-      await clienteEngine.execucoes.confirmar(comando.id, { status: 'outcome_unknown' })
-      fechados++
-    } catch (erro) {
-      log?.(`[engine] não consegui fechar o comando ${comando.id}: ${erro?.message || erro}`)
-    }
+    if (!fechadosNoLote) break
+    if (lista.length < LOTE) { completo = true; break }
   }
 
   if (fechados) log?.(`[engine] ${fechados} comando(s) interrompido(s) foram fechados, ${avisados} aviso(s) enviado(s)`)
-  return { fechados, avisados }
+  return { fechados, avisados, completo }
 }
