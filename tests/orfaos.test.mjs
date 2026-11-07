@@ -212,5 +212,19 @@ const download = (extra = {}) => ({
   check('e termina como completo', r.completo === true)
 }
 
+// --- falha parcial não é limpeza completa; aviso só depois de fechar ---------
+{
+  const enviadas = []
+  const confirmados = []
+  const lista = [0, 1, 2].map((i) => ({ id: `d${i}`, commandType: 'media.download', status: 'pending', payload: { chatId: `c${i}@s.whatsapp.net`, url: 'https://x.com/a', ackText: '⏳' } }))
+  const clienteEngine = { execucoes: {
+    pendentes: async () => lista,
+    confirmar: async (id) => { if (id === 'd1') throw new Error('motor recusou'); confirmados.push(id) }
+  } }
+  const r = await fecharOrfaos({ message: { send: async (chatId) => { enviadas.push(chatId); return {} } } }, clienteEngine, 'conta', { log: () => {} })
+  check('um que não fechou deixa o resultado incompleto (tenta de novo na próxima conexão)', r.completo === false && r.fechados === 2, JSON.stringify(r))
+  check('quem não foi fechado não recebe aviso (evita aviso repetido)', enviadas.join() === 'c0@s.whatsapp.net,c2@s.whatsapp.net', enviadas.join())
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE COMANDO ÓRFÃO PASSARAM')
 process.exit(falhas ? 1 : 0)

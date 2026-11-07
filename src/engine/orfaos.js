@@ -57,6 +57,18 @@ export async function fecharOrfaos (client, clienteEngine, accountId, { log, avi
       // fechado de qualquer jeito, senão continua invisível.
       const recente = !comando.createdAt || (agora - new Date(comando.createdAt).getTime()) < idadeMaximaMs
 
+      // Fecha primeiro: se a confirmação falha, o comando segue pendente e a
+      // próxima conexão tenta de novo — avisando antes, a pessoa receberia o
+      // mesmo aviso a cada tentativa.
+      try {
+        await clienteEngine.execucoes.confirmar(comando.id, { status: 'outcome_unknown' })
+        fechados++
+        fechadosNoLote++
+      } catch (erro) {
+        log?.(`[engine] não consegui fechar o comando ${comando.id}: ${erro?.message || erro}`)
+        continue
+      }
+
       if (avisar && recente && prometeuAlgo(comando) && comando.payload?.chatId) {
         try {
           await client.message.send(comando.payload.chatId, {
@@ -70,16 +82,9 @@ export async function fecharOrfaos (client, clienteEngine, accountId, { log, avi
           log?.(`[engine] não consegui avisar sobre o comando ${comando.id}: ${erro?.message || erro}`)
         }
       }
-
-      try {
-        await clienteEngine.execucoes.confirmar(comando.id, { status: 'outcome_unknown' })
-        fechados++
-        fechadosNoLote++
-      } catch (erro) {
-        log?.(`[engine] não consegui fechar o comando ${comando.id}: ${erro?.message || erro}`)
-      }
     }
-    if (!fechadosNoLote) break
+    // Falha parcial não é limpeza concluída: o que sobrou fica para a próxima conexão.
+    if (fechadosNoLote !== lista.length) break
     if (lista.length < LOTE) { completo = true; break }
   }
 
