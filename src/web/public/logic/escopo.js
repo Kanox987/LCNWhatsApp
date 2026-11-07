@@ -10,14 +10,14 @@
 // de propósito, e a tela diz o alcance em palavras.
 import { DESTINOS } from './acoes.js'
 
-const ABRANGENTES = new Set(['all_contacts', 'all_groups', 'everywhere', 'tagged'])
+const ABRANGENTES = new Set(['all_contacts', 'all_groups', 'everywhere', 'tagged', 'listed'])
 
-// Os seis destinos, com o rótulo e a ajuda de `DESTINOS`: a tela não mantém uma
+// Os sete destinos, com o rótulo e a ajuda de `DESTINOS`: a tela não mantém uma
 // segunda lista que um dia diverge da primeira.
 export const OPCOES_DE_ESCOPO = DESTINOS
 
 export const escopoExigeBusca = (modo) => modo === 'contact' || modo === 'group'
-export const escopoExigeVariavel = (modo) => modo === 'tagged'
+export const escopoExigeVariavel = (modo) => modo === 'tagged' || modo === 'listed'
 // "Todos os grupos MENOS este": só faz sentido onde o destino é abrangente.
 export const escopoAceitaExcecao = (modo) => ABRANGENTES.has(modo)
 
@@ -25,7 +25,7 @@ export const escopoAceitaExcecao = (modo) => ABRANGENTES.has(modo)
 // grupo, então um grupo de fora ali seria uma restrição inócua que o resumo
 // faria parecer real.
 export function excecoesDoAlcance (modo, excecoes) {
-  const doTipo = modo === 'all_contacts' ? 'contact' : modo === 'all_groups' ? 'group' : null
+  const doTipo = (modo === 'all_contacts' || modo === 'listed') ? 'contact' : modo === 'all_groups' ? 'group' : null
   return normalizarExcecoes(excecoes).filter((item) => !doTipo || item.kind === doTipo)
 }
 
@@ -61,8 +61,12 @@ export function montarEscopo ({ modo, alvo = null, variavel = '', excecoes = [] 
   }
   if (escopoExigeVariavel(modo)) {
     const nome = String(variavel ?? '').trim()
-    if (!nome) return { escopo: null, problema: 'Informe o nome da marca que identifica as conversas (por exemplo, vip).' }
-    return { escopo: { include: [{ kind: 'tagged', id: nome }], exclude: montarExclusoes(modo, excecoes) }, problema: null }
+    if (!nome) {
+      return { escopo: null, problema: modo === 'listed'
+        ? 'Informe o nome da lista de pessoas (a mesma da página Listas).'
+        : 'Informe o nome da marca que identifica as conversas (por exemplo, vip).' }
+    }
+    return { escopo: { include: [{ kind: modo, id: nome }], exclude: montarExclusoes(modo, excecoes) }, problema: null }
   }
   return { escopo: { include: [{ kind: modo }], exclude: montarExclusoes(modo, excecoes) }, problema: null }
 }
@@ -87,6 +91,12 @@ export function descreverEscopo ({ modo, alvo = null, variavel = '', excecoes = 
       return nome
         ? `Autorizar só nas conversas marcadas com “${nome}”.${sufixo}`
         : 'Informe o nome da marca antes de instalar.'
+    }
+    case 'listed': {
+      const nome = String(variavel ?? '').trim()
+      return nome
+        ? `Autorizar no privado de quem está na lista “${nome}”. Quem entra ou sai da lista depois muda o alcance, sem reinstalar.${sufixo}`
+        : 'Informe o nome da lista antes de instalar.'
     }
     default: return 'Escolher onde o comando pode executar é obrigatório antes de instalar.'
   }

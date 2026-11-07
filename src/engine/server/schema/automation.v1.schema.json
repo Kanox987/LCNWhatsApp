@@ -475,7 +475,7 @@
   ],
   "definitions": {
     "scopeRef": {
-      "description": "Um destino da automação. 'contact'/'group' endereçam UMA conversa. 'all_contacts', 'all_groups' e 'everywhere' são os destinos abrangentes — existem para a pessoa poder escolher 'todos' de propósito, já que lista vazia nunca significa todos. 'tagged' casa com as conversas marcadas com uma variável (a mesma que {{var.chat.<chave>}} lê).",
+      "description": "Um destino da automação. 'contact'/'group' endereçam UMA conversa. 'all_contacts', 'all_groups' e 'everywhere' são os destinos abrangentes — existem para a pessoa poder escolher 'todos' de propósito, já que lista vazia nunca significa todos. 'tagged' casa com as conversas marcadas com uma variável (a mesma que {{var.chat.<chave>}} lê). 'listed' casa com o privado de quem está numa lista de pessoas (a mesma de 'põe na lista').",
       "oneOf": [
         {
           "type": "object",
@@ -510,6 +510,25 @@
                 "all_groups",
                 "everywhere"
               ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "listed"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Nome da lista de pessoas (a mesma de 'põe na lista'). Vale para a conversa PRIVADA de quem está na lista; lista vazia ou que não existe não casa com ninguém."
             }
           }
         },

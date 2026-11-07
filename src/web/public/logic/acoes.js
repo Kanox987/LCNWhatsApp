@@ -943,6 +943,7 @@ export const DESTINOS = Object.freeze([
   { id: 'all_contacts', rotulo: 'Todos os contatos no privado', ajuda: 'Qualquer conversa direta. Canal e transmissão ficam de fora.' },
   { id: 'all_groups', rotulo: 'Todos os grupos', ajuda: 'Qualquer grupo.' },
   { id: 'everywhere', rotulo: 'Qualquer conversa', ajuda: 'Contatos e grupos. Canal e transmissão continuam de fora.' },
+  { id: 'listed', rotulo: 'Pessoas de uma lista', ajuda: 'A conversa privada de cada pessoa que estiver na lista que você escolher. Se a lista for editada depois, o alcance muda junto, sem reinstalar. Lista vazia não alcança ninguém.' },
   { id: 'tagged', rotulo: 'Conversas marcadas', ajuda: 'Só onde a variável que você escolher estiver preenchida — o mesmo mecanismo do marcador VIP. É como se liga algo conversa por conversa.' }
 ])
 

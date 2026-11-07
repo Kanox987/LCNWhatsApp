@@ -160,7 +160,7 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
   ])
   // O que a busca procura: o destino de contato/grupo e os destinos "todos os
   // contatos"/"todos os grupos" já dizem; só os outros precisam perguntar.
-  const tipoDaBusca = () => (escopo.modo === 'all_contacts' ? 'contact' : escopo.modo === 'all_groups' ? 'group' : escopo.modo === 'contact' || escopo.modo === 'group' ? escopo.modo : kindSelect.value)
+  const tipoDaBusca = () => (escopo.modo === 'all_contacts' || escopo.modo === 'listed' ? 'contact' : escopo.modo === 'all_groups' ? 'group' : escopo.modo === 'contact' || escopo.modo === 'group' ? escopo.modo : kindSelect.value)
   const excecoesArea = el('div')
   const searchInput = el('input', { type: 'search', placeholder: 'Digite um nome para buscar', disabled: !instances.length })
   const directoryResults = el('div', { className: 'directory-results' })
@@ -194,6 +194,8 @@ function painelInstalacao ({ templates, rootTemplateId, pools, instances, naviga
     modoAjuda.textContent = OPCOES_DE_ESCOPO.find((opcao) => opcao.id === escopo.modo)?.ajuda || ''
     campoDaMarca.hidden = !escopoExigeVariavel(escopo.modo)
     campoDoTipoDaBusca.hidden = !(escopo.modo === 'everywhere' || escopo.modo === 'tagged')
+    campoDaMarca.querySelector('label').textContent = escopo.modo === 'listed' ? 'Nome da lista' : 'Nome da marca'
+    variavelInput.placeholder = escopo.modo === 'listed' ? 'Ex.: autorizados' : 'Ex.: vip'
     campoDaBusca.hidden = !(busca || excecao)
     directoryResults.hidden = !(busca || excecao)
     areaDoDestino.hidden = !busca

@@ -21,8 +21,8 @@ const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅
 const grupo = { id: '1203@g.us', label: 'Time', kind: 'group' }
 const contato = { id: '5511@s.whatsapp.net', label: 'Ana', kind: 'contact' }
 
-check('a tela oferece os seis destinos do motor',
-  OPCOES_DE_ESCOPO.map((o) => o.id).join() === 'contact,group,all_contacts,all_groups,everywhere,tagged')
+check('a tela oferece os sete destinos do motor',
+  OPCOES_DE_ESCOPO.map((o) => o.id).sort().join() === 'all_contacts,all_groups,contact,everywhere,group,listed,tagged')
 
 const valido = (escopo) => { try { lerPerfil({ schemaVersion: 1, profileId: 'x', profileVersion: 1, scope: escopo }); return true } catch { return false } }
 
@@ -33,6 +33,8 @@ for (const [modo, entrada] of [
   ['all_groups', {}],
   ['everywhere', {}],
   ['tagged', { variavel: ' vip ' }],
+  ['listed', { variavel: ' autorizados ' }],
+  ['listed', { variavel: 'autorizados', excecoes: [contato] }],
   ['all_groups', { excecoes: [grupo] }],
   ['everywhere', { excecoes: [grupo, contato] }]
 ]) {
@@ -67,6 +69,11 @@ for (const [nome, entrada, pedaco] of [
   check(`${nome}: recusa em vez de assumir "todos"`, r.escopo === null && r.problema.includes(pedaco), r.problema)
 }
 
+check('a lista vira o id do destino "listed" e a exceção de grupo é descartada',
+  montarEscopo({ modo: 'listed', variavel: ' autorizados ', excecoes: [grupo] }).escopo.include[0].id === 'autorizados' &&
+  montarEscopo({ modo: 'listed', variavel: 'autorizados', excecoes: [grupo] }).escopo.exclude.length === 0)
+check('lista sem nome não instala', /nome da lista/.test(montarEscopo({ modo: 'listed', variavel: '  ' }).problema || ''))
+check('"da lista" diz o nome e que o alcance muda com a lista', /lista “autorizados”.*sem reinstalar/.test(descreverEscopo({ modo: 'listed', variavel: 'autorizados' })))
 check('só contato e grupo pedem busca', escopoExigeBusca('contact') && escopoExigeBusca('group') && !escopoExigeBusca('everywhere') && !escopoExigeBusca('tagged'))
 check('só "marcadas" pede o nome da marca', escopoExigeVariavel('tagged') && !escopoExigeVariavel('all_groups'))
 check('exceção só nos destinos abrangentes', escopoAceitaExcecao('all_groups') && escopoAceitaExcecao('tagged') && !escopoAceitaExcecao('contact') && !escopoAceitaExcecao('group'))

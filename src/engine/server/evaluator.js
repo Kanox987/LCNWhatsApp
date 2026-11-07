@@ -233,6 +233,10 @@ function refCasa (db, ref, chat) {
     // canal não é um caso de uso, é um acidente.
     case 'everywhere': return chat.kind === 'direct' || chat.kind === 'group'
     case 'tagged': return conversaMarcada(db, chat, ref.ref_id)
+    // Lista de PESSOAS: vale na conversa privada de quem está nela. Em grupo não
+    // casa nunca (o grupo não é uma pessoa da lista), lista vazia ou inexistente
+    // não casa com ninguém, e exclude vence como nos outros destinos.
+    case 'listed': return chat.kind === 'direct' && estaNaLista(db, ref.ref_id, chat.id)
     default: return false
   }
 }

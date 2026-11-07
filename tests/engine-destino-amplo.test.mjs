@@ -145,6 +145,32 @@ db.prepare('UPDATE entity_attributes SET value_json = ? WHERE scope_kind = ? AND
   .run('3', 'contact', ANA, 'vip')
 check('número diferente de zero marca', casa('so-vip', ANA, 'direct'))
 
+// --- pessoas de uma lista ---------------------------------------------------
+// `listed` lê a MESMA lista de `põe na lista` (linha de entity_attributes). É
+// autorização dinâmica: quem entra ou sai da lista muda o alcance sem republicar,
+// então os limites precisam ser exatos: só o privado de quem está na lista, lista
+// vazia ou inexistente é ninguém, e exclude continua vencendo.
+publicar('so-lista', { include: [{ kind: 'listed', id: 'autorizados' }] })
+check('lista inexistente não casa com ninguém', !casa('so-lista', ANA, 'direct') && !casa('so-lista', G1, 'group'))
+
+marcar('contact', ANA, '__lista__autorizados', 'true')
+check('quem está na lista casa no privado', casa('so-lista', ANA, 'direct'))
+check('quem não está na lista continua de fora', !casa('so-lista', BRUNO, 'direct'))
+check('o grupo nunca casa com uma lista de pessoas', !casa('so-lista', G1, 'group'))
+
+publicar('lista-nome-solto', { include: [{ kind: 'listed', id: '  Autorizados ' }] })
+check('o nome da lista é normalizado como no comando', casa('lista-nome-solto', ANA, 'direct'))
+
+publicar('lista-menos-ana', { include: [{ kind: 'listed', id: 'autorizados' }], exclude: [{ kind: 'contact', id: ANA }] })
+check('exclude vence a lista', !casa('lista-menos-ana', ANA, 'direct'))
+
+publicar('todos-menos-lista', { include: [{ kind: 'all_contacts' }], exclude: [{ kind: 'listed', id: 'autorizados' }] })
+check('lista também funciona como exceção', !casa('todos-menos-lista', ANA, 'direct') && casa('todos-menos-lista', BRUNO, 'direct'))
+
+db.prepare('UPDATE entity_attributes SET value_json = ? WHERE scope_kind = ? AND scope_id = ? AND key = ?')
+  .run('false', 'contact', ANA, '__lista__autorizados')
+check('sair da lista tira do alcance sem republicar', !casa('so-lista', ANA, 'direct'))
+
 // --- combinações -----------------------------------------------------------
 publicar('vip-mais-grupos', { include: [{ kind: 'tagged', id: 'vip' }, { kind: 'all_groups' }] })
 check('vários destinos somam', casa('vip-mais-grupos', ANA, 'direct') && casa('vip-mais-grupos', G2, 'group'))

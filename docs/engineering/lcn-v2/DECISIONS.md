@@ -1380,12 +1380,23 @@ próprio bot não vale como dono.
 
 **Por quê:** `allowFrom` só decide external/any; quem pode é outra pergunta.
 
-## D-52 — Escopo `listed` ficou de fora; a restrição por lista vive no gatilho
+## D-52 — Escopo `listed`: alcance por lista de pessoas, com os mesmos limites do `acesso: lista`
 
-**Decidido (05/11/2026):** não existe escopo "contatos da lista X". O dono aprovou fazer por último (06/11); a reavaliação do risco de autorização dinâmica fica registrada aqui quando sair.
+**Decidido (05/11/2026), revisto e feito (07/11/2026):** existe o destino `listed` (`onde: da lista X`,
+`menos: da lista X`, "Pessoas de uma lista" no catálogo). Casa só com a conversa **privada** de quem está na lista;
+grupo nunca casa; lista vazia ou inexistente não casa com ninguém; `exclude` vence; o nome é normalizado como no
+comando `liberar`. Não há tabela nova: lê a mesma linha de `entity_attributes` que as ações e o campo `acesso`.
 
-**Por quê:** escopo por lista seria autorização dinâmica sobre automação publicada (risco apontado na revisão
-externa); `acesso: lista X` já cobre "quem".
+**Por que deixou de ser "fora":** a objeção era autorização dinâmica sobre automação publicada (quem entra na lista
+muda o alcance sem republicar). Isso já é verdade para `acesso: lista X`, que existe desde D-51; o escopo não abre uma
+via nova, só usa a mesma fronteira de confiança: **quem pode editar a lista decide o alcance**. Essa fronteira é a dos
+comandos `liberar`/`desliberar` (só dono por padrão) e da página Listas. O que o escopo `listed` não faz: dar
+permissão (quem pode usar continua sendo `acesso`/`allowFrom`) nem valer em grupo.
+
+**Alternativa recusada:** copiar os membros para o escopo na instalação (congelaria o alcance; o dono esperaria que
+liberar alguém funcionasse sem reinstalar).
+
+**Custo aceito:** o painel mostra na revisão antes de instalar que o alcance muda junto com a lista.
 
 ## D-53 — Acervo aceita JSON e texto editável sob trava entre processos
 

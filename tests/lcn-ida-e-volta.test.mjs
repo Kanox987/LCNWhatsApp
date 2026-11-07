@@ -198,6 +198,29 @@ configurável
 
 // --- condição com dois ramos ---------------------------------------------
 {
+// Alcance por lista de pessoas: `onde:`/`menos:` guardam o nome da lista e o texto
+// que o painel mostra volta a compilar no mesmo escopo.
+{
+  const doc = compilar(`automação
+  nome: Por lista
+  tipo: comando
+  dispara com: /x
+  onde: da lista autorizados
+  menos: da lista bloqueados
+  pool: p1
+  acessa: texto
+  casa: exato
+  quem: só externos
+
+  responde "oi"
+`)
+  check('"da lista X" compila para o destino listed',
+    mesmo(doc.scope, { include: [{ kind: 'listed', id: 'autorizados' }], exclude: [{ kind: 'listed', id: 'bloqueados' }] }), JSON.stringify(doc.scope))
+  const texto = descompilar(doc)
+  check('o destino listed volta como "da lista X"', /onde: da lista autorizados/.test(texto) && /menos: da lista bloqueados/.test(texto))
+  check('e compila de novo no mesmo escopo', mesmo(compilar(texto).scope, doc.scope))
+}
+
   const doc = compilar(`automação
   tipo: comando
   dispara com: /alterna

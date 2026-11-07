@@ -625,7 +625,8 @@ export const DESTINOS = Object.freeze({
   all_groups: 'todos os grupos',
   contact: 'contato',
   group: 'grupo',
-  tagged: 'marcadas com'
+  tagged: 'marcadas com',
+  listed: 'da lista'
 })
 
 // --- a URGÊNCIA da automação ---------------------------------------------

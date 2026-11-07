@@ -35,7 +35,7 @@ Frentes novas desta leva, fora da lista A–K do pedido:
 |---|---|---|
 | listas de pessoas, ações `liberar`/`desliberar`, página Listas | **feito** | D-50 |
 | campo `acesso` (quem pode usar) | **feito** | D-51 |
-| escopo `listed` e comando "quem está na lista" | **não feito**, aprovado pelo dono para o fim | D-52 |
+| escopo `listed` e comando "quem está na lista" | **feito** (`onde: da lista X`; modelo `quem-esta-na-lista`) | D-52 |
 | acervo com JSON e edição, exportar/importar lista | **feito** | D-53 |
 | seletor de alcance completo no catálogo | **feito** | D-54 |
 | estado do motor persistido no container (`./estado`) | **feito** | D-58 |

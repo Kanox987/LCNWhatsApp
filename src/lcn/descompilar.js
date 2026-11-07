@@ -185,7 +185,7 @@ function escreverOperando (op) {
 function escreverDestino (ref) {
   const palavra = DESTINOS[ref.kind]
   if (!palavra) return ref.kind
-  if (ref.kind === 'tagged') return `${palavra} ${ref.id}`
+  if (ref.kind === 'tagged' || ref.kind === 'listed') return `${palavra} ${ref.id}`
   if (ref.kind === 'contact' || ref.kind === 'group') return `${palavra} ${ref.id}`
   return palavra
 }
