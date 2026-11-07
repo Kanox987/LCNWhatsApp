@@ -12,6 +12,7 @@ import { descompilar } from '../lcn/descompilar.js'
 import { exemploDeChamada, montarReferencia } from '../lcn/referencia.js'
 import * as glossario from './public/logic/acoes.js'
 import { respostaBinaria } from './binario.js'
+import { dentroDeContainer } from '../runtime.js'
 
 // A referência da linguagem é a MESMA para todo mundo e não depende de nada
 // gravado, então é montada uma vez na carga do módulo. O glossário entra aqui,
@@ -34,7 +35,7 @@ function queryObjeto (query) {
   return Object.fromEntries(query.entries())
 }
 
-export function criarRoteadorWeb (aplicacao) {
+export function criarRoteadorWeb (aplicacao, { emContainer = dentroDeContainer } = {}) {
   const roteador = criarRoteador()
   const automacoes = () => aplicacao.motor.automacoes
   const pools = () => aplicacao.motor.pools
@@ -94,9 +95,15 @@ export function criarRoteadorWeb (aplicacao) {
   roteador.get('/api/v1/instances/:id/optimization', ({ params }) => aplicacao.instancias.obterOtimizacao(params.id))
   roteador.put('/api/v1/instances/:id/optimization', ({ params, body }) => aplicacao.instancias.definirOtimizacao(params.id, body))
   // Concessões: o teto que o administrador dá à instância. Mora no registro,
-  // fora da pasta da instância — ver src/agent/concessoes.js.
-  roteador.get('/api/v1/instances/:id/grants', ({ params }) => aplicacao.instancias.obterConcessoes(params.id))
-  roteador.put('/api/v1/instances/:id/grants', ({ params, body }) => aplicacao.instancias.definirConcessoes(params.id, body))
+  // fora da pasta da instância — ver src/agent/concessoes.js. A rota existe só
+  // no painel do ADMINISTRADOR (host). O painel que roda dentro do container é
+  // o do cliente: se expusesse isto, o teto que lhe deram teria um botão para
+  // ser mexido por quem ele limita. Não registrar é mais forte que recusar —
+  // a rota simplesmente não existe (404), e não há handler a esquecer de guardar.
+  if (!emContainer()) {
+    roteador.get('/api/v1/instances/:id/grants', ({ params }) => aplicacao.instancias.obterConcessoes(params.id))
+    roteador.put('/api/v1/instances/:id/grants', ({ params, body }) => aplicacao.instancias.definirConcessoes(params.id, body))
+  }
   roteador.get('/api/v1/instances/:id/usage', ({ params }) => aplicacao.instancias.obterUso(params.id))
   roteador.get('/api/v1/instances/:id/logs', ({ params, query }) => aplicacao.instancias.obterLogs(params.id, Number(query.get('lines'))))
   roteador.get('/api/v1/instances/:id/directory', ({ params, query }) => aplicacao.diretorio.listar(params.id, queryObjeto(query)))
