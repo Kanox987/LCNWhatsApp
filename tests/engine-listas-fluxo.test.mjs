@@ -99,6 +99,21 @@ check('lista esvaziada não vira "todos"', membrosDaLista(db, 'autorizados').len
 const f = avaliarEvento(db, evento(ESTRANHO, '/forja'))
 check('variable.set não escreve na lista (chave reservada)', !estaNaLista(db, 'autorizados', ESTRANHO) && statusDe(f, 'forja') !== 'no_match', statusDe(f, 'forja'))
 
+// --- mostrar a lista ------------------------------------------------------
+publicar('mostra', true, [
+  { id: 's', type: 'action.list.show', config: { list: 'Autorizados', limit: 2 } }
+], [{ from: 'g', to: 's', on: 'matched' }])
+check('lista vazia: responde que está vazia, sem número nenhum', respostaDe(avaliarEvento(db, evento(PESSOAL, '/mostra')), 'mostra') === 'A lista autorizados está vazia.')
+check('estranho não vê a lista', statusDe(avaliarEvento(db, evento(ESTRANHO, '/mostra')), 'mostra') === 'no_match')
+avaliarEvento(db, evento(PESSOAL, '/liberar', { menciona: [ANA] }))
+check('uma pessoa: título com total e o número, sem jid', respostaDe(avaliarEvento(db, evento(PESSOAL, '/mostra')), 'mostra') === 'Lista autorizados (1):\n• 5511933333333')
+avaliarEvento(db, evento(PESSOAL, '/liberar', { menciona: [BIA] }))
+avaliarEvento(db, evento(PESSOAL, '/liberar', { menciona: [ESTRANHO] }))
+const mostrada = respostaDe(avaliarEvento(db, evento(PESSOAL, '/mostra')), 'mostra')
+check('passou do limite: mostra os primeiros e diz quantos faltam', mostrada.startsWith('Lista autorizados (3):') && mostrada.split('\n').length === 4 && mostrada.endsWith('e mais 1') && !mostrada.includes('@'), mostrada)
+for (const quem of [ANA, BIA, ESTRANHO]) avaliarEvento(db, evento(PESSOAL, '/desliberar', { menciona: [quem] }))
+check('esvaziada de novo, volta a dizer que está vazia', respostaDe(avaliarEvento(db, evento(PESSOAL, '/mostra')), 'mostra') === 'A lista autorizados está vazia.')
+
 // --- a linguagem: escrever, compilar e voltar ----------------------------
 const fonte = `automação
   nome: Só autorizados
@@ -119,6 +134,22 @@ const fonte = `automação
 const compilado = compilar(fonte)
 const tipos = compilado.flow.nodes.map((no) => no.type)
 check('a linguagem compila "põe na lista" e a condição sobre sender.lists', tipos.includes('action.list.add') && tipos.includes('condition.compare'), tipos.join())
+const mostra = compilar(`automação
+  nome: Ver lista
+  tipo: comando
+  dispara com: /ver
+  casa: exato
+  quem: qualquer um
+  pool: p1
+
+  mostra a lista
+    qual: autorizados
+    título: "Quem pode ({{lista.total}}):"
+    até: 10
+`)
+const noMostra = mostra.flow.nodes.find((no) => no.type === 'action.list.show')
+check('a linguagem compila "mostra a lista" com título e limite', noMostra?.config.list === 'autorizados' && noMostra.config.limit === 10 && noMostra.config.title === 'Quem pode ({{lista.total}}):', JSON.stringify(noMostra))
+check('e descompila para a mesma frase', JSON.stringify(compilar(descompilar(mostra)).flow) === JSON.stringify(mostra.flow))
 const volta = descompilar(compilado)
 check('e o descompilador escreve de volta a mesma frase', volta.includes('põe na lista') && volta.includes('evento sender.lists.autorizados == true') && volta.includes('qual: pendentes'))
 check('recompilar o texto devolvido dá o mesmo fluxo', JSON.stringify(compilar(volta).flow) === JSON.stringify(compilado.flow))

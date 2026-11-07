@@ -1,0 +1,47 @@
+template quem-esta-na-lista v1
+  nome: Quem está na lista
+  descrição: Responde com os números de quem está numa lista nomeada — por padrão "autorizados". Só o dono usa. A resposta mostra telefones no chat onde o comando foi usado.
+  categoria: configuracoes
+
+automação
+  nome: Quem está na lista
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Mostra quem está na lista (só o dono)
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato ou com argumentos
+  quem: {{params.allowFrom}}
+  só dono
+
+  mostra a lista
+    qual: {{params.lista}}
+    título: "{{params.titleText}}"
+    vazia: "{{params.emptyText}}"
+    até: {{params.limit}}
+
+configurável
+  command: texto = "/quem"
+    rótulo: Comando
+    ajuda: A palavra que o dono digita para ver a lista.
+  lista: texto = "autorizados"
+    rótulo: Nome da lista
+    ajuda: Letras minúsculas, números e "_", começando por letra. Use o MESMO nome dos comandos que põem e tiram gente da lista.
+  titleText: texto = "Lista {{lista.nome}} ({{lista.total}}):"
+    rótulo: Título
+    ajuda: Primeira linha da resposta. Pode usar {{lista.nome}} e {{lista.total}}.
+  emptyText: texto = "A lista {{lista.nome}} está vazia."
+    rótulo: Quando a lista está vazia
+    ajuda: Resposta quando ninguém está na lista.
+  limit: número = 50
+    rótulo: Quantos mostrar
+    ajuda: Máximo de números na resposta. Passou disso, aparece "e mais N".
+  allowFrom: opção (external, any) = "any"
+    rótulo: Quem pode acionar
+    ajuda: any responde também às SUAS próprias mensagens, do número onde o bot roda. external faz o bot ignorar o próprio número.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando.
+
+avisa nota
+  Restrito ao dono do bot. Enquanto nenhum dono estiver cadastrado, só o próprio número consegue usar este comando. A resposta traz números de telefone: use em conversa privada com o dono.

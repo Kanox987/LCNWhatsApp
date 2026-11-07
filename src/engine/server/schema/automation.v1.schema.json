@@ -239,6 +239,9 @@
                 "$ref": "#/definitions/actionListRemove"
               },
               {
+                "$ref": "#/definitions/actionListShow"
+              },
+              {
                 "$ref": "#/definitions/actionWhatsappReact"
               },
               {
@@ -1112,6 +1115,26 @@
               "type": "string",
               "description": "Resposta depois de editar a lista. Pode usar {{target.number}} e {{sender.name}}. Sem este texto a ação não responde nada."
             }
+          }
+        }
+      }
+    },
+    "actionListShow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.list.show" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["list"],
+          "properties": {
+            "list": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Nome da lista (letras minúsculas, números e _, começando por letra, até 32). Maiúscula e acento são normalizados." },
+            "title": { "type": "string", "description": "Primeira linha da resposta. Pode usar {{lista.nome}} e {{lista.total}}. Sem este texto vale \"Lista {{lista.nome}} ({{lista.total}}):\"." },
+            "emptyText": { "type": "string", "description": "Resposta quando a lista não tem ninguém. Sem este texto vale \"A lista {{lista.nome}} está vazia.\"." },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "Quantas pessoas aparecem na resposta; as demais viram \"e mais N\". Sem este campo valem 50." }
           }
         }
       }

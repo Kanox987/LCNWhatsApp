@@ -11,7 +11,7 @@ import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
 import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
-import { adicionarNaLista, estaNaLista, listasDa, normalizarNomeDeLista, removerDaLista } from './listas.js'
+import { adicionarNaLista, estaNaLista, listasDa, membrosDaLista, normalizarNomeDeLista, removerDaLista } from './listas.js'
 import { criarServicoDeEnquetes } from './enquetesService.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
@@ -2223,6 +2223,27 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
           payload: { chatId: evento.chat.id, text: interpolar(no.config.confirmText, contexto) }
         })
       }
+      return 'success'
+    }
+
+    case 'action.list.show': {
+      // Só lê: mostra quem está numa lista nomeada. Não emite comando de gateway
+      // além da resposta, e nunca entrega o jid cru — só o número, como o resto.
+      const nome = normalizarNomeDeLista(interpolar(no.config?.list ?? '', contexto))
+      if (!nome) throw new ErroDeFluxo(`Nome de lista inválido: "${no.config?.list ?? ''}". Use letras minúsculas, números e "_", começando por letra (até 32).`)
+      const membros = membrosDaLista(db, nome)
+      const limite = Number.isInteger(no.config?.limit) ? no.config.limit : 50
+      const dadosDaLista = { nome, total: membros.length }
+      const ctxLista = { ...contexto, lista: dadosDaLista }
+      let texto
+      if (!membros.length) {
+        texto = interpolar(no.config?.emptyText || 'A lista {{lista.nome}} está vazia.', ctxLista)
+      } else {
+        const linhas = membros.slice(0, limite).map((id) => `• ${soDigitos(id)}`)
+        if (membros.length > limite) linhas.push(`e mais ${membros.length - limite}`)
+        texto = [interpolar(no.config?.title || 'Lista {{lista.nome}} ({{lista.total}}):', ctxLista), ...linhas].join('\n')
+      }
+      comandos.push({ commandType: 'whatsapp.reply', payload: { chatId: evento.chat.id, text: texto } })
       return 'success'
     }
 

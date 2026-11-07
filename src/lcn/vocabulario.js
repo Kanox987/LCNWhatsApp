@@ -382,6 +382,16 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    palavra: 'mostra a lista',
+    tipo: 'action.list.show',
+    campos: [
+      { chave: 'list', rotulo: 'qual', tipo: 'palavra' },
+      { chave: 'title', rotulo: 'título', tipo: 'texto' },
+      { chave: 'emptyText', rotulo: 'vazia', tipo: 'texto' },
+      { chave: 'limit', rotulo: 'até', tipo: 'numero' }
+    ]
+  },
+  {
     palavra: 'promove no grupo',
     tipo: 'action.group.promote',
     campos: [

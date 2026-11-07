@@ -643,6 +643,23 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.list.show',
+    rotulo: 'Mostrar uma lista',
+    familia: 'moderacao',
+    resumo: 'Responde com os números de quem está numa lista nomeada.',
+    exemplo: '/quem mostra os números da lista "autorizados".',
+    ressalva: { level: 'requirement', text: 'A resposta mostra números de telefone no chat onde o comando foi usado. Instale-o só para o dono, ou use em conversa privada com ele: em grupo, todo mundo lê.' },
+    dependencias: 'Nada além do nome da lista. Funciona em conversa privada e em grupo, e não precisa de admin.',
+    resultado: 'Uma mensagem com um número por linha. Lista com mais gente que o limite mostra os primeiros e diz quantos faltam.',
+    errosComuns: 'Escrever o nome da lista diferente do usado nos comandos que põem e tiram gente: "autorizados" e "autorizado" são listas diferentes.',
+    campos: [
+      { chave: 'list', rotulo: 'Qual lista', ajuda: 'O nome da lista, como "autorizados". Maiúscula e acento não importam; espaço vira "_".' },
+      { chave: 'title', rotulo: 'Título', ajuda: 'Primeira linha da resposta. Pode usar {{lista.nome}} e {{lista.total}}. Sem este texto aparece "Lista autorizados (3):".' },
+      { chave: 'emptyText', rotulo: 'Quando a lista está vazia', ajuda: 'Resposta quando ninguém está na lista. Sem este texto aparece "A lista autorizados está vazia.".' },
+      { chave: 'limit', rotulo: 'Quantos mostrar', ajuda: 'Máximo de números na resposta (padrão 50). Passou disso, aparece "e mais N".' }
+    ]
+  },
+  {
     tipo: 'action.group.promote',
     rotulo: 'Promover a administrador',
     familia: 'moderacao',
