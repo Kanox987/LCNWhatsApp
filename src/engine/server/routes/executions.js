@@ -250,10 +250,14 @@ export function registrarRotasExecutions (roteador, db) {
     const accountId = query.get('accountId')
     if (!accountId) throw new ErroHttp(400, 'Falta accountId.')
     const limite = Math.min(50, Math.max(1, Number(query.get('limit')) || 20))
+    // `antesDe` entra no SQL, antes do LIMIT: o corte feito depois deixaria os
+    // pendentes novos (que vêm primeiro) ocuparem a janela e esconderem os órfãos.
+    const antesDe = query.get('antesDe')
+    if (antesDe !== null && Number.isNaN(Date.parse(antesDe))) throw new ErroHttp(400, 'antesDe precisa ser uma data ISO.')
     const linhas = db.prepare(`SELECT id, run_id, target_account_id, command_type, payload_json, status, created_at
       FROM outbound_commands
-      WHERE status = 'pending' AND target_account_id = ?
-      ORDER BY rowid DESC LIMIT ?`).all(accountId, limite)
+      WHERE status = 'pending' AND target_account_id = ? AND (? IS NULL OR created_at < ?)
+      ORDER BY rowid DESC LIMIT ?`).all(accountId, antesDe && new Date(antesDe).toISOString(), antesDe && new Date(antesDe).toISOString(), limite)
     return linhas.map((row) => ({
       id: row.id,
       runId: row.run_id,

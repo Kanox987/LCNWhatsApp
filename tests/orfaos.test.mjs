@@ -175,5 +175,42 @@ const download = (extra = {}) => ({
   check('motor que recusa fechar não faz a limpeza girar para sempre', consultas === 1 && r.fechados === 0 && r.completo === false, `consultas=${consultas}`)
 }
 
+// --- o que nasceu depois do boot do processo não é órfão ---------------------
+// Contra o motor de verdade: os pendentes NOVOS vêm primeiro (rowid DESC) e,
+// sendo mais que o lote, esconderiam os órfãos se o corte fosse feito depois do
+// LIMIT. O corte tem que acontecer no SQL.
+{
+  const { abrirBanco } = await import('../src/engine/server/db.js')
+  const { criarApi } = await import('../src/engine/server/api.js')
+  const db = abrirBanco(':memory:')
+  const api = criarApi(db)
+  const boot = Date.parse('2026-11-06T10:00:00Z')
+  db.prepare(`INSERT INTO automations (id, schema_version, enabled, deployment_mode, created_at, updated_at) VALUES ('a', 1, 1, 'live', 'x', 'x')`).run()
+  const revisao = Number(db.prepare(`INSERT INTO automation_revisions (automation_id, revision, status, doc_json, created_at) VALUES ('a', 1, 'active', '{}', 'x')`).run().lastInsertRowid)
+  db.prepare(`INSERT INTO inbound_events (id, account_id, chat_id, chat_kind, sender_id, message_kind, message_text, replay, raw_json, received_at) VALUES ('e', 'conta', 'c', 'direct', 's', 'text', 't', 0, '{}', 'x')`).run()
+  const run = Number(db.prepare(`INSERT INTO automation_runs (event_id, automation_id, automation_revision_id, deployment_mode, status, created_at) VALUES ('e', 'a', ?, 'live', 'ok', 'x')`).run(revisao).lastInsertRowid)
+  const inserir = db.prepare(`INSERT INTO outbound_commands (id, run_id, target_account_id, command_type, payload_json, status, created_at) VALUES (?, ?, 'conta', 'whatsapp.reply', '{}', 'pending', ?)`)
+  for (let i = 0; i < 30; i++) inserir.run(`velho-${i}`, run, new Date(boot - 60_000 + i).toISOString())
+  for (let i = 0; i < 80; i++) inserir.run(`novo-${i}`, run, new Date(boot + 5_000 + i).toISOString())
+
+  const confirmados = []
+  const clienteEngine = {
+    execucoes: {
+      pendentes: async (conta, limite, antesDe) => api.resolver('GET', '/commands/pending', {
+        body: null, req: { headers: {} },
+        query: new URLSearchParams({ accountId: conta, limit: String(limite), ...(antesDe != null ? { antesDe: new Date(antesDe).toISOString() } : {}) })
+      }),
+      confirmar: async (id) => {
+        confirmados.push(id)
+        db.prepare(`UPDATE outbound_commands SET status = 'outcome_unknown' WHERE id = ?`).run(id)
+      }
+    }
+  }
+  const r = await fecharOrfaos({ message: { send: async () => ({}) } }, clienteEngine, 'conta', { log: () => {}, antesDe: boot, avisar: false, agora: boot + 10_000 })
+  check('fecha os 30 órfãos mesmo com 80 pendentes novos na frente', r.fechados === 30 && confirmados.every((id) => id.startsWith('velho-')), JSON.stringify({ fechados: r.fechados, completo: r.completo }))
+  check('não encosta nos pendentes do processo atual', db.prepare(`SELECT COUNT(*) n FROM outbound_commands WHERE status = 'pending'`).get().n === 80)
+  check('e termina como completo', r.completo === true)
+}
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE COMANDO ÓRFÃO PASSARAM')
 process.exit(falhas ? 1 : 0)

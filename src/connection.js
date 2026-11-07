@@ -337,6 +337,9 @@ function anotarEnqueteCriada (event, clienteEngine) {
 // gateway executava o mesmo comando duas vezes (duas linhas acrescentadas, dois
 // itens no JSON). Quem reinicia perde a lembrança, mas aí os pendentes viram
 // `outcome_unknown` em `fecharOrfaos`, então nada é reenviado.
+// Quando este processo subiu: o que o motor lista como pendente e é mais velho
+// que isto é órfão de uma queda anterior (ver `fecharOrfaos`).
+const INICIO_DO_PROCESSO = Date.now()
 const LIMITE_DE_DESPACHADOS = 5000
 // Um id só é esquecido depois de uma hora (a mesma régua de `fecharOrfaos`): até
 // lá o comando ainda pode estar em andamento, e expulsá-lo só porque a lista
@@ -721,7 +724,7 @@ export async function iniciar () {
         // "o serviço reiniciou" para quem esperava uma mídia a caminho.
         if (!orfaosFechados && !orfaosEmCurso) {
           orfaosEmCurso = true
-          fecharOrfaos(client, clienteEngine, accountId, { log })
+          fecharOrfaos(client, clienteEngine, accountId, { log, antesDe: INICIO_DO_PROCESSO })
             .then((r) => { if (r?.completo) orfaosFechados = true })
             .catch(() => {})
             .finally(() => { orfaosEmCurso = false })

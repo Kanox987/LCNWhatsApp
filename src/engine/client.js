@@ -69,8 +69,9 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       obter: (runId) => requisitar('GET', caminho('/executions', runId)),
       confirmar: (id, body) => requisitar('POST', `${caminho('/commands', id)}/result`, body),
       // O que ficou sem resposta nesta conta — ver a rota no motor.
-      pendentes: (accountId, limite = 20) =>
-        requisitar('GET', `/commands/pending?accountId=${encodeURIComponent(accountId)}&limit=${limite}`)
+      // `antesDe` (ms) limita aos criados antes desse instante; o corte é no motor.
+      pendentes: (accountId, limite = 20, antesDe = null) =>
+        requisitar('GET', `/commands/pending?accountId=${encodeURIComponent(accountId)}&limit=${limite}${antesDe != null ? `&antesDe=${encodeURIComponent(new Date(antesDe).toISOString())}` : ''}`)
     },
     meta: {
       obterVariaveis: () => requisitar('GET', '/meta/variables')

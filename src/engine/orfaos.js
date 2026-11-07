@@ -31,7 +31,7 @@ const AVISO_PADRAO = '⚠️ Não consegui terminar o download — o serviço re
 const LOTE = 50
 const MAXIMO_DE_LOTES = 20
 
-export async function fecharOrfaos (client, clienteEngine, accountId, { log, avisar = true, agora = Date.now(), idadeMaximaMs = 60 * 60 * 1000 } = {}) {
+export async function fecharOrfaos (client, clienteEngine, accountId, { log, avisar = true, agora = Date.now(), idadeMaximaMs = 60 * 60 * 1000, antesDe = null } = {}) {
   if (!accountId) return { fechados: 0, avisados: 0, completo: true }
 
   let fechados = 0
@@ -40,7 +40,7 @@ export async function fecharOrfaos (client, clienteEngine, accountId, { log, avi
   for (let lote = 0; lote < MAXIMO_DE_LOTES; lote++) {
     let pendentes
     try {
-      pendentes = await clienteEngine.execucoes.pendentes(accountId, LOTE)
+      pendentes = await clienteEngine.execucoes.pendentes(accountId, LOTE, antesDe)
     } catch (erro) {
       // Falha aqui não pode impedir o gateway de subir: ficar sem fechar órfão é
       // ruim, não subir é pior.
