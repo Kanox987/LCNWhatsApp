@@ -194,6 +194,14 @@ check('otimização: rejeita quarantineThreshold < 1', lancouQuarentenaInvalida)
 const configAposRejeicao = JSON.parse(fs.readFileSync(path.join(dataDir, 'config.json'), 'utf8'))
 check('otimização: rejeição não altera o config.json em disco', configAposRejeicao.confiabilidade.falhasConsecutivasParaQuarentena === 20)
 
+// --- vagas preferenciais do rápido (engine/fila.js) ---
+check('otimização: sem configurar, uma vaga prefere comando rápido', atualizado.vagasRapidas === 1)
+const comVagas = service.definirOtimizacao('wa-000001', { vagasRapidas: 0 })
+check('otimização: 0 desliga a vaga preferencial e é gravado', comVagas.vagasRapidas === 0 && JSON.parse(fs.readFileSync(path.join(dataDir, 'config.json'), 'utf8')).hardware.vagasRapidas === 0)
+let lancouVagasInvalidas = false
+try { service.definirOtimizacao('wa-000001', { vagasRapidas: -1 }) } catch { lancouVagasInvalidas = true }
+check('otimização: rejeita vagasRapidas negativo', lancouVagasInvalidas)
+
 fs.rmSync(pastaTmp, { recursive: true, force: true })
 
 // --- instância virtual "bare" (modo simples, sem registro nenhum) ---

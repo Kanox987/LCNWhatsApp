@@ -222,6 +222,7 @@ function optimizationCard (instanceId, optimization) {
   const upload = el('input', { type: 'text', value: formatBandwidth(optimization.bandwidthLimit?.uploadBytesPerSecond), placeholder: 'sem limite' })
   const quarantine = el('input', { type: 'number', min: '1', step: '1', value: optimization.quarantineThreshold })
   const simultaneos = el('input', { type: 'number', min: '1', step: '1', value: optimization.comandosSimultaneos ?? 2 })
+  const rapidas = el('input', { type: 'number', min: '0', step: '1', value: optimization.vagasRapidas ?? 1 })
   const formMessage = el('div')
   const submit = button('Salvar otimização', { variant: 'primary', type: 'submit' })
   const form = el('form', { className: 'stack-lg' }, [
@@ -229,7 +230,8 @@ function optimizationCard (instanceId, optimization) {
       field('Limite de download', download, 'Velocidade máxima recebida por esta instância. Exemplos: 500 KB/s, 2 MB/s ou sem limite.'),
       field('Limite de upload', upload, 'Velocidade máxima enviada por esta instância. Use as mesmas unidades ou escreva sem limite.'),
       field('Limiar de quarentena', quarantine, 'Quantas falhas de conexão seguidas até a instância parar de tentar reconectar sozinha.'),
-      field('Comandos ao mesmo tempo', simultaneos, 'Quantos comandos este número executa em paralelo. O que eles disputam é a conexão com o WhatsApp, que é uma só: sem limite, uma rajada de buscas sobe dezenas de fotos de uma vez e os envios começam a estourar o tempo. 2 é o padrão; máquina folgada aguenta mais.')
+      field('Comandos ao mesmo tempo', simultaneos, 'Quantos comandos este número executa em paralelo. O que eles disputam é a conexão com o WhatsApp, que é uma só: sem limite, uma rajada de buscas sobe dezenas de fotos de uma vez e os envios começam a estourar o tempo. 2 é o padrão; máquina folgada aguenta mais.'),
+      field('Vagas para comandos rápidos', rapidas, 'Quantas dessas vagas preferem comandos rápidos, como /ping. Um comando lento, como o envio de um vídeo baixado, só usa uma delas quando nenhum rápido está esperando. 1 é o padrão; 0 desliga. No comando, a linha "rapidez:" diz se ele é rápido (1) ou lento (0).')
     ]),
     el('div', { className: 'readonly-box' }, [
       el('div', {}, [el('span', { text: 'Memória' }), el('strong', { text: optimization.resources?.memory || 'não definida' })]),
@@ -248,13 +250,16 @@ function optimizationCard (instanceId, optimization) {
       const paralelos = Number(simultaneos.value)
       // Zero trancaria a fila inteira e o bot ficaria mudo sem nada no log.
       if (!Number.isInteger(paralelos) || paralelos < 1) throw new Error('Comandos ao mesmo tempo deve ser um número inteiro a partir de 1.')
+      const preferenciais = Number(rapidas.value)
+      if (!Number.isInteger(preferenciais) || preferenciais < 0) throw new Error('Vagas para comandos rápidos deve ser um número inteiro a partir de 0.')
       const body = {
         bandwidthLimit: {
           downloadBytesPerSecond: parseBandwidth(download.value),
           uploadBytesPerSecond: parseBandwidth(upload.value)
         },
         quarantineThreshold: threshold,
-        comandosSimultaneos: paralelos
+        comandosSimultaneos: paralelos,
+        vagasRapidas: preferenciais
       }
       setBusy(submit, true, 'Salvando…')
       const saved = await api.instances.updateOptimization(instanceId, body)
@@ -262,6 +267,7 @@ function optimizationCard (instanceId, optimization) {
       upload.value = formatBandwidth(saved.bandwidthLimit.uploadBytesPerSecond)
       quarantine.value = saved.quarantineThreshold
       simultaneos.value = saved.comandosSimultaneos
+      rapidas.value = saved.vagasRapidas
       notify('Controles de otimização atualizados.')
     } catch (error) {
       formMessage.replaceChildren(errorState(error))

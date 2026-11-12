@@ -26,6 +26,7 @@ import { caminhoInstancia, nomeContainer } from '../instances/paths.js'
 import { gerarQuadlet } from '../instances/quadlet.js'
 import { ARQ_ESTADO as ARQ_ESTADO_BARE, ARQ_CONFIG as ARQ_CONFIG_BARE, RAIZ } from '../paths.js'
 import { ARQ_PID_ENGINE } from '../engine/paths.js'
+import { VAGAS_RAPIDAS_PADRAO } from '../engine/fila.js'
 import * as processoDaInstancia from './processoDaInstancia.js'
 import { statusServico as statusServicoBare, iniciarBot as iniciarBotBare, pararBot as pararBotBare, reiniciarBot as reiniciarBotBare, logsServico as logsServicoBare } from '../runtime.js'
 
@@ -823,6 +824,9 @@ export function criarInstanceService ({
       // WhatsApp, que é uma só: sem limite, uma rajada de buscas sobe dezenas
       // de capas de uma vez e o socket estoura o tempo. Ver engine/fila.js.
       comandosSimultaneos: efetivo['hardware.comandosSimultaneos'],
+      // Quantas dessas vagas preferem envio rápido (ver engine/fila.js). Não
+      // é concessão: só reparte o limite que já vale.
+      vagasRapidas: Number.isSafeInteger(config.hardware?.vagasRapidas) && config.hardware.vagasRapidas >= 0 ? config.hardware.vagasRapidas : VAGAS_RAPIDAS_PADRAO,
       quarantineThreshold: efetivo['confiabilidade.falhasConsecutivasParaQuarentena'],
       resources: instancia.resources ?? { memory: null, cpus: null },
       // O que a tela precisa para se explicar: valor configurado, limite
@@ -860,6 +864,13 @@ export function criarInstanceService ({
         throw new Error('comandosSimultaneos deve ser um inteiro >= 1.')
       }
       saida.comandosSimultaneos = patch.comandosSimultaneos
+    }
+    if (patch.vagasRapidas !== undefined) {
+      // 0 desliga a preferência; acima do limite a fila usa o limite.
+      if (!Number.isInteger(patch.vagasRapidas) || patch.vagasRapidas < 0) {
+        throw new Error('vagasRapidas deve ser um inteiro >= 0 (0 = sem vaga preferencial).')
+      }
+      saida.vagasRapidas = patch.vagasRapidas
     }
     return saida
   }
@@ -908,6 +919,9 @@ export function criarInstanceService ({
     }
     if (mudancas.comandosSimultaneos !== undefined) {
       config.hardware.comandosSimultaneos = mudancas.comandosSimultaneos
+    }
+    if (mudancas.vagasRapidas !== undefined) {
+      config.hardware.vagasRapidas = mudancas.vagasRapidas
     }
     if (mudancas.quarantineThreshold !== undefined) {
       config.confiabilidade = { ...config.confiabilidade, falhasConsecutivasParaQuarentena: mudancas.quarantineThreshold }
