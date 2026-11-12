@@ -391,6 +391,38 @@ export const ACOES = Object.freeze([
       { chave: 'limit', rotulo: 'até', tipo: 'numero' }
     ]
   },
+  // Registro de usos (registroDeUsos.js), para limite de uso: `conta usos` põe
+  // o número numa variável local, o `se evento local.<nome> >= 3` comum decide,
+  // e `anota uso` grava o uso de agora.
+  {
+    palavra: 'anota uso',
+    tipo: 'action.usage.record',
+    campos: [
+      { chave: 'rule', rotulo: 'regra', tipo: 'palavra' },
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado' } }
+    ]
+  },
+  {
+    palavra: 'conta usos',
+    tipo: 'action.usage.count',
+    campos: [
+      { chave: 'rule', rotulo: 'regra', tipo: 'palavra' },
+      { chave: 'window', rotulo: 'janela', tipo: 'palavra' },
+      { chave: 'key', rotulo: 'em', tipo: 'palavra' },
+      { chave: 'who', rotulo: 'de quem', tipo: 'palavra', palavras: { sender: 'quem enviou', target: 'quem foi marcado', everyone: 'todos' } },
+      { chave: 'where', rotulo: 'onde', tipo: 'palavra', palavras: { chat: 'nesta conversa', anywhere: 'em qualquer conversa' } }
+    ]
+  },
+  {
+    palavra: 'limpa usos',
+    tipo: 'action.usage.clear',
+    campos: [
+      { chave: 'rule', rotulo: 'regra', tipo: 'palavra' },
+      { chave: 'who', rotulo: 'quem', tipo: 'palavra', palavras: { target: 'quem foi marcado', sender: 'quem enviou', everyone: 'todos' } },
+      { chave: 'notFoundText', rotulo: 'sem alvo', tipo: 'texto' },
+      { chave: 'confirmText', rotulo: 'confirma', tipo: 'texto' }
+    ]
+  },
   {
     palavra: 'promove no grupo',
     tipo: 'action.group.promote',

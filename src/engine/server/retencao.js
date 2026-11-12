@@ -33,6 +33,7 @@
 // janela significa.
 import fs from 'fs'
 import { ID_GLOBAL } from './attributeScopes.js'
+import { varrerUsos } from './registroDeUsos.js'
 
 export const CHAVE_RETENCAO = '__retencao__'
 
@@ -214,6 +215,11 @@ export function iniciarVarredura (db, { intervaloMs = INTERVALO_MS, aoVarrer = n
           `${resultado.agendamentos} disparo(s) do relógio apagados`
         )
       }
+      // Os usos anotados têm janela própria (limite semanal precisa de uma
+      // semana de memória, o histórico de execuções não).
+      const usos = varrerUsos(db)
+      if (usos.usos) console.log(`[engine] retenção dos usos (${usos.horas}h): ${usos.usos} uso(s) apagados`)
+      resultado.usos = usos.usos
       if (aoVarrer) aoVarrer(resultado)
       return resultado
     } catch (erro) {

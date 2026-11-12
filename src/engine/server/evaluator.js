@@ -12,6 +12,7 @@ import { valoresDeAgora } from './momento.js'
 import { avisoDeDesligado, desligadoNaConversa, familiaDoDocumento } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
 import { adicionarNaLista, estaNaLista, listasDa, membrosDaLista, normalizarNomeDeLista, removerDaLista } from './listas.js'
+import { anotarUso, contarUsos, lerJanela, limparUsos } from './registroDeUsos.js'
 import { criarServicoDeEnquetes } from './enquetesService.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
 import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, familiasDoMenu, gravarConfigDeMenu, lerConfigDeMenu, normalizarFamilia, resolverConfigDeMenu } from './menuConfig.js'
@@ -2248,6 +2249,66 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
         texto = [interpolar(no.config?.title || 'Lista {{lista.nome}} ({{lista.total}}):', ctxLista), ...linhas].join('\n')
       }
       comandos.push({ commandType: 'whatsapp.reply', payload: { chatId: evento.chat.id, text: texto } })
+      return 'success'
+    }
+
+    case 'action.usage.record':
+    case 'action.usage.count':
+    case 'action.usage.clear': {
+      // O registro de usos (registroDeUsos.js): quem usou o quê e quando, para
+      // limite de uso escrito na linguagem. Roda no motor, sem comando de
+      // gateway. Como nas listas, a pessoa vem sempre do evento, nunca de texto
+      // digitado.
+      const regra = interpolar(no.config?.rule ?? '', contexto)
+      const regraInvalida = () => new ErroDeFluxo(`Nome de regra inválido: "${regra}". Use letras minúsculas, números e "_", começando por letra (até 32).`)
+      const padrao = no.type === 'action.usage.clear' ? 'target' : 'sender'
+      const quemDe = no.config?.who || padrao
+      const pessoa = quemDe === 'everyone' ? null : quemDe === 'sender' ? evento.sender?.id : resolverAlvo(evento)
+
+      if (no.type === 'action.usage.count') {
+        const segundos = lerJanela(no.config?.window)
+        if (!segundos) throw new ErroDeFluxo(`Janela inválida: "${no.config?.window ?? ''}". Escreva como "10 minutos", "1 hora" ou "7 dias".`)
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(no.config?.key ?? '')) throw new ErroDeFluxo('A contagem precisa de um nome simples de variável local.')
+        // Sem pessoa identificada (alvo ausente) a conta é zero, não "de todos":
+        // contar todo mundo no lugar de um alvo que faltou travaria o comando
+        // de quem não tem nada a ver.
+        let total = 0
+        if (quemDe === 'everyone' || pessoa) {
+          const feito = contarUsos(db, {
+            regra, segundos, pessoa, chat: no.config?.where === 'chat' ? evento.chat?.id ?? null : null
+          })
+          if (!feito.ok) throw regraInvalida()
+          total = feito.total
+        }
+        contexto.local[no.config.key] = total
+        return 'success'
+      }
+
+      if (quemDe !== 'everyone' && !pessoa) {
+        if (no.type === 'action.usage.clear' && typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
+          comandos.push({
+            commandType: 'whatsapp.reply',
+            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
+          })
+          return 'success'
+        }
+        throw new ErroDeFluxo('Não há de quem anotar ou apagar o uso: o comando não indicou ninguém.')
+      }
+
+      if (no.type === 'action.usage.record') {
+        const feito = anotarUso(db, { regra, pessoa, chat: evento.chat?.id })
+        if (!feito.ok) throw regraInvalida()
+        return 'success'
+      }
+
+      const feito = limparUsos(db, { regra, pessoa })
+      if (!feito.ok) throw regraInvalida()
+      if (typeof no.config?.confirmText === 'string' && no.config.confirmText) {
+        comandos.push({
+          commandType: 'whatsapp.reply',
+          payload: { chatId: evento.chat.id, text: interpolar(no.config.confirmText, { ...contexto, usos: { apagados: feito.apagados } }) }
+        })
+      }
       return 'success'
     }
 

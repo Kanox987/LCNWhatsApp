@@ -18,6 +18,9 @@ export const ACOES_SUPORTADAS = Object.freeze([
   'action.list.add',
   'action.list.remove',
   'action.list.show',
+  'action.usage.record',
+  'action.usage.count',
+  'action.usage.clear',
   'action.variable.calculate',
   // RANKING: a única ação que lê MUITOS registros em vez de um.
   //

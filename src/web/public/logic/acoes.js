@@ -660,6 +660,54 @@ export const ACOES = Object.freeze([
     ]
   },
   {
+    tipo: 'action.usage.record',
+    rotulo: 'Anotar um uso',
+    familia: 'moderacao',
+    resumo: 'Anota que a pessoa usou o comando agora, numa regra com nome, como "downloads".',
+    exemplo: 'Depois de o /dow conferir o limite, anota o uso na regra "downloads".',
+    dependencias: 'Nada além do nome da regra. Funciona em conversa privada e em grupo.',
+    resultado: 'Uma linha a mais no registro de usos (quem, onde, quando). Não responde nada.',
+    errosComuns: 'Anotar antes de contar: a conta já inclui o uso de agora e o limite fecha um antes. Conte primeiro, anote depois.',
+    campos: [
+      { chave: 'rule', rotulo: 'Regra', ajuda: 'O nome que junta os usos, como "downloads". Comandos diferentes podem anotar na mesma regra e dividir o mesmo limite.' },
+      { chave: 'who', rotulo: 'De quem', ajuda: 'quem enviou a mensagem (o padrão) ou quem foi marcado.' }
+    ]
+  },
+  {
+    tipo: 'action.usage.count',
+    rotulo: 'Contar usos',
+    familia: 'moderacao',
+    resumo: 'Conta quantas vezes a regra foi usada numa janela de tempo e guarda o número para o próximo "se".',
+    exemplo: 'conta usos (regra downloads, janela 10 minutos, em qtd) e depois: se evento local.qtd >= 3, responde "Espera um pouco".',
+    dependencias: 'Os usos anotados antes com "Anotar um uso". A retenção dos usos (padrão 7 dias) é o máximo que a janela enxerga.',
+    resultado: 'O número fica em evento local.<nome> só durante esta execução.',
+    errosComuns: 'Janela maior que a retenção dos usos: o que já foi apagado não conta, e o limite afrouxa sem aviso.',
+    campos: [
+      { chave: 'rule', rotulo: 'Regra', ajuda: 'O mesmo nome usado em "Anotar um uso".' },
+      { chave: 'window', rotulo: 'Janela', ajuda: 'Até quanto tempo para trás conta: "30 segundos", "10 minutos", "1 hora", "7 dias".' },
+      { chave: 'key', rotulo: 'Guardar em', ajuda: 'Nome da variável local que recebe o número, lida como evento local.<nome>.' },
+      { chave: 'who', rotulo: 'De quem', ajuda: 'quem enviou (o padrão), quem foi marcado, ou todos somados.' },
+      { chave: 'where', rotulo: 'Onde', ajuda: 'em qualquer conversa (o padrão) ou só nesta conversa.' }
+    ]
+  },
+  {
+    tipo: 'action.usage.clear',
+    rotulo: 'Limpar usos',
+    familia: 'moderacao',
+    resumo: 'Apaga os usos anotados de uma regra, de uma pessoa ou de todos.',
+    exemplo: '/zerar @fulano apaga os downloads do fulano, e ele volta a ter o limite inteiro.',
+    ressalva: { level: 'requirement', text: 'Quem pode usar este comando decide quem escapa do limite. Instale-o só para o dono.' },
+    dependencias: 'Alguém marcado ou respondido, a não ser que escolha "todos".',
+    resultado: 'Os usos somem; a próxima conta começa do zero.',
+    errosComuns: 'Escrever a regra diferente da usada em "Anotar um uso": "presenca" e "presença_" são regras diferentes, e zerar a errada não muda nada.',
+    campos: [
+      { chave: 'rule', rotulo: 'Regra', ajuda: 'O mesmo nome usado em "Anotar um uso".' },
+      { chave: 'who', rotulo: 'De quem', ajuda: 'quem foi marcado (o padrão), quem enviou, ou todos (a regra inteira).' },
+      { chave: 'notFoundText', rotulo: 'Quando ninguém foi marcado', ajuda: 'Resposta para quem usou o comando sem marcar ninguém. Sem este texto a falta só aparece na aba Execuções.' },
+      { chave: 'confirmText', rotulo: 'Confirmação', ajuda: 'O que o bot responde depois de apagar. Pode usar {{usos.apagados}}.' }
+    ]
+  },
+  {
     tipo: 'action.group.promote',
     rotulo: 'Promover a administrador',
     familia: 'moderacao',

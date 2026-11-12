@@ -242,6 +242,15 @@
                 "$ref": "#/definitions/actionListShow"
               },
               {
+                "$ref": "#/definitions/actionUsageRecord"
+              },
+              {
+                "$ref": "#/definitions/actionUsageCount"
+              },
+              {
+                "$ref": "#/definitions/actionUsageClear"
+              },
+              {
                 "$ref": "#/definitions/actionWhatsappReact"
               },
               {
@@ -1141,6 +1150,65 @@
               "type": "string",
               "description": "Resposta depois de editar a lista. Pode usar {{target.number}} e {{sender.name}}. Sem este texto a ação não responde nada."
             }
+          }
+        }
+      }
+    },
+    "actionUsageRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.usage.record" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rule"],
+          "properties": {
+            "rule": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Nome da regra que junta os usos, como \"downloads\" (letras minúsculas, números e _, começando por letra, até 32). Comandos diferentes podem anotar na mesma regra. Maiúscula e acento são normalizados." },
+            "who": { "description": "De quem é o uso anotado: 'sender' é quem enviou a mensagem; 'target' é quem foi mencionado ou citado. Sem este campo vale 'sender'.", "enum": ["sender", "target"] }
+          }
+        }
+      }
+    },
+    "actionUsageCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.usage.count" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rule", "window", "key"],
+          "properties": {
+            "rule": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Nome da regra que junta os usos, como \"downloads\" (letras minúsculas, números e _, começando por letra, até 32). Comandos diferentes podem anotar na mesma regra. Maiúscula e acento são normalizados." },
+            "window": { "type": "string", "pattern": "^[0-9]+ ?(segundos?|minutos?|min|horas?|dias?|semanas?|s|m|h|d)$", "description": "Até quanto tempo para trás os usos contam, como \"10 minutos\", \"1 hora\" ou \"7 dias\". Uso mais velho que a retenção dos usos (padrão 7 dias) já foi apagado e não conta." },
+            "key": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "description": "Variável local que recebe o número, lida depois como evento local.<nome> (ex.: se evento local.qtd >= 3). Só vale nesta execução." },
+            "who": { "description": "De quem contar: 'sender' (quem enviou), 'target' (quem foi marcado) ou 'everyone' (todos somados). Sem este campo vale 'sender'.", "enum": ["sender", "target", "everyone"] },
+            "where": { "description": "'chat' conta só os usos desta conversa; 'anywhere' conta em todas. Sem este campo vale 'anywhere'.", "enum": ["chat", "anywhere"] }
+          }
+        }
+      }
+    },
+    "actionUsageClear": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "config"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "const": "action.usage.clear" },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rule"],
+          "properties": {
+            "rule": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Nome da regra que junta os usos, como \"downloads\" (letras minúsculas, números e _, começando por letra, até 32). Comandos diferentes podem anotar na mesma regra. Maiúscula e acento são normalizados." },
+            "who": { "description": "De quem apagar: 'target' (quem foi marcado), 'sender' (quem enviou) ou 'everyone' (a regra inteira, de todos). Sem este campo vale 'target'.", "enum": ["sender", "target", "everyone"] },
+            "notFoundText": { "type": "string", "description": "Resposta quando o comando não indicou ninguém. Sem este texto a execução vira erro no histórico e o WhatsApp não recebe nada." },
+            "confirmText": { "type": "string", "description": "Resposta depois de apagar. Pode usar {{usos.apagados}} e {{target.number}}. Sem este texto a ação não responde nada." }
           }
         }
       }

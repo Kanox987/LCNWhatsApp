@@ -1,0 +1,52 @@
+template presenca v1
+  nome: Marcar presença (com limite)
+  descrição: Cada pessoa marca presença com um comando, até um limite por janela de tempo — por padrão uma vez por dia. Quem já marcou recebe aviso em vez de marcar de novo. Os usos ficam na regra "presenca"; o comando de zerar usos apaga a conta de alguém.
+  categoria: utilitarios
+
+automação
+  nome: Marcar presença
+  tipo: comando
+  dispara com: {{params.command}}
+  menu: {{params.command}} — Marca sua presença
+  pool: {{params.poolId}}
+  acessa: texto
+  casa: exato
+  quem: só externos
+  acesso: {{params.acesso}}
+
+  conta usos
+    regra: {{params.regra}}
+    janela: {{params.janela}}
+    em: vezes
+  se evento local.vezes >= "{{params.limite}}"
+    responde "{{params.jaMarcouText}}"
+  senão
+    anota uso
+      regra: {{params.regra}}
+    responde "{{params.confirmText}}"
+
+configurável
+  command: texto = "/presenca"
+    rótulo: Comando
+    ajuda: A palavra que cada pessoa digita para marcar presença.
+  regra: texto = "presenca"
+    rótulo: Nome da regra
+    ajuda: Onde os usos ficam anotados. Use o MESMO nome no comando que zera os usos. Letras minúsculas, números e "_", começando por letra.
+  janela: texto = "1 dia"
+    rótulo: Janela
+    ajuda: De quanto em quanto tempo o limite recomeça, como "1 dia", "12 horas" ou "7 dias". Os usos ficam guardados 7 dias por padrão; janela maior que isso não enxerga o que já foi apagado.
+  limite: número = 1
+    rótulo: Quantas vezes por janela
+    ajuda: Quantas presenças cada pessoa pode marcar dentro da janela.
+  confirmText: texto = "Presença marcada, {{sender.name}}."
+    rótulo: Confirmação
+    ajuda: Resposta para quem marcou.
+  jaMarcouText: texto = "Você já marcou presença ({{local.vezes}}). Tente de novo mais tarde."
+    rótulo: Quando passou do limite
+    ajuda: Resposta para quem já usou todas as vezes da janela. {{local.vezes}} mostra quantas já foram.
+  poolId: texto
+    rótulo: Pool que responde
+    ajuda: Identificador do pool de números que vai responder este comando.
+  acesso: texto = "todos"
+    rótulo: Quem pode usar
+    ajuda: todos, dono, admins (administradores do grupo) ou lista <nome> (quem foi posto nessa lista). O dono sempre pode. Quem não pode é ignorado, sem resposta.
