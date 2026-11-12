@@ -25,7 +25,7 @@ Atualizado em 06/11/2026. Os commits citados estão na `v3`.
 | **F** QR ou código de pareamento | pareamento por número | **feito, na `onda1`** | `PAIRING.md` |
 | **G** agendamento | reescrita no motor | **feito** (D-48), validado só com relógio injetado, não em produção | `SCHEDULER.md` |
 | **H** recover | recuperação de mensagem apagada, opt-in | **não começou**; o dono vai testar junto (evento de revogação chega com o id? o celular devolve o conteúdo?) | plano |
-| **I** anti-trava | teto por remetente, profundidade, regex | **parcial** — profundidade existe; regex recusada; teto por remetente **em aberto para o dono** (D-57; Gemini disse que vale, desenho mínimo registrado) | `PERFORMANCE.md` |
+| **I** anti-trava | teto por remetente, profundidade, regex | **parcial** — profundidade existe; regex recusada; teto por remetente resolvido **pela linguagem**: `anota/conta/limpa usos` (D-59) | `PERFORMANCE.md` |
 | **J** segurança | login no painel | **descartada pelo dono**: o cliente só vê o painel do próprio container (D-56) | `SECURITY_REVIEW.md` |
 | **K** medir de novo | comparação antes/depois | **feito em 07/11** — seis vereditos PASSOU, heap −0,047 MiB/min, mesmo pico de 280 MiB; sem par de economia, nada foi otimizado | `PERFORMANCE.md` |
 

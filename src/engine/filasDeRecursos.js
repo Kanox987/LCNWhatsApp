@@ -8,12 +8,23 @@ import { sinalDoEvento, cancelarTrabalhoExterno } from './cancelamento.js'
 // acrescentar argumentos aos caminhos de álbum, carrossel e futuras ações.
 const contextoDoComando = new AsyncLocalStorage()
 
-export function comContextoDeComando (scheduling, filas, tarefa) {
-  return contextoDoComando.run({ prioridade: normalizarPrioridade(scheduling?.priority), filas }, tarefa)
+// A rapidez declarada no cabeçalho vence; sem ela, quem chama deduz pelo tipo
+// do comando (o gateway sabe quais são longos).
+export function comContextoDeComando (scheduling, filas, tarefa, { lento = false } = {}) {
+  const declarado = scheduling?.speed
+  return contextoDoComando.run({
+    prioridade: normalizarPrioridade(scheduling?.priority),
+    lento: declarado ? declarado === 'slow' : lento === true,
+    filas
+  }, tarefa)
 }
 
 export function prioridadeDoComando () {
   return contextoDoComando.getStore()?.prioridade || 'normal'
+}
+
+export function lentoDoComando () {
+  return contextoDoComando.getStore()?.lento === true
 }
 
 export function filasDoComando () {
@@ -27,17 +38,19 @@ export function criarFilasDeRecursos (cfg = {}, { aoMudar, agora } = {}) {
     maxPendentes: maxPendentesEfetivo(cfg), agingMs: hardware.agingMs,
     esperaMaximaMs: hardware.esperaMaximaMs, agora, aoMudar
   }
+  // Só o socket tem vaga preferencial: é nele que o envio curto disputa com
+  // o upload longo. Rede e CPU servem quase só trabalho lento.
   const filas = Object.fromEntries(Object.entries({
-    socket: hardware.comandosSimultaneos,
-    rede: limites.downloadConcorrencia,
-    cpu: Number.isSafeInteger(hardware.cpuConcorrencia) && hardware.cpuConcorrencia > 0 ? hardware.cpuConcorrencia : 1
-  }).map(([recurso, limite]) => [recurso, criarFila({ ...opcoes, recurso, limite })]))
+    socket: [hardware.comandosSimultaneos, hardware.vagasRapidas],
+    rede: [limites.downloadConcorrencia, 0],
+    cpu: [Number.isSafeInteger(hardware.cpuConcorrencia) && hardware.cpuConcorrencia > 0 ? hardware.cpuConcorrencia : 1, 0]
+  }).map(([recurso, [limite, vagasRapidas]]) => [recurso, criarFila({ ...opcoes, recurso, limite, vagasRapidas })]))
   const recusasDeComandos = {}
   const avisos = { enviados: 0, recusados: 0, falharam: 0 }
   let politicasInvalidas = 0
   return {
     ...filas,
-    executar (recurso, tarefa, { prioridade = prioridadeDoComando() } = {}) {
+    executar (recurso, tarefa, { prioridade = prioridadeDoComando(), lento = lentoDoComando() } = {}) {
       if (!Object.hasOwn(filas, recurso)) throw new Error(`Recurso de execução desconhecido: ${recurso}`)
       const signal = recurso === 'rede' ? sinalDoEvento() : undefined
       return filas[recurso].executar(() => {
@@ -45,7 +58,7 @@ export function criarFilasDeRecursos (cfg = {}, { aoMudar, agora } = {}) {
         // Socket e CPU conservam a drenagem, sem preempção de efeitos em curso.
         signal?.throwIfAborted()
         return tarefa()
-      }, { prioridade, signal }).catch((erro) => {
+      }, { prioridade, lento, signal }).catch((erro) => {
         if (signal?.aborted) throw signal.reason
         if (erro?.code === 'LCN_SEM_VAGA') cancelarTrabalhoExterno('recusa_admissao', erro.recurso || recurso)
         throw erro

@@ -158,6 +158,7 @@ o motor não sabe representar.
 ## D-13. O teto por remetente não vem da `v2`
 
 > **Em aberto em 06/11/2026:** nenhum teto por remetente na admissão. Só existe a profundidade de recursão. Ver D-57.
+> **11/11/2026:** o limite por remetente passou a ser escrito na linguagem (registro de usos). Ver D-59.
 
 **Decidido:** entra em `src/engine/filasDeRecursos.js` e `fila.js`, por conta,
 com a recusa **relatada** — frente I.
@@ -1437,7 +1438,7 @@ container e não tem terminal.
 
 **Por quê:** sem a rota, não há o que elevar; o limite é imposto por quem cria o container.
 
-## D-57 — Frente I: teto por remetente — não implementado, em aberto para o dono
+## D-57 — Frente I: teto por remetente — não implementado (resolvido pela linguagem na D-59)
 
 **Estado em 07/11/2026:** nada implementado. O que existe: profundidade de recursão limitada; regex de usuário
 recusada; cada fila tem `maxPendentes` (configurável pelo administrador) com recusa relatada, nunca descarte
@@ -1467,6 +1468,31 @@ Agora `ENV HOME=/home/node`, montagem `./estado` nesse caminho (`run.sh`, compos
 antigo (`cp` de `/home/node` ou `/root`) quando `estado/` está vazio. `LCN_CONCESSOES` é repassada ao container.
 
 **Por quê:** perder as informações do cliente numa atualização é o pior defeito possível para este produto.
+
+## D-59 — Frente I resolvida pela linguagem: registro de usos
+
+**Decidido (11/11/2026), substitui o "em aberto" da D-57:** em vez de um teto por remetente fixo na admissão, a
+linguagem ganhou três ações do motor — `anota uso`, `conta usos` e `limpa usos` (`action.usage.record/count/clear`) —
+sobre a tabela `usage_records` (migração 017). Quem escreve o comando monta a regra: "conta os usos de quem mandou na
+regra X nos últimos 10 minutos; se passou de N, avisa; senão anota e segue". Modelos `/presenca` (limite por
+janela) e `/zerarusos` (só dono). Retenção própria, 168 h por padrão, configurável, 0 = para sempre; a varredura
+roda junto com a das execuções.
+
+**Por quê:** foi o pedido do dono ("o cara que está programando no LCN pode criar regras"), não mexe na admissão
+(`fila.js`) e não descarta mensagem em silêncio. Contar e anotar são síncronos no mesmo processo, sem corrida.
+
+## D-60 — Vaga preferencial do rápido na fila do socket
+
+**Decidido (11/11/2026):** das `hardware.comandosSimultaneos` vagas do socket, `hardware.vagasRapidas` (padrão 1,
+0 desliga, nunca acima do limite) preferem envio rápido. Um envio lento só ocupa uma delas se nenhum rápido elegível
+estiver esperando — rápido preso na própria conversa não conta. Não é reserva nem preempção. Rápido/lento vem do
+cabeçalho (`rapidez: 1|0`, ou `rápido|lento`, campo `scheduling.speed`); sem a linha, deduz por COMANDO pelo
+`COMANDOS_LONGOS` do gateway, então o "baixando…" do `/dow` sai rápido e só o upload é lento. `prioridade:` passou
+a aceitar 0 a 3 além das palavras. Rede e CPU ficam sem vaga preferencial.
+
+**Por quê:** o `/ping` preso atrás do `/dow` não é urgência (os dois são "normal"), é tempo de vaga. Gemini 3.8
+Flash concordou com a regra e com a dedução por comando, e lembrou que o rápido de conversa ocupada não pode travar
+a vaga.
 
 
 ## Consultas externas desta rodada

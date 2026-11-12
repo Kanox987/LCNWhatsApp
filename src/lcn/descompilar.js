@@ -9,7 +9,7 @@
 import {
   ACOES, ACOES_DE_GRUPO, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS, NIVEIS_DE_AVISO, ONDE_PROCURAR, ORIGENS, OPERADORES,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR, acaoPorTipo,
-  PRIORIDADES, OPERACOES_ARITMETICAS, BLOCOS_DE_CONDICAO
+  PRIORIDADES, RAPIDEZES, OPERACOES_ARITMETICAS, BLOCOS_DE_CONDICAO
 } from './vocabulario.js'
 import { conferirEstrutura, inferirEstrutura } from './estrutura.js'
 import { escreverTempo } from './tempo.js'
@@ -283,6 +283,9 @@ export function descompilar (documento, template = null) {
   if (fila?.priority && fila.priority !== 'normal') {
     h(`prioridade: ${PRIORIDADES[fila.priority] || fila.priority}`)
   }
+  // Ausente é "deduz pelo tipo do comando", que não é o mesmo que nenhum dos
+  // dois valores; por isso só aparece quando foi declarada.
+  if (fila?.speed) h(`rapidez: ${RAPIDEZES[fila.speed] || fila.speed}`)
   if (fila?.onNoSlot?.kind === 'notify') h(`sem vaga: ${JSON.stringify(fila.onNoSlot.text ?? '')}`)
   else if (fila?.onNoSlot?.kind && fila.onNoSlot.kind !== 'discard') h(`sem vaga: ${fila.onNoSlot.kind}`)
 

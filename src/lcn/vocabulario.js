@@ -693,6 +693,17 @@ export const PRIORIDADES = Object.freeze({
 //
 // Só duas formas existem hoje, e a terceira foi recusada de propósito. Ver o
 // comentário do campo `sem vaga` em CAMPOS_DO_CABECALHO para o motivo.
+// A MESMA URGÊNCIA EM NÚMERO, para quem prefere escrever `prioridade: 3`.
+// São os níveis da fila (src/engine/fila.js); um teste confere que batem.
+export const PRIORIDADE_EM_NUMERO = Object.freeze({ low: 0, normal: 1, high: 2, very_high: 3 })
+
+// QUANTO TEMPO O ENVIO SEGURA A VAGA, que é outra pergunta: um `/ping` e um
+// `/dow` podem ser igualmente "normal", mas o upload do `/dow` ocupa o socket
+// por minutos. Rápido pode usar a vaga preferencial; lento só a usa quando
+// nenhum rápido espera. Sem a linha, o gateway deduz pelo tipo do comando.
+export const RAPIDEZES = Object.freeze({ fast: 'rápido', slow: 'lento' })
+export const RAPIDEZ_EM_NUMERO = Object.freeze({ fast: 1, slow: 0 })
+
 export const RECUSAS_SEM_VAGA = Object.freeze({
   discard: 'descarta'
 })
@@ -956,7 +967,13 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     chave: 'prioridade',
     vale: 'todos',
     palavras: PRIORIDADES,
-    ajuda: 'Quando a fila está disputada, quem passa primeiro. Pergunte "se isto esperar, o que se perde?" — e não "isto é pesado?". Capturar uma visualização única é "muito alta" porque a mídia deixa de existir se esperar; baixar um vídeo é "baixa" porque o endereço continua lá amanhã. Vale para TODOS os envios desta automação. Sem esta linha, fica em "normal".'
+    ajuda: 'Quando a fila está disputada, quem passa primeiro. Pergunte "se isto esperar, o que se perde?" — e não "isto é pesado?". Capturar uma visualização única é "muito alta" porque a mídia deixa de existir se esperar; baixar um vídeo é "baixa" porque o endereço continua lá amanhã. Aceita também número, de 0 ("baixa") a 3 ("muito alta"). Vale para TODOS os envios desta automação. Sem esta linha, fica em "normal".'
+  },
+  {
+    chave: 'rapidez',
+    vale: 'todos',
+    palavras: RAPIDEZES,
+    ajuda: 'Quanto tempo cada envio desta automação segura a vaga de envio. "rápido" (ou 1) pode usar a vaga que prefere comandos rápidos; "lento" (ou 0) só entra nela quando nenhum rápido está esperando. Não é urgência: isso é a "prioridade". Sem esta linha, o sistema deduz pelo que o envio faz — download, chamada de conexão e recuperação são lentos, o resto é rápido.'
   },
   {
     chave: 'sem vaga',

@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'async_hooks'
 import * as enviadas from '../enviadas.js'
 import { limitesDeMidia } from '../mediaLimits.js'
 import { criarOrcamentoDeMidia } from '../mediaBudget.js'
-import { criarFilasDeRecursos, comContextoDeComando, filasDoComando, prioridadeDoComando } from './filasDeRecursos.js'
+import { criarFilasDeRecursos, comContextoDeComando, filasDoComando, prioridadeDoComando, lentoDoComando } from './filasDeRecursos.js'
 import { sinalDoEvento, cancelarTrabalhoExterno } from './cancelamento.js'
 import { registrarFonteDeRecursos } from '../state.js'
 import { montarFilho, montarPai, podeVirarAlbum } from './album.js'
@@ -197,7 +197,7 @@ async function enviarERegistrar (client, destino, conteudo, opcoes) {
   const resultado = await semContarAEspera((sinal) => socket().executar(() => {
     sinal()
     return client.message.send(destino, conteudo, opcoes)
-  }, { prioridade: prioridadeDoComando() }))
+  }, { prioridade: prioridadeDoComando(), lento: lentoDoComando() }))
   enviadas.registrar(resultado?.id)
   return resultado
 }
@@ -208,7 +208,7 @@ async function subirMidia (client, buffer, opcoes) {
   return semContarAEspera((sinal) => socket().executar(() => {
     sinal()
     return client.message.upload(buffer, opcoes)
-  }, { prioridade: prioridadeDoComando() }))
+  }, { prioridade: prioridadeDoComando(), lento: lentoDoComando() }))
 }
 
 function opcoesDeCitacao (replyTo) {
@@ -2485,7 +2485,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
         }
       }
       await confirmarFailOpen(clienteEngine, comando, status, resultado)
-    })
+    }, { lento: COMANDOS_LONGOS.has(comando?.commandType) })
   }
 }
 

@@ -385,6 +385,13 @@
             "very_high"
           ]
         },
+        "speed": {
+          "description": "Quanto tempo cada envio segura a vaga do socket. fast pode usar a vaga preferencial; slow so a usa quando nenhum fast espera. Ausente, o gateway deduz pelo tipo de comando (download, chamada de conexao e recuperacao sao slow).",
+          "enum": [
+            "fast",
+            "slow"
+          ]
+        },
         "onNoSlot": {
           "type": "object",
           "additionalProperties": false,

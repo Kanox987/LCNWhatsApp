@@ -8,6 +8,7 @@
 import {
   ACOES, ACOES_DE_GRUPO, BLOCOS_DE_CONDICAO, PROFUNDIDADE_CONDICOES_PADRAO, CAMPOS_DO_CABECALHO, CAMPOS_DO_TEMPLATE, CASAMENTOS, CLASSES, DESTINOS, EXIGENCIAS,
   MARCAS_DO_CABECALHO, NIVEIS_DE_AVISO, ONDE_PROCURAR, OPERADORES, OPERACOES_ARITMETICAS, ORIGENS, PRIORIDADES,
+  PRIORIDADE_EM_NUMERO, RAPIDEZES, RAPIDEZ_EM_NUMERO,
   TIPOS_DE_CONFIG, TIPOS_DE_MENSAGEM, TIPOS_DE_VALOR,
   acaoPorPalavra, inverter
 } from './vocabulario.js'
@@ -25,7 +26,8 @@ export class ErroDeSintaxe extends Error {
 
 const CASAMENTO_POR_PALAVRA = inverter(CASAMENTOS)
 const ORIGEM_POR_PALAVRA = inverter(ORIGENS)
-const PRIORIDADE_POR_PALAVRA = inverter(PRIORIDADES)
+const PRIORIDADE_POR_PALAVRA = { ...inverter(PRIORIDADES), ...inverter(PRIORIDADE_EM_NUMERO) }
+const RAPIDEZ_POR_PALAVRA = { ...inverter(RAPIDEZES), ...inverter(RAPIDEZ_EM_NUMERO) }
 const TIPO_POR_PALAVRA = inverter(TIPOS_DE_MENSAGEM)
 const ACAO_DE_GRUPO_POR_PALAVRA = inverter(ACOES_DE_GRUPO)
 const OPERADOR_POR_SIMBOLO = inverter(OPERADORES)
@@ -1098,10 +1100,21 @@ export function compilar (texto, { maxProfundidade = process.env.LCN_MAX_PROFUND
         const codigo = PRIORIDADE_POR_PALAVRA[valor]
         if (!codigo) {
           throw new ErroDeSintaxe(
-            `"prioridade" aceita: ${Object.values(PRIORIDADES).join(', ')} — veio "${valor}"`, l.n
+            `"prioridade" aceita: ${Object.values(PRIORIDADES).join(', ')}, ou de 0 a 3 — veio "${valor}"`, l.n
           )
         }
         doc.scheduling.priority = codigo
+        break
+      }
+      case 'rapidez': {
+        if (ehMarcador(valor)) { doc.scheduling.speed = valor; break }
+        const codigo = RAPIDEZ_POR_PALAVRA[valor]
+        if (!codigo) {
+          throw new ErroDeSintaxe(
+            `"rapidez" aceita: ${Object.values(RAPIDEZES).join(', ')}, ou 1 (rápido) e 0 (lento) — veio "${valor}"`, l.n
+          )
+        }
+        doc.scheduling.speed = codigo
         break
       }
       case 'sem vaga': {

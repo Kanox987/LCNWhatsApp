@@ -33,6 +33,14 @@
 // O número do limite é configurável e o padrão é dois. Padrão sensato sim,
 // teto no código não — quem rodar numa máquina folgada sobe, quem estiver em
 // 3,8 GB de RAM com IA do lado desce.
+//
+// VAGA PREFERENCIAL DO RÁPIDO. O `/ping` preso atrás do upload de um `/dow`
+// não é questão de urgência: os dois podem ser "normal". É questão de quanto
+// tempo cada um segura a vaga. Então `vagasRapidas` das vagas preferem tarefa
+// RÁPIDA: uma tarefa lenta só ocupa uma delas se nenhuma rápida estiver
+// esperando (e puder começar). Não é reserva — vaga parada esperando um rápido
+// que não vem seria desperdício — e não é preempção: o que já começou termina.
+// Dentro de cada classe a ordem continua sendo urgência + envelhecimento.
 import { AsyncResource } from 'node:async_hooks'
 import { performance } from 'node:perf_hooks'
 
@@ -41,6 +49,7 @@ export const MAX_PENDENTES_PADRAO = 256
 export const AGING_MS_PADRAO = 10000
 export const ESPERA_MAXIMA_MS = 180000
 export const PRIORIDADES = Object.freeze({ low: 0, normal: 1, high: 2, very_high: 3 })
+export const VAGAS_RAPIDAS_PADRAO = 1
 
 export function normalizarPrioridade (prioridade) {
   return Object.hasOwn(PRIORIDADES, prioridade) ? prioridade : 'normal'
@@ -53,9 +62,13 @@ function inteiro (valor, padrao, minimo = 1) {
 export function criarFila ({
   limite = LIMITE_PADRAO, maxPendentes = MAX_PENDENTES_PADRAO,
   agingMs = AGING_MS_PADRAO, esperaMaximaMs = ESPERA_MAXIMA_MS,
+  vagasRapidas = VAGAS_RAPIDAS_PADRAO,
   recurso = 'execucao', aoMudar = null, agora = () => performance.now()
 } = {}) {
   const teto = inteiro(limite, LIMITE_PADRAO)
+  // Nunca acima do limite; com todas preferenciais, o lento ainda entra
+  // quando não há rápido esperando.
+  const rapidas = Math.min(inteiro(vagasRapidas, VAGAS_RAPIDAS_PADRAO, 0), teto)
   const capacidade = inteiro(maxPendentes, MAX_PENDENTES_PADRAO, 0)
   const envelhecimento = inteiro(agingMs, AGING_MS_PADRAO)
   const prazo = inteiro(esperaMaximaMs, ESPERA_MAXIMA_MS)
@@ -64,6 +77,7 @@ export function criarFila ({
   // impede cruzar tarefas da mesma conversa; não guarda outra fila de promessas.
   const chaves = new Map()
   let emCurso = 0
+  let lentosEmCurso = 0
   let sequencia = 0
   let encerrada = false
   let drenagem = null
@@ -76,6 +90,7 @@ export function criarFila ({
   }
   const estado = () => ({
     recurso, emCurso, esperando: esperando.length, limite: teto,
+    vagasRapidas: rapidas, lentosEmCurso,
     maxPendentes: capacidade, agingMs: envelhecimento,
     chavesAtivas: chaves.size, encerrada,
     ...metricas, recusasPorPrioridade: { ...metricas.recusasPorPrioridade }
@@ -121,6 +136,7 @@ export function criarFila ({
     item.signal?.removeEventListener('abort', item.cancelar)
     medirEspera(item, instante)
     emCurso++
+    if (item.lento) lentosEmCurso++
     if (item.chave != null) chaves.get(item.chave).emCurso = true
     metricas.iniciadas++
     metricas.picoEmCurso = Math.max(metricas.picoEmCurso, emCurso)
@@ -134,6 +150,7 @@ export function criarFila ({
 
   function terminar (item, erro, valor, falhou = false) {
     emCurso--
+    if (item.lento) lentosEmCurso--
     if (item.chave != null) chaves.get(item.chave).emCurso = false
     soltarChave(item)
     metricas.concluidas++
@@ -148,6 +165,7 @@ export function criarFila ({
     while (emCurso < teto && esperando.length) {
       const instante = agora()
       let melhor = -1
+      let melhorRapido = -1
       const vistas = new Set()
       for (let i = 0; i < esperando.length; i++) {
         const item = esperando[i]
@@ -159,23 +177,29 @@ export function criarFila ({
           if (chaves.get(item.chave).emCurso) continue
         }
         if (melhor === -1 || comparar(item, esperando[melhor], instante) > 0) melhor = i
+        if (!item.lento && (melhorRapido === -1 || comparar(item, esperando[melhorRapido], instante) > 0)) melhorRapido = i
       }
       if (melhor === -1) break
+      // As vagas comuns acabaram para o lento: a que sobrou é preferencial e
+      // vai para o melhor rápido que puder começar, se houver um.
+      if (esperando[melhor].lento && lentosEmCurso >= teto - rapidas && melhorRapido !== -1) melhor = melhorRapido
       iniciar(esperando.splice(melhor, 1)[0], instante)
     }
   }
 
-  function admitir (tarefa, { prioridade = 'normal', chave = null, signal } = {}) {
+  function admitir (tarefa, { prioridade = 'normal', chave = null, signal, lento = false } = {}) {
     if (typeof tarefa !== 'function') throw new TypeError('A fila recebe uma função para iniciar somente depois da admissão.')
     if (signal?.aborted) return { erro: signal.reason }
     const instante = agora()
     prioridade = normalizarPrioridade(prioridade)
-    const item = { tarefa, chave, signal, prioridade, prioridadeBase: PRIORIDADES[prioridade], entrouEmMs: instante, sequencia: sequencia++, relogio: null }
+    const item = { tarefa, chave, signal, prioridade, prioridadeBase: PRIORIDADES[prioridade], lento: lento === true, entrouEmMs: instante, sequencia: sequencia++, relogio: null }
     if (encerrada) {
       const erro = recusar(item, 'encerrada', instante)
       avisar()
       return { erro }
     }
+    // Com vaga livre não há rápido elegível esperando (`seguir` já o teria
+    // iniciado), então o lento pode tomá-la sem conferir a preferência.
     const podeIniciar = emCurso < teto && (chave == null || !chaves.has(chave))
     if (!podeIniciar && esperando.length >= capacidade) {
       let pior = 0

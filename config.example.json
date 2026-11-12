@@ -19,6 +19,7 @@
     "markOnline": true,
     "logLevel": "silent",
     "comandosSimultaneos": 2,
+    "vagasRapidas": 1,
     "admissaoConcorrencia": 8,
     "maxPendentes": 256,
     "admissaoLogJanelaMs": 5000,
