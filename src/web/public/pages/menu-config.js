@@ -73,6 +73,18 @@ export async function renderMenuConfig ({ refresh }) {
     el('option', { value: 'sim', text: 'Numerar — 1, 2, 3 nos itens' }),
     el('option', { value: 'nao', text: 'Não numerar — marcador simples' })
   ])
+  // Quais famílias de comando o menu mostra. Comando sem `família:` nunca
+  // aparece; aqui se escolhe, entre os que têm, quais valem neste nível. Só
+  // muda a LISTA: o comando continua respondendo (desligar é na aba Dados).
+  const modoDeFamilias = el('select', { className: 'input' }, [
+    el('option', { value: '', text: 'Herdar — quem manda é o nível de cima' }),
+    el('option', { value: 'todas', text: 'Todas as famílias' }),
+    el('option', { value: 'estas', text: 'Só estas famílias' })
+  ])
+  const listaDeFamilias = el('input', { type: 'text', className: 'input', placeholder: 'utilitarios, vendas' })
+  const blocoDeFamilias = field('Famílias mostradas', listaDeFamilias, 'Separe por vírgula. É o nome escrito em família: no comando; nos modelos, a categoria do catálogo.')
+  const mostrarListaDeFamilias = () => { blocoDeFamilias.hidden = modoDeFamilias.value !== 'estas' }
+  modoDeFamilias.addEventListener('change', mostrarListaDeFamilias)
   const cabecalho = el('input', { type: 'text', className: 'input' })
   const rodape = el('input', { type: 'text', className: 'input' })
   const textoVazio = el('input', { type: 'text', className: 'input' })
@@ -98,6 +110,9 @@ export async function renderMenuConfig ({ refresh }) {
       for (const campo of [cabecalho, rodape, textoVazio, tituloDoBotao]) campo.value = ''
       formato.value = ''
       numerar.value = ''
+      modoDeFamilias.value = ''
+      listaDeFamilias.value = ''
+      mostrarListaDeFamilias()
       gravado = {}
       estado.textContent = 'Escreva o id da conversa para ver o que está configurado nela.'
       return
@@ -114,6 +129,9 @@ export async function renderMenuConfig ({ refresh }) {
       rodape.value = config.footer ?? ''
       textoVazio.value = config.emptyText ?? ''
       tituloDoBotao.value = config.buttonTitle ?? ''
+      modoDeFamilias.value = config.families === '*' ? 'todas' : Array.isArray(config.families) ? 'estas' : ''
+      listaDeFamilias.value = Array.isArray(config.families) ? config.families.join(', ') : ''
+      mostrarListaDeFamilias()
       const vazio = !Object.keys(config).length
       estado.textContent = vazio
         ? 'Nada configurado neste nível — vale o que vier de cima na cascata.'
@@ -152,6 +170,8 @@ export async function renderMenuConfig ({ refresh }) {
     const payload = {}
     if (formato.value) payload.format = formato.value
     if (numerar.value) payload.numbered = numerar.value === 'sim'
+    if (modoDeFamilias.value === 'todas') payload.families = '*'
+    if (modoDeFamilias.value === 'estas') payload.families = listaDeFamilias.value
     for (const [campo, chave] of [[cabecalho, 'header'], [rodape, 'footer'], [textoVazio, 'emptyText'], [tituloDoBotao, 'buttonTitle']]) {
       if (campo.value !== '' || chave in gravado) payload[chave] = campo.value
     }
@@ -165,6 +185,11 @@ export async function renderMenuConfig ({ refresh }) {
       const alvo = alvoAtual()
       if (alvo.precisaDeId && !idAtual()) {
         return mostrarErro('Falta a conversa', 'Para configurar um grupo ou contato específico, escreva o id dele. Você acha o id na aba Dados.')
+      }
+      // Lista vazia é configuração válida no motor (menu sem nenhuma família),
+      // mas aqui quase sempre é esquecimento: pede para escrever ou herdar.
+      if (modoDeFamilias.value === 'estas' && !listaDeFamilias.value.trim()) {
+        return mostrarErro('Faltam as famílias', 'Escreva quais famílias mostrar, separadas por vírgula, ou escolha "Todas as famílias".')
       }
       setBusy(salvar, true)
       try {
@@ -242,6 +267,10 @@ export async function renderMenuConfig ({ refresh }) {
         field('Formato', formato, 'Texto funciona em qualquer aparelho. A lista para tocar depende do aplicativo de quem recebe desenhar.'),
         field('Numeração', numerar, 'Mostra 1, 2, 3 nos itens. O toque continua acionando o mesmo comando.'),
         field('Título do botão', tituloDoBotao, 'Só aparece no formato de lista.')
+      ]),
+      el('div', { className: 'form-grid' }, [
+        field('Famílias', modoDeFamilias, 'O menu agrupa os comandos por família. Comando sem família não aparece.'),
+        blocoDeFamilias
       ]),
       field('Cabeçalho', cabecalho, 'A linha antes da lista de comandos.'),
       field('Rodapé', rodape, 'Opcional, depois da lista.'),

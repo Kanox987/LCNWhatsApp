@@ -907,7 +907,7 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
   {
     chave: 'família',
     vale: 'todos',
-    ajuda: 'A que grupo de comandos este pertence — "download", "figurinha", "compra e venda". É texto livre: serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, em vez de comando por comando.'
+    ajuda: 'A que grupo de comandos este pertence — "download", "figurinha", "compra e venda". É texto livre. O /menu agrupa os comandos por ela, e comando sem família não aparece no menu (continua respondendo). Também serve para ligar e desligar um conjunto inteiro de uma vez numa conversa, em vez de comando por comando.'
   },
   { chave: 'onde', vale: 'todos', palavras: DESTINOS, repetivel: true, ajuda: 'Em que conversas esta automação vale. Pode repetir a linha. Lista vazia nunca significa "em todas". Num agendado é o DESTINO: cada linha precisa ser um grupo ou um contato, porque o relógio não tem conversa de onde herdar o lugar.' },
   { chave: 'menos', vale: SEM_RELOGIO, palavras: DESTINOS, repetivel: true, ajuda: 'A exceção do "onde": vale em todos os grupos, menos neste.' },

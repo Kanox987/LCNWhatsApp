@@ -9,12 +9,12 @@ import { interpolar, resolverCaminho } from './interpolate.js'
 import { calcular, ErroDeCalculo } from './aritmetica.js'
 import { ehLinkDeMidia } from '../linkDeMidia.js'
 import { valoresDeAgora } from './momento.js'
-import { avisoDeDesligado, desligadoNaConversa } from './familias.js'
+import { avisoDeDesligado, desligadoNaConversa, familiaDoDocumento } from './familias.js'
 import { ehDono, podeUsarComandoRestrito } from './owners.js'
 import { adicionarNaLista, estaNaLista, listasDa, membrosDaLista, normalizarNomeDeLista, removerDaLista } from './listas.js'
 import { criarServicoDeEnquetes } from './enquetesService.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
-import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, gravarConfigDeMenu, lerConfigDeMenu, resolverConfigDeMenu } from './menuConfig.js'
+import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, familiasDoMenu, gravarConfigDeMenu, lerConfigDeMenu, normalizarFamilia, resolverConfigDeMenu } from './menuConfig.js'
 import {
   ErroDeContador,
   aplicarNasVariaveis,
@@ -2111,7 +2111,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
             fallbackText: menu.texto,
             // O número só muda o rótulo: o toque precisa continuar enviando
             // o comando original, ou numerar quebraria o próprio menu.
-            items: menu.itens.map((item, i) => ({ id: item.label, label: menu.config.numbered ? `${i + 1}. ${item.label}` : item.label, description: item.description || '' }))
+            items: menu.itens.map((item, i) => ({ id: item.label, label: menu.config.numbered ? `${i + 1}. ${item.label}` : item.label, description: item.description || '', family: item.family }))
           }
         })
         return 'success'
@@ -2566,7 +2566,12 @@ function candidatosPublicados (db) {
 // comando publicado naquela conversa como qualquer outro. Quem não quiser
 // vê-lo escreve `menu: não` no .lcn do menu — primitiva criada junto com esta
 // mudança, porque apagar o rótulo NÃO esconde (o rótulo cai no comando).
-function automacoesVisiveisEm (db, chatDoEvento) {
+//
+// SÓ ENTRA QUEM TEM FAMÍLIA. O menu é organizado por família, e um comando sem
+// `família:` (ou com ela em branco) não tem onde morar nele: fica de fora, e
+// continua respondendo normalmente. E entre os que têm, só as famílias que o
+// menu daquela conversa deixa mostrar (`families` na configuração do menu).
+function automacoesVisiveisEm (db, chatDoEvento, familiasPermitidas = null) {
   const linhas = db.prepare(`
     SELECT a.id AS automation_id, a.active_revision_id, r.doc_json
     FROM automations a
@@ -2591,6 +2596,9 @@ function automacoesVisiveisEm (db, chatDoEvento) {
     // porque o rótulo cai no próprio comando quando menuLabel falta — apagar
     // o rótulo troca o texto da linha, não some com ela.
     if (documento.display?.menuHidden) continue
+    const familia = familiaDoDocumento(documento)
+    if (!familia) continue
+    if (familiasPermitidas && !familiasPermitidas.has(normalizarFamilia(familia))) continue
     const trigger = acharTrigger(documento)
     const rotulo = documento.display?.menuLabel || trigger?.config?.command
     // Regra automática (anti-link e afins) não é um comando que alguém digita,
@@ -2599,7 +2607,8 @@ function automacoesVisiveisEm (db, chatDoEvento) {
     if (!rotulo) continue
     visiveis.push({
       label: rotulo,
-      description: documento.display?.menuDescription || null
+      description: documento.display?.menuDescription || null,
+      family: tituloDaFamilia(familia)
     })
   }
   return visiveis
@@ -2612,22 +2621,63 @@ function numerarLinhas (texto) {
   return texto.split(/\r?\n/).map((linha) => linha.trim() ? `${++numero}. ${linha}` : linha).join('\n')
 }
 
+// O título de uma família no menu. As famílias dos modelos vêm da categoria do
+// catálogo, que é um identificador ("modulos-especializados"); estas quatro
+// ganham o nome com acento, o mesmo de `CATEGORY_LABELS` em pages/catalog.js.
+// Família escrita à mão já é texto de gente e só ganha a inicial maiúscula.
+const TITULOS_DAS_CATEGORIAS = Object.freeze({
+  utilitarios: 'Utilitários',
+  configuracoes: 'Configurações',
+  empresarial: 'Empresarial',
+  'modulos-especializados': 'Módulos especializados'
+})
+
+function tituloDaFamilia (familia) {
+  const conhecida = TITULOS_DAS_CATEGORIAS[normalizarFamilia(familia)]
+  if (conhecida) return conhecida
+  return familia.charAt(0).toUpperCase() + familia.slice(1)
+}
+
+// Agrupa por família, em ordem alfabética do título; dentro da família, a
+// ordem de sempre. Duas famílias que só diferem em maiúscula ou acento são a
+// mesma.
+function agruparPorFamilia (itens) {
+  const grupos = new Map()
+  for (const item of itens) {
+    const chave = normalizarFamilia(item.family)
+    if (!grupos.has(chave)) grupos.set(chave, { titulo: item.family, itens: [] })
+    grupos.get(chave).itens.push(item)
+  }
+  return [...grupos.values()].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'))
+}
+
 // Monta o menu daquela conversa. A configuração vem em cascata (config do
 // grupo > padrão do tipo > config do nó > padrão do código), então o mesmo
 // documento de automação produz menus diferentes em grupos diferentes.
 function renderizarMenu (db, acao, evento) {
   const config = resolverConfigDeMenu(db, evento.chat, acao.config)
-  const visiveis = automacoesVisiveisEm(db, evento.chat)
+  const visiveis = automacoesVisiveisEm(db, evento.chat, familiasDoMenu(config))
 
   if (!visiveis.length) {
     return { config, itens: [], texto: config.emptyText }
   }
 
-  const linhas = visiveis.map((item, i) => `${config.numbered ? `${i + 1}.` : '•'} ${item.label}${item.description ? ` — ${item.description}` : ''}`)
-  const partes = [config.header, ...linhas]
+  // A numeração corre o menu inteiro, sem recomeçar a cada família: "manda o
+  // 7" tem de apontar um item só.
+  const grupos = agruparPorFamilia(visiveis)
+  const itens = grupos.flatMap((g) => g.itens)
+  const partes = [config.header]
+  let numero = 0
+  for (const grupo of grupos) {
+    partes.push('', `*${grupo.titulo}*`)
+    for (const item of grupo.itens) {
+      numero++
+      partes.push(`${config.numbered ? `${numero}.` : '•'} ${item.label}${item.description ? ` — ${item.description}` : ''}`)
+    }
+  }
   if (config.footer) partes.push('', config.footer)
 
-  return { config, itens: visiveis, texto: partes.join('\n') }
+  return { config, itens, texto: partes.join('\n') }
 }
 
 function jaAvaliado (db, eventId, revisionId) {

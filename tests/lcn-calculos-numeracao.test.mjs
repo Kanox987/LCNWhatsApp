@@ -218,9 +218,10 @@ try {
   check('erro retomado aparece no histórico', /zero/.test(detalhe(ruimDepois)))
 
   // Só dois comandos visíveis, para conferir ordem, filtro e IDs de escolha.
+  // Comando sem família não entra no menu, então os dois moram em "testes".
   db.prepare('UPDATE automations SET enabled = 0').run()
-  const a = publicar(documento('responde "A"', 'alfa'))
-  const b = publicar(documento('responde "B"', 'beta'))
+  const a = publicar(documento('responde "A"', 'alfa', 'família: testes'))
+  const b = publicar(documento('responde "B"', 'beta', 'família: testes'))
   const oculto = publicar(documento('responde "oculto"', 'oculto'))
   db.prepare('UPDATE automations SET enabled = 0 WHERE id = ?').run(oculto.id)
   for (const formato of ['texto', 'com botões']) {
@@ -232,9 +233,9 @@ try {
     const rev = db.prepare('SELECT active_revision_id AS id FROM automations WHERE id = ?').get(doc.id).id
     const r = avaliarEvento(db, ev).results.find((x) => x.automationId === doc.id)
     const p = r.commands[0].payload
-    igual(`${formato}: cabeçalho e rodapé ficam fora da numeração`, p.fallbackText || p.text, 'Escolha\n1. /alfa\n2. /beta\n\nFim')
+    igual(`${formato}: cabeçalho e rodapé ficam fora da numeração`, p.fallbackText || p.text, 'Escolha\n\n*Testes*\n1. /alfa\n2. /beta\n\nFim')
     if (formato === 'com botões') igual('menu numera rótulos preservando IDs', p.items, [
-      { id: '/alfa', label: '1. /alfa', description: '' }, { id: '/beta', label: '2. /beta', description: '' }
+      { id: '/alfa', label: '1. /alfa', description: '', family: 'Testes' }, { id: '/beta', label: '2. /beta', description: '', family: 'Testes' }
     ])
     check('menu conserva a revisão publicada', rev > 0)
     db.prepare('UPDATE automations SET enabled = 0 WHERE id = ?').run(doc.id)

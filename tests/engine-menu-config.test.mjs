@@ -39,10 +39,11 @@ for (const g of [GRUPO_TESTES, GRUPO_CLIENTES]) {
 }
 const PRIVADO = '5511900000001@s.whatsapp.net'
 
-function publicarComando (id, comando, escopo, label, descricao) {
+// Comando sem família não entra no menu; os daqui moram em "atendimento".
+function publicarComando (id, comando, escopo, label, descricao, familia = 'atendimento') {
   const doc = {
     schemaVersion: 1, id, revision: 1, name: id, enabled: true,
-    display: { menuLabel: label, menuDescription: descricao },
+    display: { menuLabel: label, menuDescription: descricao, family: familia },
     scope: { include: [{ kind: escopo.kind, id: escopo.id }], exclude: [] },
     inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
     responder: { strategy: 'weighted_rendezvous', poolId: 'p1' },
@@ -122,6 +123,42 @@ check('comando interativo leva o título do botão configurado', cmdInterativo.p
 check('comando interativo SEMPRE leva o texto de reserva', typeof cmdInterativo.payload.fallbackText === 'string' && cmdInterativo.payload.fallbackText.includes('/testar'))
 check('os outros grupos continuam em texto', menuDe(GRUPO_CLIENTES).commandType === 'whatsapp.reply')
 
+check('comando interativo leva a família de cada item', cmdInterativo.payload.items.find((i) => i.label === '/testar')?.family === 'Atendimento')
+
+// --- famílias disponíveis por conversa ------------------------------------
+publicarComando('vendas-testes', '/pedido', { kind: 'group', id: GRUPO_TESTES }, '/pedido', 'Fazer pedido', 'vendas')
+check('sem lista de famílias, o menu mostra todas', menuDe(GRUPO_TESTES).payload.fallbackText.includes('/pedido') &&
+  menuDe(GRUPO_TESTES).payload.fallbackText.includes('/testar'))
+gravarConfigDeMenu(db, alvoDeConfig('group', GRUPO_TESTES), { format: 'interactive', buttonTitle: 'Abrir comandos', families: ['Vendas'] })
+const soVendas = menuDe(GRUPO_TESTES).payload
+check('com famílias definidas, o menu do grupo mostra só elas', soVendas.fallbackText.includes('/pedido') && !soVendas.fallbackText.includes('/testar'), soVendas.fallbackText)
+check('o filtro vale para os itens interativos também', soVendas.items.every((i) => i.family === 'Vendas'), JSON.stringify(soVendas.items))
+check('a lista de famílias não afeta outro grupo', menuDe(GRUPO_CLIENTES).payload.text.includes('/orcamento'))
+
+gravarConfigDeMenu(db, alvoDeConfig('group_default'), { header: 'Menu dos grupos:', families: 'vendas' })
+check('o padrão dos grupos também restringe famílias', !menuDe(GRUPO_CLIENTES).payload.text.includes('/orcamento'))
+gravarConfigDeMenu(db, alvoDeConfig('group', GRUPO_CLIENTES), { header: 'Bem-vindo à nossa empresa!', footer: 'Atendimento 9h às 18h', families: 'todas' })
+check('"todas" no grupo vence o padrão restritivo do tipo', menuDe(GRUPO_CLIENTES).payload.text.includes('/orcamento'))
+gravarConfigDeMenu(db, alvoDeConfig('group_default'), { header: 'Menu dos grupos:' })
+
+const lida = resolverConfigDeMenu(db, { id: GRUPO_TESTES, kind: 'group' }, {})
+check('famílias são guardadas em minúsculas e sem repetir', JSON.stringify(lida.families) === '["vendas"]', JSON.stringify(lida.families))
+const INTERATIVO = { format: 'interactive', buttonTitle: 'Abrir comandos' }
+gravarConfigDeMenu(db, alvoDeConfig('group', GRUPO_TESTES), { ...INTERATIVO, families: ' Vendas , atendimento,vendas ' })
+check('famílias também entram como texto separado por vírgula',
+  JSON.stringify(resolverConfigDeMenu(db, { id: GRUPO_TESTES, kind: 'group' }, {}).families) === '["vendas","atendimento"]')
+const comDuas = menuDe(GRUPO_TESTES).payload.fallbackText
+check('com duas famílias, as duas aparecem', comDuas.includes('/pedido') && comDuas.includes('/testar'))
+gravarConfigDeMenu(db, alvoDeConfig('group', GRUPO_TESTES), { ...INTERATIVO, families: 'Utilitários' })
+const soUtilitarios = menuDe(GRUPO_TESTES).payload.items.map((i) => i.label)
+check('família escrita com acento casa com a categoria do modelo (utilitarios)',
+  soUtilitarios.includes('/menu') && !soUtilitarios.includes('/testar'), JSON.stringify(soUtilitarios))
+gravarConfigDeMenu(db, alvoDeConfig('group', GRUPO_TESTES), { ...INTERATIVO, families: [] })
+const vazio = menuDe(GRUPO_TESTES).payload
+check('lista de famílias vazia não vira "todas": o menu fica vazio',
+  !vazio.items?.length && !(vazio.text || vazio.fallbackText || '').includes('/'), JSON.stringify(vazio))
+gravarConfigDeMenu(db, alvoDeConfig('group', GRUPO_TESTES), { ...INTERATIVO, families: '*' })
+
 // --- lado do gateway: interativo e o fallback -----------------------------
 function clienteFake (falharInterativo) {
   const enviados = []
@@ -149,6 +186,24 @@ const botao = c1.enviados[0]?.conteudo?.interactiveMessage?.nativeFlowMessage?.b
 check('gateway: monta o botão no formato single_select', botao?.name === 'single_select')
 const params = JSON.parse(botao?.buttonParamsJson || '{}')
 check('gateway: as linhas do menu viram itens do seletor', params.sections?.[0]?.rows?.[0]?.title === '/testar')
+
+const c3 = clienteFake(false)
+await executarComandos(c3, [{
+  id: 'm3',
+  commandType: 'whatsapp.menu',
+  payload: {
+    ...payloadMenu,
+    items: [
+      { id: '/a', label: '/a', family: 'Atendimento' },
+      { id: '/b', label: '/b', family: 'Atendimento' },
+      { id: '/c', label: '/c', family: 'Vendas' }
+    ]
+  }
+}], engineFake)
+const secoes = JSON.parse(c3.enviados[0]?.conteudo?.interactiveMessage?.nativeFlowMessage?.buttons?.[0]?.buttonParamsJson || '{}').sections || []
+check('gateway: uma seção do seletor por família',
+  secoes.length === 2 && secoes[0].title === 'Atendimento' && secoes[0].rows.length === 2 && secoes[1].title === 'Vendas',
+  JSON.stringify(secoes.map((x) => [x.title, x.rows.length])))
 
 const c2 = clienteFake(true)
 await executarComandos(c2, [{ id: 'm2', commandType: 'whatsapp.menu', payload: payloadMenu }], engineFake)

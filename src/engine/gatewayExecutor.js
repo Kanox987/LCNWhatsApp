@@ -1778,11 +1778,16 @@ function formatarMB (bytes) {
 // WhatsApp simplesmente não renderizam. Por isso o fallback para texto não é
 // tratamento de erro, é parte do desenho — o menu SEMPRE chega de algum jeito.
 function montarMenuInterativo (payload) {
-  const linhas = payload.items.slice(0, 10).map((item) => ({
-    title: item.label,
-    description: item.description || '',
-    id: item.id
-  }))
+  // Uma seção por família, na ordem em que o motor já agrupou. O teto de 10 é
+  // do WhatsApp para a lista inteira, não por seção. Item sem família (menu
+  // vindo de motor antigo) cai na seção do cabeçalho, como sempre caiu.
+  const secoes = []
+  for (const item of payload.items.slice(0, 10)) {
+    const titulo = item.family || payload.header || 'Comandos'
+    let secao = secoes[secoes.length - 1]
+    if (!secao || secao.title !== titulo) secoes.push(secao = { title: titulo, rows: [] })
+    secao.rows.push({ title: item.label, description: item.description || '', id: item.id })
+  }
 
   return {
     interactiveMessage: {
@@ -1793,7 +1798,7 @@ function montarMenuInterativo (payload) {
           name: 'single_select',
           buttonParamsJson: JSON.stringify({
             title: payload.title || 'Ver comandos',
-            sections: [{ title: payload.header || 'Comandos', rows: linhas }]
+            sections: secoes
           })
         }],
         messageParamsJson: ''

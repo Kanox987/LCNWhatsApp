@@ -31,10 +31,13 @@ await criarApi(db).resolver('POST', '/templates/menu/install', {
   req: { headers: {} }
 })
 
-function criarAutomacao ({ id, scopeId, scopeKind = 'contact', display, deploymentMode = 'live', enabled = true, command = `/${id}` }) {
+// Comando sem família não entra no menu, então os casos daqui ganham uma por
+// padrão; `semFamilia` cria um comando como os de antes, sem nenhuma.
+function criarAutomacao ({ id, scopeId, scopeKind = 'contact', display, semFamilia = false, deploymentMode = 'live', enabled = true, command = `/${id}` }) {
+  const exibicao = semFamilia ? display : { family: 'testes', ...display }
   const doc = {
     schemaVersion: 1, id, revision: 1, name: id, enabled: true,
-    ...(display ? { display } : {}),
+    ...(exibicao ? { display: exibicao } : {}),
     scope: { include: [{ kind: scopeKind, id: scopeId }], exclude: [] },
     inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
     responder: { strategy: 'weighted_rendezvous', poolId: 'p-menu' },
@@ -82,10 +85,11 @@ function textoDoMenu (resultado) {
   return menu?.commands?.[0]?.payload?.text
 }
 
-// As linhas de item do menu, sem o cabeçalho. A ORDEM entre automações não é
-// contratada em lugar nenhum, então todo caso compara CONJUNTO, nunca índice.
+// As linhas de item do menu, sem o cabeçalho nem os títulos das famílias. A
+// ORDEM entre automações não é contratada em lugar nenhum, então todo caso
+// compara CONJUNTO, nunca índice.
 function itensDoMenu (resultado) {
-  return (textoDoMenu(resultado) || '').split('\n').slice(1).sort()
+  return (textoDoMenu(resultado) || '').split('\n').filter((l) => l.startsWith('• ')).sort()
 }
 
 try {
@@ -110,6 +114,23 @@ try {
   criarAutomacao({ id: 'semlabel', scopeId: '5511000000004@s.whatsapp.net', command: '/semlabel' })
   const semLabel = await avaliarEvento(db, eventoMenu({ chatId: '5511000000004@s.whatsapp.net', msgId: 'M4' }))
   check('sem display.menuLabel, usa o próprio comando do gatilho como rótulo (nunca undefined)', textoDoMenu(semLabel).includes('• /semlabel'))
+
+  // --- famílias: o menu é organizado por elas ---------------------------
+  const CHAT_FAMILIAS = '5511000000007@s.whatsapp.net'
+  criarAutomacao({ id: 'orfao', scopeId: CHAT_FAMILIAS, semFamilia: true, display: { menuLabel: '/orfao' } })
+  criarAutomacao({ id: 'embranco', scopeId: CHAT_FAMILIAS, display: { family: '   ', menuLabel: '/embranco' } })
+  criarAutomacao({ id: 'vendas1', scopeId: CHAT_FAMILIAS, display: { family: 'vendas', menuLabel: '/pedido' } })
+  criarAutomacao({ id: 'vendas2', scopeId: CHAT_FAMILIAS, display: { family: 'Vendas', menuLabel: '/catalogo' } })
+  const comFamilias = textoDoMenu(await avaliarEvento(db, eventoMenu({ chatId: CHAT_FAMILIAS, msgId: 'M7' })))
+  check('comando SEM família não aparece no menu', !comFamilias.includes('/orfao'), comFamilias)
+  check('comando com família EM BRANCO não aparece no menu', !comFamilias.includes('/embranco'))
+  check('o menu tem um título por família, em negrito', comFamilias.includes('*Vendas*') && comFamilias.includes('*Utilitários*'), comFamilias)
+  check('família que só difere em maiúscula é a mesma (um título só)', comFamilias.split('\n').filter((l) => l === '*Vendas*').length === 1)
+  const linhasF = comFamilias.split('\n')
+  const iVendas = linhasF.indexOf('*Vendas*')
+  check('os comandos da família vêm debaixo do título dela',
+    linhasF[iVendas + 1]?.startsWith('• /pedido') && linhasF[iVendas + 2]?.startsWith('• /catalogo'), JSON.stringify(linhasF.slice(iVendas, iVendas + 3)))
+  check('as famílias vêm em ordem alfabética', linhasF.indexOf('*Utilitários*') < iVendas)
 
   criarAutomacao({ id: 'sombra', scopeId: '5511000000005@s.whatsapp.net', deploymentMode: 'shadow', display: { menuLabel: '/sombra' } })
   const comSombra = await avaliarEvento(db, eventoMenu({ chatId: '5511000000005@s.whatsapp.net', msgId: 'M5' }))

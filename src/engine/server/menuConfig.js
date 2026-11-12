@@ -45,7 +45,38 @@ function limpar (bruto) {
   for (const campo of ['header', 'footer', 'emptyText', 'buttonTitle']) {
     if (typeof bruto[campo] === 'string') limpo[campo] = bruto[campo]
   }
+  const familias = limparFamilias(bruto.families)
+  if (familias !== undefined) limpo.families = familias
   return limpo
+}
+
+// AS FAMÍLIAS QUE O MENU MOSTRA NESTA CONVERSA.
+//
+// Ausente = herda do nível de cima; e se ninguém disser nada, o menu mostra
+// todas — padrão não é teto, nem trava. `'*'` diz "todas" de propósito, para
+// um grupo específico desfazer a restrição do padrão dos grupos. Uma lista
+// diz exatamente quais. Aceita texto com vírgula pelo mesmo motivo de
+// `familias.js`: quem escreve à mão pela aba Dados escreve texto.
+// Sem acento e com hífen no lugar de espaço: quem escreve "Módulos
+// especializados" quer a família `modulos-especializados` do catálogo.
+export const normalizarFamilia = (texto) => String(texto ?? '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .trim().toLowerCase().replace(/[\s_-]+/g, '-')
+
+function limparFamilias (bruto) {
+  if (bruto === '*' || (typeof bruto === 'string' && normalizarFamilia(bruto) === 'todas')) return '*'
+  const lista = Array.isArray(bruto) ? bruto : typeof bruto === 'string' ? bruto.split(',') : null
+  if (!lista) return undefined
+  const limpas = [...new Set(lista.filter((f) => typeof f === 'string').map(normalizarFamilia).filter(Boolean))]
+  return limpas
+}
+
+/**
+ * As famílias que o menu daquela configuração mostra, já normalizadas, ou
+ * `null` quando mostra todas.
+ */
+export function familiasDoMenu (config) {
+  return Array.isArray(config?.families) ? new Set(config.families.map(normalizarFamilia)) : null
 }
 
 // Cascata, do mais específico para o mais geral:
