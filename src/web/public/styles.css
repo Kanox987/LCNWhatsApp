@@ -1475,6 +1475,31 @@ textarea[spellcheck="false"] { font-family: var(--font-mono); font-size: 0.8rem;
 .lcn-ajuda { border: 1px solid var(--border); border-radius: 6px; background: var(--surface-sunken); padding: 8px 10px; max-height: 320px; overflow-y: auto; }
 .lcn-ajuda .lcn-ref-item { border-left: none; padding-left: 0; margin: 0; }
 .lcn-ajuda-vazia { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+/* A caixa de passar o mouse. Mora na moldura, fora de .lcn-caixa, porque a
+   caixa do editor corta o que transborda. Não pega o ponteiro: senão ela
+   mesma tiraria o mouse do campo e se fecharia. */
+.lcn-moldura { position: relative; }
+.lcn-dica {
+  position: absolute;
+  z-index: 20;
+  max-width: min(440px, 100%);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+.lcn-dica[hidden] { display: none; }
+.lcn-dica-titulo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.lcn-dica-titulo code { font-family: var(--font-mono); font-weight: 700; }
+.lcn-dica-titulo span { color: var(--text-muted); }
+.lcn-dica-texto, .lcn-dica-linha { margin: 4px 0 0; }
+.lcn-dica-linha strong { font-weight: 600; }
 .lcn-ref-marcas { margin: 2px 0; }
 .lcn-ref-trecho {
   font-family: var(--font-mono);

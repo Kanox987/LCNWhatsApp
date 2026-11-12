@@ -833,7 +833,9 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
   {
     chave: 'acesso',
     vale: ['comando', 'vigia'],
-    doc: 'requireAdmin',
+    // Sem `doc`: a linha escreve um de três campos (requireOwner, requireAdmin,
+    // requireList), e emprestar a prosa de um só fazia a ajuda dizer "só
+    // administradores" para quem escreveu "acesso: dono".
     ajuda: 'Quem pode usar, além do "quem" acima: "todos" (padrão, sem trava), "dono", "admins" (administradores do grupo) ou "lista autorizados" (quem foi posto nessa lista com "põe na lista"). O dono sempre passa. Quem não pode é ignorado, sem resposta; lista vazia não libera ninguém.'
   },
   { chave: 'argumentos', vale: 'comando', doc: 'args' },

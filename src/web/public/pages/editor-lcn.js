@@ -20,6 +20,7 @@
 // só visualmente, e o salto continua existindo na falha de salvar, que é o
 // momento em que a pessoa parou de escrever e está olhando o resultado.
 import { api } from '../api.js'
+import { ajudaNaPosicao } from '../logic/ajuda-ao-passar.js'
 import { ajudaNoCursor } from '../logic/ajuda-no-cursor.js'
 import { realcar } from '../logic/realce.js'
 import { inserirTrecho } from '../logic/trechos.js'
@@ -27,6 +28,9 @@ import { button, el } from '../ui.js'
 import { corpoDaAcao } from './referencia-lcn.js'
 
 const ESPERA_ANTES_DE_CONFERIR = 400
+// Quanto o ponteiro fica parado antes da caixa abrir. Menos que isso, ela
+// pisca enquanto a pessoa só atravessa o texto com o mouse.
+const ESPERA_ANTES_DA_CAIXA = 350
 
 // A camada de realce é um espelho do textarea: mesma fonte, mesmo tamanho,
 // mesma entrelinha, mesmo recuo (travados numa regra só do CSS). O que ela tem
@@ -79,6 +83,9 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
   // vocabulário e do MESMO JSON Schema que o Ajv usa na instalação. Chegam na
   // mesma resposta de onde saem as palavras do realce — uma requisição só.
   let acoes = []
+  // A resposta inteira, para a caixa de passar o mouse: ela explica também o
+  // cabeçalho, as marcas e a condição, que não são ações.
+  let referencia = null
   const acompanhar = acompanharRolagem(area, camada, numeros)
   const repintar = () => {
     // `palavras` é relido a cada pintura porque ele chega depois, por rede.
@@ -134,6 +141,7 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
     .then((ref) => {
       palavras = ref?.palavras || {}
       acoes = ref?.acoes || []
+      referencia = ref || null
       repintar()
       atualizarAjuda()
     })
@@ -143,6 +151,76 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
   // é `input`, porque andar não altera o texto.
   for (const evento of ['click', 'keyup', 'focus', 'select']) {
     area.addEventListener(evento, atualizarAjuda)
+  }
+
+  // --- a caixa de passar o mouse, como numa IDE ---------------------------
+  //
+  // O textarea não diz qual caractere está sob o ponteiro, mas a fonte é
+  // monoespaçada e a entrelinha é fixa (as três regras de alinhamento do CSS):
+  // linha e coluna saem de conta, com a largura de um caractere medida na
+  // fonte que o navegador de fato usou. Quem decide O QUE explicar é
+  // `ajudaNaPosicao`, função pura e testada contra a referência real.
+  const caixa = el('div', { className: 'lcn-dica', role: 'tooltip', hidden: true })
+  let larguraDoCaractere = 0
+  const medirCaractere = () => {
+    if (larguraDoCaractere) return larguraDoCaractere
+    const contexto = document.createElement('canvas').getContext('2d')
+    if (!contexto) return 0
+    contexto.font = getComputedStyle(area).font
+    larguraDoCaractere = contexto.measureText('0'.repeat(100)).width / 100
+    return larguraDoCaractere
+  }
+  const esconderCaixa = () => { caixa.hidden = true }
+  const posicaoDoPonteiro = (evento) => {
+    const estilo = getComputedStyle(area)
+    const entrelinha = parseFloat(estilo.lineHeight)
+    const largura = medirCaractere()
+    if (!entrelinha || !largura) return null
+    const retangulo = area.getBoundingClientRect()
+    const x = evento.clientX - retangulo.left - area.clientLeft - parseFloat(estilo.paddingLeft) + area.scrollLeft
+    const y = evento.clientY - retangulo.top - area.clientTop - parseFloat(estilo.paddingTop) + area.scrollTop
+    if (x < 0 || y < 0) return null
+    const linha = Math.floor(y / entrelinha) + 1
+    return {
+      linha,
+      coluna: Math.floor(x / largura),
+      // Logo abaixo da linha apontada, em coordenadas da moldura.
+      topo: area.offsetTop + area.clientTop + parseFloat(estilo.paddingTop) + linha * entrelinha - area.scrollTop + 4
+    }
+  }
+  const mostrarCaixa = (evento) => {
+    if (!referencia) return
+    const lugar = posicaoDoPonteiro(evento)
+    const dica = lugar && ajudaNaPosicao({ texto: area.value, linha: lugar.linha, coluna: lugar.coluna, referencia })
+    if (!dica) { esconderCaixa(); return }
+    const linhaDe = (rotulo, valor) => el('p', { className: 'lcn-dica-linha' }, [el('strong', { text: `${rotulo} ` }), valor])
+    caixa.replaceChildren(
+      el('div', { className: 'lcn-dica-titulo' }, [
+        el('code', { text: dica.titulo }),
+        dica.rotulo ? el('span', { text: dica.rotulo }) : null
+      ]),
+      dica.texto ? el('p', { className: 'lcn-dica-texto', text: dica.texto }) : null,
+      dica.aceita ? linhaDe('Aceita:', dica.aceita.join(' · ')) : null,
+      dica.padrao !== null && dica.padrao !== undefined ? linhaDe('Padrão:', String(dica.padrao)) : null,
+      dica.campos ? linhaDe('Campos:', dica.campos.join(' · ')) : null,
+      dica.obrigatorio ? el('p', { className: 'lcn-dica-linha', text: 'Obrigatório.' }) : null
+    )
+    caixa.hidden = false
+    // Encostada no ponteiro, sem passar da borda direita da moldura.
+    const moldura = caixa.parentElement
+    const esquerda = evento.clientX - (moldura?.getBoundingClientRect().left ?? 0)
+    const limite = (moldura?.clientWidth ?? 0) - caixa.offsetWidth
+    caixa.style.left = `${Math.max(0, Math.min(esquerda, limite))}px`
+    caixa.style.top = `${lugar.topo}px`
+  }
+  let relogioDaCaixa = null
+  area.addEventListener('mousemove', (evento) => {
+    clearTimeout(relogioDaCaixa)
+    relogioDaCaixa = setTimeout(() => mostrarCaixa(evento), ESPERA_ANTES_DA_CAIXA)
+  })
+  // Digitar, rolar ou sair do campo deixa a caixa velha mentindo sobre o lugar.
+  for (const evento of ['mouseleave', 'input', 'keydown', 'scroll', 'blur']) {
+    area.addEventListener(evento, () => { clearTimeout(relogioDaCaixa); esconderCaixa() })
   }
 
   // --- a linha do erro, marcada sem mexer no cursor -----------------------
@@ -236,7 +314,12 @@ export function editorLcn ({ texto = '', botoes = [] } = {}) {
   conferir()
 
   const elemento = el('section', { className: 'card stack' }, [
-    el('div', { className: 'lcn-caixa' }, [numeros, camada, area]),
+    // A moldura existe por causa da caixa: `.lcn-caixa` corta o que transborda
+    // (é o que alinha o realce), e a dica precisa poder passar da borda.
+    el('div', { className: 'lcn-moldura' }, [
+      el('div', { className: 'lcn-caixa' }, [numeros, camada, area]),
+      caixa
+    ]),
     estado,
     ajuda,
     aviso,
