@@ -113,6 +113,30 @@ do código.
    operacional.
 4. **Não constitui promessa de RAM de produto.**
 
+## Segunda medição (frente K), 07/11/2026, código da `v3` em `e0e3735` (depois só mudou documentação)
+
+Mesma máquina, mesmo Node (v22.23.4), mesmo arnês, 30 min, saída 0. Log:
+`soak-v3c.log`. Uma primeira tentativa foi interrompida por engano (sinal 143) e **não conta**.
+
+| veredito | 1ª medição (04/11) | 2ª medição (07/11) |
+|---|---|---|
+| saldo do orçamento de mídia | 0 B em 14.184 operações | **0 B em 11.958 operações** |
+| mapa de esteiras | 0 chaves após 59.355.312 conversas | **0 chaves após 50.040.244** |
+| `arrayBuffers` pós-GC | 0,10 → 280,11 → 0,10 MiB | **0,10 → 280,11 → 0,10 MiB** |
+| heap pós-GC | 24,25 → 44,42 → 22,52 (−1,73) | **24,37 → 45,15 → 22,63 (−1,74)** |
+| tendência linear do heap | −0,511 MiB/min | **−0,047 MiB/min** (estável) |
+| drenagem das filas | 0/0/0 nas quatro | **0/0/0 nas quatro** |
+| integridade | sem erro interno | **sem erro interno** |
+
+**O que se lê daqui, e o que não.** Os seis vereditos passam nas duas medições e o pico de `arrayBuffers` bate no
+orçamento (280 MiB) nas duas. A tendência do heap mudou de −0,51 para −0,05 MiB/min: as duas são "sem vazamento
+linear"; a diferença de inclinação não é ganho nem perda, provavelmente é ruído de série curta com GC (não foi investigado). O número de conversas e de
+operações foi **menor** (−16% e −16%) com o mesmo tempo de relógio: a máquina esteve ocupada com outras coisas
+durante parte da segunda rodada (acesso por SSH e testes pontuais), então **não há base para dizer que a `v3` ficou
+mais lenta ou mais rápida**. Esta leva não otimizou desempenho; a medição serve para provar que as frentes novas
+(agendador, listas, cotas) não introduziram retenção. Continua valendo: nenhum destes números vai para promessa de
+produto.
+
 ## Antes e depois: o que existe e o que não existe
 
 | frente | antes | depois | comparável? |
@@ -127,9 +151,9 @@ porque não otimizou desempenho — consertou governança de limites e pareament
 O pedido manda dar o antes e o depois "quando disponível". Aqui não está, e
 por isso não há número de economia neste documento.
 
-A frente **K** do pedido é justamente a segunda medição, no mesmo cenário, na
-mesma máquina, com a mesma metodologia. Ela é a que produz o par — e está
-pendente (ver FINAL_REPORT, parte J).
+A frente **K** do pedido é a segunda medição, no mesmo cenário, na mesma máquina,
+com a mesma metodologia. Foi feita em 07/11/2026 (seção acima). Ela confirma a
+ausência de retenção; não produz par de economia, porque nada foi otimizado.
 
 ## O que já é sabido sobre lentidão, e não é desempenho
 

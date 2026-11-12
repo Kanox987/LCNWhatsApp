@@ -27,7 +27,7 @@ Atualizado em 06/11/2026. Os commits citados estão na `v3`.
 | **H** recover | recuperação de mensagem apagada, opt-in | **não começou**; o dono vai testar junto (evento de revogação chega com o id? o celular devolve o conteúdo?) | plano |
 | **I** anti-trava | teto por remetente, profundidade, regex | **parcial** — profundidade existe; regex recusada; teto por remetente **em aberto para o dono** (D-57; Gemini disse que vale, desenho mínimo registrado) | `PERFORMANCE.md` |
 | **J** segurança | login no painel | **descartada pelo dono**: o cliente só vê o painel do próprio container (D-56) | `SECURITY_REVIEW.md` |
-| **K** medir de novo | comparação antes/depois | **pendente** — `npm run soak` de 30 min ainda não rodou nesta árvore | `PERFORMANCE.md` |
+| **K** medir de novo | comparação antes/depois | **feito em 07/11** — seis vereditos PASSOU, heap −0,047 MiB/min, mesmo pico de 280 MiB; sem par de economia, nada foi otimizado | `PERFORMANCE.md` |
 
 Frentes novas desta leva, fora da lista A–K do pedido:
 
