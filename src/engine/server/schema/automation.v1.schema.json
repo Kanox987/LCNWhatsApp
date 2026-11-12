@@ -607,6 +607,7 @@
               "description": "Quem pode acionar. 'external' ignora mensagens do próprio número do bot, que é o padrão seguro. 'any' também responde ao próprio número — é o que faz um comando pessoal funcionar quando você manda a mídia de onde o bot roda. Só vale para comando digitado: a barreira do gatilho AUTOMÁTICO não tem como ser desligada, porque lá reagir à própria mensagem vira laço."
             },
             "requireOwner": {
+              "description": "Só os donos do bot acionam (a lista da página Donos do painel). Enquanto ninguém foi marcado como dono, fica aberto, para dar para configurar o primeiro dono pelo WhatsApp. Quem não pode é ignorado, sem resposta. Comando de dono também passa por cima do atendimento humano.",
               "type": "boolean"
             },
             "requireAdmin": {
@@ -634,6 +635,7 @@
                   "description": "O que separa as partes. O compilador divide por um único caractere ou símbolo (como / ou |), então o separador deve ter tamanho máximo 1 para garantir ida e volta perfeita na metalinguagem .lcn. A última parte leva o resto, então o separador pode aparecer dentro dela."
                 },
                 "names": {
+                  "description": "Os nomes das partes, na ordem em que aparecem. De 2 a 5 nomes, sem repetir, cada um começando por letra. A parte que não veio fica sem valor, não vira texto vazio.",
                   "type": "array",
                   "minItems": 2,
                   "maxItems": 5,
@@ -697,6 +699,7 @@
               "description": "Tipos de mensagem que acionam a regra. Vazio = qualquer tipo. A lista é a MESMA de inputPolicy.acceptedMessageKinds de propósito: aquele portão é avaliado ANTES do gatilho, então um tipo que só existisse aqui produziria regra que nunca dispara, sem erro em lugar nenhum."
             },
             "containsLink": {
+              "description": "true: só reage a mensagem que tem link. false: só reage a mensagem SEM link. Sem o campo, link não importa.",
               "type": "boolean"
             },
             "alsoOnCommands": {
@@ -709,6 +712,7 @@
               "description": "Só reage quando o link é um POST DE MÍDIA de rede conhecida (reel e foto do Instagram, Shorts e vídeo do YouTube, TikTok, Pinterest, Facebook, X, Reddit…). Link de loja, notícia, arquivo em nuvem ou post de comunidade é IGNORADO em vez de tentado — sem isto o bot promete \"baixando…\" antes de descobrir que não há mídia. Use com containsLink. A lista fechada vive em src/engine/linkDeMidia.js."
             },
             "keywords": {
+              "description": "Palavras ou trechos que acionam a regra. Basta um deles aparecer em qualquer lugar do texto; maiúscula e minúscula não importam. Vazio ou sem o campo = não filtra por palavra.",
               "type": "array",
               "maxItems": 50,
               "items": {
@@ -718,6 +722,7 @@
               }
             },
             "requireOwner": {
+              "description": "Só os donos do bot acionam (a lista da página Donos do painel). Enquanto ninguém foi marcado como dono, fica aberto, para dar para configurar o primeiro dono pelo WhatsApp. Quem não pode é ignorado, sem resposta. Comando de dono também passa por cima do atendimento humano.",
               "type": "boolean"
             },
             "requireAdmin": {
@@ -768,6 +773,7 @@
               "description": "Ações de grupo que acionam o porteiro: add (entrou), remove (saiu), promote (promoveu), demote (rebaixou), subject (mudou o nome)."
             },
             "requireOwner": {
+              "description": "Só os donos do bot acionam (a lista da página Donos do painel). Enquanto ninguém foi marcado como dono, fica aberto, para dar para configurar o primeiro dono pelo WhatsApp. Quem não pode é ignorado, sem resposta. Comando de dono também passa por cima do atendimento humano.",
               "type": "boolean"
             }
           }
@@ -806,6 +812,7 @@
               "description": "Fuso IANA em que a data e a hora da agenda são lidas, como America/Sao_Paulo. O motor confere contra o banco de fusos na publicação."
             },
             "schedule": {
+              "description": "Quando dispara: uma vez daqui a um intervalo, uma vez numa data e hora, ou de forma recorrente (a cada intervalo, todo dia, em dias da semana, todo mês). As horas são lidas no fuso do campo acima. Disparo atrasado além da tolerância vira 'perdido', e recorrente nunca dispara em rajada.",
               "oneOf": [
                 {
                   "description": "Uma vez, daqui a um intervalo. A contagem começa quando a revisão entra no ar.",
@@ -1789,9 +1796,11 @@
           ],
           "properties": {
             "left": {
+              "description": "O primeiro lado da comparação: um valor fixo, uma variável ou um campo do evento. Número continua número, então 10 é maior que 3.",
               "$ref": "#/definitions/comparableOperand"
             },
             "operator": {
+              "description": "Como comparar. eq/neq: igual ou diferente (dois números comparam como número; o resto, como texto). gt, gte, lt, lte: maior, maior ou igual, menor, menor ou igual; só entre números, e um valor que não existe dá falso, nunca vira zero. contains/not_contains: contém ou não o trecho. starts_with/not_starts_with: começa ou não com o trecho. Os quatro de texto ignoram maiúscula e minúscula e dão falso quando falta um dos lados.",
               "enum": [
                 "eq",
                 "neq",
@@ -1806,6 +1815,7 @@
               ]
             },
             "right": {
+              "description": "O segundo lado da comparação: um valor fixo, uma variável ou um campo do evento.",
               "$ref": "#/definitions/comparableOperand"
             }
           }
