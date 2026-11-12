@@ -2,11 +2,24 @@ import fs from 'fs'
 import { ErroHttp } from '../transport.js'
 import { obterCapacidadesRuntime } from '../runtimeCapabilities.js'
 import { listarDeclaradas } from '../declaredVariables.js'
+import { limiteAdministrativo } from '../../../agent/concessoes.js'
 
 const arquivoSchema = new URL('../schema/automation.v1.schema.json', import.meta.url)
 const documentSchema = JSON.parse(fs.readFileSync(arquivoSchema, 'utf8'))
 
 export function registrarRotasMeta (roteador, db) {
+  // O contador que o cliente vê ("12 de 20"). Conta o mesmo que a cota barra
+  // (o total da tabela, prontas incluídas) e lê o mesmo teto, para a tela
+  // nunca dizer que há vaga quando o cadastro vai ser recusado. `maximo` 0 =
+  // sem limite: a tela então não mostra contador nenhum.
+  roteador.get('/meta/cotas', () => {
+    const contar = (tabela) => db.prepare(`SELECT COUNT(*) AS n FROM ${tabela}`).get().n
+    return {
+      automacoes: { usadas: contar('automations'), maximo: limiteAdministrativo('limites.maxAutomacoes') },
+      conexoes: { usadas: contar('connections'), maximo: limiteAdministrativo('limites.maxConexoes') }
+    }
+  })
+
   roteador.get('/meta/automation-editor', ({ query }) => {
     const schemaVersion = query?.get('schemaVersion')
     if (schemaVersion !== undefined && schemaVersion !== null && schemaVersion !== '1') {

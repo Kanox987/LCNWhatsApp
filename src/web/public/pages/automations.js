@@ -1,5 +1,6 @@
 import { api } from '../api.js'
 import { badge, button, copyText, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
+import { descreverCota } from '../logic/cotas.js'
 import { criarControleParametro, rotuloTipo, valorParametro } from '../logic/parametros.js'
 import { editorLcn } from './editor-lcn.js'
 import { referenciaLcn } from './referencia-lcn.js'
@@ -206,8 +207,11 @@ async function painelRevisoes (automation) {
 }
 
 async function renderList ({ navigate, refresh }) {
-  const [automations, atualizacoes, conflitos] = await Promise.all([
+  const [automations, atualizacoes, conflitos, cotas] = await Promise.all([
     api.automations.list(),
+    // O contador é informação, não pré-requisito: motor antigo sem a rota
+    // não pode derrubar a lista.
+    api.cotas().catch(() => null),
     // Um comando instalado numa versão antiga do template continua
     // funcionando: a lista não pode quebrar por causa de um aviso.
     api.templates.updates().catch(() => []),
@@ -219,8 +223,12 @@ async function renderList ({ navigate, refresh }) {
     description: 'Crie respostas por comando, teste em modo sombra e publique quando estiver pronto.',
     actions: [button('Nova automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }), button('Atualizar', { onClick: refresh })]
   })
+  const cota = descreverCota(cotas?.automacoes, { singular: 'automação', plural: 'automações' })
+  const contador = cota
+    ? el('div', { className: 'cota-contador' }, [badge(cota.texto, cota.tom), cota.aviso ? el('span', { className: 'field-help', text: cota.aviso }) : null])
+    : null
   if (!automations.length) {
-    return emptyState('Nenhuma automação ainda', 'Você escreve a regra em português na linguagem do projeto, com a referência ao lado e o erro apontando a linha.', button('Criar primeira automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }))
+    return el('div', { className: 'stack' }, [contador, emptyState('Nenhuma automação ainda', 'Você escreve a regra em português na linguagem do projeto, com a referência ao lado e o erro apontando a linha.', button('Criar primeira automação', { variant: 'primary', onClick: () => navigate('/automations?new=1') }))])
   }
   const pendentePorId = new Map((atualizacoes || []).map((a) => [a.automationId, a]))
   // DOIS COMANDOS COM A MESMA PALAVRA: os dois respondem, e quem digita recebe
@@ -234,7 +242,7 @@ async function renderList ({ navigate, refresh }) {
       conflitoPorId.set(envolvida.automationId, { comando: conflito.comando, outras })
     }
   }
-  return el('div', { className: 'stack' }, automations.map((automation) => {
+  return el('div', { className: 'stack' }, [contador, ...automations.map((automation) => {
     const name = automation.draft?.document?.name || automation.id
     const pendente = pendentePorId.get(automation.id)
     const actions = el('div', { className: 'button-row table-actions' })
@@ -481,7 +489,7 @@ async function renderList ({ navigate, refresh }) {
       areaConfig,
       areaRevisoes
     ])
-  }))
+  })])
 }
 
 // O assistente monta uma forma só. Abrir nele uma automação de outra forma e

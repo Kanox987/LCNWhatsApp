@@ -183,6 +183,7 @@ export const api = {
   variables: {
     meta: () => request('/meta/variables')
   },
+  cotas: () => request('/meta/cotas'),
   media: {
     list: () => request('/media'),
     upload: (body) => request('/media', { method: 'POST', body }),

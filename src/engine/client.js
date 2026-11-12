@@ -74,7 +74,8 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
         requisitar('GET', `/commands/pending?accountId=${encodeURIComponent(accountId)}&limit=${limite}${antesDe != null ? `&antesDe=${encodeURIComponent(new Date(antesDe).toISOString())}` : ''}`)
     },
     meta: {
-      obterVariaveis: () => requisitar('GET', '/meta/variables')
+      obterVariaveis: () => requisitar('GET', '/meta/variables'),
+      cotas: () => requisitar('GET', '/meta/cotas')
     },
     // O gateway RELATA enquete e voto; quem grava é o motor, que tem banco.
     // A fronteira é de propósito: a alternativa era dar um SQLite próprio ao

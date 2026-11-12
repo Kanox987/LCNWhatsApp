@@ -9,6 +9,7 @@ import {
 } from '../src/agent/concessoes.js'
 import { MAX_PENDENTES_PADRAO, criarFila } from '../src/engine/fila.js'
 import { criarFilasDeRecursos } from '../src/engine/filasDeRecursos.js'
+import { descreverCota } from '../src/web/public/logic/cotas.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -106,7 +107,22 @@ try {
     check('a recusa não deixa meia instalação para trás', (lista.items || lista).length === 1)
   })
 
-  // --- fila de ação -----------------------------------------------------
+  // --- o contador que o cliente vê ---------------------------------------
+  await comConcessoes({ 'limites.maxAutomacoes': 3 }, async () => {
+    const api = criarApi(abrirBanco(':memory:'))
+    await api.resolver('POST', '/automations', contexto(automacao('um')))
+    const cotas = await api.resolver('GET', '/meta/cotas', contexto())
+    check('o contador conta as automações e lê o mesmo teto da cota', cotas.automacoes.usadas === 1 && cotas.automacoes.maximo === 3, JSON.stringify(cotas.automacoes))
+    check('conexões sem teto: maximo 0 e o total, prontas incluídas', cotas.conexoes.maximo === 0 && cotas.conexoes.usadas === prontas, JSON.stringify(cotas.conexoes))
+  })
+  check('sem teto, a tela não mostra contador', descreverCota({ usadas: 5, maximo: 0 }, { singular: 'automação', plural: 'automações' }) === null)
+  const meio = descreverCota({ usadas: 12, maximo: 20 }, { singular: 'automação', plural: 'automações' })
+  check('"12 de 20 automações", neutro abaixo de 80%', meio?.texto === '12 de 20 automações' && meio.tom === 'neutral' && meio.aviso === null)
+  check('perto do teto avisa em amarelo', descreverCota({ usadas: 16, maximo: 20 }, { singular: 'a', plural: 'as' })?.tom === 'warning')
+  const cheio = descreverCota({ usadas: 21, maximo: 20 }, { singular: 'automação', plural: 'automações' })
+  check('no teto (ou acima, depois de a cota baixar) diz o que fazer', cheio?.tom === 'danger' && /apague uma das 21/.test(cheio.aviso))
+  check('teto 1 usa o singular', descreverCota({ usadas: 0, maximo: 1 }, { singular: 'conexão', plural: 'conexões' })?.texto === '0 de 1 conexão')
+
   const pendentesAceitos = async (cfg) => {
     const filas = criarFilasDeRecursos(cfg)
     const libera = []

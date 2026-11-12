@@ -380,6 +380,7 @@ h1, h2, h3, h4 {
 .list-card.compact { padding: 11px 14px; }
 .list-card-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .list-card-main > .badge { align-self: flex-start; }
+.cota-contador { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .list-card-main h2 { margin: 0; font-size: 1rem; font-weight: 600; }
 .list-card-meta { color: var(--text-muted); font-size: 0.82rem; display: flex; flex-direction: column; gap: 2px; }
 .table-actions { display: flex; gap: 8px; flex: none; }

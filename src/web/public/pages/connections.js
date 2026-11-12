@@ -17,6 +17,7 @@
 //   3. a CREDENCIAL — se existe, e para onde ela viaja (ou não).
 import { api } from '../api.js'
 import { badge, button, el, emptyState, errorState, field, formatDate, notify, setBusy, setPageHeader } from '../ui.js'
+import { descreverCota } from '../logic/cotas.js'
 
 const METODOS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 // `mídia` é entrada de ARQUIVO — a foto, o vídeo, o áudio que chegou pela
@@ -713,10 +714,14 @@ export async function renderConnections ({ refresh }) {
     actions: [button('Atualizar', { onClick: refresh })]
   })
 
-  const [conexoes, prontas] = await Promise.all([
+  const [conexoes, prontas, cotas] = await Promise.all([
     api.connections.list(),
-    api.connections.prontas().catch(() => [])
+    api.connections.prontas().catch(() => []),
+    api.cotas().catch(() => null)
   ])
+  // A cota conta o total, prontas incluídas: é o mesmo número que o motor
+  // usa para recusar o cadastro.
+  const cota = descreverCota(cotas?.conexoes, { singular: 'conexão', plural: 'conexões' })
 
   const raiz = el('div', { className: 'connections-layout' })
   const coluna = el('div', { className: 'stack' })
@@ -727,7 +732,8 @@ export async function renderConnections ({ refresh }) {
   coluna.append(el('div', { className: 'section-heading' }, [
     el('div', {}, [
       el('h2', { text: 'Serviços cadastrados' }),
-      el('p', { text: conexoes.length === 1 ? '1 serviço.' : `${conexoes.length} serviços.` })
+      el('p', { text: conexoes.length === 1 ? '1 serviço.' : `${conexoes.length} serviços.` }),
+      cota ? el('div', { className: 'cota-contador' }, [badge(cota.texto, cota.tom), cota.aviso ? el('span', { className: 'field-help', text: cota.aviso }) : null]) : null
     ]),
     button('Nova conexão', { variant: 'primary', onClick: () => abrir() })
   ]))

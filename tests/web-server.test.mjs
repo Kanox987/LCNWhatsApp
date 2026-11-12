@@ -80,7 +80,8 @@ function criarAplicacaoFake () {
         listar: registrar('execucoes.listar', { items: [], nextCursor: null })
       },
       meta: {
-        obterVariaveis: registrar('meta.obterVariaveis', { builtIn: [], reserved: [] })
+        obterVariaveis: registrar('meta.obterVariaveis', { builtIn: [], reserved: [] }),
+        cotas: registrar('meta.cotas', { automacoes: { usadas: 0, maximo: 0 }, conexoes: { usadas: 0, maximo: 0 } })
       },
       entidades: {
         listar: registrar('entidades.listar', [{ key: 'vip', value: true }]),
@@ -153,6 +154,8 @@ try {
 
   const r6 = await fetch(`${base}/api/v1/meta/variables`)
   check('GET /api/v1/meta/variables: delega pro motor', aplicacao.chamadas.some((c) => c.nome === 'meta.obterVariaveis') && r6.status === 200)
+  const rCotas = await fetch(`${base}/api/v1/meta/cotas`)
+  check('GET /api/v1/meta/cotas: delega pro motor', aplicacao.chamadas.some((c) => c.nome === 'meta.cotas') && rCotas.status === 200)
 
   const r7 = await fetch(`${base}/api/v1/entities/contact/5511999@s.whatsapp.net/attributes`)
   check('GET .../attributes: repassa kind e id certos', aplicacao.chamadas.some((c) => c.nome === 'entidades.listar' && c.args[0] === 'contact' && c.args[1] === '5511999@s.whatsapp.net') && r7.status === 200)

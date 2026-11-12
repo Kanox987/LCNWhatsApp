@@ -395,6 +395,7 @@ export function criarRoteadorWeb (aplicacao, { emContainer = dentroDeContainer }
 
   // --- variáveis (Parte C, Módulo 1) ---
   roteador.get('/api/v1/meta/variables', () => meta().obterVariaveis())
+  roteador.get('/api/v1/meta/cotas', () => meta().cotas())
   roteador.get('/api/v1/entities/:kind/:id/attributes', ({ params }) => entidades().listar(params.kind, params.id))
   roteador.put('/api/v1/entities/:kind/:id/attributes/:key', ({ params, body }) => entidades().definir(params.kind, params.id, params.key, body?.value))
   roteador.delete('/api/v1/entities/:kind/:id/attributes/:key', ({ params }) => entidades().remover(params.kind, params.id, params.key))
