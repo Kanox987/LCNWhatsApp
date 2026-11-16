@@ -193,6 +193,13 @@ export function registrarSucessoConexao () {
   gravar()
 }
 
+// Troca de número: as falhas eram do número que saiu. Herdá-las jogaria o
+// pareamento novo direto na quarentena.
+export function zerarSaude () {
+  estado.saude = { ...SAUDE_INICIAL }
+  gravar()
+}
+
 // Retorna o contador atualizado (não só grava) de propósito: agendarFlush()
 // é debounced (250ms) — quem chama isto e precisa decidir algo com o valor
 // NA HORA (ex: já bateu o limiar de quarentena?) não pode confiar em

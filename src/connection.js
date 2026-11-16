@@ -20,7 +20,7 @@ import { atualizarGrupos, registrarContato } from './directory.js'
 import * as state from './state.js'
 import * as bandwidth from './bandwidth.js'
 import { classificarFechamento, mensagemParaClasse, codigoParaClasse } from './connectionReasons.js'
-import { EXIT_QUARANTINED } from './exitCodes.js'
+import { EXIT_QUARANTINED, codigoDeSaidaParaReinicio } from './exitCodes.js'
 import { resolverAccountId } from './engine/instanceIdentity.js'
 import { construirEventoDeMensagem, construirEventoDeIndisponivel, construirEventoDeGrupo, chatIdDoEvento } from './engine/zapoAdapter.js'
 import { criarFila } from './engine/fila.js'
@@ -35,6 +35,7 @@ import * as groupInfo from './engine/groupInfo.js'
 import { executarComandos, COMANDOS_LONGOS } from './engine/gatewayExecutor.js'
 import { APARELHOS, resolverAparelho } from './aparelho.js'
 import * as lidMap from './lidMap.js'
+import { ARQ_PEDIDO_LOGOUT, concluirLimpezaPendente, esquecerNumeroDescartado, esvaziarSessao, lembrarNumeroDescartado, marcarLimpezaPendente, numeroFoiDescartado } from './sessaoLogout.js'
 
 const log = (...a) => console.log(`[${new Date().toLocaleTimeString('pt-BR')}]`, ...a)
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -62,7 +63,8 @@ export function querPareamentoPorCodigo (argv = process.argv, env = process.env)
   return String(env.LCN_PAIR_NUMBER || '').replace(/\D/g, '').length >= 8
 }
 
-const USAR_CODIGO = querPareamentoPorCodigo()
+// `let`: a subida depois de uma troca de número pode desligar o código (ver iniciar()).
+let USAR_CODIGO = querPareamentoPorCodigo()
 
 // Aparelho por argumento/ambiente, com a mesma lógica do --code: quem conecta
 // escolhe na hora, sem editar arquivo. O config.json é o padrão de quem não
@@ -521,6 +523,14 @@ function criarStore () {
 
 export async function iniciar () {
   garantirPastas()
+  // Troca de número pedida na vida anterior deste processo: termina de apagar
+  // a sessão AGORA, antes de criarStore() abrir o zapo.sqlite (ver
+  // src/sessaoLogout.js). Falhar aqui é melhor que reconectar o número antigo.
+  if (concluirLimpezaPendente({ pastaDados: PASTA_DADOS, pastaSessao: PASTA_SESSAO, log })) state.zerarSaude()
+  if (USAR_CODIGO && numeroFoiDescartado(PASTA_DADOS, numeroDoArgumento())) {
+    USAR_CODIGO = false
+    log('O número configurado para código foi desconectado pela troca: pareando por QR.')
+  }
   let cfg = carregar()
 
   // Precedência: o que foi passado na hora de conectar vence o config.json,
@@ -601,13 +611,18 @@ export async function iniciar () {
       // seus envios; fechar o socket antes transformaria a drenagem em falhas.
       await admissao.encerrar({ cancelarExternos: true })
       if (apagarSessao) {
+        // Marcador ANTES do logout: se o SQLite regravar a sessão depois da
+        // limpeza abaixo, a próxima subida apaga de novo com este processo
+        // já morto. Também cobre um crash no meio do caminho.
+        try { marcarLimpezaPendente(PASTA_DADOS) } catch (e) { log('erro marcando limpeza da sessão:', e.message) }
         try { await clienteAtual?.logout() } catch {}
         await sleepMs(800)
-        try {
-          for (const f of fs.readdirSync(PASTA_SESSAO)) {
-            fs.rmSync(path.join(PASTA_SESSAO, f), { recursive: true, force: true })
-          }
-        } catch (e) { log('erro limpando sessão:', e.message) }
+        try { esvaziarSessao(PASTA_SESSAO) } catch (e) { log('erro limpando sessão:', e.message) }
+        const numeroDoAmbiente = USAR_CODIGO ? numeroDoArgumento() : null
+        if (numeroDoAmbiente) {
+          try { lembrarNumeroDescartado(PASTA_DADOS, numeroDoAmbiente) } catch (e) { log('erro anotando o número descartado:', e.message) }
+        }
+        state.zerarSaude()
         state.definirConexao({ conectado: false, numero: null, nome: null })
         log('Sessão limpa. Reiniciando pra novo login (veja o QR/código nos logs)...')
       } else {
@@ -623,7 +638,7 @@ export async function iniciar () {
   // Comando "apagar dados do número" (vindo do painel > Serviço): o painel cria
   // data/logout.request; aqui deslogamos, limpamos a sessão e saímos pra reiniciar
   // limpo (o restart policy do container / PM2 recoloca de pé pedindo novo login).
-  const reqLogout = path.join(PASTA_DADOS, 'logout.request')
+  const reqLogout = path.join(PASTA_DADOS, ARQ_PEDIDO_LOGOUT)
   const reqRestart = path.join(PASTA_DADOS, 'restart.request')
   setInterval(async () => {
     if (desligando) return
@@ -644,7 +659,7 @@ export async function iniciar () {
     if (!fs.existsSync(reqLogout)) return
     try { fs.unlinkSync(reqLogout) } catch {}
     log('🔌 Comando recebido: apagando dados do número e reiniciando...')
-    await desligarGracioso({ apagarSessao: true })
+    await desligarGracioso({ apagarSessao: true, codigo: codigoDeSaidaParaReinicio() })
   }, 3000)
 
   async function conectar () {
@@ -696,6 +711,7 @@ export async function iniciar () {
         if (desligando) return
         falhas = 0
         state.registrarSucessoConexao()
+        try { esquecerNumeroDescartado(PASTA_DADOS) } catch {}
         state.limparQR()
         state.limparCodigoPareamento()
         const creds = client.getCredentials?.()

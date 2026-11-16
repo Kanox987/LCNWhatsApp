@@ -26,6 +26,7 @@ export function criarAplicacao ({
       iniciar: (id) => instanceService.iniciar(id),
       parar: (id) => instanceService.parar(id),
       reiniciar: (id) => instanceService.reiniciar(id),
+      desconectar: (id) => instanceService.desconectar(id),
       // ATENÇÃO — CREDENCIAL SENSÍVEL: devolve QR/código de pareamento em
       // claro (ver aviso em instanceService.js). Só é seguro sem controle
       // de acesso porque este objeto hoje só é consumido por um transporte

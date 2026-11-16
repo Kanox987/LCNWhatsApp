@@ -29,6 +29,7 @@ import { ARQ_PID_ENGINE } from '../engine/paths.js'
 import { VAGAS_RAPIDAS_PADRAO } from '../engine/fila.js'
 import * as processoDaInstancia from './processoDaInstancia.js'
 import { statusServico as statusServicoBare, iniciarBot as iniciarBotBare, pararBot as pararBotBare, reiniciarBot as reiniciarBotBare, logsServico as logsServicoBare } from '../runtime.js'
+import { marcarLimpezaPendente, pedirLogout } from '../sessaoLogout.js'
 
 export const ID_BARE = 'bare'
 
@@ -389,6 +390,15 @@ export function criarInstanceService ({
   lerRssPid = lerRssDoPid,
   obterMemoriaPainel = () => process.memoryUsage(),
   verificarPidVivo = pidVivo,
+  // Religar o número do modo simples depois da troca (ver desconectar). Os
+  // dois são injetáveis para o teste não subir processo nem esperar relógio.
+  iniciarProcessoSimples = processoDaInstancia.iniciar,
+  agendar = (fn, ms) => setTimeout(fn, ms).unref(),
+  processoEhDoBot = processoDaInstancia.pidEhDoBot,
+  bareArqPid = path.join(path.dirname(ARQ_ESTADO_BARE), 'bot.pid'),
+  // Antes de religar o principal, o tempo de um supervisor (PM2, container)
+  // religar sozinho. Se ele religou, iniciarBot recusa: nunca há dois.
+  esperaSupervisorMs = 8000,
   // Um nome por caminho, seguindo a convenção do `arqPidEngine` acima. A
   // primeira versão aceitava três nomes para cada um destes quatro, com cadeia
   // de fallback entre eles — doze parâmetros para quatro caminhos. Dois nomes
@@ -638,6 +648,9 @@ export function criarInstanceService ({
   }
 
   function executarAcaoCicloDeVida (id, acao, opcoes = {}) {
+    // Quem mandou parar, ligar ou reiniciar depois de uma troca decide agora:
+    // o religamento pendente da troca não pode passar por cima.
+    cancelarReligamento(id)
     if (id === ID_BARE) return executarAcaoCicloDeVidaBare(acao, opcoes)
     const instancia = exigir(id)
 
@@ -729,6 +742,7 @@ export function criarInstanceService ({
   function remover (id) {
     if (id === ID_BARE) throw new Error('O número principal não pode ser removido por aqui.')
     const instancia = exigir(id)
+    cancelarReligamento(id)
     if (!instancia.nomeSimples) {
       throw new Error('Só número do modo simples é removido por aqui; instância gerenciada sai pelo registro.')
     }
@@ -751,6 +765,107 @@ export function criarInstanceService ({
   const iniciar = (id, opcoes) => executarAcaoCicloDeVida(id, 'start', opcoes || {})
   const parar = (id) => executarAcaoCicloDeVida(id, 'stop')
   const reiniciar = (id) => executarAcaoCicloDeVida(id, 'restart')
+
+  // TROCAR O NÚMERO CONECTADO sem apagar mais nada: configurações, automações,
+  // mídia e dados da instância ficam; só a sessão do WhatsApp sai.
+  //
+  // O MARCADOR E O PEDIDO VÃO SEMPRE. Bot de pé: ele lê data/logout.request,
+  // desloga, apaga a sessão e sai para voltar mostrando um QR novo. Bot
+  // parado (ou um batimento recente de um processo que acabou de morrer):
+  // ninguém lê o pedido, e o marcador faz a próxima subida começar sem a
+  // sessão antiga — e descartar o pedido que ficou na fila, que senão
+  // derrubaria o pareamento novo segundos depois de ele começar.
+  //
+  // QUEM SOBE O BOT DE NOVO depende de como ele roda:
+  // - gerenciado (systemd/Quadlet): o bot sai com código 75 e o
+  //   Restart=on-failure religa (ver exitCodes.js);
+  // - container ou PM2: o reinício deles é incondicional;
+  // - número do modo simples e principal solto (`node index.js` destacado,
+  //   que é como o painel liga): ninguém. O painel espera o processo sair e
+  //   liga de novo, já sem sessão.
+  // Só religa o processo que é DESTE painel (pidEhDoBot): rodando em outro
+  // container (só o batimento chega aqui), quem o sobe de novo é quem o subiu.
+  const RELIGAR_INTERVALO_MS = 1000
+  const RELIGAR_TENTATIVAS = 60
+  // Um religamento pendente por número: um segundo clique reaproveita o
+  // primeiro, e parar/ligar/reiniciar/remover o cancela.
+  const religamentos = new Map()
+
+  function cancelarReligamento (id) {
+    const pendente = religamentos.get(id)
+    if (!pendente) return
+    pendente.cancelado = true
+    religamentos.delete(id)
+  }
+
+  function pidDoArquivo (arquivo) {
+    try {
+      const pid = parseInt(fs.readFileSync(arquivo, 'utf8').trim(), 10)
+      return Number.isInteger(pid) && pid > 0 ? pid : null
+    } catch {
+      return null
+    }
+  }
+
+  // Espera ESTE pid morrer, não o bot.pid sumir: se alguém ligar o número no
+  // meio do caminho, o pid novo não é confundido com o antigo.
+  function religarQuandoSair (id, { pid, ligar, esperaAntes = 0 }) {
+    if (religamentos.has(id)) return
+    const pendente = { cancelado: false }
+    religamentos.set(id, pendente)
+    const encerrar = () => { if (religamentos.get(id) === pendente) religamentos.delete(id) }
+    const ligarAgora = () => {
+      if (pendente.cancelado) return
+      encerrar()
+      // iniciar() recusa se outro processo já estiver de pé: nunca há dois.
+      try { ligar() } catch {}
+    }
+    let tentativas = 0
+    const passo = () => {
+      if (pendente.cancelado) return
+      if (!verificarPidVivo(pid)) {
+        if (esperaAntes > 0) agendar(ligarAgora, esperaAntes)
+        else ligarAgora()
+        return
+      }
+      tentativas += 1
+      if (tentativas < RELIGAR_TENTATIVAS) agendar(passo, RELIGAR_INTERVALO_MS)
+      else encerrar()
+    }
+    agendar(passo, RELIGAR_INTERVALO_MS)
+  }
+
+  function religarDepoisDaTroca (id, instancia) {
+    if (instancia.nomeSimples) {
+      const pid = pidDoArquivo(instancia.arqPid)
+      if (pid && processoEhDoBot(pid, instancia.nomeSimples)) {
+        religarQuandoSair(id, { pid, ligar: () => iniciarProcessoSimples(instancia.nomeSimples, instancia.arqPid) })
+      }
+      return
+    }
+    if (instancia.isBare) {
+      const pid = pidDoArquivo(bareArqPid)
+      if (pid && processoEhDoBot(pid, null)) {
+        religarQuandoSair(id, { pid, esperaAntes: esperaSupervisorMs, ligar: () => bareIniciarBot() })
+      }
+    }
+  }
+
+  function desconectar (id) {
+    const instancia = exigir(id)
+    const pastaDados = path.dirname(caminhoEstado(instancia))
+    let vivo = vivoPeloStatus(statusUnit(instancia))
+    // Batimento recente sem bot.pid é processo que já saiu: o index.js apaga
+    // o pid-file em toda saída, onde quer que rode.
+    if (instancia.arqPid && !fs.existsSync(instancia.arqPid)) vivo = false
+    marcarLimpezaPendente(pastaDados)
+    pedirLogout(pastaDados)
+    if (vivo === false) {
+      return { instanceId: id, action: 'logout', ok: true, queued: true, applied: 'next-start' }
+    }
+    religarDepoisDaTroca(id, instancia)
+    return { instanceId: id, action: 'logout', ok: true, queued: true, applied: 'running' }
+  }
 
   // Pareamento: LEITURA do que connection.js já persiste em state.json
   // (definirQR/definirCodigoPareamento). Pedir um código NOVO também é
@@ -1117,5 +1232,5 @@ export function criarInstanceService ({
     return { lines: saida.trimEnd().split('\n') }
   }
 
-  return { listar, obter, criar, remover, iniciar, parar, reiniciar, pareamento, obterOtimizacao, definirOtimizacao, obterConcessoes, definirConcessoes, obterUso, obterLogs }
+  return { listar, obter, criar, remover, iniciar, parar, reiniciar, desconectar, pareamento, obterOtimizacao, definirOtimizacao, obterConcessoes, definirConcessoes, obterUso, obterLogs }
 }

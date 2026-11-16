@@ -91,6 +91,7 @@ export function criarRoteadorWeb (aplicacao, { emContainer = dentroDeContainer }
   roteador.post('/api/v1/instances/:id/start', ({ params, body }) => aplicacao.instancias.iniciar(params.id, { pairNumber: body?.pairNumber }))
   roteador.post('/api/v1/instances/:id/stop', ({ params }) => aplicacao.instancias.parar(params.id))
   roteador.post('/api/v1/instances/:id/restart', ({ params }) => aplicacao.instancias.reiniciar(params.id))
+  roteador.post('/api/v1/instances/:id/logout', ({ params }) => aplicacao.instancias.desconectar(params.id))
   roteador.get('/api/v1/instances/:id/pairing', ({ params }) => aplicacao.instancias.pareamento(params.id))
   roteador.get('/api/v1/instances/:id/optimization', ({ params }) => aplicacao.instancias.obterOtimizacao(params.id))
   roteador.put('/api/v1/instances/:id/optimization', ({ params, body }) => aplicacao.instancias.definirOtimizacao(params.id, body))

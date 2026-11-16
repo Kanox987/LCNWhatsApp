@@ -11,6 +11,88 @@ function formatUptime (uptimeMs) {
   return `${Math.floor(horas / 24)}d ${horas % 24}h`
 }
 
+// TROCAR O NÚMERO CONECTADO sem apagar automações, configurações ou mídia.
+//
+// A confirmação é na própria tela, em dois cliques, e não window.confirm:
+// navegador embutido e painel dentro de outra página podem bloquear o diálogo
+// nativo, e aí o botão simplesmente não faria nada.
+//
+// O ESTADO DA TROCA MORA FORA DO BOTÃO. Enquanto o número não está conectado
+// a página se redesenha sozinha a cada 4 s, e uma confirmação guardada só no
+// elemento sumiria no meio do caminho. Depois do pedido, a mesma anotação
+// mantém a página se atualizando até o QR novo aparecer.
+const TROCA_ARMADA_MS = 20000
+const TROCA_ACOMPANHADA_MS = 90000
+// O segundo clique de um clique duplo chega em milissegundos, debaixo do
+// mesmo cursor: não pode valer como confirmação.
+const TROCA_INTERVALO_MINIMO_MS = 600
+const trocas = new Map()
+
+function trocaArmadaEm (id) {
+  const t = trocas.get(id)
+  return t?.armadaEm && Date.now() - t.armadaEm < TROCA_ARMADA_MS ? t.armadaEm : null
+}
+
+function trocaRecente (id) {
+  const t = trocas.get(id)
+  return Boolean(t?.emAndamento || (t?.enviadaEm && Date.now() - t.enviadaEm < TROCA_ACOMPANHADA_MS))
+}
+
+function trocaDeNumero (instance, refresh) {
+  const id = instance.instanceId
+  const TEXTO_INICIAL = 'Desconecta o WhatsApp atual e gera um QR novo. Automações, configurações e arquivos ficam como estão.'
+  const aviso = el('p', { className: 'muted compact', text: TEXTO_INICIAL })
+  const cancelar = button('Cancelar', { variant: 'secondary', hidden: true })
+  const armar = (em) => {
+    trocas.set(id, { armadaEm: em })
+    trocar.textContent = 'Sim, desconectar este número'
+    cancelar.hidden = false
+    aviso.textContent = 'O número atual sai do WhatsApp deste painel. Para voltar a usá-lo, será preciso parear de novo.'
+  }
+  const voltar = () => {
+    trocas.delete(id)
+    trocar.textContent = 'Trocar número conectado'
+    cancelar.hidden = true
+    aviso.textContent = TEXTO_INICIAL
+  }
+  cancelar.addEventListener('click', voltar)
+  const trocar = button('Trocar número conectado', {
+    variant: 'danger',
+    onClick: async (event) => {
+      const control = event.currentTarget
+      if (trocas.get(id)?.emAndamento) return
+      const armadaEm = trocaArmadaEm(id)
+      if (!armadaEm) {
+        armar(Date.now())
+        return
+      }
+      if (event.detail > 1 || Date.now() - armadaEm < TROCA_INTERVALO_MINIMO_MS) return
+      cancelar.hidden = true
+      setBusy(control, true, 'Desconectando…')
+      trocas.set(id, { emAndamento: true })
+      const caminho = window.location.pathname
+      try {
+        const resposta = await api.instances.action(id, 'logout')
+        trocas.set(id, { enviadaEm: Date.now() })
+        notify(resposta?.applied === 'next-start'
+          ? 'Sessão descartada. Ao iniciar o número, ele mostra um QR novo.'
+          : 'Pedido enviado. O número atual vai ser desconectado, e o QR novo aparece aqui quando o bot voltar.')
+        // Só redesenha se a pessoa continua nesta página: em outra, o
+        // redesenho jogaria fora o que ela estiver editando.
+        window.setTimeout(() => { if (window.location.pathname === caminho) refresh() }, 3000)
+      } catch (error) {
+        trocas.delete(id)
+        notify(error.message, 'danger')
+        setBusy(control, false)
+        voltar()
+      }
+    }
+  })
+  if (trocas.get(id)?.emAndamento) setBusy(trocar, true, 'Desconectando…')
+  else if (trocaArmadaEm(id)) armar(trocaArmadaEm(id))
+  return el('div', { className: 'pairing-reset' }, [aviso, el('div', { className: 'button-row' }, [trocar, cancelar])])
+}
+
 function lifecycleCard (instance, refresh, navigate) {
   // LIGAR DO ZERO FUNCIONA EM TODOS, e este texto dizia o contrário.
   //
@@ -47,6 +129,7 @@ function lifecycleCard (instance, refresh, navigate) {
       badge(instance.unitStatus || 'desconhecido', instance.unitStatus === 'active' || instance.unitStatus === 'rodando' ? 'success' : 'neutral')
     ]),
     el('div', { className: 'button-row' }, actions),
+    trocaDeNumero(instance, refresh),
     podeRemover
       ? el('div', { className: 'stack' }, [
         el('p', { className: 'muted compact', text: 'Remover apaga os dados E a sessão deste número. Ele não volta sozinho: quem reaproveitar o nome vai parear de novo. Pare o número antes.' }),
@@ -364,7 +447,9 @@ export async function renderInstance ({ params, navigate, refresh }) {
 
   // Enquanto não conectar, atualiza sozinho — pega a conexão automaticamente
   // assim que o QR for escaneado, sem precisar ficar clicando em Atualizar.
-  if (pairing.connected !== true) {
+  // Logo depois de uma troca também: o estado ainda pode dizer "conectado"
+  // com o número antigo por alguns segundos.
+  if (pairing.connected !== true || trocaRecente(id)) {
     const caminhoEsperado = `/instances/${encodeURIComponent(id)}`
     pollTimer = window.setInterval(() => {
       if (window.location.pathname !== caminhoEsperado) {

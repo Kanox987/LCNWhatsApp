@@ -75,9 +75,16 @@ fi
 manter_vivo () {
   local nome="$1"; shift
   local espera=5
+  local inicio codigo
   while true; do
+    inicio=$(date +%s)
     "$@"
-    log "${nome} saiu (código $?) — subindo de novo em ${espera}s"
+    codigo=$?
+    # Quem ficou de pé mais de um minuto não está em laço de queda: a volta
+    # começa do intervalo curto. Sem isso, depois de alguns reinícios (troca de
+    # número, reinício pedido pelo painel) cada volta levaria um minuto.
+    if [ $(( $(date +%s) - inicio )) -ge 60 ]; then espera=5; fi
+    log "${nome} saiu (código ${codigo}) — subindo de novo em ${espera}s"
     sleep "${espera}"
     if [ "${espera}" -lt 60 ]; then espera=$(( espera * 2 )); fi
   done

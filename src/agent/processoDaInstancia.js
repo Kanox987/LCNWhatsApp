@@ -57,6 +57,27 @@ export function numeroParaParear (bruto) {
   return limpo
 }
 
+// ESTE PID É MESMO DESTE BOT? Só o `kill(pid, 0)` não responde: a pasta de
+// dados pode ser dividida com outro container, e o bot.pid de lá traz um pid
+// de outro namespace — aqui o mesmo número pode ser um processo qualquer.
+// Pelo /proc confere que é um `node index.js` com o LCN_INSTANCIA certo
+// (ausente para o número principal). Sem /proc (macOS) sobra a checagem de
+// vida, que é o que existia antes.
+export function pidEhDoBot (pid, nome = null, { proc = '/proc', estaVivo = vivo } = {}) {
+  if (!estaVivo(pid)) return false
+  if (!fs.existsSync(path.join(proc, 'self'))) return true
+  try {
+    const argumentos = fs.readFileSync(path.join(proc, String(pid), 'cmdline'), 'utf8').split('\0')
+    if (!argumentos.some((a) => a === 'index.js' || a.endsWith('/index.js'))) return false
+    const ambiente = fs.readFileSync(path.join(proc, String(pid), 'environ'), 'utf8').split('\0')
+    const linha = ambiente.find((v) => v.startsWith('LCN_INSTANCIA='))
+    const instancia = linha ? linha.slice('LCN_INSTANCIA='.length) : ''
+    return nome ? instancia === nome : instancia === ''
+  } catch {
+    return false
+  }
+}
+
 export function iniciar (nome, arqPid, { spawnFn = spawn, raiz = RAIZ, pairNumber = null } = {}) {
   const pid = pidDe(arqPid)
   if (pid && vivo(pid)) return { ok: false, out: `O número "${nome}" já está rodando (pid ${pid}).` }
