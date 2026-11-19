@@ -10,7 +10,6 @@ import { renderAcervo } from './pages/acervo.js'
 import { renderOwners } from './pages/owners.js'
 import { renderListas } from './pages/listas.js'
 import { renderPools } from './pages/pools.js'
-import { renderMenuConfig } from './pages/menu-config.js'
 import { button, emptyState, errorState, loading, setPageHeader } from './ui.js'
 
 const page = document.querySelector('#page')
@@ -31,7 +30,11 @@ function matchRoute (pathname) {
   if (pathname === '/owners') return { render: renderOwners, section: '/owners' }
   if (pathname === '/listas') return { render: renderListas, section: '/listas' }
   if (pathname === '/pools') return { render: renderPools, section: '/pools' }
-  if (pathname === '/menu') return { render: renderMenuConfig, section: '/menu' }
+  // O MENU NÃO TEM MAIS ABA. Ele é uma automação comum (o comando /menu), e
+  // a configuração por conversa ou por tipo de conversa é pelo comando
+  // `configura menu`. Quem abrir /menu por um favorito antigo cai na lista de
+  // automações, onde o menu aparece como qualquer outro comando.
+  if (pathname === '/menu') return { redirect: '/automations' }
   return null
 }
 
@@ -53,6 +56,9 @@ export function navigate (to, { replace = false } = {}) {
 async function renderCurrentRoute () {
   const token = ++renderToken
   const route = matchRoute(window.location.pathname)
+  // Endereço antigo: troca no histórico (sem deixar o velho para o "voltar")
+  // e desenha o destino.
+  if (route?.redirect) return navigate(route.redirect, { replace: true })
   window.scrollTo({ top: 0, behavior: 'instant' })
   if (!route) {
     updateActiveNavigation('')

@@ -566,7 +566,12 @@ export const ACOES = Object.freeze([
     palavra: 'configura menu',
     tipo: 'action.menu.config',
     campos: [
-      { chave: 'field', rotulo: 'campo', tipo: 'palavra', palavras: { header: 'cabeçalho', footer: 'rodapé', emptyText: 'texto de vazio', buttonTitle: 'título do botão', format: 'formato' } },
+      { chave: 'field', rotulo: 'campo', tipo: 'palavra', palavras: { header: 'cabeçalho', footer: 'rodapé', emptyText: 'texto de vazio', buttonTitle: 'título do botão', format: 'formato', numbered: 'numeração', families: 'famílias', reset: 'volta ao padrão' } },
+      // Sem esta linha vale a conversa onde o comando foi usado — o que todo
+      // documento guardado antes dela já fazia.
+      // `outra conversa`: o número ou id vem logo depois do comando, antes do
+      // valor — é o "um grupo / um contato específico" da antiga aba Menu.
+      { chave: 'target', rotulo: 'onde vale', tipo: 'palavra', palavras: { chat: 'nesta conversa', group_default: 'todos os grupos', direct_default: 'todo o privado', other: 'outra conversa' } },
       { chave: 'usageText', rotulo: 'como usar', tipo: 'texto' },
       { chave: 'confirmText', rotulo: 'confirma', tipo: 'texto' }
     ]

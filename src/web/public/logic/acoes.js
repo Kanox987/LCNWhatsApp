@@ -852,14 +852,15 @@ export const ACOES = Object.freeze([
     tipo: 'action.menu.config',
     rotulo: 'Configurar o menu pelo WhatsApp',
     familia: 'configuracao',
-    resumo: 'Muda o texto do menu daquela conversa sem abrir o painel. O valor novo é o que a pessoa escreveu depois do comando.',
-    exemplo: '"/configmenu Comandos da loja:" troca o cabeçalho só daquele grupo.',
-    dependencias: 'Nada além do texto depois do comando. Muda só a conversa onde foi usado, nunca as outras.',
-    resultado: 'O valor novo é gravado e já vale no próximo menu daquela conversa, sem passar pelo painel.',
-    errosComuns: 'Deixar o comando aberto a todos: aí qualquer pessoa reescreve o cabeçalho do seu menu. E sem o texto de uso, quem manda o comando sozinho não descobre como usar.',
+    resumo: 'Muda o menu pelo próprio WhatsApp: o texto, o formato, a numeração ou as famílias mostradas. O valor novo é o que a pessoa escreveu depois do comando.',
+    exemplo: '"/configmenu Comandos da loja:" troca o cabeçalho só daquele grupo. Com campo numeração, "/numerar sim" passa a mostrar 1, 2, 3.',
+    dependencias: 'Nada além do texto depois do comando. Sem "onde vale", muda só a conversa onde foi usado; com "todos os grupos" ou "todo o privado", muda o padrão de todas as conversas daquele tipo que não têm configuração própria; com "outra conversa", o número ou id da conversa vem logo depois do comando, antes do valor, e nada é enviado nela.',
+    resultado: 'O valor novo é gravado e já vale no próximo menu. A configuração da conversa ganha do padrão do tipo, que ganha do que o próprio menu traz. "Volta ao padrão" apaga aquele nível inteiro, e ele passa a herdar. Escrever "herdar" depois do comando devolve à herança só aquele campo; "em branco" deixa um texto vazio (entre aspas, as duas palavras valem como texto comum).',
+    errosComuns: 'Deixar o comando aberto a todos: aí qualquer pessoa reescreve o seu menu. E sem o texto de uso, quem manda o comando sozinho não descobre como usar.',
     campos: [
-      { chave: 'field', rotulo: 'O que mudar', ajuda: 'cabeçalho, rodapé, texto de menu vazio, título do botão ou formato.' },
-      { chave: 'usageText', rotulo: 'Se vier sem texto', ajuda: 'Explica como usar quando alguém manda o comando sozinho.' },
+      { chave: 'field', rotulo: 'O que mudar', ajuda: 'cabeçalho, rodapé, texto de menu vazio, título do botão, formato (texto ou com botões), numeração (sim ou não), famílias (separadas por vírgula, ou "todas") ou volta ao padrão (apaga a configuração e herda do nível de cima; não precisa de texto).' },
+      { chave: 'target', rotulo: 'Onde vale', ajuda: 'nesta conversa (o padrão), todos os grupos, todo o privado ou outra conversa. Todos os grupos e todo o privado valem para toda conversa daquele tipo que não tenha configuração própria. Outra conversa: escreva o número ou o id dela logo depois do comando, antes do valor.' },
+      { chave: 'usageText', rotulo: 'Se vier sem texto', ajuda: 'Explica como usar quando alguém manda o comando sozinho. Em branco, o bot explica sozinho conforme o campo.' },
       { chave: 'confirmText', rotulo: 'Confirmação', ajuda: 'Resposta depois de gravar.' }
     ]
   },

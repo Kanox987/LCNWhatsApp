@@ -7,6 +7,7 @@
 import { api, ApiError } from '../api.js'
 import { badge, button, el, emptyState, errorState, field, notify, setBusy, setPageHeader } from '../ui.js'
 import { TIPOS, converterParaTipo, descreverValor, tipoDoValor, valorParaCampo } from '../logic/valores.js'
+import { conversaPeloId, linhasDoMenu, nivelDoTipo, semFamiliasConfiguradas } from '../logic/menuDaConversa.js'
 
 // Seletor de tipo + campo, que troca conforme o tipo. Devolve os dois nós e
 // uma função que lê o valor já convertido — quem chama não precisa saber qual
@@ -205,6 +206,107 @@ function painelDeFamilias (kind, entity) {
   ])
 }
 
+// O MENU NESTA CONVERSA: ver e apagar. Mudar é pelo comando `configura menu`.
+//
+// Ver serve para conferir o resultado do comando sem mandar /menu na conversa
+// (num grupo, isso publicaria o menu para todo mundo). Apagar serve sobretudo
+// para conversa onde o comando não roda mais — o bot saiu do grupo, o id foi
+// digitado errado —, porque a chave do menu é reservada e a lista de
+// variáveis abaixo não a apaga.
+function painelDoMenu (kind, entity) {
+  const area = el('div', { className: 'stack-sm' }, [el('p', { className: 'muted compact', text: 'Carregando menu…' })])
+  const chatKind = kind === 'group' ? 'group' : 'direct'
+
+  const nivel = nivelDoTipo(chatKind)
+
+  const lista = (linhas) => el('div', { className: 'stack-sm' }, linhas.map((linha) =>
+    el('div', { className: 'row-between compact' }, [
+      el('span', { text: linha.rotulo }),
+      el('span', {}, [
+        el('strong', { text: linha.valor }),
+        linha.origem ? el('span', { className: 'muted', text: ` (${linha.origem})` }) : null
+      ])
+    ])))
+
+  const montar = async () => {
+    let efetivo
+    try {
+      efetivo = await api.menuConfig.effective(entity.id, chatKind)
+    } catch (erro) {
+      area.replaceChildren(el('p', { className: 'muted compact', text: `Não consegui carregar: ${erro.message}` }))
+      return
+    }
+    const propria = linhasDoMenu(efetivo?.propria)
+    const doTipo = linhasDoMenu(efetivo?.padraoDoTipo)
+    // Só os menus que RESPONDEM aqui: a rota já tira os de escopo de outra
+    // conversa e os desligados nesta.
+    const menus = Array.isArray(efetivo?.menus) ? efetivo.menus : []
+
+    const apagarPadrao = button(`Apagar o ${nivel.nome.toLowerCase()}`, { variant: 'danger', onClick: async (event) => {
+      if (!window.confirm(`Apagar o ${nivel.nome.toLowerCase()}? Isso muda o menu em ${nivel.curto}, não só nesta conversa.`)) return
+      const controle = event.currentTarget
+      setBusy(controle, true, 'Apagando…')
+      try {
+        await api.menuConfig.removeDefault(nivel.kind)
+        notify(`Pronto. O ${nivel.nome.toLowerCase()} foi apagado.`)
+        await montar()
+      } catch (erro) {
+        notify(erro.message, 'danger')
+        setBusy(controle, false)
+      }
+    } })
+
+    const apagar = button('Apagar a configuração desta conversa', { variant: 'danger', onClick: async (event) => {
+      if (!window.confirm('Apagar a configuração do menu desta conversa? Ela volta a seguir o padrão.')) return
+      const controle = event.currentTarget
+      setBusy(controle, true, 'Apagando…')
+      try {
+        await api.menuConfig.removeOwn(kind === 'group' ? 'group' : 'contact', entity.id)
+        notify('Pronto. O menu desta conversa voltou ao padrão.')
+        await montar()
+      } catch (erro) {
+        notify(erro.message, 'danger')
+        setBusy(controle, false)
+      }
+    } })
+
+    area.replaceChildren(...[
+      el('h3', { text: 'Configuração própria' }),
+      propria.length
+        ? el('div', { className: 'stack-sm' }, [lista(propria), el('div', { className: 'button-row' }, apagar)])
+        : el('p', { className: 'muted compact', text: 'Nenhuma. Esta conversa segue o padrão.' }),
+      el('h3', { text: nivel.nome }),
+      doTipo.length
+        ? el('div', { className: 'stack-sm' }, [lista(doTipo), el('div', { className: 'button-row' }, apagarPadrao)])
+        : el('p', { className: 'muted compact', text: 'Nada configurado neste nível.' }),
+      efetivo?.grupoAtivo === false
+        ? el('p', { className: 'field-help', text: 'O bot não está ativo neste grupo, então o menu não responde aqui até o grupo ser ativado.' })
+        : null,
+      menus.length
+        ? null
+        : el('p', { className: 'muted compact', text: 'Nenhum comando de menu responde nesta conversa: ou não há nenhum publicado, ou o "onde" dele não inclui esta conversa, ou ele está desligado aqui.' }),
+      ...menus.map((menu) => el('div', { className: 'stack-sm' }, [
+        el('h3', { text: `Como sai aqui: ${menu.name}` }),
+        lista(linhasDoMenu(menu.config, { propria: efetivo?.propria, padraoDoTipo: efetivo?.padraoDoTipo, doDocumento: menu.doDocumento, chatKind })),
+        semFamiliasConfiguradas(menu.config) ? el('p', { className: 'muted compact', text: 'Famílias: todas.' }) : null
+      ]))
+    ].filter(Boolean))
+  }
+
+  montar()
+
+  return el('section', { className: 'panel stack' }, [
+    el('div', { className: 'panel-heading' }, [
+      el('div', {}, [
+        el('h2', { text: 'Menu nesta conversa' }),
+        el('p', { text: 'O menu que vale aqui, já juntando a configuração desta conversa, o padrão do tipo de conversa e o que o comando de menu define.' })
+      ])
+    ]),
+    el('p', { className: 'field-help', text: `Para mudar, use o comando de configurar menu no WhatsApp (template "Configurar menu"). Aqui dá para ver de onde vem cada parte do menu e para apagar a configuração própria desta conversa ou o padrão de ${nivel.curto}.` }),
+    area
+  ])
+}
+
 function entityPanel (kind, entity) {
   const attributesArea = el('div', { className: 'stack' })
   const newKeyInput = el('input', { type: 'text', placeholder: 'ex: vip' })
@@ -280,6 +382,26 @@ export async function renderEntities ({ navigate }) {
   const panelArea = el('div')
   let searchTimer = null
 
+  // Os painéis de uma conversa: o que o bot FAZ aqui, o menu dela e as
+  // variáveis. O primeiro vem antes porque é a pergunta mais frequente —
+  // "por que o bot não responde neste grupo?".
+  const abrirConversa = (kind, item) => panelArea.replaceChildren(
+    painelDeFamilias(kind, item),
+    painelDoMenu(kind, item),
+    entityPanel(kind, item)
+  )
+
+  // Conversa que não aparece na busca (o bot saiu do grupo, contato fora da
+  // agenda) ainda pode ter dados guardados — por exemplo uma configuração de
+  // menu feita pelo comando com "outra conversa". Pelo número ou id dá para
+  // abrir e apagar.
+  const idInput = el('input', { type: 'text', placeholder: 'ex: 5511999999999 ou 1203630000@g.us' })
+  const abrirPeloId = button('Abrir', { onClick: () => {
+    const conversa = conversaPeloId(idInput.value)
+    if (!conversa) return notify('Escreva um número com DDD ou um id terminado em @g.us, @s.whatsapp.net ou @lid.', 'danger')
+    abrirConversa(conversa.kind, { id: conversa.id, label: conversa.id })
+  } })
+
   async function search () {
     if (!instanceSelect.value) return resultsArea.replaceChildren(el('p', { className: 'muted', text: 'Escolha uma instância com diretório disponível.' }))
     resultsArea.replaceChildren(el('p', { className: 'muted', text: 'Buscando…' }))
@@ -288,15 +410,7 @@ export async function renderEntities ({ navigate }) {
       if (!result.items.length) return resultsArea.replaceChildren(el('p', { className: 'muted', text: 'Nenhum resultado encontrado.' }))
       resultsArea.replaceChildren(...result.items.map((item) => button(`${item.label} · ${item.id}`, {
         variant: 'result',
-        onClick: () => {
-          // Os dois painéis da conversa: o que o bot FAZ aqui, e as variáveis
-          // dela. O primeiro vem antes porque é a pergunta mais frequente —
-          // "por que o bot não responde neste grupo?".
-          panelArea.replaceChildren(
-            painelDeFamilias(kindSelect.value, item),
-            entityPanel(kindSelect.value, item)
-          )
-        }
+        onClick: () => abrirConversa(kindSelect.value, item)
       })))
     } catch (error) {
       resultsArea.replaceChildren(error instanceof ApiError ? errorState(error) : el('p', { className: 'muted', text: 'Não foi possível buscar agora.' }))
@@ -318,7 +432,9 @@ export async function renderEntities ({ navigate }) {
         field('Tipo', kindSelect, 'Contatos ou grupos.')
       ]),
       field('Buscar por nome', searchInput, 'A busca acontece automaticamente depois que você para de digitar.'),
-      resultsArea
+      resultsArea,
+      field('Ou abra pelo número ou id', idInput, 'Para conversa que não aparece na busca, como um grupo de onde o bot já saiu.'),
+      el('div', { className: 'button-row' }, abrirPeloId)
     ]),
     panelArea
   ])

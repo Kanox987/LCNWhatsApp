@@ -46,7 +46,6 @@ export function criarRoteadorWeb (aplicacao, { emContainer = dentroDeContainer }
   const retencao = () => aplicacao.motor.retencao
   const templates = () => aplicacao.motor.templates
   const donos = () => aplicacao.motor.donos
-  const menu = () => aplicacao.motor.menu
 
   // Saúde do BFF em si + do motor por trás — nunca lança 500 só porque o
   // motor está fora do ar (mesmo espírito de "motor não está rodando" que
@@ -351,21 +350,6 @@ export function criarRoteadorWeb (aplicacao, { emContainer = dentroDeContainer }
     dados: body?.dados, modo: body?.modo, simular: body?.simular, estado: body?.estado
   }))
 
-  // --- configuração do menu ---
-  //
-  // Mesma história: CRUD pronto no motor (`routes/menu.js`), incluindo a
-  // pré-visualização que a própria rota diz existir "para a UI", e nenhuma
-  // rota aqui. Até hoje o menu só se configurava de dentro do WhatsApp, pelo
-  // comando de configuração, um campo por mensagem.
-  //
-  // `effective` é o que de fato vale numa conversa, já resolvida a cascata
-  // (config da conversa > padrão do tipo > padrão do código): é o que permite
-  // a tela mostrar o resultado em vez de a pessoa deduzir qual camada ganhou.
-  roteador.get('/api/v1/menu-config/effective', ({ query }) => menu().obterEfetivo(query.get('chatId'), query.get('chatKind')))
-  roteador.get('/api/v1/menu-config/:kind', ({ params, query }) => menu().obter(params.kind, query.get('id')))
-  roteador.put('/api/v1/menu-config/:kind', ({ params, query, body }) => menu().salvar(params.kind, query.get('id'), body))
-  roteador.delete('/api/v1/menu-config/:kind', ({ params, query }) => menu().remover(params.kind, query.get('id')))
-
   // --- pools (coordenação multi-bot) ---
   roteador.get('/api/v1/pools', () => pools().listar())
   roteador.post('/api/v1/pools', ({ body }) => pools().criar(body))
@@ -400,6 +384,14 @@ export function criarRoteadorWeb (aplicacao, { emContainer = dentroDeContainer }
   roteador.get('/api/v1/entities/:kind/:id/attributes', ({ params }) => entidades().listar(params.kind, params.id))
   roteador.put('/api/v1/entities/:kind/:id/attributes/:key', ({ params, body }) => entidades().definir(params.kind, params.id, params.key, body?.value))
   roteador.delete('/api/v1/entities/:kind/:id/attributes/:key', ({ params }) => entidades().remover(params.kind, params.id, params.key))
+
+  // --- menu numa conversa: só ver e apagar ---
+  // Gravar é pelo comando `configura menu`. Aqui a aba Dados mostra o menu
+  // que vale numa conversa (sem precisar mandar /menu nela) e apaga a
+  // configuração própria dela, inclusive de conversa onde o bot não está mais.
+  // Não há PUT de propósito: um caminho só para mudar o menu.
+  roteador.get('/api/v1/menu-config/effective', ({ query }) => aplicacao.motor.menu.efetivo(query.get('chatId'), query.get('chatKind')))
+  roteador.delete('/api/v1/menu-config/:kind', ({ params, query }) => aplicacao.motor.menu.apagar(params.kind, query.get('id')))
 
   // --- catálogo de comandos/templates (Parte C, Módulo 4) ---
   roteador.get('/api/v1/templates', () => templates().listar())

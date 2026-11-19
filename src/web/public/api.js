@@ -150,14 +150,6 @@ export const api = {
     export: (nome) => request(`/listas/${segment(nome)}/exportar`),
     import: (nome, corpo) => request(`/listas/${segment(nome)}/importar`, { method: 'POST', body: corpo })
   },
-  // A cascata do menu: config da conversa > padrão do tipo > padrão do código.
-  // `effective` devolve o que de fato vale, já resolvido.
-  menuConfig: {
-    effective: (chatId, chatKind) => request(withQuery('/menu-config/effective', { chatId, chatKind })),
-    get: (kind, id) => request(withQuery(`/menu-config/${segment(kind)}`, id ? { id } : undefined)),
-    save: (kind, id, body) => request(withQuery(`/menu-config/${segment(kind)}`, id ? { id } : undefined), { method: 'PUT', body }),
-    remove: (kind, id) => request(withQuery(`/menu-config/${segment(kind)}`, id ? { id } : undefined), { method: 'DELETE' })
-  },
   templates: {
     updates: () => request('/templates/updates'),
     list: () => request('/templates'),
@@ -203,5 +195,13 @@ export const api = {
     list: (kind, id) => request(`/entities/${segment(kind)}/${segment(id)}/attributes`),
     set: (kind, id, key, value) => request(`/entities/${segment(kind)}/${segment(id)}/attributes/${segment(key)}`, { method: 'PUT', body: { value } }),
     remove: (kind, id, key) => request(`/entities/${segment(kind)}/${segment(id)}/attributes/${segment(key)}`, { method: 'DELETE' })
+  },
+  // O menu que vale numa conversa, e apagar a configuração própria dela ou o
+  // padrão do tipo (todos os grupos / todo o privado).
+  // Mudar o menu é pelo comando `configura menu`; aqui não grava.
+  menuConfig: {
+    effective: (chatId, chatKind) => request(`/menu-config/effective?${new URLSearchParams({ chatId, chatKind })}`),
+    removeOwn: (kind, id) => request(`/menu-config/${segment(kind)}?${new URLSearchParams({ id })}`, { method: 'DELETE' }),
+    removeDefault: (kind) => request(`/menu-config/${kind === 'group_default' ? 'group_default' : 'direct_default'}`, { method: 'DELETE' })
   }
 }

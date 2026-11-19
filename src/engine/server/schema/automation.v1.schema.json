@@ -2299,17 +2299,31 @@
           "additionalProperties": false,
           "properties": {
             "field": {
-              "description": "Propriedade do menu a alterar: 'header' (cabeçalho), 'footer' (rodapé), 'emptyText' (sem comandos), 'buttonTitle' (botão) ou 'format' (formato).",
+              "description": "Propriedade do menu a alterar: 'header' (cabeçalho), 'footer' (rodapé), 'emptyText' (sem comandos), 'buttonTitle' (botão), 'format' (formato), 'numbered' (numeração: sim ou não), 'families' (famílias mostradas, separadas por vírgula, ou 'todas') ou 'reset' (apaga a configuração daquele alvo e ele volta a herdar). Depois do comando, 'herdar' tira só aquele campo do alvo (volta a seguir o nível de cima) e 'em branco' grava texto vazio nos campos de texto; entre aspas, as duas palavras valem como texto comum. Sem a linha, vale 'header' (cabeçalho).",
+              "default": "header",
               "enum": [
                 "header",
                 "footer",
                 "emptyText",
                 "buttonTitle",
-                "format"
+                "format",
+                "numbered",
+                "families",
+                "reset"
+              ]
+            },
+            "target": {
+              "description": "Onde a mudança vale: 'chat' (só a conversa onde o comando foi usado, o padrão), 'group_default' (todos os grupos que não têm configuração própria), 'direct_default' (todo o privado que não tem configuração própria) ou 'other' (outra conversa, indicada pelo número ou id escrito logo depois do comando, antes do valor).",
+              "default": "chat",
+              "enum": [
+                "chat",
+                "group_default",
+                "direct_default",
+                "other"
               ]
             },
             "usageText": {
-              "description": "Mensagem de orientação enviada na conversa quando o comando de configuração do menu é acionado sem argumentos.",
+              "description": "Mensagem de orientação enviada na conversa quando o comando de configuração do menu é acionado sem argumentos. Sem ela, o motor explica conforme o campo.",
               "type": "string"
             },
             "confirmText": {

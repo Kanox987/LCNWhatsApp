@@ -47,8 +47,13 @@ figurinhas em lote com orçamento seguro de mídia.
 e apague arquivos de texto ou mídias diretamente pelas conversas.
 
 **Menu diferente em cada conversa.** Cada grupo pode ter o próprio menu, com
-texto próprio, em lista simples ou com botões. E dá para mudar esse texto pelo
-próprio WhatsApp, sem abrir o painel.
+texto próprio, em lista simples ou com botões, numerado ou não. O menu é um
+comando como outro qualquer (aparece em Automações, não tem aba própria), e se
+configura pelo próprio WhatsApp, com o comando de configurar o menu — numa
+conversa só, em outra conversa indicada pelo número, ou em todos os grupos /
+todo o privado de uma vez. Na aba Dados, cada conversa mostra o menu que vale
+nela, de onde vem cada parte, e permite apagar a configuração própria dela ou
+o padrão de todos os grupos / todo o privado.
 
 **Dono do bot.** Você marca contatos como donos, e alguns comandos só respondem
 a eles. Serve para o caso comum de uma empresa: o número da empresa roda o bot,

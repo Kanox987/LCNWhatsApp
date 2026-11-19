@@ -102,36 +102,36 @@ declara os seis, com as palavras `numeração`, `formato`, `cabeçalho`, `rodap�
 `compilar(descompilar(doc))` devolve os seis valores idênticos (só a ordem das
 chaves difere, que é indiferente). **Não há lacuna no `mostra menu`.**
 
-A lacuna real é mais estreita, e é esta:
+A lacuna real era mais estreita, e **está fechada** (ver "A aba Menu saiu",
+abaixo):
 
-### `configura menu` não alcança a numeração
+### `configura menu` não alcançava a numeração — FECHADA
 
 `action.menu.config` existe para o dono trocar o menu **de dentro do WhatsApp**,
-por comando. O `field` dele é um enum de **cinco** valores no schema
+por comando. O `field` dele era um enum de **cinco** valores no schema
 (`definitions/actionMenuConfig`): `header`, `footer`, `emptyText`,
-`buttonTitle`, `format`. **`numbered` não está lá**, e
-`src/lcn/vocabulario.js:489` espelha os mesmos cinco.
+`buttonTitle`, `format`, e `src/lcn/vocabulario.js` espelhava os mesmos cinco,
+enquanto `limpar()` em `menuConfig.js` aceitava `numbered` e só a aba Menu do
+painel mexia nele.
 
-Mas `limpar()` em `menuConfig.js:44` aceita `numbered`, e a aba Menu do painel
-ganhou o controle nesta frente (`src/web/public/pages/menu-config.js:71`). Então
-**a numeração por conversa é alterável pelo painel e não por comando** — nem com
-um `.lcn` escrito à mão, porque a palavra não existe no enum.
+Agora o enum tem também `numbered` (palavra `numeração`), `families`
+(`famílias`) e `reset` (`volta ao padrão`), e há um campo opcional `target`
+(`onde vale`: `nesta conversa`, `todos os grupos`, `todo o privado`). Os cinco
+valores antigos continuam válidos, então documento guardado não muda. O
+avaliador lê a numeração com `lerNumeracao()` (sim/não, liga/desliga, 1/0) e
+responde explicando quando o valor não é reconhecido.
 
-Não eliminei: é um valor a mais no enum do schema e no `palavras` do
-vocabulário, mais a entrada no avaliador. Fica registrado como lacuna porque
-acrescentar enum ao schema mexe na validação de documento guardado, e isso é
-mudança de frente J, não de C.
+### Por conversa e por tipo de conversa
 
-### E uma assimetria que não é lacuna, mas parece
-
-A aba Menu configura o menu **por conversa** e **por tipo de conversa** (todos
-os grupos / todo o privado), guardando em `entity_attributes` sob
+O menu é configurado **por conversa** e **por tipo de conversa** (todos os
+grupos / todo o privado), guardado em `entity_attributes` sob
 `__menu_config__`, `__menu_default_group__` e `__menu_default_direct__`. O
-`.lcn` não declara isso, e **não deveria**: é dado de execução por conversa, do
-mesmo tipo que uma variável, não estrutura de automação. O caminho pelo `.lcn`
-existe e é o `configura menu` — que grava exatamente aquela linha
-(`evaluator.js:2008-2010`). O que o `.lcn` não faz é declarar o valor por
-conversa de forma estática; para isso usam-se dois menus com `onde:` diferentes.
+`.lcn` não declara esse valor de forma estática, e **não deveria**: é dado de
+execução por conversa, do mesmo tipo que uma variável, não estrutura de
+automação. O caminho é o `configura menu`, que grava exatamente aquela linha —
+na conversa onde o comando foi enviado (o padrão) ou, com `onde vale`, no
+padrão de todos os grupos ou de todo o privado. Para valores fixos por
+conversa, usam-se dois menus com `onde:` diferentes.
 
 A cascata, do mais específico para o mais geral (`menuConfig.js:66`), é
 `PADRAO → nó do documento → padrão do tipo → aquela conversa`. Conferi a
@@ -158,17 +158,87 @@ Nenhuma é defeito, e cada uma tem teste que a fixa:
 
 - **A ressurreição.** O menu removido voltava a cada arranque. É o que a
   migração `012` e o marcador resolvem.
-- **O salvamento em bloco do painel.** A aba Menu gravava os seis campos
-  sempre, então quem mudasse só o formato zerava os quatro textos. Medido e
-  consertado; `''` continua sendo valor legítimo guardado, de propósito.
-- **O controle de numeração ausente** na aba, que o motor sempre aceitou.
+- **O salvamento em bloco do painel** (histórico; a aba saiu depois). A aba
+  Menu gravava os seis campos sempre, então quem mudasse só o formato zerava os
+  quatro textos. Foi consertado na época; `''` continua sendo valor legítimo
+  guardado, de propósito — e hoje o comando chega nele com `em branco` (ou
+  aspas vazias).
+- **O controle de numeração ausente** na aba (histórico), que o motor sempre
+  aceitou. Hoje a numeração é pelo `configura menu`.
+
+## A aba Menu saiu
+
+O menu é uma automação comum (o comando `/menu`, que aparece em Automações),
+então a aba própria virou redundante e foi retirada:
+
+- o link "☰ Menu" saiu da navegação (`src/web/public/index.html`);
+- `src/web/public/pages/menu-config.js` foi apagado;
+- quem abrir `/menu` (favorito antigo) é levado para `/automations`, trocando o
+  endereço no histórico (`main.js`, `replace: true`);
+- a gravação pelo painel saiu: o BFF não repassa `PUT /menu-config`, e mudar o
+  menu é só pelo comando;
+- **ver e apagar voltaram**, na aba Dados de cada conversa (seção "Menu nesta
+  conversa"): o BFF repassa só `GET /api/v1/menu-config/effective` e
+  `DELETE /api/v1/menu-config/:kind`, com `menuConfig.effective/removeOwn` em
+  `src/web/public/api.js` e `menu.efetivo/apagar` em `src/engine/client.js`.
+  Ver serve para conferir o resultado sem mandar `/menu` num grupo (o que
+  publicaria o menu para todo mundo); apagar serve para conversa onde o
+  comando não roda mais (o bot saiu do grupo, id errado), já que a chave é
+  reservada e a lista de variáveis não a apaga. A mesma seção mostra o padrão
+  de todos os grupos / todo o privado (ou "Nada configurado neste nível") com
+  o botão de apagá-lo (`menuConfig.removeDefault`), e cada linha do "Como sai
+  aqui" diz de onde o valor veio: desta conversa, do padrão do tipo, do
+  comando de menu ou padrão do sistema. A aba Dados também abre uma
+  conversa pelo número ou id, para quem não aparece mais na busca;
+- `GET /menu-config/effective` do motor passou a trazer, além da cascata de
+  sempre (`config`), a configuração própria (`propria`), o padrão do tipo
+  (`padraoDoTipo`), se o bot está ativo no grupo (`grupoAtivo`) e uma entrada
+  por automação de menu no ar **que responde naquela conversa** (`menus`): o
+  escopo da automação precisa casar e ela não pode estar desligada ali — as
+  mesmas perguntas do avaliador (`automacaoRespondeNaConversa`). Cada entrada
+  traz o menu já com a cascata (`config`) e o que o documento dela define
+  (`doDocumento`);
+- as rotas do motor (`src/engine/server/routes/menu.js`) **ficaram**, como API
+  do motor, inclusive o PUT.
+
+O que a aba fazia, e como se faz agora:
+
+| Na aba | Pelo comando (`configura menu`) |
+|---|---|
+| cabeçalho, rodapé, texto de vazio, título do botão, formato | `campo: cabeçalho` etc. (já existia) |
+| formato texto / com botões | `campo: formato`, argumento `texto` ou `com botões` (os códigos `text`/`interactive` também valem) |
+| texto em branco | argumento `em branco` (ou `""`); no texto de vazio, deixa o `/menu` mudo |
+| "Herdar" em um campo só | argumento `herdar`: tira só aquele campo; se era o último, a linha sai do banco |
+| numeração liga/desliga | `campo: numeração`, argumento sim/não |
+| famílias mostradas | `campo: famílias`, argumento com as famílias (`todas` desfaz a restrição de cima; `herdar` volta a segui-la) |
+| padrão de todos os grupos / todo o privado | `onde vale: todos os grupos` / `todo o privado` |
+| voltar ao padrão (apagar a config) | `campo: volta ao padrão` (não precisa de argumento); o padrão de todos os grupos / todo o privado também se apaga pelo botão na aba Dados |
+| configurar a conversa X | enviar o comando dentro da conversa X, ou `onde vale: outra conversa` com o número ou id de X logo depois do comando (nada é enviado em X) |
+| apagar a config de conversa onde o bot não está | `volta ao padrão` com `onde vale: outra conversa`, ou o botão na aba Dados |
+| prévia do menu efetivo | aba Dados → a conversa → "Menu nesta conversa" |
+
+Para quem instala pelo catálogo, o template `config-menu` (v2) pergunta o que o
+comando muda (`campo`, inclusive formato, numeração, famílias e volta ao
+padrão) e onde vale (`ondeVale`, inclusive outra conversa). Sem `como usar`
+fixo, o motor explica o que escrever conforme o campo.
 
 ## Prova
 
-`npm test` → **5077 checagens, zero falhas** (a linha de base da frente era
-5046). Arquivos da frente: `migrations/012_menu_padrao.sql`,
-`menuPadrao.js`, `tests/menu-padrao.test.mjs`,
-`tests/cabecalho-sem-linha-vazia.test.mjs`, mais as edições em `evaluator.js`,
-`conflitos.js`, `db.js`, `automationsService.js`, `routes/automations.js`,
-`schema/automation.v1.schema.json`, os três arquivos de `src/lcn/` e
-`src/web/public/pages/menu-config.js`.
+Frente original: `npm test` → 5077 checagens, zero falhas (linha de base 5046),
+com `migrations/012_menu_padrao.sql`, `menuPadrao.js`,
+`tests/menu-padrao.test.mjs`, `tests/cabecalho-sem-linha-vazia.test.mjs` e as
+edições em `evaluator.js`, `conflitos.js`, `db.js`, `automationsService.js`,
+`routes/automations.js`, schema e `src/lcn/`.
+
+Fechamento da lacuna e saída da aba: `npm test` → **6347 checagens, zero
+falhas** (linha de base 6296). Teste novo `tests/menu-configura-por-comando.test.mjs`
+(`.lcn` → automação → execução → numeração mudada, ida e volta
+compilar/descompilar, documentos antigos válidos, famílias, padrão por tipo,
+volta ao padrão); `tests/painel-donos-e-menu.test.mjs` passou a conferir que a
+aba, o link e as rotas do BFF sumiram e que `/menu` redireciona.
+
+Revisão (herdar por campo, em branco, formato por palavra, outra conversa,
+template v2, ver e apagar na aba Dados): `tests/menu-configura-por-comando.test.mjs`
+foi a 132 checagens e `tests/painel-donos-e-menu.test.mjs` passou a conferir a
+corrente de ver/apagar e a ausência do PUT no BFF. `npm test` → **6435
+checagens, zero falhas**.

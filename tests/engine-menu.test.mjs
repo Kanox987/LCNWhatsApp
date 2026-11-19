@@ -77,7 +77,9 @@ const LINHA_DO_MENU = '• /menu — Mostra esta lista de comandos'
 // `depende de: config-menu`, então instalar um instala os dois, e os dois ficam
 // publicados naquela conversa. Aparecer na lista é o certo — quem não quiser o
 // item escreve `menu: não` no .lcn dele.
-const LINHA_DO_CONFIG = '• /configmenu — Muda o texto do menu desta conversa (só o dono)'
+// Desde a v2 do config-menu o mesmo template muda qualquer campo, em qualquer
+// conversa, então o rótulo deixou de dizer "o texto" e "desta conversa".
+const LINHA_DO_CONFIG = '• /configmenu — Muda o menu (só o dono)'
 const PAR_DO_MENU = [LINHA_DO_MENU, LINHA_DO_CONFIG].sort()
 
 function textoDoMenu (resultado) {

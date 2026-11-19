@@ -956,10 +956,11 @@ Compreende 1 ação para customização de menus diretamente por comandos no cha
 
 #### 38. `configura menu`
 - **Nome técnico**: `action.menu.config`
-- **O que faz**: Atualiza campos do menu naquela conversa específica (cabeçalho, rodapé, textos) sem abrir o painel.
+- **O que faz**: Atualiza o menu pelo próprio WhatsApp — textos, formato, numeração e famílias mostradas — na conversa onde foi usado, no padrão de todos os grupos / todo o privado, ou em outra conversa indicada no comando. É o caminho de configuração do menu: o painel não tem mais aba Menu (na aba Dados, cada conversa mostra o menu que vale nela e de onde vem cada parte, e permite apagar a configuração própria dela ou o padrão de todos os grupos / todo o privado).
 - **Parâmetros**:
-  - `field` (*enum: `header`, `footer`, `emptyText`, `buttonTitle`, `format`*, obrigatório, rótulo: `campo`, valores: `cabeçalho`, `rodapé`, `texto de vazio`, `título do botão`, `formato`): Qual campo do menu atualizar.
-  - `usageText` (*string*, opcional, rótulo: `como usar`): Mensagem de orientação caso o comando seja enviado sem texto.
+  - `field` (*enum: `header`, `footer`, `emptyText`, `buttonTitle`, `format`, `numbered`, `families`, `reset`*, opcional, rótulo: `campo`, valores: `cabeçalho`, `rodapé`, `texto de vazio`, `título do botão`, `formato`, `numeração`, `famílias`, `volta ao padrão`, padrão: `header`): Qual campo do menu atualizar. Sem a linha, o comando muda o cabeçalho — então, com `onde vale: todos os grupos` e sem `campo`, o texto mandado vira o cabeçalho de todos os grupos. `numeração` espera sim ou não depois do comando; `famílias` espera nomes separados por vírgula, ou `todas`; `volta ao padrão` apaga a configuração daquele alvo (não precisa de texto) e ele volta a herdar. Em qualquer campo, `herdar` depois do comando tira só aquele campo do alvo; nos campos de texto, `em branco` (ou aspas vazias) grava texto vazio. `formato` aceita `texto` ou `com botões`.
+  - `target` (*enum: `chat`, `group_default`, `direct_default`, `other`*, opcional, rótulo: `onde vale`, valores: `nesta conversa`, `todos os grupos`, `todo o privado`, `outra conversa`, padrão: `chat`): Onde a mudança vale. Sem a linha, só a conversa onde o comando foi usado. Com `outra conversa`, o número ou id da conversa vem logo depois do comando, antes do valor.
+  - `usageText` (*string*, opcional, rótulo: `como usar`): Mensagem de orientação caso o comando seja enviado sem texto. Sem ela, o motor explica conforme o campo.
   - `confirmText` (*string*, opcional, rótulo: `confirma`): Mensagem de confirmação após salvar a alteração.
 - **Exemplo real (.lcn)**:
   ```lcn

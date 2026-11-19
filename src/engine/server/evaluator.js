@@ -15,7 +15,7 @@ import { adicionarNaLista, estaNaLista, listasDa, membrosDaLista, normalizarNome
 import { anotarUso, contarUsos, lerJanela, limparUsos } from './registroDeUsos.js'
 import { criarServicoDeEnquetes } from './enquetesService.js'
 import { ehChaveReservada, motivoDeRecusa } from './chavesReservadas.js'
-import { CHAVE_MENU, FORMATOS as FORMATOS_DE_MENU, familiasDoMenu, gravarConfigDeMenu, lerConfigDeMenu, normalizarFamilia, resolverConfigDeMenu } from './menuConfig.js'
+import { CHAVE_MENU, alvoDaConversa, alvoDeConfig, apagarConfigDeMenu, familiasDoMenu, gravarConfigDeMenu, lerConfigDeMenu, normalizarFamilia, resolverConfigDeMenu, usoDoCampo, valorDoComando } from './menuConfig.js'
 import {
   ErroDeContador,
   aplicarNasVariaveis,
@@ -253,6 +253,28 @@ function refCasa (db, ref, chat) {
 function escopoCasa (db, refs, chat) {
   if (refs.some((r) => r.direction === 'exclude' && refCasa(db, r, chat))) return false
   return refs.some((r) => r.direction === 'include' && refCasa(db, r, chat))
+}
+
+/**
+ * Esta automação publicada responde nesta conversa? As mesmas duas perguntas
+ * que o avaliador faz a cada mensagem: o escopo da revisão ativa casa com a
+ * conversa, e o comando (ou a família dele) não está desligado ali.
+ *
+ * Existe para a aba Dados não mostrar, como "o menu daqui", um /menu que só
+ * vale em outro grupo. O portão de grupo ativo fica de fora de propósito: ele
+ * vale para a conversa inteira, e quem pergunta responde isso uma vez só
+ * (`grupoAtivo`).
+ */
+export function automacaoRespondeNaConversa (db, { automationId, revisionId, documento }, chat) {
+  const refs = db.prepare('SELECT direction, kind, ref_id FROM automation_scopes WHERE automation_revision_id = ?').all(revisionId)
+  if (!escopoCasa(db, refs, chat)) return false
+  return !desligadoNaConversa(db, chat, { automationId, documento }).desligado
+}
+
+/** O bot está ativo neste grupo? Privado sempre conta como ativo. */
+export function grupoAtivo (db, chat) {
+  if (chat?.kind !== 'group') return true
+  return conversaMarcada(db, chat, CHAVE_GRUPO_ATIVO)
 }
 
 // O destino de um comando pode vir de uma VARIÁVEL, não só fixo no documento.
@@ -2059,38 +2081,74 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       // que a pessoa escreveu depois do comando. Restrição de quem pode fazer
       // isso é do GATILHO (requireOwner), não daqui — assim a mesma ação serve
       // para um dono, e futuramente para um admin de grupo.
+      //
+      // `onde vale` (target) é o que a aba Menu do painel fazia com "todos os
+      // grupos" e "todo o privado". A aba saiu; o caminho é este. Sem a linha,
+      // vale a conversa onde o comando foi usado, como sempre valeu.
+      //
+      // `outra conversa` (target 'other') é o "um grupo / um contato
+      // específico" da aba: o endereço vem na frente do valor, então o dono
+      // configura o privado de um cliente do próprio privado com o bot, sem
+      // mandar nada na conversa do cliente.
       const argumento = (contexto.message?.args || '').trim()
       const campo = no.config?.field || 'header'
-
-      if (!argumento) {
-        comandos.push({
-          commandType: 'whatsapp.reply',
-          payload: { chatId: evento.chat.id, text: no.config?.usageText || 'Escreva o texto novo depois do comando.' }
-        })
+      const destino = no.config?.target || 'chat'
+      const responder = (texto) => comandos.push({
+        commandType: 'whatsapp.reply',
+        payload: { chatId: evento.chat.id, text: texto }
+      })
+      const explicar = () => {
+        responder(no.config?.usageText || usoDoCampo(campo, destino === 'other'))
         return 'success'
       }
 
-      const alvo = evento.chat.kind === 'group'
-        ? { scopeKind: 'group', scopeId: evento.chat.id, key: CHAVE_MENU }
-        : { scopeKind: 'contact', scopeId: evento.chat.id, key: CHAVE_MENU }
+      let alvo
+      let resto = argumento
+      if (destino === 'group_default' || destino === 'direct_default') {
+        alvo = alvoDeConfig(destino)
+      } else if (destino === 'other') {
+        const endereco = argumento.split(/\s+/)[0]
+        alvo = alvoDaConversa(endereco)
+        if (!alvo) return explicar()
+        resto = argumento.slice(endereco.length).trim()
+      } else {
+        alvo = evento.chat.kind === 'group'
+          ? { scopeKind: 'group', scopeId: evento.chat.id, key: CHAVE_MENU }
+          : { scopeKind: 'contact', scopeId: evento.chat.id, key: CHAVE_MENU }
+      }
 
-      if (campo === 'format' && !FORMATOS_DE_MENU.includes(argumento)) {
-        comandos.push({
-          commandType: 'whatsapp.reply',
-          payload: { chatId: evento.chat.id, text: `Formato inválido. Use ${FORMATOS_DE_MENU.join(' ou ')}.` }
-        })
+      // Voltar ao padrão APAGA aquele nível, e ele passa a herdar do de cima.
+      // Não é o mesmo que gravar textos vazios, e não precisa de argumento.
+      if (campo === 'reset') {
+        apagarConfigDeMenu(db, alvo)
+        responder(no.config?.confirmText || 'Menu de volta ao padrão.')
+        return 'success'
+      }
+
+      // Comando sozinho só explica. Para gravar em branco há "em branco" (ou
+      // aspas vazias) — ver `valorDoComando`.
+      if (!resto) return explicar()
+
+      const lido = valorDoComando(campo, resto)
+      if (lido.erro) {
+        responder(lido.erro)
         return 'success'
       }
 
       // Preserva o que já estava configurado: mudar o cabeçalho não pode
-      // apagar o rodapé que alguém configurou antes.
+      // apagar o rodapé que alguém configurou antes. E "herdar" tira só este
+      // campo; se o nível ficar sem nada, a linha sai do banco, igual ao
+      // voltar ao padrão.
       const atual = lerConfigDeMenu(db, alvo)
-      gravarConfigDeMenu(db, alvo, { ...atual, [campo]: argumento })
+      if (lido.herdar) {
+        delete atual[campo]
+        if (Object.keys(atual).length === 0) apagarConfigDeMenu(db, alvo)
+        else gravarConfigDeMenu(db, alvo, atual)
+      } else {
+        gravarConfigDeMenu(db, alvo, { ...atual, [campo]: lido.valor })
+      }
 
-      comandos.push({
-        commandType: 'whatsapp.reply',
-        payload: { chatId: evento.chat.id, text: (no.config?.confirmText || 'Menu atualizado.') }
-      })
+      responder(no.config?.confirmText || 'Menu atualizado.')
       return 'success'
     }
 
@@ -2121,7 +2179,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       // visível e o `quando não houver comando` daquela conversa está em
       // branco — e aí o branco quer dizer "não responda nada", não "mande uma
       // mensagem sem nada dentro", que o WhatsApp recusa. Era por onde o
-      // salvar do painel (ver menu-config.js) deixava o /menu mudo e
+      // salvar da antiga aba Menu do painel (removida) deixava o /menu mudo e
       // engasgado em vez de mudo e limpo.
       if (!menu.texto) return 'success'
       comandos.push({

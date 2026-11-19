@@ -146,9 +146,9 @@
         {
           "itemKey": "config-menu",
           "templateId": "config-menu",
-          "templateVersion": 1,
+          "templateVersion": 2,
           "origem": "dependencia",
-          "contentHash": "b044de955afefca67d3dc45b3fe5c8249437cd8362693d87fc0e02e1cfc079c0"
+          "contentHash": "123cf2ea813ac6be1b595b628a01e9bdafb6c9d6ca1b37f8373fa247e32e1fa6"
         },
         {
           "itemKey": "menu",

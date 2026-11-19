@@ -50,6 +50,10 @@ function limpar (bruto) {
   return limpo
 }
 
+// O que um documento de menu define, só com os campos que a cascata usa —
+// para a aba Dados dizer "veio do comando de menu" sem adivinhar.
+export const limparConfigDeMenu = limpar
+
 // AS FAMÍLIAS QUE O MENU MOSTRA NESTA CONVERSA.
 //
 // Ausente = herda do nível de cima; e se ninguém disser nada, o menu mostra
@@ -77,6 +81,108 @@ function limparFamilias (bruto) {
  */
 export function familiasDoMenu (config) {
   return Array.isArray(config?.families) ? new Set(config.families.map(normalizarFamilia)) : null
+}
+
+// O que alguém escreve depois do comando de configurar a numeração. Devolve
+// `null` para o que não é sim nem não — quem chama responde pedindo de novo,
+// em vez de adivinhar.
+const SIM = new Set(['sim', 's', 'true', '1', 'liga', 'ligar', 'ligado', 'numerar'])
+const NAO = new Set(['não', 'nao', 'n', 'false', '0', 'desliga', 'desligar', 'desligado'])
+export function lerNumeracao (texto) {
+  const palavra = String(texto ?? '').trim().toLowerCase()
+  if (SIM.has(palavra)) return true
+  if (NAO.has(palavra)) return false
+  return null
+}
+
+// O formato como alguém escreve no WhatsApp. Aceita as mesmas palavras que a
+// linguagem usa no `mostra menu` ("texto", "com botões") e o código interno
+// ("text", "interactive"). `null` para o resto.
+const semAcento = (texto) => String(texto ?? '')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .trim().toLowerCase().replace(/\s+/g, ' ')
+const FORMATO_POR_PALAVRA = Object.freeze({
+  text: 'text', texto: 'text', 'so texto': 'text',
+  interactive: 'interactive', 'com botoes': 'interactive', botoes: 'interactive',
+  interativo: 'interactive', lista: 'interactive'
+})
+export function lerFormato (texto) {
+  return FORMATO_POR_PALAVRA[semAcento(texto)] || null
+}
+
+export const CAMPOS_DE_TEXTO = Object.freeze(['header', 'footer', 'emptyText', 'buttonTitle'])
+
+// O VALOR QUE O COMANDO `configura menu` VAI GRAVAR, a partir do que a pessoa
+// escreveu depois dele. Devolve um de três:
+//   { valor }   grava este valor no nível escolhido
+//   { herdar }  tira SÓ este campo do nível, que volta a seguir o de cima
+//   { erro }    não grava nada; o texto explica o que escrever
+//
+// Duas palavras são especiais, porque sem elas o comando não alcançava o que a
+// aba Menu alcançava:
+//   - "herdar" devolve um campo só à herança (a aba tinha "Herdar" por campo;
+//     "volta ao padrão" apaga o nível inteiro, outros campos junto).
+//   - "em branco" grava '' num campo de texto: rodapé vazio mesmo quando o
+//     padrão tem rodapé, e o texto de vazio em branco, que quer dizer "não
+//     responda nada". Comando sem nada depois só mostra o jeito de usar.
+// Quem quiser gravar literalmente a palavra "herdar" ou "em branco" põe entre
+// aspas; aspas sem nada dentro também gravam em branco.
+export function valorDoComando (campo, argumento) {
+  const bruto = String(argumento ?? '').trim()
+  const palavra = semAcento(bruto)
+  if (palavra === 'herdar') return { herdar: true }
+
+  if (CAMPOS_DE_TEXTO.includes(campo)) {
+    const entreAspas = bruto.match(/^["“”](.*)["“”]$/s)
+    if (entreAspas) return { valor: entreAspas[1] }
+    if (palavra === 'em branco') return { valor: '' }
+    return { valor: bruto }
+  }
+  if (campo === 'format') {
+    const formato = lerFormato(bruto)
+    return formato ? { valor: formato } : { erro: 'Formato: escreva texto ou com botões depois do comando (ou herdar, para seguir o padrão).' }
+  }
+  if (campo === 'numbered') {
+    const numerar = lerNumeracao(bruto)
+    return numerar === null ? { erro: 'Numeração: escreva sim ou não depois do comando (ou herdar, para seguir o padrão).' } : { valor: numerar }
+  }
+  // `families`: o texto vai como foi escrito; `limpar` separa por vírgula,
+  // normaliza e entende "todas".
+  return { valor: bruto }
+}
+
+// O que explicar quando o comando vem sem nada depois, conforme o campo.
+export function usoDoCampo (campo, comOutraConversa = false) {
+  const antes = comOutraConversa ? 'o número ou o id da conversa e depois ' : ''
+  const textos = {
+    header: 'o cabeçalho novo',
+    footer: 'o rodapé novo',
+    emptyText: 'o texto para quando não houver comando',
+    buttonTitle: 'o título novo do botão',
+    format: 'o formato: texto ou com botões',
+    numbered: 'sim ou não',
+    families: 'as famílias, separadas por vírgula, ou todas'
+  }
+  // Só chega aqui com outra conversa: nos outros alvos, voltar ao padrão não
+  // precisa de nada depois do comando.
+  if (campo === 'reset') return 'Escreva depois do comando o número ou o id da conversa que volta ao padrão.'
+  const extra = CAMPOS_DE_TEXTO.includes(campo)
+    ? ' Escreva "em branco" para deixar vazio, ou "herdar" para voltar a seguir o padrão.'
+    : ' Ou escreva "herdar" para voltar a seguir o padrão.'
+  return `Escreva depois do comando ${antes}${textos[campo] || 'o valor novo'}.${extra}`
+}
+
+// Uma conversa indicada pelo que alguém digitou: o id inteiro (de grupo ou de
+// contato) ou só o número, que vira contato. Mesmas formas que o destino de
+// um comando aceita (`resolverDestinoConfigurado` no avaliador).
+export function alvoDaConversa (texto) {
+  const limpo = String(texto ?? '').trim()
+  if (!limpo) return null
+  if (/@g\.us$/.test(limpo)) return { scopeKind: 'group', scopeId: limpo, key: CHAVE_MENU }
+  if (/@(s\.whatsapp\.net|lid)$/.test(limpo)) return { scopeKind: 'contact', scopeId: limpo, key: CHAVE_MENU }
+  if (!/^\+?[\d().-]+$/.test(limpo)) return null
+  const digitos = limpo.replace(/\D/g, '')
+  return digitos.length >= 8 ? { scopeKind: 'contact', scopeId: `${digitos}@s.whatsapp.net`, key: CHAVE_MENU } : null
 }
 
 // Cascata, do mais específico para o mais geral:

@@ -103,16 +103,15 @@ export function criarClienteEngine ({ socketPath = process.env.LCN_ENGINE_SOCKET
       exportar: (nome) => requisitar('GET', `/listas/${encodeURIComponent(nome)}/exportar`),
       importar: (nome, corpo) => requisitar('POST', `/listas/${encodeURIComponent(nome)}/importar`, corpo)
     },
-    menu: {
-      obterEfetivo: (chatId, chatKind) => requisitar('GET', `/menu-config/effective?chatId=${encodeURIComponent(chatId)}&chatKind=${encodeURIComponent(chatKind || 'direct')}`),
-      obter: (kind, id) => requisitar('GET', `/menu-config/${encodeURIComponent(kind)}${id ? `?id=${encodeURIComponent(id)}` : ''}`),
-      salvar: (kind, id, config) => requisitar('PUT', `/menu-config/${encodeURIComponent(kind)}${id ? `?id=${encodeURIComponent(id)}` : ''}`, config),
-      remover: (kind, id) => requisitar('DELETE', `/menu-config/${encodeURIComponent(kind)}${id ? `?id=${encodeURIComponent(id)}` : ''}`)
-    },
     entidades: {
       listar: (kind, id) => requisitar('GET', `${caminho(`/entities/${encodeURIComponent(kind)}`, id)}/attributes`),
       definir: (kind, id, key, value) => requisitar('PUT', `${caminho(`/entities/${encodeURIComponent(kind)}`, id)}/attributes/${encodeURIComponent(key)}`, { value }),
       remover: (kind, id, key) => requisitar('DELETE', `${caminho(`/entities/${encodeURIComponent(kind)}`, id)}/attributes/${encodeURIComponent(key)}`)
+    },
+    // Menu: só leitura e apagar. Gravar é pelo comando `configura menu`.
+    menu: {
+      efetivo: (chatId, chatKind) => requisitar('GET', `/menu-config/effective?${new URLSearchParams({ chatId: chatId || '', chatKind: chatKind || '' })}`),
+      apagar: (kind, id) => requisitar('DELETE', `/menu-config/${encodeURIComponent(kind)}${id ? `?${new URLSearchParams({ id })}` : ''}`)
     },
     automacoes: {
       conflitos: () => requisitar('GET', '/automations/conflitos'),
