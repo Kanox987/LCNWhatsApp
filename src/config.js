@@ -3,15 +3,10 @@ import fs from 'fs'
 import { ARQ_CONFIG, ARQ_CONFIG_EXEMPLO } from './paths.js'
 
 // Config padrão — usado quando falta o arquivo ou faltam chaves nele.
+// `destino` e `captura` (recuperação de visualização única) saíram junto com a
+// recuperação. Config antigo que ainda os tenha não quebra: `mesclar` guarda a
+// chave do usuário, e nada mais a lê.
 export const PADRAO = {
-  destino: { tipo: 'self', jid: '' },
-  captura: {
-    contatos: 'todos',
-    blocklist: [],
-    grupos: { ativo: false, allowlist: [] },
-    destinoProprioContatos: [],
-    downloadAutomatico: { conversas: [] }
-  },
   hardware: {
     markOnline: true,
     logLevel: 'silent',

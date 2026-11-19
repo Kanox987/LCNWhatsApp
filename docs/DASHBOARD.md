@@ -6,20 +6,17 @@ por arquivos: `config.json`, `data/state.json`, `data/archive.json`, `midia/`).
 ## Cabeçalho
 - Conexão (conectado?, número, nome, tempo online).
 - Serviço (rodando/parado) e modo (docker/seco).
-- Total de mídias e nº de remetentes.
 
 ## Menu
-1. **Dados de uso e conexões** — uptime, memória, reconexões, quedas, capturas,
-   ignoradas, última captura, e contagem por remetente. Avisa se há flag de
-   update da Baileys.
-2. **Galeria** — lista os arquivos (tipo, remetente, quando, tamanho, 📝 se tem
-   transcrição). Abrir um item = abre no visualizador padrão do SO; `p` abre a
-   pasta `midia/`.
-3. **Limpeza** — apagar por seleção, por remetente, por período (mais antigos que
-   N dias) ou tudo. Remove arquivo físico e entrada do índice.
-4. **Configurações** — ver [CONFIG.md](CONFIG.md). Inclui um **Modo debug**
-   (Hardware) que loga cada mensagem recebida, pra diagnosticar captura.
-5. **Serviço**:
+1. **Dados de uso e conexões** — uptime, memória, reconexões e quedas. Avisa
+   se há flag de update da Baileys.
+2. **Limpar capturas antigas** — a recuperação de visualização única foi
+   retirada, e nada mais grava em `data/archive.json`. Esta tela só apaga o que
+   ficou de instalações antigas: por seleção, por remetente, por período (mais
+   antigos que N dias) ou tudo. Remove arquivo físico e entrada do índice.
+3. **Configurações** — ver [CONFIG.md](CONFIG.md). Inclui um **Modo debug**
+   (Hardware) que loga cada mensagem recebida, pra diagnosticar recebimento.
+4. **Serviço**:
    - **1. Conectar / mostrar QR** — renderiza o QR **dentro do painel** pra
      escanear (o bot salva o QR gerado; a tela mostra e informa a idade dele).
      Quando já conectado, avisa.
@@ -34,10 +31,6 @@ por arquivos: `config.json`, `data/state.json`, `data/archive.json`, `midia/`).
    > Não há "iniciar/parar" aqui: no modo container o painel roda dentro do próprio
    > container e não controla o Docker do host. Pra parar de vez, use no host
    > `docker stop LCNWhatsApp`; o serviço em si vive pelo restart policy.
-6. **Atualizar** — roda `update.sh`. Em modo container, só funciona
+5. **Atualizar** — roda `update.sh`. Em modo container, só funciona
    rodado no host (fora do `docker exec`) — o painel avisa se detectar que está
    rodando de dentro do container. Ver [ATUALIZACAO.md](ATUALIZACAO.md).
-
-> Recuperar visu única "já vista": como o WhatsApp apaga a mídia após a
-> visualização, a recuperação é a releitura do **arquivo local** que o bot já
-> salvou no momento em que a mensagem chegou. Use a Galeria.

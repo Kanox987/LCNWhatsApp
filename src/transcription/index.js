@@ -1,5 +1,5 @@
 // Transcrição de áudio plugável. Escolhe o provedor conforme o config e devolve
-// texto (ou null se desligado/falhar). É um extra: nunca derruba a captura.
+// texto (ou null se desligado/falhar). É um extra: nunca derruba quem chamou.
 //
 // Provedores:
 //   off            -> não transcreve

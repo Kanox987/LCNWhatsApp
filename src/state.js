@@ -16,9 +16,6 @@ const INICIAL = {
   metricas: {
     reconexoes: 0,
     quedas: 0,
-    processadas: 0,   // visu única capturada e reenviada
-    ignoradas: 0,     // (aprox.) mensagens que chegaram ao handler e foram descartadas
-    ultimaCaptura: null,
     bytesBaixados: 0, // total baixado (mídia), acumulado desde este boot — painel de recursos (Parte C, Módulo 6)
     bytesEnviados: 0  // total reenviado (mídia), acumulado desde este boot
   },
@@ -175,12 +172,6 @@ export function limparCodigoPareamento () {
 export function incr (chave, n = 1) {
   if (estado.metricas[chave] === undefined) estado.metricas[chave] = 0
   estado.metricas[chave] += n
-  agendarFlush()
-}
-
-export function marcarCaptura () {
-  estado.metricas.processadas += 1
-  estado.metricas.ultimaCaptura = Date.now()
   agendarFlush()
 }
 

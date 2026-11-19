@@ -580,7 +580,7 @@ export async function iniciar () {
   const admissao = criarAdmissaoDeEventos(cfg)
   state.registrarFonteDeAdmissao(() => admissao.estado)
 
-  // Hot-reload: a maioria do config (captura, transcrição, atualização) é lida ao
+  // Hot-reload: a maioria do config (transcrição, atualização) é lida ao
   // vivo pelos handlers via closure em `cfg`. Só reconecta quando muda algo que
   // precisa recriar o client (logLevel, markOnline).
   observar((novo) => {

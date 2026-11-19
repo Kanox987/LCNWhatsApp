@@ -1,10 +1,10 @@
 // Dashboard de terminal do LCNWhatsApp (comando `lcn`).
-// Porta de entrada do app: status, uso/conexões, galeria, limpeza e configurações.
+// Porta de entrada do app: status, uso/conexões, limpeza e configurações.
 // Fala com o bot só por arquivos (config.json, data/state.json, data/archive.json,
 // midia/), então funciona igual em modo container ou seco.
 import readline from 'readline'
 import path from 'path'
-import { spawn, spawnSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import fs from 'fs'
 import qrcode from 'qrcode-terminal'
 import * as cfgMod from './config.js'
@@ -12,8 +12,7 @@ import * as archive from './archive.js'
 import * as state from './state.js'
 import * as runtime from './runtime.js'
 import * as directoryMod from './directory.js'
-import { caminhoDe } from './archive.js'
-import { PASTA_MIDIA, PASTA_DADOS, ARQ_GRUPOS_REFRESH } from './paths.js'
+import { PASTA_DADOS, ARQ_GRUPOS_REFRESH } from './paths.js'
 import { soDigitos } from './util.js'
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -49,15 +48,12 @@ function cabecalho () {
   const serv = runtime.statusServico()
   const conBadge = st?.conectado ? `${G}● conectado${Z}` : `${R}○ desconectado${Z}`
   const servBadge = serv === 'rodando' ? `${G}rodando${Z}` : serv === 'parado' ? `${Y}parado${Z}` : `${D}?${Z}`
-  const contagem = archive.contagemPorNumero()
-  const numeros = Object.keys(contagem)
 
   console.log(`${B}${C}╔══════════════════════════════════════════════════╗${Z}`)
   console.log(`${B}${C}║             LCNWhatsApp — painel                 ║${Z}`)
   console.log(`${B}${C}╚══════════════════════════════════════════════════╝${Z}`)
   console.log(` Conexão : ${conBadge}${st?.numero ? `  (${st.numero}${st.nome ? ', ' + st.nome : ''})` : ''}`)
   console.log(` Serviço : ${servBadge}   modo: ${B}${rt.mode}${Z}${rt.engine ? ` (${rt.engine})` : ''}`)
-  console.log(` Mídias  : ${B}${archive.total()}${Z} no total, de ${B}${numeros.length}${Z} remetente(s)`)
   if (st?.conectado && st?.desde) console.log(` Online há: ${duracao(Date.now() - st.desde)}`)
   const t = cfgMod.carregar().transcricao
   // pythonBin só é gravado pelo install.sh no modo nativo; no container o
@@ -81,19 +77,17 @@ async function menuPrincipal () {
   for (;;) {
     cabecalho()
     console.log(` ${B}1${Z}  Dados de uso e conexões`)
-    console.log(` ${B}2${Z}  Galeria de arquivos locais`)
-    console.log(` ${B}3${Z}  Limpeza de arquivos`)
-    console.log(` ${B}4${Z}  Configurações`)
-    console.log(` ${B}5${Z}  Serviço (conectar/QR, reiniciar, logs)`)
-    console.log(` ${B}6${Z}  Atualizar sistema`)
+    console.log(` ${B}2${Z}  Limpar capturas antigas`)
+    console.log(` ${B}3${Z}  Configurações`)
+    console.log(` ${B}4${Z}  Serviço (conectar/QR, reiniciar, logs)`)
+    console.log(` ${B}5${Z}  Atualizar sistema`)
     console.log(` ${B}0${Z}  Sair`)
     const op = (await ask('\n> ')).trim()
     if (op === '1') await telaUso()
-    else if (op === '2') await telaGaleria()
-    else if (op === '3') await telaLimpeza()
-    else if (op === '4') await telaConfig()
-    else if (op === '5') await telaServico()
-    else if (op === '6') await telaAtualizar()
+    else if (op === '2') await telaLimpeza()
+    else if (op === '3') await telaConfig()
+    else if (op === '4') await telaServico()
+    else if (op === '5') await telaAtualizar()
     else if (op === '0') { rl.close(); return }
   }
 }
@@ -108,14 +102,6 @@ async function telaUso () {
   console.log(` Memória (RSS)    : ${st.memoriaMB ?? '—'} MB`)
   console.log(` Reconexões       : ${m.reconexoes ?? 0}`)
   console.log(` Quedas           : ${m.quedas ?? 0}`)
-  console.log(` Capturas (visu)  : ${m.processadas ?? 0}`)
-  console.log(` Ignoradas        : ${m.ignoradas ?? 0}`)
-  console.log(` Última captura   : ${tempoRelativo(m.ultimaCaptura)}`)
-  console.log(`\n${B}Por remetente${Z}`)
-  const contagem = archive.contagemPorNumero()
-  const linhas = Object.entries(contagem).sort((a, b) => b[1] - a[1])
-  if (!linhas.length) console.log(` ${D}nenhuma mídia arquivada${Z}`)
-  for (const [num, qtd] of linhas) console.log(`  ${num.padEnd(16)} ${qtd}`)
   if (fs.existsSync(caminhoFlag())) console.log(`\n${Y}⚠️  Sinalizado update do zapo-js (quedas seguidas). Ver menu Atualizar.${Z}`)
   await pausar()
 }
@@ -124,44 +110,12 @@ function caminhoFlag () {
   return path.join(PASTA_DADOS, 'precisa-update.flag')
 }
 
-function abrirNoSO (caminho) {
-  const cmd = process.platform === 'win32' ? 'explorer'
-    : process.platform === 'darwin' ? 'open' : 'xdg-open'
-  try { spawn(cmd, [caminho], { detached: true, stdio: 'ignore' }).unref() } catch (e) {
-    console.log('Não consegui abrir automaticamente:', e.message)
-  }
-}
-
-async function telaGaleria () {
-  for (;;) {
-    cabecalho()
-    console.log(`${B}Galeria${Z}  ${D}(arquivos em midia/)${Z}\n`)
-    const itens = archive.listar()
-    if (!itens.length) { console.log(` ${D}nada arquivado ainda${Z}`); return pausar() }
-    itens.slice(0, 30).forEach((i, idx) => {
-      const kb = Math.round((i.tamanho || 0) / 1024)
-      console.log(` ${B}${String(idx + 1).padStart(2)}${Z} [${i.tipo}] ${i.numero.padEnd(15)} ${tempoRelativo(i.timestamp).padEnd(12)} ${kb}KB${i.transcricao ? ' 📝' : ''}`)
-    })
-    if (itens.length > 30) console.log(` ${D}...e mais ${itens.length - 30}${Z}`)
-    console.log(`\n ${B}número${Z} = abrir no visualizador  |  ${B}p${Z} = abrir pasta  |  ${B}0${Z} = voltar`)
-    const op = (await ask('\n> ')).trim()
-    if (op === '0') return
-    if (op === 'p') { abrirNoSO(PASTA_MIDIA); continue }
-    const n = parseInt(op, 10)
-    if (n >= 1 && n <= Math.min(30, itens.length)) {
-      const item = itens[n - 1]
-      console.log(`\n${B}${item.tipo}${Z} de ${item.numero}${item.nome ? ` (${item.nome})` : ''}`)
-      if (item.caption) console.log(`Legenda: ${item.caption}`)
-      if (item.transcricao) console.log(`Transcrição: ${item.transcricao}`)
-      abrirNoSO(caminhoDe(item))
-      await pausar()
-    }
-  }
-}
-
+// Recuperação de visualização única saiu do LCN (a Meta mudou o tratamento
+// desses arquivos). Nada mais grava em data/archive.json; esta tela só existe
+// para apagar as capturas que ficaram de instalações antigas.
 async function telaLimpeza () {
   cabecalho()
-  console.log(`${B}Limpeza${Z}\n`)
+  console.log(`${B}Limpar capturas antigas${Z}  ${D}(${archive.total()} no índice)${Z}\n`)
   console.log(' 1  Apagar por seleção (escolher itens)')
   console.log(' 2  Apagar por remetente (lote)')
   console.log(' 3  Apagar por período (últimos N dias / mais antigos que N dias)')
@@ -216,37 +170,9 @@ function nomeDoId (id) {
   return id
 }
 
-// Checklist: itens numerados com [x]/[ ], números separados por vírgula pra
-// alternar, 'a'=todos, 'n'=nenhum, 'b'=buscar por nome, 'm'=digitar
-// manualmente, Enter confirma. `itens` é [{id, nome}]. Retorna array de ids,
-// ou null (chame o fallback manual) quando `itens` vier vazio ou 'm'.
-async function selecionarLista (itens, atuais, titulo) {
-  if (!itens.length) return null
-  const sel = new Set(atuais)
-  let filtro = ''
-  for (;;) {
-    const visiveis = filtro ? itens.filter((i) => i.nome.toLowerCase().includes(filtro)) : itens
-    cabecalho()
-    console.log(`${B}${titulo}${Z}${filtro ? `  ${D}(filtro: "${filtro}")${Z}` : ''}\n`)
-    if (!visiveis.length) console.log(` ${D}nenhum resultado pro filtro${Z}`)
-    visiveis.forEach((item, idx) => {
-      const marca = sel.has(item.id) ? `${G}[x]${Z}` : '[ ]'
-      console.log(` ${marca} ${String(idx + 1).padStart(2)}  ${item.nome}`)
-    })
-    console.log(`\n Números separados por vírgula alternam | ${B}a${Z}=todos ${B}n${Z}=nenhum ${B}b${Z}=buscar${filtro ? ` ${B}t${Z}=tirar filtro` : ''} ${B}m${Z}=manual | Enter confirma`)
-    const op = (await ask('\n> ')).trim().toLowerCase()
-    if (op === '') return [...sel]
-    if (op === 'm') return null
-    if (op === 'b') { filtro = (await ask('Buscar por nome: ')).trim().toLowerCase(); continue }
-    if (op === 't') { filtro = ''; continue }
-    if (op === 'a') { visiveis.forEach((i) => sel.add(i.id)); continue }
-    if (op === 'n') { visiveis.forEach((i) => sel.delete(i.id)); continue }
-    const idxs = op.split(',').map((s) => parseInt(s.trim(), 10) - 1).filter((n) => n >= 0 && n < visiveis.length)
-    for (const i of idxs) { const id = visiveis[i].id; sel.has(id) ? sel.delete(id) : sel.add(id) }
-  }
-}
-
-// Igual ao de cima, mas escolhe só UM item (pra destino, que é singular).
+// Lista numerada pra escolher UM item, com busca por nome. `itens` é
+// [{id, nome}]. Retorna o id, ou null (chame o fallback manual) quando
+// `itens` vier vazio, 'm' ou Enter.
 async function selecionarUm (itens, titulo) {
   if (!itens.length) return null
   let filtro = ''
@@ -277,19 +203,12 @@ function itensGrupos () {
   return grupos.map((g) => ({ id: g.id, nome: g.nome }))
 }
 
-// Checklist de números com fallback pra CSV manual (diretório vazio ou 'm').
-async function escolherNumeros (atuais) {
-  const sel = await selecionarLista(itensContatos(), atuais, 'Selecione os contatos')
-  if (sel) return sel
-  return (await ask('Números separados por vírgula: ')).split(',').map((s) => s.replace(/\D/g, '')).filter(Boolean)
-}
-
 // ————— Configurações por tópicos —————
 // Item de menu com valor alinhado numa coluna fixa e colorido pelo estado
 // (verde = ligado/ativo, apagado = desligado/off, ciano = informativo neutro).
 function itemCfg (num, label, valor) {
   const ligado = /^(ligado|on|sim)$/i.test(valor)
-  const desligado = /^(desligado|off|não)$/i.test(valor) || /^0 (na lista|contato|conversa)/i.test(valor)
+  const desligado = /^(desligado|off|não)$/i.test(valor) || /^0 conversa/i.test(valor)
   const cor = ligado ? G : desligado ? D : C
   console.log(` ${B}${num}${Z}  ${label.padEnd(28)} ${D}(${Z}${cor}${valor}${Z}${D})${Z}`)
 }
@@ -299,87 +218,18 @@ async function telaConfig () {
     cabecalho()
     const c = cfgMod.carregar()
     console.log(`${B}Configurações${Z}\n`)
-    itemCfg(1, 'Destino das mídias', `${c.destino.tipo}${c.destino.jid ? ': ' + c.destino.jid : ''}`)
-    itemCfg(2, 'Contatos que disparam', Array.isArray(c.captura.contatos) ? `${c.captura.contatos.length} na lista` : 'todos')
-    itemCfg(3, 'Grupos', c.captura.grupos.ativo ? 'ligado' : 'desligado')
-    itemCfg(4, 'Transcrição', c.transcricao.provedor)
-    console.log(` ${B}5${Z}  Hardware / baixo consumo`)
-    itemCfg(6, 'Atualização (auto-update lib)', c.atualizacao.autoUpdateLib ? 'on' : 'off')
-    itemCfg(7, 'Destino próprio por contato', `${(c.captura.destinoProprioContatos || []).length} contato(s)`)
-    itemCfg(8, 'Transcrição por conversa', `${(c.transcricao.conversas || []).length} conversa(s)`)
-    itemCfg(9, 'Download automático', `${(c.captura.downloadAutomatico?.conversas || []).length} conversa(s)`)
+    itemCfg(1, 'Transcrição', c.transcricao.provedor)
+    itemCfg(2, 'Transcrição por conversa', `${(c.transcricao.conversas || []).length} conversa(s)`)
+    console.log(` ${B}3${Z}  Hardware / baixo consumo`)
+    itemCfg(4, 'Atualização (auto-update lib)', c.atualizacao.autoUpdateLib ? 'on' : 'off')
     console.log(` ${B}0${Z}  Voltar`)
     const op = (await ask('\n> ')).trim()
-    if (op === '1') await cfgDestino(c)
-    else if (op === '2') await cfgContatos(c)
-    else if (op === '3') await cfgGrupos(c)
-    else if (op === '4') await cfgTranscricao(c)
-    else if (op === '5') await cfgHardware(c)
-    else if (op === '6') await cfgAtualizacao(c)
-    else if (op === '7') await cfgDestinoProprio(c)
-    else if (op === '8') await cfgTranscricaoConversas(c)
-    else if (op === '9') await cfgDownloadAutomatico(c)
+    if (op === '1') await cfgTranscricao(c)
+    else if (op === '2') await cfgTranscricaoConversas(c)
+    else if (op === '3') await cfgHardware(c)
+    else if (op === '4') await cfgAtualizacao(c)
     else if (op === '0') return
   }
-}
-
-async function cfgDestino (c) {
-  console.log('\n1 self-chat (você mesmo)  2 número específico  3 grupo')
-  const op = (await ask('> ')).trim()
-  if (op === '1') c.destino = { tipo: 'self', jid: '' }
-  else if (op === '2') {
-    const escolhido = await selecionarUm(itensContatos(), 'Escolha o número')
-    c.destino = { tipo: 'numero', jid: escolhido || (await ask('Número com DDI: ')).replace(/\D/g, '') }
-  } else if (op === '3') {
-    const escolhido = await selecionarUm(itensGrupos(), 'Escolha o grupo')
-    c.destino = { tipo: 'grupo', jid: escolhido || (await ask('ID do grupo (...@g.us): ')).trim() }
-  }
-  cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
-}
-
-async function cfgContatos (c) {
-  console.log('\n1 todos  2 definir allowlist  3 definir blocklist')
-  const op = (await ask('> ')).trim()
-  if (op === '1') c.captura.contatos = 'todos'
-  else if (op === '2') c.captura.contatos = await escolherNumeros(Array.isArray(c.captura.contatos) ? c.captura.contatos : [])
-  else if (op === '3') c.captura.blocklist = await escolherNumeros(c.captura.blocklist || [])
-  cfgMod.salvar(c); console.log(`${G}Salvo. (aplica na próxima reconexão automática)${Z}`); await pausar()
-}
-
-async function cfgGrupos (c) {
-  c.captura.grupos.ativo = await confirmar('Capturar visu única também em grupos?')
-  if (c.captura.grupos.ativo) {
-    const sel = await selecionarLista(itensGrupos(), c.captura.grupos.allowlist || [], 'Allowlist de grupos (nenhum marcado = todos)')
-    c.captura.grupos.allowlist = sel || (await ask('Allowlist de grupos (...@g.us, vírgula) ou vazio p/ todos: ')).split(',').map((s) => s.trim()).filter(Boolean)
-  }
-  cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
-}
-
-// Nova: destino próprio por contato — /recover (e captura normal) desses
-// contatos volta a mídia na própria conversa, não no destino global.
-async function cfgDestinoProprio (c) {
-  cabecalho()
-  console.log(`${B}Destino próprio por contato${Z}`)
-  console.log(`${D}Contatos marcados aqui recebem a mídia de volta na própria conversa (ex: /recover), em vez do destino padrão configurado.${Z}\n`)
-  c.captura.destinoProprioContatos = await escolherNumeros(c.captura.destinoProprioContatos || [])
-  cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
-}
-
-// Nova: download automático — nas conversas marcadas aqui, quando a visu
-// única chegar travada (view_once_unavailable_fanout, sem /recover), a
-// próxima resposta sua nessa conversa — qualquer citação, não precisa ser
-// exatamente /recover — já revela a mídia sozinha.
-async function cfgDownloadAutomatico (c) {
-  cabecalho()
-  console.log(`${B}Download automático${Z}`)
-  console.log(`${D}Nas conversas marcadas aqui, quando a visu única chegar travada`)
-  console.log(`(sem /recover), a próxima resposta sua nessa conversa — qualquer`)
-  console.log(`citação, não precisa ser exatamente /recover — já revela sozinha.${Z}\n`)
-  const dl = c.captura.downloadAutomatico || (c.captura.downloadAutomatico = { conversas: [] })
-  const itens = [...itensContatos(), ...itensGrupos()]
-  const sel = await selecionarLista(itens, dl.conversas || [], 'Conversas com download automático')
-  dl.conversas = sel ?? (await ask('IDs separados por vírgula (número ou ...@g.us): ')).split(',').map((s) => s.trim()).filter(Boolean)
-  cfgMod.salvar(c); console.log(`${G}Salvo.${Z}`); await pausar()
 }
 
 async function cfgTranscricao (c) {
