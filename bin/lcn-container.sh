@@ -24,6 +24,9 @@ mkdir -p "${PASTA_ENGINE}/run"
 # Segurável por ambiente: quem estiver depurando não quer esperar um minuto
 # a cada tentativa.
 ESPERA_APOS_FALHA="${LCN_ESPERA_APOS_FALHA:-60}"
+# Quanto esperar o motor abrir o socket. Com 0,1 CPU ele leva ~40 s; 90 s
+# cobre máquina lenta sem esconder um motor travado.
+ESPERA_MOTOR="${LCN_ESPERA_MOTOR:-90}"
 
 log () { echo "[lcn] $*"; }
 
@@ -33,13 +36,13 @@ PID_MOTOR=$!
 
 # Esperar o SOCKET, não um sleep fixo: em máquina lenta o motor demora mais, e
 # um gateway que sobe antes perde as primeiras mensagens sem avisar.
-for _ in $(seq 1 60); do
+for _ in $(seq 1 $((ESPERA_MOTOR * 2))); do
   [ -S "$SOCKET" ] && break
   kill -0 "$PID_MOTOR" 2>/dev/null || { log "o motor morreu ao subir"; exit 1; }
   sleep 0.5
 done
 if [ ! -S "$SOCKET" ]; then
-  log "o motor não abriu o socket em 30s — abortando em vez de subir mudo"
+  log "o motor não abriu o socket em ${ESPERA_MOTOR}s — abortando em vez de subir mudo"
   exit 1
 fi
 log "motor no ar"
