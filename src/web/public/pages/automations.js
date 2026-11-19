@@ -210,7 +210,7 @@ async function painelRevisoes (automation) {
 }
 
 async function renderList ({ navigate, refresh }) {
-  const [automations, atualizacoes, conflitos, cotas] = await Promise.all([
+  const [automations, cotas, atualizacoes, conflitos] = await Promise.all([
     api.automations.list(),
     // O contador é informação, não pré-requisito: motor antigo sem a rota
     // não pode derrubar a lista.
