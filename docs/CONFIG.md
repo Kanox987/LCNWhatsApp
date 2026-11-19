@@ -5,18 +5,12 @@ Editável pelo painel (`lcn` > Configurações) ou à mão. O bot recarrega a qu
 `hardware.logLevel`/`hardware.markOnline` (usados na criação do socket) disparam
 uma reconexão leve quando mudam.
 
+> A recuperação de visualização única foi retirada (o WhatsApp mudou o
+> tratamento desses arquivos). Os campos `destino` e `captura` eram dela e não
+> são mais usados; se ainda estiverem no seu `config.json`, são ignorados.
+
 ```jsonc
 {
-  "destino": { "tipo": "self|numero|grupo", "jid": "" },
-  "captura": {
-    "contatos": "todos",            // ou ["5511999...", ...] (allowlist)
-    "blocklist": [],                 // números sempre ignorados
-    "grupos": { "ativo": false, "allowlist": [] },  // captar em grupos?
-    "destinoProprioContatos": [],    // números que recebem a mídia de volta na própria conversa
-    "downloadAutomatico": {          // ver docs/DOWNLOAD-AUTOMATICO.md
-      "conversas": []                // números ou JIDs de grupo marcados
-    }
-  },
   "hardware": {
     "markOnline": false,             // não aparecer "online" p/ quem envia
     "logLevel": "silent",
@@ -48,20 +42,6 @@ uma reconexão leve quando mudam.
 }
 ```
 
-- **destino.tipo `self`**: manda pra sua própria conversa. `numero`: `jid` = número
-  com DDI. `grupo`: `jid` = `...@g.us`.
-- **captura.contatos**: `"todos"` ou lista. A lista também alimenta o filtro
-  pré-crypto (`shouldIgnoreJid`).
-- **captura.destinoProprioContatos**: números nessa lista furam `destino` — a mídia
-  capturada (via `/recover` ou captura normal) volta na própria conversa com o
-  contato, em vez de ir pro destino global. Editável em `lcn` > Configurações >
-  Destino próprio por contato.
-- **grupos.ativo**: por padrão desligado (performance). Ver PERFORMANCE.md.
-- **captura.downloadAutomatico**: conversas marcadas não precisam mais digitar
-  `/recover` quando a visu única chegar travada — a próxima resposta sua nessa
-  conversa (qualquer citação) já revela sozinha. Ver
-  [DOWNLOAD-AUTOMATICO.md](DOWNLOAD-AUTOMATICO.md). Editável em `lcn` > Configurações
-  > Download automático.
 - **download**: o serviço que baixa link de mídia. `esperaMaximaSegundos` é
   quanto o bot espera antes de desistir — e desistir **cancela o trabalho no
   serviço** (`POST /jobs/{job}/cancelar`), em vez de largar a vaga ocupada: como
@@ -80,7 +60,7 @@ uma reconexão leve quando mudam.
   > copiar o segredo para o banco.
 
 - **hardware.debug**: liga logs detalhados de cada mensagem recebida — útil pra
-  diagnosticar "mandei e não capturou". Ver [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).
+  diagnosticar "mandei e o bot não reagiu". Ver [SOLUCAO-DE-PROBLEMAS.md](SOLUCAO-DE-PROBLEMAS.md).
 - **hardware.logLevel**: nível de log da `zapo-js` (`silent` em produção; `warn`/`error`
   ajuda a ver falhas de descriptografia). Mudança exige reconexão.
 - **transcricao.conversas**: lista de overrides por conversa. `auto: true` liga

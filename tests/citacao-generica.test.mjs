@@ -1,5 +1,5 @@
 // Testes de acharCitacaoGenerica: reconhece QUALQUER citação/resposta, sem
-// exigir texto específico (ao contrário de acharComandoRecover/acharComandoTexto).
+// exigir texto específico (ao contrário de acharComandoTexto).
 import { acharCitacaoGenerica } from '../src/visu.js'
 
 const img = { url: 'x', mediaKey: 'k', mimetype: 'image/jpeg', caption: 'oi' }
@@ -7,7 +7,7 @@ const quotedMsg = { viewOnceMessageV2: { message: { imageMessage: img } } }
 
 const casos = [
   [
-    'texto qualquer citando algo (não precisa ser /recover)',
+    'texto qualquer citando algo (não precisa ser um comando)',
     {
       extendedTextMessage: {
         text: 'oi, isso é o que eu acho?',

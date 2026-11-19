@@ -1,5 +1,5 @@
 // Gerência de grupo: /ban, /mute, /unmute — e os dois defeitos que o dono
-// relatou ao vivo no /x9 e no /recover.
+// relatou ao vivo num comando que nomeava o autor de uma mensagem respondida.
 //
 // OS DOIS DEFEITOS, nas palavras dele: "em grupos pegam o id do grupo como se
 // fosse número wa.me de alguém, e no pv ele marca o próprio user". São causas
@@ -8,8 +8,8 @@
 //  1. O adaptador caía no remoteJid quando a chave de grupo não trazia
 //     participant — e em grupo o remoteJid é o GRUPO. Um endereço de conversa
 //     virava o telefone de uma pessoa.
-//  2. A legenda falava de {{sender.*}}, que num COMANDO é quem digitou, não
-//     quem mandou a mídia recuperada. No pv isso é sempre a própria pessoa.
+//  2. O texto falava de {{sender.*}}, que num COMANDO é quem digitou, não
+//     quem mandou a mensagem respondida. No pv isso é sempre a própria pessoa.
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -61,7 +61,7 @@ function eventoZapo (key, message = { conversation: 'oi' }) {
 }
 
 // =========================================================================
-// 2. A legenda do /x9 nomeia quem MANDOU a mídia, não quem digitou
+// 2. {{quoted.*}} nomeia quem MANDOU a mensagem respondida, não quem digitou
 // =========================================================================
 const db = abrirBanco(':memory:')
 const agora = new Date().toISOString()
@@ -77,7 +77,7 @@ function publicar (id, doc, escopo = { kind: 'group', ref: GRUPO }) {
 }
 
 let n = 0
-function evento ({ texto, chat = GRUPO, kind = 'group', de = PESSOA, citadoDe = null, visuCitada = false } = {}) {
+function evento ({ texto, chat = GRUPO, kind = 'group', de = PESSOA, citadoDe = null } = {}) {
   n++
   const ev = {
     provider: 'zapo',
@@ -91,7 +91,6 @@ function evento ({ texto, chat = GRUPO, kind = 'group', de = PESSOA, citadoDe = 
     providerRef: { provider: 'zapo', id: `g${n}`, remoteJid: chat }
   }
   if (citadoDe) ev.message.quotedRef = { id: 'q1', participant: citadoDe }
-  if (visuCitada) ev.message.quotedMediaRef = { token: 'TOKEN-OPACO', kind: 'view_once', mediaKind: 'image' }
   return ev
 }
 
@@ -101,31 +100,31 @@ function rodar (id, ev) {
   return (avaliarEvento(db, ev).results || []).find((x) => x.automationId === id)
 }
 
-const LEGENDA = '👁 De: wa.me/{{quoted.number}}'
+const TEXTO_AUTOR = 'De: wa.me/{{quoted.number}}'
 
-publicar('x9', {
-  schemaVersion: 1, id: 'x9', revision: 1, name: 'X9', enabled: true,
+publicar('autor', {
+  schemaVersion: 1, id: 'autor', revision: 1, name: 'Autor', enabled: true,
   scope: { include: [{ kind: 'group', id: GRUPO }], exclude: [] },
   inputPolicy: { acceptedMessageKinds: ['text'], historyPolicy: 'live_only' },
   responder: { strategy: 'weighted_rendezvous', poolId: 'p1' },
   flow: {
     nodes: [
-      { id: 'g', type: 'trigger.command', config: { command: '/x9', match: 'exact_or_args', allowFrom: 'any' } },
-      { id: 'rec', type: 'action.whatsapp.recover', config: { destination: 'same_chat', caption: LEGENDA, notFoundText: 'sem mídia' } }
+      { id: 'g', type: 'trigger.command', config: { command: '/autor', match: 'exact_or_args', allowFrom: 'any' } },
+      { id: 'r', type: 'action.whatsapp.reply', config: { text: TEXTO_AUTOR } }
     ],
-    edges: [{ from: 'g', to: 'rec', on: 'matched' }]
+    edges: [{ from: 'g', to: 'r', on: 'matched' }]
   }
 })
 
 {
-  // PESSOA digita /x9 respondendo a visu única que OUTRA mandou.
-  const r = rodar('x9', evento({ texto: '/x9', de: PESSOA, citadoDe: OUTRA, visuCitada: true }))
-  const legenda = r.commands[0]?.payload?.caption || ''
-  check('a legenda nomeia quem MANDOU a mídia', legenda.includes('5511900000456'), legenda)
-  check('e não quem digitou o comando', !legenda.includes('5511900000123'), legenda)
-  // O id do grupo na legenda é o sintoma relatado — ele não pode aparecer de
+  // PESSOA digita /autor respondendo uma mensagem que OUTRA mandou.
+  const r = rodar('autor', evento({ texto: '/autor', de: PESSOA, citadoDe: OUTRA }))
+  const texto = r?.commands?.[0]?.payload?.text || ''
+  check('o texto nomeia quem MANDOU a mensagem respondida', texto.includes('5511900000456'), texto)
+  check('e não quem digitou o comando', !texto.includes('5511900000123'), texto)
+  // O id do grupo no texto é o sintoma relatado — ele não pode aparecer de
   // jeito nenhum, nem por sender nem por chat.
-  check('o id do grupo não aparece como se fosse telefone', !legenda.includes('120363'), legenda)
+  check('o id do grupo não aparece como se fosse telefone', !texto.includes('120363'), texto)
 }
 
 // =========================================================================

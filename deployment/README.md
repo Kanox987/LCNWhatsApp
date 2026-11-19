@@ -10,21 +10,21 @@ parâmetros. Quem usa a instância só conecta o número. Sem perfil (ou com
 No container, aponte o arquivo — só o **caminho** vai por variável de ambiente:
 
 ```bash
-./run.sh --profile deployment/perfis/recuperar-x9.json
+./run.sh --profile deployment/perfis/administracao-protecao.json
 ```
 
 Com `docker compose`, a pasta `deployment/` já é montada em
 `/run/lcn/provisioning`; escolha o perfil no `.env`:
 
 ```
-LCN_PROVISION_PROFILE=/run/lcn/provisioning/perfis/recuperar-x9.json
+LCN_PROVISION_PROFILE=/run/lcn/provisioning/perfis/administracao-protecao.json
 ```
 
 Sem container (motor rodando):
 
 ```bash
-lcn engine provisionar --perfil deployment/perfis/recuperar-x9.json --check   # só mostra o plano
-lcn engine provisionar --perfil deployment/perfis/recuperar-x9.json
+lcn engine provisionar --perfil deployment/perfis/administracao-protecao.json --check   # só mostra o plano
+lcn engine provisionar --perfil deployment/perfis/administracao-protecao.json
 ```
 
 ## Como se comporta
@@ -49,10 +49,10 @@ Código de saída da CLI: `0` aplicado ou nada a fazer; `2` arquivo ilegível;
 ```json
 {
   "schemaVersion": 1,
-  "profileId": "recuperar-x9",
+  "profileId": "exemplo",
   "profileVersion": 1,
   "packageIds": [],
-  "templateIds": ["x9", "apagar"],
+  "templateIds": ["eco", "apagar"],
   "scope": { "include": [{ "kind": "everywhere" }], "exclude": [] },
   "deploymentMode": "live",
   "pools": [{ "id": "principal", "label": "Principal" }],
@@ -76,7 +76,7 @@ Código de saída da CLI: `0` aplicado ou nada a fazer; `2` arquivo ilegível;
 Arquivo opcional, apontado por `LCN_PROVISION_POLICY`:
 
 ```json
-{ "schemaVersion": 1, "allowedPackageIds": ["basico"], "allowedTemplateIds": ["x9"] }
+{ "schemaVersion": 1, "allowedPackageIds": ["basico"], "allowedTemplateIds": ["eco"] }
 ```
 
 Se o perfil pedir algo fora da lista, **o perfil inteiro** é recusado (nada é
@@ -88,12 +88,4 @@ recusa — nunca é ignorada.
 | arquivo | o que instala |
 |---|---|
 | `vazio.json` | nada; instância limpa |
-| `recuperar-x9.json` | x9, recuperação de visualização única (manual e automática), destino do recover e apagar mensagem citada |
 | `administracao-protecao.json` | pacotes de administração e proteção, só em grupos |
-
-`recuperar-x9.json` deixa de fora `anti-visualizacao-unica` (ela pode remover o
-autor de um grupo): quem quiser acrescenta em `templateIds`. Ele **não**
-recupera mensagem apagada — isso não existe no LCN.
-
-Para testar: `config-recover` e `config-auto-recover` são "só dono". Enquanto
-nenhum dono estiver cadastrado, o próprio número do bot consegue usá-los.

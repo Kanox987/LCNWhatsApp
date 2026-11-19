@@ -105,16 +105,14 @@ const schemaPropViewOnce = schema.definitions.actionWhatsappSendFile.properties.
 check('schema define viewOnce como boolean em actionWhatsappSendFile', schemaPropViewOnce?.type === 'boolean')
 check('schema descreve o limite honesto (pedido ao aplicativo, não garantia)',
   typeof schemaPropViewOnce?.description === 'string' &&
-  schemaPropViewOnce.description.includes('pedido ao aplicativo') &&
-  schemaPropViewOnce.description.includes('/x9'))
+  schemaPropViewOnce.description.includes('pedido ao aplicativo'))
 
 const acaoTela = ACOES_TELA.find((a) => a.tipo === 'action.whatsapp.sendFile')
 const campoTela = acaoTela?.campos.find((c) => c.chave === 'viewOnce')
 check('catálogo da tela inclui viewOnce em action.whatsapp.sendFile', !!campoTela)
 check('catálogo da tela traz texto de ajuda com limite honesto',
   typeof campoTela?.ajuda === 'string' &&
-  campoTela.ajuda.includes('pedido') &&
-  campoTela.ajuda.includes('/x9'))
+  campoTela.ajuda.includes('pedido'))
 
 // --- 4. Avaliador (evaluator.js) --------------------------------------------
 const db = abrirBanco(':memory:')

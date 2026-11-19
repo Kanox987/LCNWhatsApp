@@ -1,12 +1,9 @@
 # Transcrição de áudio (opcional)
 
-Extra plugável. Nunca derruba a captura: se falhar ou estiver `off`, a mídia é
-salva/reenviada sem transcrição. Configure em `lcn` > Configurações > Transcrição.
+Extra plugável. Nunca derruba o bot: se falhar ou estiver `off`, o áudio só
+fica sem transcrição. Configure em `lcn` > Configurações > Transcrição.
 
-## Além da visu única
-
-Originalmente a transcrição só rodava em áudio de visualização única capturado.
-Agora também dá pra transcrever áudio normal:
+## Como usar
 
 - **Transcrição automática por conversa**: em `lcn` > Configurações > Transcrição
   por conversa, marque `auto: sim` pra uma conversa (contato ou grupo) — todo
@@ -15,11 +12,11 @@ Agora também dá pra transcrever áudio normal:
 - **Comando `/transcrever`**: responda (cite) qualquer áudio com o texto
   `/transcrever` e o bot transcreve e responde na mesma conversa. Quem pode usar
   o comando depende de `transcricao.comandoTerceiros` (padrão: só o dono da
-  conta, respondendo de qualquer dispositivo logado na sua conta — mesmo modelo
-  do `/recover`) — cada conversa pode sobrepor esse padrão individualmente.
+  conta, respondendo de qualquer dispositivo logado na sua conta) — cada
+  conversa pode sobrepor esse padrão individualmente.
 
 Nos dois casos, o áudio baixado é temporário: existe só durante a transcrição e
-é apagado em seguida (não é arquivado como uma "captura").
+é apagado em seguida (não fica guardado em disco).
 
 ## Provedores
 - **off** (padrão) — sem transcrição.

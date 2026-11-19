@@ -14,8 +14,9 @@ import * as enviadas from '../enviadas.js'
 // aqui (não reinventada) por consistência.
 //
 // EM GRUPO O REMETENTE NUNCA CAI NO remoteJid, e isto é o conserto de um
-// defeito relatado ao vivo: a legenda do /x9 saía com "wa.me/120363..." — o
-// id do GRUPO apresentado como se fosse o telefone de uma pessoa. O grupo é
+// defeito relatado ao vivo: uma legenda com "wa.me/{{sender}}" saía com
+// "wa.me/120363..." — o id do GRUPO apresentado como se fosse o telefone de
+// uma pessoa. O grupo é
 // o endereço da conversa, nunca o autor dela, e a cadeia de `||` fazia essa
 // troca calada toda vez que `participant` não vinha na chave.
 //
@@ -176,13 +177,10 @@ function extrairTexto (msg) {
 // NUNCA pode virar JSON solto. Vira um token opaco (mediaRefCache) que só
 // este mesmo processo consegue resolver de volta.
 //
-// BUG real encontrado nos testes (não suposição): desembrulhar() só abre
-// ephemeralMessage/deviceSentMessage/documentWithCaptionMessage — NÃO abre
-// viewOnceMessage/viewOnceMessageV2/viewOnceMessageV2Extension. Pra visu
-// única, o node de mídia mora dentro desse envelope, então usar `msg`
-// (só desembrulhado no sentido "normal") nunca acharia o node — mediaRef
-// ficava sempre undefined. acharVisuUnica() (visu.js, já testado) é quem
-// sabe abrir ESSE envelope específico e devolve { node, tipo, interno }.
+// desembrulhar() só abre ephemeralMessage/deviceSentMessage/
+// documentWithCaptionMessage — NÃO abre viewOnceMessage/viewOnceMessageV2/
+// viewOnceMessageV2Extension. Pra visu única, quem abre esse envelope é
+// acharVisuUnica() (visu.js), usado só para ler tipo e legenda (dadosDaMidia).
 function construirMediaRefInline (msg, tipo) {
   const campo = `${tipo}Message`
   const node = msg?.[campo]
@@ -190,12 +188,12 @@ function construirMediaRefInline (msg, tipo) {
   return mediaRefCache.criar({ node, tipo, interno: msg })
 }
 
-function construirMediaRef (msgBruta, msg, kind, marcadaComoViewOnce) {
-  if (kind === 'view_once') {
-    const achado = acharVisuUnica(msgBruta, marcadaComoViewOnce)
-    if (!achado) return undefined
-    return mediaRefCache.criar({ node: achado.node, tipo: achado.tipo, interno: achado.interno })
-  }
+// Visualização única NÃO vira token: a recuperação foi retirada (a Meta mudou
+// o tratamento desses arquivos), e um token aqui deixaria figurinha, acervo ou
+// conexão servirem de recuperação disfarçada. O `kind` 'view_once' continua,
+// porque o gatilho (anti-visualização única) depende dele.
+function construirMediaRef (msg, kind) {
+  if (kind === 'view_once') return undefined
   if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'sticker') {
     return construirMediaRefInline(msg, kind)
   }
@@ -207,9 +205,10 @@ function construirMediaRef (msgBruta, msg, kind, marcadaComoViewOnce) {
 // opaco, e `mediaKey`/`directPath` continuam só na memória do gateway.
 //
 // O tipo importa porque `message.kind` de uma visualização única é literalmente
-// 'view_once': não diz se é foto, vídeo ou áudio, e uma legenda de mídia
-// recuperada precisa dizer. A legenda importa porque é o que a pessoa escreveu
-// junto com a mídia, e some com ela.
+// 'view_once': não diz se é foto, vídeo ou áudio, e um modelo que fala da mídia
+// precisa dizer. A legenda importa porque é o que a pessoa escreveu junto com
+// a mídia. Vale também para visu única, que não tem token mas tem tipo e
+// legenda.
 function dadosDaMidia (msgBruta, msg, kind, marcadaComoViewOnce) {
   if (kind === 'view_once') {
     const achado = acharVisuUnica(msgBruta, marcadaComoViewOnce)
@@ -224,8 +223,8 @@ function dadosDaMidia (msgBruta, msg, kind, marcadaComoViewOnce) {
 
 // Varre os campos da mensagem procurando contextInfo.quotedMessage — mesma
 // ideia de acharCitacaoGenerica, mas devolvendo só
-// endereçamento (nunca o conteúdo da citação: /recover e visu única
-// continuam ação nativa protegida, não precisam vazar isso pro motor).
+// endereçamento (nunca o conteúdo da mídia citada, que não precisa vazar
+// pro motor).
 function construirQuotedRef (msg) {
   if (!msg) return undefined
   for (const [chave, node] of Object.entries(msg)) {
@@ -250,14 +249,16 @@ function construirQuotedRef (msg) {
   return undefined
 }
 
-// A visualização única dentro da mensagem CITADA — é onde o WhatsApp deixa
-// uma cópia decriptável da mídia original, e é o que faz o /recover funcionar.
+// A mídia dentro da mensagem CITADA (figurinha, foto, vídeo, áudio).
 //
 // O motor recebe apenas um TOKEN opaco (mesma proteção do mediaRef da
 // mensagem atual): quem consegue trocar o token pela mídia é só o processo
-// que o criou, e o segredo (mediaKey, directPath) nunca sai daqui. Assim o
-// motor consegue DECIDIR sobre uma visu única citada sem nunca receber o
-// conteúdo dela.
+// que o criou, e o segredo (mediaKey, directPath) nunca sai daqui.
+//
+// Visualização única citada NÃO ganha token: a recuperação foi retirada (a
+// Meta mudou o tratamento desses arquivos), e responder uma visu única com
+// /converter ou /roubar seria recuperação disfarçada. Sai só o rótulo, o tipo
+// e a legenda, sem `token`, e toda ação que exige mídia lê `token`.
 function construirQuotedMediaRef (msg) {
   if (!msg) return undefined
   for (const [chave, node] of Object.entries(msg)) {
@@ -269,9 +270,15 @@ function construirQuotedMediaRef (msg) {
     //   2. se não é, ainda assim existe mídia ali?
     // Antes só existia a segunda, com o resultado rotulado `view_once` sempre —
     // então uma foto comum citada viajava mentindo o tipo. O rótulo agora diz a
-    // verdade, e quem exige visu única é quem CONSOME (o /recover), não o nome
-    // do campo.
+    // verdade.
     const visu = acharVisuUnica(citada, false)
+    if (visu) {
+      return {
+        kind: 'view_once',
+        mediaKind: visu.tipo,
+        ...(typeof visu.node?.caption === 'string' && visu.node.caption ? { caption: visu.node.caption } : {})
+      }
+    }
     // A figurinha citada entra por um caminho PRÓPRIO, e não pela busca de
     // visualização única. `acharVisuUnica` fala de visu única: carregar
     // figurinha para dentro dela misturaria dois assuntos, e um dia alguém
@@ -280,7 +287,7 @@ function construirQuotedMediaRef (msg) {
     // Isto é o que faz "/converter png" e "/roubar" existirem: os dois
     // trabalham em cima de uma figurinha RESPONDIDA, e até agora não havia
     // token nenhum para ela.
-    const figurinha = !visu ? desembrulhar(citada)?.stickerMessage : null
+    const figurinha = desembrulhar(citada)?.stickerMessage
     if (figurinha) {
       return {
         token: mediaRefCache.criar({ node: figurinha, tipo: 'sticker', interno: desembrulhar(citada) }),
@@ -288,11 +295,11 @@ function construirQuotedMediaRef (msg) {
         mediaKind: 'sticker'
       }
     }
-    const achado = visu || acharVisuUnica(citada, true)
+    const achado = acharVisuUnica(citada, true)
     if (achado) {
       return {
         token: mediaRefCache.criar({ node: achado.node, tipo: achado.tipo, interno: achado.interno }),
-        kind: visu ? 'view_once' : 'media',
+        kind: 'media',
         mediaKind: achado.tipo,
         ...(typeof achado.node?.caption === 'string' && achado.node.caption ? { caption: achado.node.caption } : {})
       }
@@ -409,9 +416,11 @@ export function construirEventoDeMensagem (event, { accountId, recebidoEmMs, bot
   // não há texto nenhum — nunca vira string vazia, que casaria com `prefix`.
   const texto = extrairTexto(msg)
   if (typeof texto === 'string' && texto) mensagem.text = texto
-  const mediaRef = construirMediaRef(msgBruta, msg, kind, key.isViewOnce === true)
-  if (mediaRef) {
-    mensagem.mediaRef = mediaRef
+  const mediaRef = construirMediaRef(msg, kind)
+  if (mediaRef) mensagem.mediaRef = mediaRef
+  // Fora do `if (mediaRef)`: visu única não tem token, mas tipo e legenda
+  // continuam valendo para a classificação e os modelos.
+  if (mediaRef || kind === 'view_once') {
     const dados = dadosDaMidia(msgBruta, msg, kind, key.isViewOnce === true)
     if (dados?.mediaKind) mensagem.mediaKind = dados.mediaKind
     if (typeof dados?.caption === 'string' && dados.caption) mensagem.mediaCaption = dados.caption

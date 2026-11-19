@@ -46,13 +46,13 @@ const perfilRuim = path.join(home, 'ruim.json')
 const perfilQuebrado = path.join(home, 'quebrado.json')
 fs.writeFileSync(perfilOk, JSON.stringify({
   schemaVersion: 1, profileId: 'gb', profileVersion: 1,
-  templateIds: ['x9', 'apagar'], scope: { include: [{ kind: 'everywhere' }], exclude: [] },
+  templateIds: ['eco', 'apagar'], scope: { include: [{ kind: 'everywhere' }], exclude: [] },
   parametrosComuns: { poolId: 'padrao' }
 }))
 // Falta o poolId: o motor recusa (400) — perfil errado, não motor quebrado.
 fs.writeFileSync(perfilRuim, JSON.stringify({
   schemaVersion: 1, profileId: 'ruim', profileVersion: 1,
-  templateIds: ['x9'], scope: { include: [{ kind: 'everywhere' }], exclude: [] }
+  templateIds: ['eco'], scope: { include: [{ kind: 'everywhere' }], exclude: [] }
 }))
 fs.writeFileSync(perfilQuebrado, '{ isto não é json')
 

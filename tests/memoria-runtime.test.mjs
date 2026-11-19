@@ -305,7 +305,7 @@ try {
     check(`precedência download=${download}, geral=${geral}: limite efetivo ${efetivo} MB`, configuracaoDeDownload(c).limiteBytes === efetivo * MB)
   }
   check('orçamento total tem caminho de configuração, sem teto fixo', limitesDeMidia({ hardware: { orcamentoMidiaMB: 512 } }).orcamento === 512 * MB)
-  for (const tipo of ['connection.call', 'whatsapp.recover', 'acervo.save', 'whatsapp.sendFile', 'media.download']) {
+  for (const tipo of ['connection.call', 'acervo.save', 'whatsapp.sendFile', 'media.download']) {
     const orcamento = criarOrcamentoDeMidia(4)
     let limiteRecebido
     let leuCorpo = false

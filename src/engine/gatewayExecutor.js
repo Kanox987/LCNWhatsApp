@@ -706,44 +706,6 @@ async function executarPacoteDeFigurinhas (client, comando, deps) {
   }
 }
 
-// Recuperação de visualização única — o comando que deu origem ao projeto.
-// O motor decidiu que era pra recuperar; aqui a mídia é de fato baixada (o
-// token só resolve neste processo) e reenviada como mídia normal.
-// 'saved_messages' resolve para o JID da própria conta, que só este lado
-// conhece: o motor mandou o destino como intenção, não como endereço.
-async function executarRecover (client, comando, deps) {
-  const { mediaRefCache, baixarBuffer, limiteBytes, resolverJidProprio } = deps
-
-  const entrada = mediaRefCache.resolver(comando.payload.mediaRef)
-  if (!entrada) {
-    throw new Error('a visualização única expirou antes do comando voltar do motor')
-  }
-
-  const destino = comando.payload.destination === 'saved_messages' || !comando.payload.destinationId
-    ? resolverJidProprio(client)
-    : comando.payload.destinationId
-  if (!destino) throw new Error('não foi possível resolver o destino da recuperação')
-
-  const buffer = await baixarBuffer(client, entrada.node, entrada.tipo, limiteBytes)
-  if (!buffer?.length) throw new Error('a mídia da visualização única veio vazia')
-
-  // O mimetype vem do nó original, e é OBRIGATÓRIO para vídeo: sem ele a
-  // biblioteca recusa o envio com "mimetype is required for video messages", e
-  // a recuperação falha depois de já ter baixado a mídia. Imagem e áudio também
-  // ganham, porque mandar o tipo certo é sempre melhor que deixar adivinhar.
-  const conteudo = { type: entrada.tipo, media: buffer }
-  const mimetype = entrada.node?.mimetype
-  if (typeof mimetype === 'string' && mimetype) conteudo.mimetype = mimetype
-  else if (entrada.tipo === 'video') conteudo.mimetype = 'video/mp4'
-  if (comando.payload.caption) conteudo.caption = comando.payload.caption
-
-  await comTimeout(
-    () => enviarERegistrar(client, destino, conteudo),
-    TIMEOUT_ENVIO_MS,
-    `timeout ao reenviar a mídia recuperada do comando ${comando.id}`
-  )
-}
-
 // Baixar mídia de um link e mandar no WhatsApp.
 //
 // Roda INTEIRO aqui, de propósito: pedir ao serviço, esperar o trabalho e
@@ -1034,7 +996,7 @@ async function executarChamadaDeConexao (client, comando, deps) {
 
   // O arquivo da mensagem, quando a função pede um.
   //
-  // Mesma fronteira da figurinha e do /recover: o motor mandou um token opaco,
+  // Mesma fronteira da figurinha: o motor mandou um token opaco,
   // e só ESTE processo consegue trocá-lo por bytes. O motor nunca viu a mídia.
   //
   // São DOIS porque existe função de duas fotos: trocar o fundo recebe a foto
@@ -2343,8 +2305,8 @@ async function executarEnvioDeArquivo (client, comando, deps) {
       // ser visualizada.
       //
       // LIMITE HONESTO: é apenas um pedido ao aplicativo de quem recebe.
-      // Modificações de WhatsApp e comandos de recuperação (como o nosso /x9)
-      // capturam a mídia antes de expirar. Não garante privacidade absoluta.
+      // Modificações de WhatsApp capturam a mídia antes de expirar. Não
+      // garante privacidade absoluta.
       if (payload.viewOnce && (conteudo.type === 'image' || conteudo.type === 'video' || conteudo.type === 'audio')) {
         conteudo.viewOnce = true
       }
@@ -2392,7 +2354,6 @@ const EXECUTORES = {
   'whatsapp.buttons': executarBotoes,
   'whatsapp.carousel': executarCarrossel,
   'whatsapp.webview': executarPagina,
-  'whatsapp.recover': executarRecover,
   'whatsapp.menu': executarMenu,
   'whatsapp.delete': executarApagar,
   'whatsapp.react': executarReagir,
@@ -2431,7 +2392,7 @@ const EXECUTORES = {
 // outras conversas. "Curto" é envio, moderação e leitura local: a ordem entre
 // eles dentro da conversa continua garantida pela vaga.
 export const COMANDOS_LONGOS = new Set([
-  'media.download', 'connection.call', 'whatsapp.recover', 'acervo.save', 'acervo.rewrite'
+  'media.download', 'connection.call', 'acervo.save', 'acervo.rewrite'
 ])
 export const COMANDOS_CURTOS = new Set([
   'whatsapp.reply', 'whatsapp.buttons', 'whatsapp.carousel', 'whatsapp.webview', 'whatsapp.menu',
@@ -2463,7 +2424,7 @@ export async function executarComandos (client, comandos, clienteEngine, deps = 
       } else {
         try {
           const resolvidas = await resolverDependencias(deps)
-          // A recuperação e a entrada de mídia compartilham rede com o HTTP,
+          // A entrada de mídia compartilha rede com o HTTP,
           // sem segurar a vaga de socket durante o download.
           const baixarBuffer = (...args) => filas.executar('rede', () => resolvidas.baixarBuffer(...args))
           resultado = (await executor(client, comando, { ...resolvidas, baixarBuffer, clienteEngine })) || null
@@ -2519,12 +2480,6 @@ async function resolverDependencias (deps) {
       acervo,
       criarExecutorDeConexao: conexao.criarExecutorDeConexao,
       baixarBuffer: visu.baixarBuffer,
-      // meJid vem com sufixo
-      // de dispositivo (":12@") e o self-chat só aceita a forma sem ele.
-      resolverJidProprio: (client) => {
-        const meJid = client.getCredentials?.()?.meJid
-        return meJid ? meJid.replace(/:\d+@/, '@') : null
-      },
       criarBaixador: downloader.criarBaixador
     }
   }

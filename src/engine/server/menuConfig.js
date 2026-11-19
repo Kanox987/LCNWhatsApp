@@ -173,8 +173,8 @@ export function usoDoCampo (campo, comOutraConversa = false) {
 }
 
 // Uma conversa indicada pelo que alguém digitou: o id inteiro (de grupo ou de
-// contato) ou só o número, que vira contato. Mesmas formas que o destino de
-// um comando aceita (`resolverDestinoConfigurado` no avaliador).
+// contato) ou só o número, que vira contato. Mesmas formas que as menções de
+// um comando aceitam (`mencoesDeclaradas` no avaliador).
 export function alvoDaConversa (texto) {
   const limpo = String(texto ?? '').trim()
   if (!limpo) return null

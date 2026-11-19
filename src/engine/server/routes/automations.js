@@ -8,7 +8,7 @@ export function registrarRotasAutomations (roteador, db) {
   const servico = criarServicoAutomacoes(db)
   const {
     obterAutomation, obterUltimaRevision, obterRevision,
-    exporAutomation, exporRevision, extrairDocumento, jsonOuNull,
+    exporAutomation, exporRevision, bloqueioDaAutomacao, extrairDocumento, jsonOuNull,
     criar, salvarRascunho, publicar, despublicar
   } = servico
 
@@ -162,6 +162,13 @@ export function registrarRotasAutomations (roteador, db) {
     if (!automation) throw new ErroHttp(404, `Automação não encontrada: ${params.id}.`)
     if (body.enabled && automation.active_revision_id === null) {
       throw new ErroHttp(409, 'Não há revisão publicada pra habilitar esta automação.')
+    }
+    // Revisão ativa com nó que o motor não executa mais (nosRemovidos.js):
+    // ligar só faria o avaliador falhar a cada evento. Desligar continua
+    // sempre permitido, e "Tirar do ar" segue pela rota de unpublish.
+    if (body.enabled) {
+      const bloqueio = bloqueioDaAutomacao(automation)
+      if (bloqueio) throw new ErroHttp(409, bloqueio.mensagem)
     }
     db.prepare('UPDATE automations SET enabled = ?, updated_at = ? WHERE id = ?')
       .run(body.enabled ? 1 : 0, new Date().toISOString(), params.id)

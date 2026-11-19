@@ -1,6 +1,6 @@
 // LCNWhatsApp — entry do bot.
-// Captura foto/vídeo/áudio em visualização única recebidos no PV e reenvia como
-// mídia NORMAL pro destino configurado (por padrão, a conversa consigo mesmo).
+// Abre a sessão do número no WhatsApp e repassa cada mensagem recebida ao motor
+// de automações, que devolve as ações (responder, apagar, figurinha...) a executar.
 //
 // Rodar o bot:      node index.js            (QR)
 //                   node index.js --code     (código de pareamento)

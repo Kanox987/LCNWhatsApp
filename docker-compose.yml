@@ -19,7 +19,7 @@ services:
     tty: true
     environment:
       # Caminho (dentro do container) do perfil a aplicar na primeira subida.
-      # Vazio = instância limpa. Ex.: /run/lcn/provisioning/perfis/recuperar-x9.json
+      # Vazio = instância limpa. Ex.: /run/lcn/provisioning/perfis/administracao-protecao.json
       LCN_PROVISION_PROFILE: ${LCN_PROVISION_PROFILE:-}
       # Teto do administrador (JSON). Vazio = nenhuma concessão, só os padrões.
       LCN_CONCESSOES: ${LCN_CONCESSOES:-}

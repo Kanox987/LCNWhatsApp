@@ -11,8 +11,12 @@
 // teste abre — não depende de relógio apertado.
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { criarAdmissaoDeEventos, registrarEntradaDeEventos } from '../src/connection.js'
 import * as mediaRefCache from '../src/engine/mediaRefCache.js'
+import { _usarPastaParaTeste } from '../src/mediaLibrary.js'
 import { COMANDOS_CURTOS, COMANDOS_LONGOS, TIPOS_DE_COMANDO } from '../src/engine/gatewayExecutor.js'
 
 let checagens = 0
@@ -39,8 +43,11 @@ const bruto = (conversa, id, texto) => ({
   timestampSeconds: 1700000000
 })
 
-// Cada `/play` vira uma recuperação de mídia cuja leitura pendura numa porta;
-// cada `/ping` vira uma resposta de texto.
+// Cada `/play` vira um "guardar no acervo" cuja leitura da mídia pendura numa
+// porta; cada `/ping` vira uma resposta de texto. O acervo é o de verdade, numa
+// pasta temporária, para nunca tocar o acervo real do usuário.
+const pastaAcervo = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-vaga-solta-'))
+_usarPastaParaTeste(pastaAcervo)
 let cenarios = 0
 function ambiente ({ hardware = {} } = {}) {
   const cfg = { hardware: { admissaoConcorrencia: 8, maxPendentes: 512, admissaoLogJanelaMs: 20, ...hardware }, download: {} }
@@ -73,8 +80,8 @@ function ambiente ({ hardware = {} } = {}) {
         const chatId = evento.chat.id
         const id = `${prefixo}-cmd-${++seq}`
         if (texto === '/play') {
-          const mediaRef = mediaRefCache.criar({ node: { fileLength: 3 }, tipo: 'image' })
-          return { results: [{ commands: [{ id, status: 'pending', commandType: 'whatsapp.recover', payload: { mediaRef, destination: 'chat', destinationId: chatId } }] }] }
+          const mediaRef = mediaRefCache.criar({ node: { fileLength: 3, mimetype: 'image/jpeg' }, tipo: 'image' })
+          return { results: [{ commands: [{ id, status: 'pending', commandType: 'acervo.save', payload: { chatId, mediaRef } }] }] }
         }
         return { results: [{ commands: [{ id, status: 'pending', commandType: 'whatsapp.reply', payload: { chatId, text: `pong ${evento.eventId}` } }] }] }
       }
@@ -190,5 +197,7 @@ function ambiente ({ hardware = {} } = {}) {
 }
 
 mediaRefCache._reiniciarParaTeste()
+_usarPastaParaTeste(null)
+fs.rmSync(pastaAcervo, { recursive: true, force: true })
 console.log(`\n${checagens} CHECAGENS PASSARAM`)
 process.exit(0)

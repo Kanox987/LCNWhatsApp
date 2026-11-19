@@ -48,7 +48,6 @@ export const ACOES_SUPORTADAS = Object.freeze([
   // porque a linguagem não manipula coleção: quem tem a lista faz o trabalho,
   // mesma forma do sorteio de membro.
   'action.variable.random',
-  'action.whatsapp.recover',
   'action.menu.render',
   'action.menu.config',
   'action.whatsapp.delete',

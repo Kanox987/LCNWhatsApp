@@ -1,5 +1,11 @@
 # Performance — descartar cedo (com cuidado)
 
+> **Registro histórico.** Este texto descreve o pipeline de captura antigo
+> (`passaFiltro` em `src/capture.js`, o toggle `grupos.ativo`), que não existe
+> mais: a recuperação de visualização única foi retirada (o WhatsApp mudou o
+> tratamento desses arquivos). A parte sobre `src/ignore.js` e o sync de LID
+> continua valendo.
+
 O problema: um número pode receber milhares de mensagens de grupo por minuto.
 Baixar/salvar mídia disso à toa seria desperdício. Mas descartar demais, cedo
 demais, quebra a própria Baileys — foi exatamente isso que aconteceu aqui (ver

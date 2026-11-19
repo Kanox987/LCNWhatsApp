@@ -29,7 +29,7 @@ const estados = (db) => db.prepare('SELECT * FROM provisioning_profile_applicati
 const TUDO = { include: [{ kind: 'everywhere' }], exclude: [] }
 const perfil = (extra = {}) => ({
   schemaVersion: 1, profileId: 'gb', profileVersion: 1,
-  templateIds: ['x9', 'apagar'], scope: TUDO,
+  templateIds: ['eco', 'apagar'], scope: TUDO,
   pools: [{ id: 'principal', label: 'Principal' }],
   parametrosComuns: { poolId: 'principal' },
   ...extra
@@ -112,12 +112,12 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
 {
   const db = abrirBanco(':memory:'); const api = criarApi(db)
   await aplicar(api, perfil())
-  const outro = await tentar(() => aplicar(api, perfil({ templateIds: ['x9'] })))
+  const outro = await tentar(() => aplicar(api, perfil({ templateIds: ['eco'] })))
   check('7. mesma versão com outro conteúdo é recusada (409)', outro.erro?.status === 409 && /outro conteúdo/.test(outro.erro.message))
   check('7. e o registro do que foi aplicado não é apagado', estados(db)[0].status === 'applied')
-  const nova = await aplicar(api, perfil({ profileVersion: 2, templateIds: ['x9', 'apagar', 'ping'] }))
+  const nova = await aplicar(api, perfil({ profileVersion: 2, templateIds: ['eco', 'apagar', 'ping'] }))
   check('7. versão maior sem --reconcile só avisa', nova.acao === 'versao-nova-pendente' && nova.versaoAplicada === 1)
-  const rec = await aplicar(api, perfil({ profileVersion: 2, templateIds: ['x9', 'apagar', 'ping'] }), { reconcile: true })
+  const rec = await aplicar(api, perfil({ profileVersion: 2, templateIds: ['eco', 'apagar', 'ping'] }), { reconcile: true })
   check('7. versão maior com --reconcile aplica (aditivo)', rec.acao === 'aplicado')
   const velha = await aplicar(api, perfil())
   check('7. versão menor que a aplicada é ignorada', velha.acao === 'ja-aplicado' || velha.acao === 'versao-antiga')
@@ -147,13 +147,13 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
 {
   const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'lcn-politica-'))
   const arquivo = path.join(pasta, 'politica.json')
-  fs.writeFileSync(arquivo, JSON.stringify({ schemaVersion: 1, allowedTemplateIds: ['x9'] }))
+  fs.writeFileSync(arquivo, JSON.stringify({ schemaVersion: 1, allowedTemplateIds: ['eco'] }))
   const db = abrirBanco(':memory:'); const api = criarApi(db, { env: { LCN_PROVISION_POLICY: arquivo } })
   const fora = await tentar(() => aplicar(api, perfil()))
   check('10. template fora da política recusa o perfil inteiro (409)', fora.erro?.status === 409 && fora.erro.detalhes?.politica === true)
   check('10. e o perfil fica blocked (a política negou de verdade)', estados(db)[0]?.status === 'blocked')
   check('10. nada foi instalado', contar(db, 'automations') === 0 && !temPool(db, 'principal'))
-  const dentro = await aplicar(api, perfil({ profileId: 'so-x9', templateIds: ['x9'] }))
+  const dentro = await aplicar(api, perfil({ profileId: 'so-eco', templateIds: ['eco'] }))
   check('10. o que a política permite passa', dentro.acao === 'aplicado')
 
   fs.writeFileSync(arquivo, '{ quebrado')
@@ -182,7 +182,7 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
 {
   const pasta = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'deployment', 'perfis')
   const arquivos = fs.readdirSync(pasta).filter((f) => f.endsWith('.json'))
-  check('11. há exemplos publicados', arquivos.length >= 3, String(arquivos.length))
+  check('11. há exemplos publicados', arquivos.length >= 2, String(arquivos.length))
   for (const arquivo of arquivos) {
     const db = abrirBanco(':memory:'); const api = criarApi(db)
     const r = await tentar(() => aplicar(api, JSON.parse(fs.readFileSync(path.join(pasta, arquivo), 'utf8'))))
@@ -190,11 +190,6 @@ const validar = (api, p, opcoes = {}) => chamar(api, 'POST', '/perfis/validar', 
       r.ok?.acao === 'aplicado' && r.ok.escolhas.every((e) => e.avisos.length === 0), r.erro?.message)
     db.close()
   }
-  const db = abrirBanco(':memory:'); const api = criarApi(db)
-  await aplicar(api, JSON.parse(fs.readFileSync(path.join(pasta, 'recuperar-x9.json'), 'utf8')))
-  const ids = db.prepare('SELECT id FROM automations').all().map((r) => r.id)
-  check('11. recuperar-x9 instala as seis automações', ids.length === 6, ids.join())
-  db.close()
 }
 
 // ------------------------------------------------ 12. número recém-conectado atende

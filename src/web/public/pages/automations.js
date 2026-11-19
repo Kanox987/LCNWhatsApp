@@ -8,6 +8,9 @@ import { analisarErroApagar, mensagemConfirmacaoApagar, statusRevisao, textoDaRe
 
 function statusAutomation (automation) {
   if (!automation.activeRevisionId) return badge('Somente rascunho', 'neutral')
+  // O motor manda `bloqueio` quando a revisão ativa usa um nó que ele não
+  // executa mais. "Pausada" sugeriria que basta ligar de novo.
+  if (automation.bloqueio && !automation.enabled) return badge('Desligada: recurso removido', 'danger')
   if (!automation.enabled) return badge('Pausada', 'warning')
   return badge(automation.deploymentMode === 'live' ? 'Ao vivo' : 'Sombra', automation.deploymentMode === 'live' ? 'success' : 'info')
 }
@@ -246,9 +249,14 @@ async function renderList ({ navigate, refresh }) {
     const name = automation.draft?.document?.name || automation.id
     const pendente = pendentePorId.get(automation.id)
     const actions = el('div', { className: 'button-row table-actions' })
+    // Com recurso removido, só "Ligar" some de uso: o motor recusa (409).
+    // "Desligar" continua, caso ela ainda esteja ligada por algum motivo.
+    const bloqueada = Boolean(automation.bloqueio) && !automation.enabled
     const toggle = button(automation.enabled ? 'Desligar' : 'Ligar', {
-      disabled: !automation.activeRevisionId && !automation.enabled,
-      title: !automation.activeRevisionId ? 'Publique uma revisão antes de ligar.' : '',
+      disabled: (!automation.activeRevisionId && !automation.enabled) || bloqueada,
+      title: bloqueada
+        ? 'Esta automação usa um recurso que foi removido e não pode ser ligada de novo.'
+        : !automation.activeRevisionId ? 'Publique uma revisão antes de ligar.' : '',
       onClick: async (event) => {
         // Captura ANTES do await: event.currentTarget vira null assim que
         // o despacho termina, então usá-lo depois de um await faz o reset
@@ -462,6 +470,18 @@ async function renderList ({ navigate, refresh }) {
         ])
       : null
 
+    // RECURSO REMOVIDO DO MOTOR.
+    //
+    // A recuperação de visualização única saiu, e as automações instaladas com
+    // ela foram desligadas na atualização. O texto vem do motor
+    // (nosRemovidos.js), que é quem sabe o motivo; a tela só lembra a saída.
+    const avisoDeBloqueio = automation.bloqueio
+      ? el('div', { className: 'notice notice-warning compact' }, [
+          el('strong', { text: 'Recurso removido: esta automação foi desligada' }),
+          el('p', { text: automation.bloqueio.mensagem })
+        ])
+      : null
+
     const avisoDeVersao = pendente
       ? el('div', { className: 'notice notice-info compact' }, [
           el('strong', { text: `Versão nova deste comando: v${pendente.de} → v${pendente.para}` }),
@@ -478,6 +498,7 @@ async function renderList ({ navigate, refresh }) {
         el('div', {}, [el('p', { className: 'mono overline', text: automation.id }), el('h2', { text: name })]),
         statusAutomation(automation)
       ]),
+      avisoDeBloqueio,
       avisoDeConflito,
       avisoDeVersao,
       areaAviso,

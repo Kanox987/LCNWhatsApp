@@ -104,8 +104,9 @@ try {
   {
     const m = mocks(), filas = criarFilasDeRecursos(cfgDe())
     const liberarRede = ocupar(filas, 'rede'), liberarSocket = ocupar(filas, 'socket')
-    await executarComandos(m.client, [comando('whatsapp.recover', { mediaRef: 'r', destinationId: 'destino', scheduling: scheduling('very_high', 'notify') })], m.motor, {
-      filas, mediaRefCache: { resolver: () => ({ node: {}, tipo: 'image' }) }, baixarBuffer: () => assert.fail('Não deve baixar')
+    await executarComandos(m.client, [comando('acervo.save', { mediaRef: 'r', scheduling: scheduling('very_high', 'notify') })], m.motor, {
+      filas, mediaRefCache: { resolver: () => ({ node: { mimetype: 'image/jpeg' }, tipo: 'image' }) }, baixarBuffer: () => assert.fail('Não deve baixar'),
+      acervo: { guardar: () => assert.fail('Não deve guardar') }
     })
     check('recusa do aviso em outro recurso conserva o recurso da falha original', m.confirmacoes[0].detail.recurso === 'rede' && m.confirmacoes[0].detail.aviso === 'recusado' && filas.socket.estado.recusasPorPrioridade.very_high === 1)
     await liberarRede(); await liberarSocket()

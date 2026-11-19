@@ -2,8 +2,8 @@
 //
 // O DEFEITO, medido no ar e não suposto. `criarControleParametro` devolvia
 // `<input type="text">` para todo parâmetro de texto, e o navegador APAGA
-// quebra de linha de um input — em silêncio, ao receber o valor. A legenda do
-// `auto-recover` que estava na VPS:
+// quebra de linha de um input — em silêncio, ao receber o valor. Uma legenda
+// de várias linhas que estava na VPS:
 //
 //     servida pelo motor:           142 caracteres, 5 quebras
 //     depois de passar pelo input:  137 caracteres, 0 quebras
@@ -35,8 +35,8 @@ const texto = (extra = {}) => ({ key: 'legenda', type: 'string', label: 'Legenda
 // inclusive os de fora deste repositório, que eu não tenho como converter.
 check('valor com quebra pede área de texto', ehCampoDeVariasLinhas(texto(), 'linha 1\nlinha 2'))
 check('valor de uma linha segue na caixa simples', ehCampoDeVariasLinhas(texto(), 'só uma linha') === false)
-check('a legenda real do /recover pede área de texto',
-  ehCampoDeVariasLinhas(texto(), '👁 *VISUALIZAÇÃO ÚNICA CAPTURADA*\n\n📱 De: wa.me/5511\n🗂 Tipo: foto'))
+check('uma legenda real de várias linhas pede área de texto',
+  ehCampoDeVariasLinhas(texto(), '📢 *AVISO*\n\n📱 De: wa.me/5511\n🗂 Tipo: foto'))
 
 // --- e o template pode DECLARAR -----------------------------------------
 //
@@ -171,19 +171,18 @@ check('valor nulo não quebra', ehCampoDeVariasLinhas(texto(), null) === false)
 // --- o caso que motivou tudo, no template de verdade --------------------
 {
   const catalogo = carregarCatalogo()
-  const alvo = catalogo.get('auto-recover')
-  const legenda = (alvo.parameters || []).find((p) => p.key === 'caption')
-  check('o padrão da legenda do auto-recover tem quebra de linha de verdade',
-    typeof legenda.default === 'string' && legenda.default.includes('\n'),
-    JSON.stringify(legenda.default?.slice(0, 40)))
-  check('então o formulário dele pede área de texto', ehCampoDeVariasLinhas(legenda, legenda.default))
+  const alvo = catalogo.get('comunicado')
+  const mensagem = (alvo.parameters || []).find((p) => p.key === 'mensagem')
+  check('o padrão da mensagem do comunicado tem quebra de linha de verdade',
+    typeof mensagem.default === 'string' && mensagem.default.includes('\n'),
+    JSON.stringify(mensagem.default?.slice(0, 40)))
+  check('então o formulário dele pede área de texto', ehCampoDeVariasLinhas(mensagem, mensagem.default))
 
   // E o documento publicado carrega as quebras — é o que o input destruiria.
-  const doc = renderizarTemplate(alvo, { caption: legenda.default, poolId: 'p' })
-  const no = doc.flow.nodes.find((n) => n.config?.caption)
-  check('e o documento publicado preserva as quebras',
-    (no.config.caption.match(/\n/g) || []).length >= 3,
-    String((no.config.caption.match(/\n/g) || []).length))
+  const doc = renderizarTemplate(alvo, { mensagem: mensagem.default, poolId: 'p' })
+  const no = doc.flow.nodes.find((n) => typeof n.config?.text === 'string' && n.config.text.includes('\n'))
+  const quebras = (no?.config?.text.match(/\n/g) || []).length
+  check('e o documento publicado preserva as quebras', quebras >= 3, String(quebras))
 }
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTODOS OS CASOS DE CAMPO MULTILINHA PASSARAM')

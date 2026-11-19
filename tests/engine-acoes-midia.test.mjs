@@ -1,5 +1,6 @@
-// Ações de mídia portadas para o motor: figurinha (vinda dos bots de
-// referência) e recover (o comando que deu origem a este projeto).
+// Ações de mídia no motor: figurinha (vinda dos bots de referência), o
+// gatilho de visualização única (o caso do anti-visualizacao-unica) e a
+// fronteira que deixa a mídia de visualização única fora de qualquer ação.
 //
 // A garantia que estes testes protegem: o motor DECIDE sobre mídia sem nunca
 // receber mídia. Ele só vê um token opaco — quem troca token por bytes é o
@@ -9,6 +10,7 @@ import { abrirBanco } from '../src/engine/server/db.js'
 import { avaliarEvento } from '../src/engine/server/evaluator.js'
 import { construirEventoDeMensagem } from '../src/engine/zapoAdapter.js'
 import { executarComandos } from '../src/engine/gatewayExecutor.js'
+import * as mediaRefCache from '../src/engine/mediaRefCache.js'
 
 let falhas = 0
 const check = (nome, ok, extra) => { if (!ok) falhas++; console.log(`${ok ? '✅' : '❌'} ${nome}${extra ? ` (${extra})` : ''}`) }
@@ -132,194 +134,120 @@ check('token da mídia citada também não', textoVazamento.includes('b=[{{messa
 check('mas o TIPO da mídia é legível — é dado, não segredo', textoVazamento.includes('tipo=[image]'), textoVazamento)
 check('nenhum token real aparece na mensagem', !textoVazamento.includes(tentaVazar.message.mediaRef))
 
-// --- recover: decide pelo token da mídia CITADA ---------------------------
-publicar('rec', [
-  { id: 'g', type: 'trigger.command', config: { command: '/recover', match: 'exact_or_args', allowFrom: 'external' } },
-  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'saved_messages', caption: 'Recuperado de {{sender.id}}', notFoundText: 'Responda uma visualização única com /recover.' } }
-], [{ from: 'g', to: 'r', on: 'matched' }])
+// --- visualização única: classificada, mas sem token -----------------------
+// A recuperação de visualização única saiu: a Meta mudou o tratamento desses
+// arquivos. Com ela sai também a recuperação disfarçada — uma figurinha, um
+// acervo ou uma conexão respondendo uma visu única. O adaptador continua
+// dizendo O QUE chegou (kind, tipo real, legenda), porque o anti-visualizacao-
+// unica decide por isso; só não entrega mais token para buscar os bytes.
+const tokensAntes = mediaRefCache._tamanho()
 
-const comVisu = avaliarEvento(db, evento({
-  kind: 'text', text: '/recover',
-  quotedMediaRef: { token: 'token-visu-9', kind: 'view_once', mediaKind: 'image' }
-}))
-const cmdRec = comandosDe(comVisu, 'rec')[0]
-check('recover: gera comando whatsapp.recover', cmdRec?.commandType === 'whatsapp.recover')
-check('recover: leva só o token da mídia citada', cmdRec?.payload?.mediaRef === 'token-visu-9')
-check('recover: preserva o tipo da mídia para o gateway reenviar certo', cmdRec?.payload?.mediaKind === 'image')
-check('recover: a legenda é interpolada no motor', cmdRec?.payload?.caption === `Recuperado de ${CHAT}`)
-check('recover: destino "saved_messages" NÃO vira endereço no motor (só o gateway sabe o JID próprio)', cmdRec?.payload?.destinationId === null)
+const visuChegando = doAdaptador({ viewOnceMessageV2: { message: { imageMessage: { url: 'auto', viewOnce: true, caption: 'segredo' } } } })
+check('adaptador: visu única própria continua classificada view_once', visuChegando.message.kind === 'view_once', visuChegando.message.kind)
+check('adaptador: visu única própria expõe o tipo real', visuChegando.message.mediaKind === 'image', visuChegando.message.mediaKind)
+check('adaptador: e a legenda original da mídia', visuChegando.message.mediaCaption === 'segredo', visuChegando.message.mediaCaption)
+check('adaptador: visu única própria NÃO gera mediaRef', visuChegando.message.mediaRef === undefined, visuChegando.message.mediaRef)
 
-const semVisu = avaliarEvento(db, evento({ kind: 'text', text: '/recover' }))
-check('recover sem visu única citada: explica em vez de falhar calado', comandosDe(semVisu, 'rec')[0]?.payload?.text === 'Responda uma visualização única com /recover.')
+// A marcação pode vir só na chave (isViewOnce), com a mídia sem envelope.
+const visuPelaChave = construirEventoDeMensagem(
+  { key: { ...chaveDireta(), isViewOnce: true }, message: { imageMessage: { url: 'chave', mimetype: 'image/jpeg' } } },
+  { accountId: 'acc-1', botId: '5511900000002@s.whatsapp.net' }
+)
+check('adaptador: visu única marcada na chave também é view_once', visuPelaChave.message.kind === 'view_once', visuPelaChave.message.kind)
+check('adaptador: e também não gera mediaRef', visuPelaChave.message.mediaRef === undefined)
 
-// A citação passou a carregar mídia comum também (é o que faz a figurinha
-// funcionar respondendo uma foto). O /recover tem que continuar recusando:
-// reenviar uma foto que todo mundo ainda vê não é recuperar nada.
-const recFotoComum = avaliarEvento(db, doAdaptador({
+const visuCitadaPorFig = doAdaptador({
   extendedTextMessage: {
-    text: '/recover',
-    contextInfo: { stanzaId: 'Q2', participant: CHAT, quotedMessage: { imageMessage: { url: 'w', mimetype: 'image/jpeg' } } }
-  }
-}))
-const cmdRecComum = comandosDe(recFotoComum, 'rec')[0]
-check('recover respondendo foto COMUM: recusa em vez de recuperar', cmdRecComum?.commandType !== 'whatsapp.recover', cmdRecComum?.commandType)
-check('recover respondendo foto comum: explica o que faltou', cmdRecComum?.payload?.text === 'Responda uma visualização única com /recover.')
-
-// E visualização única de verdade continua funcionando pelo adaptador.
-const recVisuReal = doAdaptador({
-  extendedTextMessage: {
-    text: '/recover',
+    text: '/fig',
     contextInfo: { stanzaId: 'Q3', participant: CHAT, quotedMessage: { viewOnceMessageV2: { message: { imageMessage: { url: 'v', viewOnce: true } } } } }
   }
 })
-check('adaptador: visu única citada continua rotulada view_once', recVisuReal.message.quotedMediaRef?.kind === 'view_once', recVisuReal.message.quotedMediaRef?.kind)
-check('recover respondendo visu única de verdade: recupera', comandosDe(avaliarEvento(db, recVisuReal), 'rec')[0]?.commandType === 'whatsapp.recover')
+check('adaptador: visu única CITADA não gera token', !visuCitadaPorFig.message.quotedMediaRef?.token, JSON.stringify(visuCitadaPorFig.message.quotedMediaRef))
+check('adaptador: a citação em si continua conhecida', visuCitadaPorFig.message.quotedRef?.id === 'Q3')
+check('adaptador: nenhum token de mídia foi criado para visu única', mediaRefCache._tamanho() === tokensAntes, `${tokensAntes} -> ${mediaRefCache._tamanho()}`)
 
-publicar('rec2', [
-  { id: 'g', type: 'trigger.command', config: { command: '/aqui', match: 'exact', allowFrom: 'external' } },
-  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat' } }
-], [{ from: 'g', to: 'r', on: 'matched' }])
-const mesmoChat = avaliarEvento(db, evento({ kind: 'text', text: '/aqui', quotedMediaRef: { token: 't2', kind: 'view_once', mediaKind: 'video' } }))
-check('recover com destino "same_chat": endereça a própria conversa', comandosDe(mesmoChat, 'rec2')[0]?.payload?.destinationId === CHAT)
+const figNaVisu = comandosDe(avaliarEvento(db, visuCitadaPorFig), 'fig')[0]
+check('figurinha respondendo visu única: não chama o serviço (nada é baixado)', figNaVisu?.commandType !== 'connection.call', figNaVisu?.commandType)
+check('figurinha respondendo visu única: nenhum comando leva mediaRef', !figNaVisu?.payload?.mediaRef)
+check('figurinha respondendo visu única: avisa como se não houvesse mídia', figNaVisu?.payload?.text === 'Manda uma imagem com /fig, ou responda uma.', figNaVisu?.payload?.text)
 
 // --- comando na PRÓPRIA mensagem (uso pessoal) ---------------------------
-// Mandar a mídia do número onde o bot roda e usar o comando ali mesmo é o caso
-// normal de quem só quer o bot para si. Com allowFrom 'external' isso NÃO
+// Mandar a mensagem do número onde o bot roda e usar o comando ali mesmo é o
+// caso normal de quem só quer o bot para si. Com allowFrom 'external' isso NÃO
 // dispara — a regra existe para o bot não reagir a si mesmo. 'any' abre para
 // comando digitado, e só para ele: a barreira do gatilho AUTOMÁTICO continua
 // não sendo configurável, porque lá reagir à própria mensagem vira laço.
-publicar('x9-proprio', [
-  { id: 'g', type: 'trigger.command', config: { command: '/x9', match: 'exact_or_args', allowFrom: 'any' } },
-  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat', notFoundText: 'sem visu' } }
+publicar('eco-proprio', [
+  { id: 'g', type: 'trigger.command', config: { command: '/eco', match: 'exact_or_args', allowFrom: 'any' } },
+  { id: 'r', type: 'action.whatsapp.reply', config: { text: 'eco' } }
 ], [{ from: 'g', to: 'r', on: 'matched' }])
 
-publicar('x9-externo', [
-  { id: 'g', type: 'trigger.command', config: { command: '/x9ext', match: 'exact_or_args', allowFrom: 'external' } },
-  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat', notFoundText: 'sem visu' } }
+publicar('eco-externo', [
+  { id: 'g', type: 'trigger.command', config: { command: '/ecoext', match: 'exact_or_args', allowFrom: 'external' } },
+  { id: 'r', type: 'action.whatsapp.reply', config: { text: 'eco' } }
 ], [{ from: 'g', to: 'r', on: 'matched' }])
 
 const meuProprioEvento = (texto) => {
-  const e = doAdaptador({
-    extendedTextMessage: {
-      text: texto,
-      contextInfo: { stanzaId: `EU${Math.random()}`, participant: CHAT, quotedMessage: { viewOnceMessageV2: { message: { imageMessage: { url: 'eu', viewOnce: true } } } } }
-    }
-  })
+  const e = doAdaptador({ conversation: texto })
   e.sender.authoredBySelf = true
   return e
 }
 
-const proprio = comandosDe(avaliarEvento(db, meuProprioEvento('/x9')), 'x9-proprio')[0]
-check('comando com allowFrom "any" responde à própria mensagem', proprio?.commandType === 'whatsapp.recover', proprio?.commandType)
+const proprio = comandosDe(avaliarEvento(db, meuProprioEvento('/eco')), 'eco-proprio')[0]
+check('comando com allowFrom "any" responde à própria mensagem', proprio?.commandType === 'whatsapp.reply', proprio?.commandType)
 
-const externo = comandosDe(avaliarEvento(db, meuProprioEvento('/x9ext')), 'x9-externo')
+const externo = comandosDe(avaliarEvento(db, meuProprioEvento('/ecoext')), 'eco-externo')
 check('comando com allowFrom "external" continua ignorando a própria mensagem', externo.length === 0)
 
-// A barreira do gatilho automático NÃO é afetada: continua absoluta.
-publicar('auto-proprio', [
+// --- gatilho de visualização única: o caso do anti-visualizacao-unica -----
+// Sem citação e sem comando: trigger.message filtrando view_once e apagando.
+// Ele decide só pelo `kind` — não precisa de token, e é por isso que continua
+// valendo com a visu única fora de qualquer ação de mídia.
+publicar('anti-visu', [
   { id: 'g', type: 'trigger.message', config: { allowFrom: 'external', messageKinds: ['view_once'] } },
-  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat' } }
+  { id: 'r', type: 'action.whatsapp.delete', config: {} }
 ], [{ from: 'g', to: 'r', on: 'matched' }], { acceptedMessageKinds: ['view_once'] })
+
+const visuDeTerceiro = doAdaptador({ viewOnceMessageV2: { message: { imageMessage: { url: 'terceiro', viewOnce: true } } } })
+const cmdAnti = comandosDe(avaliarEvento(db, visuDeTerceiro), 'anti-visu')
+check('visu única de terceiro: gera whatsapp.delete', cmdAnti[0]?.commandType === 'whatsapp.delete', cmdAnti[0]?.commandType)
+check('visu única de terceiro: apaga a PRÓPRIA mensagem que chegou', cmdAnti[0]?.payload?.messageRef?.id === visuDeTerceiro.providerRef.id)
+check('visu única de terceiro: só o apagar, nada de mídia', cmdAnti.length === 1 && !JSON.stringify(cmdAnti).includes('mediaRef'))
+
+const fotoComum = doAdaptador({ imageMessage: { url: 'comum', mimetype: 'image/jpeg' } })
+check('foto comum não aciona o gatilho de visu única', comandosDe(avaliarEvento(db, fotoComum), 'anti-visu').length === 0)
+
+// A barreira do gatilho automático NÃO é configurável: continua absoluta.
 const autoProprio = doAdaptador({ viewOnceMessageV2: { message: { imageMessage: { url: 'loop', viewOnce: true } } } })
 autoProprio.sender.authoredBySelf = true
-check('gatilho automático nunca reage à própria mensagem, aconteça o que acontecer', comandosDe(avaliarEvento(db, autoProprio), 'auto-proprio').length === 0)
+check('gatilho automático nunca reage à própria mensagem, aconteça o que acontecer', comandosDe(avaliarEvento(db, autoProprio), 'anti-visu').length === 0)
 
-// --- destino que vem de VARIÁVEL, não do documento ------------------------
-// É o encontro entre o comando comum e o de configuração: o de configuração
-// grava na tabela, o comum lê de lá. Mesma tabela dos marcadores tipo VIP,
-// nenhum mecanismo novo.
-publicar('rec-config', [
-  { id: 'g', type: 'trigger.command', config: { command: '/rc', match: 'exact_or_args', allowFrom: 'external' } },
-  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'configured', destinationId: '{{var.global.recover_destino}}', notFoundText: 'sem visu' } }
-], [{ from: 'g', to: 'r', on: 'matched' }])
-
-const visuCitada = () => doAdaptador({
-  extendedTextMessage: {
-    text: '/rc',
-    contextInfo: { stanzaId: `QC${Math.random()}`, participant: CHAT, quotedMessage: { viewOnceMessageV2: { message: { imageMessage: { url: 'k', viewOnce: true } } } } }
-  }
-})
-
-// Antes de configurar: funciona, indo para as mensagens salvas. Quem acabou de
-// instalar não pode ficar com um comando morto esperando configuração.
-const semConfig = comandosDe(avaliarEvento(db, visuCitada()), 'rec-config')[0]
-check('destino configurável sem configuração: ainda recupera', semConfig?.commandType === 'whatsapp.recover', semConfig?.commandType)
-check('destino configurável sem configuração: cai para mensagens salvas', semConfig?.payload?.destination === 'saved_messages' && semConfig?.payload?.destinationId === null)
-
-// O comando de configuração grava exatamente isto:
-db.prepare('INSERT INTO entity_attributes (scope_kind, scope_id, key, value_json, updated_at) VALUES (?, ?, ?, ?, ?)')
-  .run('global', '__global__', 'recover_destino', JSON.stringify('5511777777777'), agora)
-
-const comConfig = comandosDe(avaliarEvento(db, visuCitada()), 'rec-config')[0]
-check('depois de configurar: o destino vem da variável', comConfig?.payload?.destinationId === '5511777777777@s.whatsapp.net', comConfig?.payload?.destinationId)
-check('depois de configurar: o número digitado vira JID sozinho', comConfig?.payload?.destination === 'fixed' || comConfig?.payload?.destination === 'configured')
-
-// --- recuperação AUTOMÁTICA: a mídia é da própria mensagem ----------------
-// Sem citação e sem comando. É o que permite o auto-recover existir sem ação
-// nova: trigger.message filtrando visualização única.
-publicar('rec-auto', [
-  { id: 'g', type: 'trigger.message', config: { allowFrom: 'external', messageKinds: ['view_once'] } },
-  { id: 'r', type: 'action.whatsapp.recover', config: { destination: 'same_chat' } }
-], [{ from: 'g', to: 'r', on: 'matched' }], { acceptedMessageKinds: ['view_once'] })
-
-const visuChegando = doAdaptador({ viewOnceMessageV2: { message: { imageMessage: { url: 'auto', viewOnce: true, caption: 'segredo' } } } })
-check('adaptador: visu única própria expõe o tipo real', visuChegando.message.mediaKind === 'image', visuChegando.message.mediaKind)
-check('adaptador: e a legenda original da mídia', visuChegando.message.mediaCaption === 'segredo')
-const cmdAuto = comandosDe(avaliarEvento(db, visuChegando), 'rec-auto')[0]
-check('recuperação automática: recupera sem ninguém digitar nada', cmdAuto?.commandType === 'whatsapp.recover', cmdAuto?.commandType)
-check('recuperação automática: usa a mídia da PRÓPRIA mensagem', cmdAuto?.payload?.mediaRef === visuChegando.message.mediaRef)
-check('recuperação automática: leva o tipo real, não "view_once"', cmdAuto?.payload?.mediaKind === 'image', cmdAuto?.payload?.mediaKind)
-
-// --- lado do gateway: token vira mídia de verdade -------------------------
-function clienteFake () {
-  const enviados = []
-  return {
-    enviados,
-    getCredentials: () => ({ meJid: '5511900000002:47@s.whatsapp.net' }),
-    message: { send: async (jid, conteudo) => { enviados.push({ jid, conteudo }); return { ok: true } } }
-  }
-}
+// --- lado do gateway ------------------------------------------------------
 const engineFake = { execucoes: { confirmar: async () => ({ ok: true }) } }
 
 const depsFig = {
   mediaRefCache: { resolver: (t) => (t === 'ok' ? { node: {}, tipo: 'image', interno: {} } : null) },
   baixarBuffer: async () => Buffer.from('imagem-crua'),
-  limiteBytes: 1000,
-  resolverJidProprio: () => '5511900000002@s.whatsapp.net'
+  limiteBytes: 1000
 }
 
 // O envio COMO figurinha continua existindo — ele virou parte da entrega da
 // chamada de conexão, e está coberto em tests/conexao-imagem.test.mjs, onde o
 // serviço declara `tipo: figurinha` e o gateway manda `type: 'sticker'`.
 
-const c3 = clienteFake()
-await executarComandos(c3, [{ id: 'c3', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'saved_messages', destinationId: null, mediaRef: 'ok', caption: 'oi' } }], engineFake, depsFig)
-check('gateway: recover resolve "saved_messages" para o JID próprio, sem o sufixo de dispositivo', c3.enviados[0]?.jid === '5511900000002@s.whatsapp.net')
-check('gateway: recover reenvia com o tipo real da mídia', c3.enviados[0]?.conteudo?.type === 'image')
-// Vídeo EXIGE mimetype: sem ele a biblioteca recusa com "mimetype is required
-// for video messages" — e a falha acontece depois de já ter baixado a mídia,
-// que é o pior momento. Achado num teste ao vivo: o recover de um vídeo de
-// visualização única falhava com a mídia na mão.
-const depsVideo = {
-  mediaRefCache: { resolver: () => ({ node: { mimetype: 'video/mp4' }, tipo: 'video', interno: {} }) },
-  baixarBuffer: async () => Buffer.from('video-cru'),
-  limiteBytes: 1000,
-  resolverJidProprio: () => '5511900000002@s.whatsapp.net'
+function clienteFake () {
+  const enviados = []
+  return { enviados, message: { send: async (jid, conteudo) => { enviados.push({ jid, conteudo }); return { ok: true } } } }
 }
-const cVideo = clienteFake()
-await executarComandos(cVideo, [{ id: 'v1', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'same_chat', destinationId: CHAT, mediaRef: 'ok', mediaKind: 'video' } }], engineFake, depsVideo)
-check('gateway: recover de vídeo informa o mimetype', cVideo.enviados[0]?.conteudo?.mimetype === 'video/mp4', JSON.stringify(cVideo.enviados[0]?.conteudo?.mimetype))
 
-const depsSemMime = { ...depsVideo, mediaRefCache: { resolver: () => ({ node: {}, tipo: 'video', interno: {} }) } }
-const cSemMime = clienteFake()
-await executarComandos(cSemMime, [{ id: 'v2', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'same_chat', destinationId: CHAT, mediaRef: 'ok', mediaKind: 'video' } }], engineFake, depsSemMime)
-check('gateway: vídeo sem mimetype no nó ainda sai com um válido', cSemMime.enviados[0]?.conteudo?.mimetype === 'video/mp4')
-
-check('gateway: recover leva a legenda', c3.enviados[0]?.conteudo?.caption === 'oi')
-
-const c4 = clienteFake()
-await executarComandos(c4, [{ id: 'c4', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'fixed', destinationId: '5599@s.whatsapp.net', mediaRef: 'ok' } }], engineFake, depsFig)
-check('gateway: destino fixo é respeitado', c4.enviados[0]?.jid === '5599@s.whatsapp.net')
+// A recuperação saiu do gateway junto com a ação: um comando antigo que ainda
+// esteja na fila não pode virar envio de mídia.
+const cAntigo = clienteFake()
+let baixou = false
+await executarComandos(cAntigo, [{ id: 'r1', commandType: 'whatsapp.recover', payload: { chatId: CHAT, destination: 'same_chat', destinationId: CHAT, mediaRef: 'ok' } }],
+  engineFake, { ...depsFig, baixarBuffer: async () => { baixou = true; return Buffer.from('x') } })
+check('gateway: comando whatsapp.recover antigo não envia nada', cAntigo.enviados.length === 0)
+check('gateway: e não baixa mídia nenhuma', baixou === false)
 
 const c5 = clienteFake()
 await executarComandos(c5, [{ id: 'c5', commandType: 'whatsapp.inventado', payload: {} }], engineFake, depsFig)

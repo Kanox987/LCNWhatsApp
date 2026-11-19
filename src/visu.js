@@ -82,11 +82,10 @@ export function acharVisuUnica (message, marcadaNaChave = false) {
 }
 
 /*
- * Reconhece um comando de texto (ex: "/recover", "/transcrever") enviado em
+ * Reconhece um comando de texto (ex: "/transcrever") enviado em
  * resposta/citação a outra mensagem. Quando você cita uma mensagem, o
- * WhatsApp inclui em contextInfo.quotedMessage uma cópia do conteúdo — isso
- * "vaza" a mídia original de uma visualização única mesmo quando ela nunca
- * chegou inline pro bot.
+ * WhatsApp inclui em contextInfo.quotedMessage uma cópia do conteúdo, e é
+ * dali que o comando tira a mídia citada.
  *
  * Retorna { quotedMessage, stanzaId, participant } ou null se o texto não
  * bater com `palavraChave` (ou não houver mensagem citada).
@@ -109,17 +108,11 @@ export function acharComandoTexto (message, palavraChave) {
   }
 }
 
-export function acharComandoRecover (message) {
-  return acharComandoTexto(message, '/recover')
-}
-
 /*
  * Reconhece QUALQUER citação/resposta, sem exigir texto específico — ao
  * contrário de acharComandoTexto, que exige bater com uma palavra-chave.
- * Usado pela recuperação implícita do download automático: enquanto uma
- * conversa está com visu única pendente, a PRIMEIRA resposta do dono que
- * citar alguma coisa (texto, mídia, figurinha — não importa o campo) é
- * tratada como um /recover implícito.
+ * Serve para saber se uma mensagem responde a outra, seja qual for o campo
+ * (texto, mídia, figurinha).
  *
  * Varre os campos da mensagem desembrulhada em vez de checar um campo fixo
  * (extendedTextMessage) porque resposta com mídia/figurinha carrega

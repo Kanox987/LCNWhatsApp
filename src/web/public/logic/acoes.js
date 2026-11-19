@@ -54,7 +54,7 @@ export const GATILHOS = Object.freeze([
   {
     tipo: 'trigger.message',
     rotulo: 'Quando chega uma mensagem (sem comando)',
-    resumo: 'A automação começa sozinha, olhando toda mensagem que chega. É o que faz um anti-link ou uma recuperação automática existirem.',
+    resumo: 'A automação começa sozinha, olhando toda mensagem que chega. É o que faz um anti-link ou um anti-visualização única existirem.',
     exemplo: 'Chega uma mensagem com link e o bot apaga.',
     ressalva: {
       level: 'info',
@@ -152,7 +152,7 @@ export const ACOES = Object.freeze([
       { chave: 'folder', rotulo: 'Uma pasta inteira', ajuda: 'Em vez de um arquivo, manda tudo que está na pasta, em ordem de nome. É assim que um comando monta o próprio carrossel — ou entrega um conjunto, como um pacote de figurinhas. Aceita variáveis, então a pasta pode vir do que a pessoa escreveu.' },
       { chave: 'delivery', rotulo: 'Como entregar a pasta', ajuda: 'Só vale com a pasta, e só quando ela tem mais de uma mídia. Carrossel manda UMA mensagem com cards que a pessoa desliza; álbum deixa o aplicativo agrupar; separado manda uma por arquivo. O carrossel cai para álbum e o álbum para sequência quando não são aceitos.' },
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Texto que acompanha o arquivo. Aceita variáveis. Arquivo de texto é enviado como mensagem, então não leva legenda.' },
-      { chave: 'viewOnce', rotulo: 'Visualização única', ajuda: 'Pede ao WhatsApp para a mídia (imagem, vídeo ou áudio) desaparecer após aberta. Atenção: é apenas um pedido ao aplicativo de quem recebe, não uma garantia — aplicativos modificados salvam a mídia de qualquer jeito, e o próprio sistema tem comandos (como /x9) que a recuperam.' },
+      { chave: 'viewOnce', rotulo: 'Visualização única', ajuda: 'Pede ao WhatsApp para a mídia (imagem, vídeo ou áudio) desaparecer após aberta. Atenção: é apenas um pedido ao aplicativo de quem recebe, não uma garantia — aplicativos modificados salvam a mídia de qualquer jeito.' },
       { chave: 'notFoundText', rotulo: 'Se o arquivo sumiu', ajuda: 'Enviado quando o arquivo foi apagado do acervo depois de o comando ser publicado — melhor avisar que ficar mudo.' }
     ]
   },
@@ -334,23 +334,6 @@ export const ACOES = Object.freeze([
       { chave: 'caption', rotulo: 'Legenda', ajuda: 'Acompanha a mídia. Sem legenda, entra a descrição que o serviço trouxer (título do vídeo, por exemplo).' },
       { chave: 'notFoundText', rotulo: 'Se não houver link', ajuda: 'Enviado quando o comando é usado sem link nenhum por perto.' },
       { chave: 'errorText', rotulo: 'Se o download falhar', ajuda: 'Escreva {{erro}} onde quiser que apareça o motivo que o serviço deu — arquivo grande demais, link não suportado, serviço fora do ar.' }
-    ]
-  },
-  {
-    tipo: 'action.whatsapp.recover',
-    rotulo: 'Recuperar visualização única',
-    familia: 'midia',
-    resumo: 'Reenvia como mídia normal algo que foi mandado para ver uma vez só. Funciona respondendo a mídia, ou automaticamente quando ela chega.',
-    exemplo: 'Responder uma visualização única com "/recover", ou deixar a conversa marcada para recuperar sozinho.',
-    ressalva: { level: 'info', text: 'Só funciona com visualização única de verdade. Foto comum respondida não é recuperada — reenviar o que todo mundo ainda vê não é recuperar nada.' },
-    dependencias: 'Uma mensagem de visualização única que o bot tenha VISTO passar. Recuperar não busca no histórico do WhatsApp: só alcança o que passou pela conexão ligada.',
-    resultado: 'A mídia é reenviada ao destino que você escolher, e por isso costuma ser comando de dono: ela foi mandada para ser vista uma vez.',
-    errosComuns: 'Supor que funciona para qualquer mensagem antiga. Não funciona — se o bot estava desconectado quando a mídia passou, não há o que recuperar.',
-    campos: [
-      { chave: 'destination', rotulo: 'Para onde mandar', ajuda: 'mesma conversa = entrega ali, à vista de quem está · mensagens salvas = só para você · configurado = usa a conversa que o comando de configuração gravou, e cai para mensagens salvas enquanto ninguém configurou · fixo = um endereço que você escreve.' },
-      { chave: 'destinationId', rotulo: 'Endereço', ajuda: 'Aceita variável: escrever {{var.global.recover_destino}} faz o destino vir da tabela, e um comando de configuração pode trocar sem mexer no comando.' },
-      { chave: 'caption', rotulo: 'Legenda', ajuda: 'Acompanha a mídia recuperada. {{media.kind}} diz se é foto, vídeo ou áudio.' },
-      { chave: 'notFoundText', rotulo: 'Se não achar', ajuda: 'Enviado quando não há visualização única para recuperar.' }
     ]
   },
   {

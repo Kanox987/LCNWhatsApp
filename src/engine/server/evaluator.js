@@ -277,31 +277,11 @@ export function grupoAtivo (db, chat) {
   return conversaMarcada(db, chat, CHAVE_GRUPO_ATIVO)
 }
 
-// O destino de um comando pode vir de uma VARIÁVEL, não só fixo no documento.
-//
-// É o que liga um comando comum ao comando de configuração: o de configuração
-// grava `var.global.recover_destino` na tabela, e o comum lê dali. Os dois se
-// encontram na mesma tabela dos marcadores (vip e afins), sem mecanismo novo.
-//
-// Três formas aceitas, porque é o que uma pessoa digita no WhatsApp:
-//   - um JID completo (5511...@s.whatsapp.net ou ...@g.us)
-//   - só os dígitos do número, que viram JID de contato
-//   - nada / variável não configurada -> null, e quem chamou avisa
-function resolverDestinoConfigurado (bruto, contexto) {
-  if (typeof bruto !== 'string' || !bruto) return null
-  const resolvido = interpolar(bruto, contexto).trim()
-  // Placeholder intacto = variável nunca gravada. Nunca tratar como endereço.
-  if (!resolvido || resolvido.includes('{{')) return null
-  if (/@(s\.whatsapp\.net|g\.us|lid)$/.test(resolvido)) return resolvido
-  const digitos = resolvido.replace(/\D/g, '')
-  return digitos.length >= 8 ? `${digitos}@s.whatsapp.net` : null
-}
-
 // QUEM A MENSAGEM MARCA, a partir do que o comando escreveu.
 //
-// Aceita vários, separados por vírgula, e cada um nas mesmas três formas que
-// `resolverDestinoConfigurado` aceita — JID inteiro, só os dígitos, ou um
-// marcador como `{{sender.id}}`, que é o caso comum.
+// Aceita vários, separados por vírgula, e cada um em três formas: JID
+// inteiro, só os dígitos, ou um marcador como `{{sender.id}}`, que é o caso
+// comum.
 //
 // O que NÃO entra: marcador que não resolveu. Um `{{...}}` intacto significa
 // variável nunca gravada, e mandá-lo como destinatário de menção marcaria
@@ -412,7 +392,9 @@ function referenciaDoLink (evento) {
 // ganha da citada, na mesma ordem em que as ações a consomem.
 function dadosDaMidiaEmJogo (evento) {
   const msg = evento?.message
-  if (msg?.mediaRef) {
+  // Visualização única chega SEM token (não vira mídia para ação nenhuma), mas
+  // o tipo e a legenda seguem legíveis: por isso `mediaKind` também conta.
+  if (msg?.mediaRef || msg?.mediaKind) {
     return {
       // `message.kind` de visualização única é literalmente 'view_once' e não
       // diz se é foto, vídeo ou áudio. Por isso o tipo vem à parte.
@@ -421,7 +403,7 @@ function dadosDaMidiaEmJogo (evento) {
     }
   }
   const citada = msg?.quotedMediaRef
-  if (citada?.token) {
+  if (citada?.token || citada?.mediaKind) {
     return {
       kind: citada.mediaKind,
       ...(citada.caption ? { caption: citada.caption } : {})
@@ -1179,7 +1161,7 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       // O motor NÃO fala com a rede. Ele resolve a URL, decide qual mensagem
       // marcar na resposta, e passa isso ao gateway — que é quem chama o
       // serviço, espera o trabalho terminar e envia os bytes. Mesma fronteira
-      // do recover e da figurinha: aqui não entra nem byte nem requisição.
+      // da figurinha: aqui não entra nem byte nem requisição.
       // Placeholder que não resolveu é APAGADO antes de procurar o link, em vez
       // de invalidar o campo inteiro. É o que permite um comando aceitar as duas
       // formas — "{{quoted.link}} {{message.link}}" funciona marcando uma
@@ -1364,77 +1346,6 @@ function executarNo (db, no, evento, contexto, comandos, temSucessor = false) {
       // ainda não existe. Nenhuma aresta casa com "dormindo", então a
       // caminhada para; quem continua é a retomada, quando o resultado chega.
       return temSucessor ? 'dormindo' : 'success'
-    }
-
-    case 'action.whatsapp.recover': {
-      // O comando que deu origem ao projeto. O motor decide COM BASE NUM TOKEN
-      // e num tipo — nunca recebe a mídia da visu única, que continua só na
-      // memória do gateway.
-      //
-      // Duas origens de mídia, e as duas são necessárias:
-      //   - a visu única CITADA, que é o /recover clássico
-      //   - a visu única da PRÓPRIA mensagem, que é o que torna possível o
-      //     recover automático: a mídia chega e é recuperada sem ninguém
-      //     digitar nada.
-      const citada = evento.message?.quotedMediaRef
-      const propria = evento.message?.kind === 'view_once' && evento.message?.mediaRef
-        ? { token: evento.message.mediaRef, kind: 'view_once', mediaKind: evento.message.mediaKind }
-        : null
-
-      const avisar = () => {
-        if (typeof no.config?.notFoundText === 'string' && no.config.notFoundText) {
-          comandos.push({
-            commandType: 'whatsapp.reply',
-            payload: { chatId: evento.chat.id, text: interpolar(no.config.notFoundText, contexto) }
-          })
-        }
-        return 'success'
-      }
-
-      // Exige visualização única EXPLICITAMENTE. A citação passou a carregar
-      // também mídia comum (é o que faz a figurinha funcionar respondendo uma
-      // foto), e recuperar uma foto que todo mundo ainda vê não é recuperar
-      // nada — o /recover existe para o que sumiu depois de aberto.
-      const fonte = propria || (citada?.kind === 'view_once' ? citada : null)
-      if (!fonte?.token) return avisar()
-
-      const destino = no.config?.destination || 'saved_messages'
-      // 'saved_messages' vira null aqui de propósito: só o gateway sabe qual é
-      // o JID da própria conta, e inventar isso no motor daria destino errado
-      // quando o mesmo documento roda em números diferentes.
-      let chatDestino = null
-      let destinoFinal = destino
-      if (destino === 'same_chat') {
-        chatDestino = evento.chat.id
-      } else if (destino === 'fixed' || destino === 'configured') {
-        chatDestino = resolverDestinoConfigurado(no.config?.destinationId, contexto)
-        if (!chatDestino) {
-          // A diferença entre os dois é o que significa "não resolveu":
-          //   'fixed'      — alguém escreveu um destino e ele não vale: é erro
-          //                  de configuração, e avisar é o certo.
-          //   'configured' — ninguém configurou AINDA, o que é o estado normal
-          //                  de quem acabou de instalar. Cai para as mensagens
-          //                  salvas em vez de recusar: o comando funciona no
-          //                  primeiro uso, e configurar depois só muda o destino.
-          if (destino === 'fixed') return avisar()
-          destinoFinal = 'saved_messages'
-        }
-      }
-
-      comandos.push({
-        commandType: 'whatsapp.recover',
-        payload: {
-          chatId: evento.chat.id,
-          destination: destinoFinal,
-          destinationId: chatDestino,
-          mediaRef: fonte.token,
-          mediaKind: fonte.mediaKind,
-          ...(typeof no.config?.caption === 'string' && no.config.caption
-            ? { caption: interpolar(no.config.caption, contexto) }
-            : {})
-        }
-      })
-      return 'success'
     }
 
     case 'action.whatsapp.sendFile': {

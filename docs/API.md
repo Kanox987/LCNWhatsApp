@@ -1,5 +1,9 @@
 # API de saída de mídia (ponto de extensão — DESLIGADO)
 
+> **Registro histórico.** O evento `captura` era emitido pela recuperação de
+> visualização única, que foi retirada (o WhatsApp mudou o tratamento desses
+> arquivos). Hoje nada emite esse evento; o gancho continua desligado.
+
 Hoje **não** há servidor nem envio externo. Existe só o gancho pra você levar as
 mídias pra fora (ex: um site) no futuro, sem retrabalho.
 

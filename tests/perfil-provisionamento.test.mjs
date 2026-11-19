@@ -79,7 +79,7 @@ validarContraCatalogo(ok({}), contexto)
 check('perfil vazio passa no catálogo, mesmo sem escopo', (() => { validarContraCatalogo(lerPerfil(base).perfil, contexto); return true })())
 validarContraCatalogo(ok({ packageIds: ['basico'] }), contexto)
 check('pacote real passa', true)
-validarContraCatalogo(ok({ templateIds: ['x9', 'apagar'] }), contexto)
+validarContraCatalogo(ok({ templateIds: ['eco', 'apagar'] }), contexto)
 check('templates reais passam', true)
 recusa('pacote inexistente é recusado', () => validarContraCatalogo(ok({ packageIds: ['nao-existe'] }), contexto), 'Pacote não encontrado: nao-existe')
 recusa('template inexistente é recusado', () => validarContraCatalogo(ok({ templateIds: ['nao-existe'] }), contexto), 'Template não encontrado no catálogo: nao-existe')
@@ -90,7 +90,7 @@ recusa('instalar algo com scope.include vazio é recusado',
 recusa('pool repetido é recusado',
   () => validarContraCatalogo(ok({ pools: [{ id: 'a', label: 'A' }, { id: 'a', label: 'B' }] }), contexto), 'Pool repetido')
 recusa('parameters para template que o perfil não instala é recusado',
-  () => validarContraCatalogo(ok({ templateIds: ['ping'], parameters: { x9: { command: '/x' } } }), contexto), 'não instala')
+  () => validarContraCatalogo(ok({ templateIds: ['ping'], parameters: { eco: { command: '/x' } } }), contexto), 'não instala')
 {
   const erro = (() => { try { validarContraCatalogo(ok({ packageIds: ['nao-existe'], templateIds: ['tambem-nao'] }), contexto) } catch (e) { return e } })()
   check('o diagnóstico do catálogo junta todos os erros', erro?.detalhes?.erros?.length === 2, String(erro?.detalhes?.erros?.length))
@@ -101,23 +101,23 @@ recusa('parameters para template que o perfil não instala é recusado',
 {
   const vazias = escolhasDoPerfil(lerPerfil(base).perfil)
   check('perfil vazio vira a escolha "vazia"', vazias.length === 1 && vazias[0].kind === 'vazia')
-  const mista = escolhasDoPerfil(ok({ packageIds: ['basico', 'protecao'], templateIds: ['x9'], deploymentMode: 'shadow', parametrosComuns: { poolId: 'p' } }))
+  const mista = escolhasDoPerfil(ok({ packageIds: ['basico', 'protecao'], templateIds: ['eco'], deploymentMode: 'shadow', parametrosComuns: { poolId: 'p' } }))
   check('um pacote por escolha, mais uma escolha para os avulsos',
     mista.map((e) => e.kind).join() === 'pacote,pacote,especificas', mista.map((e) => e.kind).join())
   check('a ordem pedida é preservada', mista[0].packageId === 'basico' && mista[1].packageId === 'protecao')
   check('escopo, modo e parâmetros valem para todas as escolhas',
     mista.every((e) => e.deploymentMode === 'shadow' && e.parametrosComuns.poolId === 'p' && e.scope.include.length === 1))
-  check('os avulsos vão como templateIds', mista[2].templateIds.join() === 'x9')
+  check('os avulsos vão como templateIds', mista[2].templateIds.join() === 'eco')
   check('sem avulsos não nasce escolha "especificas"', escolhasDoPerfil(ok({ packageIds: ['basico'] })).length === 1)
 }
 
 // ---------------------------------------------------------------- política
 
 {
-  const politica = lerPolitica({ schemaVersion: 1, allowedPackageIds: ['basico'], allowedTemplateIds: ['x9'] })
-  aplicarPolitica(ok({ packageIds: ['basico'], templateIds: ['x9'] }), politica)
+  const politica = lerPolitica({ schemaVersion: 1, allowedPackageIds: ['basico'], allowedTemplateIds: ['eco'] })
+  aplicarPolitica(ok({ packageIds: ['basico'], templateIds: ['eco'] }), politica)
   check('o que a política permite passa', true)
-  aplicarPolitica(ok({ packageIds: ['basico'], templateIds: ['x9'] }), null)
+  aplicarPolitica(ok({ packageIds: ['basico'], templateIds: ['eco'] }), null)
   check('política ausente permite tudo', true)
   aplicarPolitica(ok({ packageIds: ['administracao'] }), lerPolitica({ schemaVersion: 1 }))
   check('política sem listas não limita nada', true)

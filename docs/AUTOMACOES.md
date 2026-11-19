@@ -129,7 +129,7 @@ A linha `prioridade:` define quem passa primeiro quando a fila está disputada: 
 
 A pergunta que decide a prioridade é: **"se este trabalho esperar, o que se perde?"**.
 
-- **Urgência é perecibilidade**: capturar uma visualização única é `muito alta` porque a mídia expira e deixa de existir no servidor do WhatsApp se não for recolhida a tempo; nenhuma repetição posterior resolve.
+- **Urgência é perecibilidade**: apagar um link proibido ou uma visualização única no grupo é `muito alta` porque a ação só vale antes que as pessoas vejam; feita depois, já não protege ninguém e nenhuma repetição posterior resolve.
 - **Peso não é urgência**: baixar um vídeo grande é `baixa`. O arquivo é pesado no orçamento de dados, mas o link continuará na internet amanhã — o trabalho pode esperar.
 
 Separar perecibilidade de peso impede uma inversão desastrosa: se arquivo pesado ganhasse prioridade pelo tamanho, um vídeo longo furaria a fila de uma mensagem rápida só por ser pesado.
@@ -462,7 +462,7 @@ Isso envia a mídia como efêmera (visualização única) no WhatsApp.
 
 Isto é um **PEDIDO** ao aplicativo de quem recebe, e **NÃO uma garantia absoluta de privacidade**:
 1. Aplicativos modificados do WhatsApp ignoram o pedido e salvam a mídia no aparelho de qualquer maneira.
-2. Este próprio sistema possui comandos como `/x9`, `/recover` e a rotina de download automático construídos justamente para recuperar mídias enviadas dessa forma.
+2. Nada impede quem recebe de fotografar a tela com outro aparelho.
 
 Nunca prometa sigilo inviolável ao usar esse recurso.
 

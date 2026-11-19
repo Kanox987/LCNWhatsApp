@@ -43,11 +43,10 @@ function valorInicial (definition, valorAtual) {
 // TEXTO DE VÁRIAS LINHAS PRECISA DE ÁREA DE TEXTO, e isto não é estética.
 //
 // `<input type="text">` APAGA quebra de linha, em silêncio — é o navegador que
-// faz isso ao receber o valor. A legenda do /recover chegava à tela já
-// achatada, e salvar publicava o texto destruído. Medido no `auto-recover` que
-// estava no ar: entravam 142 caracteres com 5 quebras, sobravam 137 sem
-// nenhuma. Perda de dados a um clique de distância, nos DOIS formulários — o de
-// instalação e o de reconfiguração usam este mesmo controle.
+// faz isso ao receber o valor. Uma legenda de várias linhas chegava à tela já
+// achatada, e salvar publicava o texto destruído: um texto com 5 quebras
+// voltava sem nenhuma. Perda de dados a um clique de distância, nos DOIS
+// formulários — o de instalação e o de reconfiguração usam este mesmo controle.
 //
 // Duas formas de saber, e as duas são necessárias:
 //

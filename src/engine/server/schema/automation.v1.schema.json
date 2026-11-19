@@ -209,9 +209,6 @@
                 "$ref": "#/definitions/actionVariableIncrement"
               },
               {
-                "$ref": "#/definitions/actionWhatsappRecover"
-              },
-              {
                 "$ref": "#/definitions/actionWhatsappDelete"
               },
               {
@@ -386,7 +383,7 @@
           ]
         },
         "speed": {
-          "description": "Quanto tempo cada envio segura a vaga do socket. fast pode usar a vaga preferencial; slow so a usa quando nenhum fast espera. Ausente, o gateway deduz pelo tipo de comando (download, chamada de conexao e recuperacao sao slow).",
+          "description": "Quanto tempo cada envio segura a vaga do socket. fast pode usar a vaga preferencial; slow so a usa quando nenhum fast espera. Ausente, o gateway deduz pelo tipo de comando (download e chamada de conexao sao slow).",
           "enum": [
             "fast",
             "slow"
@@ -986,7 +983,7 @@
             },
             "viewOnce": {
               "type": "boolean",
-              "description": "Envia a mídia (imagem, vídeo ou áudio) como visualização única. É um pedido ao aplicativo de quem recebe, não uma garantia: aplicativos modificados salvam a mídia de qualquer jeito, e o próprio sistema tem comandos (como o /x9) que recuperam o que outros mandam assim."
+              "description": "Envia a mídia (imagem, vídeo ou áudio) como visualização única. É um pedido ao aplicativo de quem recebe, não uma garantia: aplicativos modificados salvam a mídia de qualquer jeito."
             },
             "notFoundText": {
               "description": "Mensagem enviada na conversa caso o arquivo ou a pasta indicada não seja encontrada no acervo.",
@@ -1897,52 +1894,6 @@
         }
       }
     },
-    "actionWhatsappRecover": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "type",
-        "config"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "type": {
-          "const": "action.whatsapp.recover"
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "destination": {
-              "enum": [
-                "same_chat",
-                "saved_messages",
-                "fixed",
-                "configured"
-              ],
-              "description": "Para onde a mídia recuperada vai. 'configured' lê o destino de uma variável (o campo destinationId aceita {{var...}}) e cai para as mensagens salvas enquanto ninguém configurou; 'fixed' exige um destino resolvido e avisa quando não há."
-            },
-            "destinationId": {
-              "description": "Número de telefone, JID ou variável com o endereço de destino da mídia quando o destino for 'fixed' ou 'configured'.",
-              "type": "string",
-              "minLength": 1
-            },
-            "caption": {
-              "description": "Texto ou legenda enviado junto com a mídia de visualização única recuperada, aceitando variáveis do contexto.",
-              "type": "string"
-            },
-            "notFoundText": {
-              "description": "Mensagem enviada na conversa quando não há mídia de visualização única encontrada para recuperar ou o destino é inválido.",
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
     "actionVariableIncrement": {
       "type": "object",
       "additionalProperties": false,
@@ -2736,7 +2687,7 @@
       }
     },
     "actionMediaDownload": {
-      "description": "Baixa a mídia de um link (YouTube, TikTok, Instagram…) por um serviço externo configurado e envia no WhatsApp. O motor NÃO fala com a rede: ele decide e passa a URL; quem chama o serviço, espera o trabalho terminar e envia os bytes é o gateway — a mesma fronteira do recover e da figurinha.",
+      "description": "Baixa a mídia de um link (YouTube, TikTok, Instagram…) por um serviço externo configurado e envia no WhatsApp. O motor NÃO fala com a rede: ele decide e passa a URL; quem chama o serviço, espera o trabalho terminar e envia os bytes é o gateway — a mesma fronteira da figurinha.",
       "type": "object",
       "additionalProperties": false,
       "required": [

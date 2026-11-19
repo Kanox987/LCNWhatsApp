@@ -95,10 +95,10 @@ const texto = campoDoSchema(defResposta, 'text')
 check('o tipo do campo vem do SCHEMA, não do catálogo', texto?.tipo === 'string')
 check('e o schema também diz o que é obrigatório', texto?.obrigatorio === true)
 
-const defRecover = acharDefinicao(schema, 'action.whatsapp.recover')
-const destino = campoDoSchema(defRecover, 'destination')
-check('campo com lista fechada devolve os valores aceitos', Array.isArray(destino?.valores) && destino.valores.includes('configured'),
-  JSON.stringify(destino?.valores))
+const defArquivo = acharDefinicao(schema, 'action.whatsapp.sendFile')
+const entrega = campoDoSchema(defArquivo, 'delivery')
+check('campo com lista fechada devolve os valores aceitos', Array.isArray(entrega?.valores) && entrega.valores.includes('carrossel'),
+  JSON.stringify(entrega?.valores))
 
 check('campo inexistente devolve null em vez de inventar', campoDoSchema(defResposta, 'naoExiste') === null)
 check('tipo desconhecido não quebra a busca', acharDefinicao(schema, 'action.inventada') === null)

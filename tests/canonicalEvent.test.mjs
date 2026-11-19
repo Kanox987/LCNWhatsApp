@@ -195,18 +195,20 @@ const eventoDmComLid = construirEventoDeMensagem({
 check('DM com LID: chat.id usa remoteJidAlt (PN), não o LID cru', eventoDmComLid.chat.id, '5522981197896@s.whatsapp.net')
 check('DM com LID: sender.id bate com chat.id (é a mesma pessoa)', eventoDmComLid.sender.id, eventoDmComLid.chat.id)
 
-// --- imagem view-once: mediaRef precisa ser um token opaco, nunca o node cru ---
+// --- imagem view-once: classificada, mas SEM token de mídia ---
+// A recuperação de visualização única saiu (a Meta mudou o tratamento desses
+// arquivos), e com ela qualquer ação que buscasse os bytes de uma. O evento
+// continua dizendo o que chegou — o anti-visualizacao-unica decide pelo kind —,
+// só não carrega mais um token que levaria à mídia.
 const nodeImagem = { url: 'x', mediaKey: 'segredo-de-verdade', directPath: '/v/abc', mimetype: 'image/jpeg' }
 const eventoViewOnce = construirEventoDeMensagem({
   key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSG3', fromMe: false, isGroup: false, isBroadcast: false, isNewsletter: false, isViewOnce: true },
   message: { viewOnceMessageV2: { message: { imageMessage: nodeImagem } } }
 }, { accountId: 'acc-1' })
 check('view-once: message.kind = view_once', eventoViewOnce.message.kind, 'view_once')
-checkBool('view-once: mediaRef existe', !!eventoViewOnce.message.mediaRef)
-checkBool('view-once: mediaRef é STRING (token), não objeto', typeof eventoViewOnce.message.mediaRef === 'string')
-checkBool('view-once: mediaRef não expõe mediaKey em texto', !JSON.stringify(eventoViewOnce.message.mediaRef).includes('segredo-de-verdade'))
-const resolvido = resolver(eventoViewOnce.message.mediaRef)
-checkBool('view-once: token resolve de volta pro node real (mesmo processo)', resolvido?.node?.mediaKey === 'segredo-de-verdade')
+check('view-once: o tipo real continua exposto', eventoViewOnce.message.mediaKind, 'image')
+checkBool('view-once: NÃO gera mediaRef', eventoViewOnce.message.mediaRef === undefined)
+checkBool('view-once: nenhum segredo da mídia no evento', !JSON.stringify(eventoViewOnce).match(/segredo-de-verdade|\/v\/abc/))
 
 // --- FIGURINHA: a mídia que o sistema não enxergava --------------------
 //
@@ -242,8 +244,7 @@ const eventoCitandoFigurinha = construirEventoDeMensagem({
 check('comando citando figurinha: a mensagem é texto', eventoCitandoFigurinha.message.kind, 'text')
 checkBool('figurinha citada: existe token', !!eventoCitandoFigurinha.message.quotedMediaRef?.token)
 check('figurinha citada: o tipo real é preservado', eventoCitandoFigurinha.message.quotedMediaRef?.mediaKind, 'sticker')
-// NÃO é visualização única, e rotular como tal faria o /recover aceitar uma
-// figurinha comum — "recuperar" algo que todo mundo continua vendo.
+// NÃO é visualização única: o rótulo tem que dizer a verdade sobre a mídia.
 check('figurinha citada NÃO é rotulada visualização única', eventoCitandoFigurinha.message.quotedMediaRef?.kind, 'media')
 checkBool('figurinha citada: o token resolve com tipo sticker',
   resolver(eventoCitandoFigurinha.message.quotedMediaRef.token)?.tipo === 'sticker')
@@ -254,7 +255,7 @@ const eventoAudioViewOnce = construirEventoDeMensagem({
   message: { viewOnceMessageV2Extension: { message: { audioMessage: { url: 'x', mediaKey: 'outro-segredo' } } } }
 }, { accountId: 'acc-1' })
 check('áudio em visu única: message.kind = view_once', eventoAudioViewOnce.message.kind, 'view_once')
-checkBool('áudio em visu única: mediaRef também é token opaco', typeof eventoAudioViewOnce.message.mediaRef === 'string')
+checkBool('áudio em visu única: também sem mediaRef', eventoAudioViewOnce.message.mediaRef === undefined)
 
 // --- message_unavailable: nunca tem message, nunca tem mediaRef/text ---
 const eventoIndisponivel = construirEventoDeIndisponivel({
@@ -280,7 +281,7 @@ const eventoComCitacao = construirEventoDeMensagem({
   key: { remoteJid: '5511999@s.whatsapp.net', id: 'MSG7', fromMe: true, isGroup: false, isBroadcast: false, isNewsletter: false },
   message: {
     extendedTextMessage: {
-      text: '/recover',
+      text: '/fig',
       contextInfo: { stanzaId: 'CITADA1', participant: '5511977@s.whatsapp.net', quotedMessage: { imageMessage: { mediaKey: 'segredo-citado' } } }
     }
   }

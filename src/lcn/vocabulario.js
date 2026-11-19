@@ -52,16 +52,6 @@ export const ACOES = Object.freeze([
     ]
   },
   {
-    palavra: 'recupera',
-    tipo: 'action.whatsapp.recover',
-    campos: [
-      { chave: 'destination', rotulo: 'para', tipo: 'palavra', palavras: { same_chat: 'esta conversa', saved_messages: 'mensagens salvas', fixed: 'número fixo', configured: 'o número configurado' } },
-      { chave: 'destinationId', rotulo: 'destino', tipo: 'texto' },
-      { chave: 'caption', rotulo: 'legenda', tipo: 'texto' },
-      { chave: 'notFoundText', rotulo: 'sem mídia', tipo: 'texto' }
-    ]
-  },
-  {
     palavra: 'baixa',
     tipo: 'action.media.download',
     campos: [
@@ -154,8 +144,7 @@ export const ACOES = Object.freeze([
       //
       // LIMITE HONESTO: é um pedido ao aplicativo de quem recebe, não uma
       // garantia absoluta. Aplicativos modificados salvam a mídia de qualquer
-      // jeito, e este próprio sistema tem comandos (como /x9 e /recover)
-      // que recuperam mídias enviadas assim.
+      // jeito.
       { chave: 'viewOnce', rotulo: 'visualização única', tipo: 'booleano' },
       { chave: 'notFoundText', rotulo: 'sem arquivo', tipo: 'texto' }
     ]
@@ -671,9 +660,9 @@ export const DESTINOS = Object.freeze({
 // NÃO é o peso. Isto é a pergunta "se este trabalho esperar, o que se perde?",
 // e ela tem três respostas possíveis que não se misturam:
 //
-//   - PERECIBILIDADE decide a urgência, e é só ela que mora aqui. Capturar uma
-//     visualização única é o caso-guia: se esperar, a mídia DEIXA DE EXISTIR e
-//     nenhuma repetição depois resolve.
+//   - PERECIBILIDADE decide a urgência, e é só ela que mora aqui. Apagar uma
+//     visualização única ou um link proibido é o caso-guia: se esperar, o grupo
+//     inteiro já viu, e nenhuma repetição depois desfaz isso.
 //   - CUSTO decide admissão e reserva, e mora no orçamento de bytes. Um vídeo
 //     de 60 MB ocupa mais orçamento que uma foto de 100 KB — e isso não o faz
 //     mais urgente.
@@ -972,13 +961,13 @@ export const CAMPOS_DO_CABECALHO = Object.freeze([
     chave: 'prioridade',
     vale: 'todos',
     palavras: PRIORIDADES,
-    ajuda: 'Quando a fila está disputada, quem passa primeiro. Pergunte "se isto esperar, o que se perde?" — e não "isto é pesado?". Capturar uma visualização única é "muito alta" porque a mídia deixa de existir se esperar; baixar um vídeo é "baixa" porque o endereço continua lá amanhã. Aceita também número, de 0 ("baixa") a 3 ("muito alta"). Vale para TODOS os envios desta automação. Sem esta linha, fica em "normal".'
+    ajuda: 'Quando a fila está disputada, quem passa primeiro. Pergunte "se isto esperar, o que se perde?" — e não "isto é pesado?". Apagar uma visualização única ou um link proibido é "muito alta" porque, se esperar, todo mundo já viu; baixar um vídeo é "baixa" porque o endereço continua lá amanhã. Aceita também número, de 0 ("baixa") a 3 ("muito alta"). Vale para TODOS os envios desta automação. Sem esta linha, fica em "normal".'
   },
   {
     chave: 'rapidez',
     vale: 'todos',
     palavras: RAPIDEZES,
-    ajuda: 'Quanto tempo cada envio desta automação segura a vaga de envio. "rápido" (ou 1) pode usar a vaga que prefere comandos rápidos; "lento" (ou 0) só entra nela quando nenhum rápido está esperando. Não é urgência: isso é a "prioridade". Sem esta linha, o sistema deduz pelo que o envio faz — download, chamada de conexão e recuperação são lentos, o resto é rápido.'
+    ajuda: 'Quanto tempo cada envio desta automação segura a vaga de envio. "rápido" (ou 1) pode usar a vaga que prefere comandos rápidos; "lento" (ou 0) só entra nela quando nenhum rápido está esperando. Não é urgência: isso é a "prioridade". Sem esta linha, o sistema deduz pelo que o envio faz — download e chamada de conexão são lentos, o resto é rápido.'
   },
   {
     chave: 'sem vaga',

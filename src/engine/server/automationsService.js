@@ -13,6 +13,7 @@ import { ErroHttp } from './transport.js'
 import { validarAutomacao } from './validate.js'
 import { limiteAdministrativo } from '../../agent/concessoes.js'
 import { ACOES_SUPORTADAS, CONDICOES_SUPORTADAS, GATILHOS_SUPORTADOS } from './runtimeCapabilities.js'
+import { bloqueioDoDocumento, bloqueioDoModelo, bloqueioDoTexto } from './nosRemovidos.js'
 
 function jsonOuNull (valor) {
   if (valor == null) return null
@@ -83,16 +84,41 @@ export function criarServicoAutomacoes (db) {
     (automation_id, revision, status, doc_json, validation_errors_json, created_at)
     VALUES (?, ?, 'draft', ?, NULL, ?)`)
 
-  const exporAutomation = (row) => row && ({
-    id: row.id,
-    schemaVersion: row.schema_version,
-    enabled: row.enabled === 1,
-    deploymentMode: row.deployment_mode,
-    activeRevisionId: row.active_revision_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    draft: exporRevision(obterUltimaRevision.get(row.id))
-  })
+  const obterDocDaRevisao = db.prepare('SELECT doc_json FROM automation_revisions WHERE id = ?')
+  const obterModeloDeOrigem = db.prepare('SELECT template_id FROM automation_template_provenance WHERE automation_id = ?')
+
+  // Automação que veio de um modelo retirado do catálogo (MODELOS_REMOVIDOS),
+  // ou null. Pega o que não tem o nó removido, mas só existia pelo recurso.
+  const bloqueioDaOrigem = (automationId) => bloqueioDoModelo(obterModeloDeOrigem.get(automationId)?.template_id)
+
+  // Nó removido do motor (ver nosRemovidos.js) na revisão ATIVA, ou modelo
+  // retirado na proveniência, ou null. É a ativa que o avaliador rodaria; um
+  // rascunho com o nó só esbarra no publish. Quase sempre a ativa é a última
+  // revisão, que a listagem já leu: aí não há consulta a mais, e o texto só é
+  // parseado quando cita um tipo removido.
+  const bloqueioDaAutomacao = (row, ultima = obterUltimaRevision.get(row.id)) => {
+    if (!row?.active_revision_id) return null
+    const docJson = ultima?.id === row.active_revision_id
+      ? ultima.doc_json
+      : obterDocDaRevisao.get(row.active_revision_id)?.doc_json
+    return bloqueioDoTexto(docJson) ?? bloqueioDaOrigem(row.id)
+  }
+
+  const exporAutomation = (row) => {
+    if (!row) return row
+    const ultima = obterUltimaRevision.get(row.id)
+    return {
+      id: row.id,
+      schemaVersion: row.schema_version,
+      enabled: row.enabled === 1,
+      deploymentMode: row.deployment_mode,
+      activeRevisionId: row.active_revision_id,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      draft: exporRevision(ultima),
+      bloqueio: bloqueioDaAutomacao(row, ultima)
+    }
+  }
 
   const criar = db.transaction((body) => {
     const documentoRecebido = extrairDocumento(body)
@@ -163,6 +189,21 @@ export function criarServicoAutomacoes (db) {
     if (!revision) throw new ErroHttp(404, revisaoAlvo ? `Revisão ${revisaoAlvo} não encontrada.` : 'Nenhuma revisão pra publicar.')
 
     const documento = jsonOuNull(revision.doc_json)
+    // Antes do schema: o tipo removido já saiu dele, e o Ajv só diria que o
+    // nó "não casa com nenhum oneOf". Quem tenta publicar merece o motivo.
+    const bloqueio = bloqueioDoDocumento(documento)
+    if (bloqueio) {
+      const indice = documento.flow.nodes.findIndex((node) => node?.type === bloqueio.tipo)
+      throw new ErroHttp(422, `${bloqueio.motivo} Esta revisão usa o nó "${bloqueio.tipo}", que o motor não executa mais, e não pode ser publicada.`, [
+        { path: `/flow/nodes/${indice}/type`, message: bloqueio.motivo }
+      ])
+    }
+    // Veio de um modelo retirado: publicar religaria o comando que promete a
+    // recuperação. A saída é "Tirar do ar" ou criar outra automação.
+    const bloqueioDeOrigem = bloqueioDaOrigem(id)
+    if (bloqueioDeOrigem) {
+      throw new ErroHttp(422, `${bloqueioDeOrigem.motivo} Esta automação veio do modelo "${bloqueioDeOrigem.modelo}", que saiu do catálogo, e não pode ser publicada de novo.`)
+    }
     const erros = validarAutomacao(db, documento)
     if (erros.length) throw new ErroHttp(422, 'Revisão inválida, não pode ser publicada.', erros)
 
@@ -230,6 +271,7 @@ export function criarServicoAutomacoes (db) {
     obterRevision,
     exporAutomation,
     exporRevision,
+    bloqueioDaAutomacao,
     extrairDocumento,
     normalizarDocumento,
     jsonOuNull,

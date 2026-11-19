@@ -3,27 +3,23 @@
 Plataforma de automação de WhatsApp que roda na **sua** máquina. Você cria
 comandos por um painel web, sem escrever código, e o bot responde por eles.
 
-O projeto começou como uma automação só: recuperar mídia de **visualização
-única** e transcrever áudio. Isso continua funcionando exatamente como antes —
-virou um dos comandos do catálogo, ao lado de vários outros.
+Por baixo, é um motor de automações e comandos para WhatsApp, com um painel
+local para montar, instalar e acompanhar tudo.
 
 Usa a biblioteca **zapo-js** para falar com o WhatsApp. Roda em Docker/Podman
 ou direto na máquina, em Linux e macOS.
 
-> ⚠️ **Você precisa responder a mensagem.** Na maioria dos casos o WhatsApp não
-> entrega o conteúdo de uma visualização única direto para o bot — ele só chega
-> se você **responder a mensagem** com o comando (de qualquer aparelho logado na
-> sua conta). Em conversas marcadas em "Download automático", qualquer resposta
-> sua já revela. Ver [docs/DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md).
+> A recuperação de visualização única foi retirada (o WhatsApp mudou o
+> tratamento desses arquivos).
 
 ---
 
 ## O que dá para fazer
 
 **Comandos prontos.** Um catálogo com comandos já configurados: `/ping`,
-`/menu`, figurinha, recuperar visualização única, anti-link, anti-imagem,
-anti-áudio, e outros. Você escolhe, preenche os campos e instala — o comando
-passa a valer nos contatos e grupos que você marcar.
+`/menu`, figurinha, transcrição de áudio, anti-link, anti-imagem, anti-áudio,
+anti-visualização única, e outros. Você escolhe, preenche os campos e instala —
+o comando passa a valer nos contatos e grupos que você marcar.
 
 **Comandos seus.** Um assistente monta o comando passo a passo: quando executa,
 onde vale, o que responde. Por baixo é sempre uma sequência de ações
@@ -150,13 +146,12 @@ lcn instances list    # números administrados nesta máquina
 | [docs/DASHBOARD.md](docs/DASHBOARD.md) | Painel do terminal |
 | [docs/CONFIG.md](docs/CONFIG.md) | Todos os campos do `config.json` |
 | [docs/TRANSCRICAO.md](docs/TRANSCRICAO.md) | Transcrição de áudio, local ou por API |
-| [docs/DOWNLOAD-AUTOMATICO.md](docs/DOWNLOAD-AUTOMATICO.md) | Recuperar sem digitar comando |
 | [docs/CONTAINER.md](docs/CONTAINER.md) | Docker e Podman |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Uso de recursos e limites |
 | [docs/HARDWARE.md](docs/HARDWARE.md) | Limites de mídia e banda |
 | [docs/ATUALIZACAO.md](docs/ATUALIZACAO.md) | Como atualizar |
 | [docs/SOLUCAO-DE-PROBLEMAS.md](docs/SOLUCAO-DE-PROBLEMAS.md) | Quando algo não funciona |
-| [docs/API.md](docs/API.md) | API local do motor |
+| [docs/API.md](docs/API.md) | Gancho de saída de mídia (histórico, desligado) |
 
 ---
 
@@ -179,7 +174,3 @@ estabilidade contínua, existem também `npm run carga` e `npm run soak`.
 
 Este projeto usa uma biblioteca não oficial para falar com o WhatsApp — não é
 homologado pela Meta. Use com o seu próprio número e por sua conta e risco.
-
-Recuperar mídia de visualização única contorna uma expectativa de privacidade
-de quem enviou. Use com responsabilidade e dentro da lei — a
-responsabilidade pelo uso é sua.

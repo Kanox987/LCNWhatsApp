@@ -293,7 +293,7 @@ Campos estruturados no formato `chave: valor`.
 
 #### 22. `prioridade`
 - **Nome técnico**: `scheduling.priority`
-- **O que faz**: Define o nível de urgência na fila de entrega com base na perecibilidade do evento (ex: mídia de visualização única é efêmera e recebe urgência máxima).
+- **O que faz**: Define o nível de urgência na fila de entrega com base na perecibilidade do evento (ex: apagar um link proibido só vale antes que as pessoas vejam, então recebe urgência máxima).
 - **Parâmetros e Tipos**: Enum `PRIORIDADES` (`baixa`, `normal`, `alta`, `muito alta`). Padrão: `normal`.
 - **Exemplo real (.lcn)**:
   ```lcn
@@ -510,7 +510,7 @@ Compreende 9 ações dedicadas à interação direta de mensagens, menus e enque
 
 ### 4.2. Família: Mídia (`midia`)
 
-Compreende 12 ações voltadas para gerenciamento de arquivos no acervo, captura de fotos efêmeras, carrosséis, pacotes de figurinhas e conexões externas.
+Compreende 11 ações voltadas para gerenciamento de arquivos no acervo, carrosséis, pacotes de figurinhas e conexões externas. (A ação `recupera`, de recuperação de visualização única, foi retirada: o WhatsApp mudou o tratamento desses arquivos.)
 
 #### 10. `envia arquivo`
 - **Nome técnico**: `action.whatsapp.sendFile`
@@ -660,20 +660,6 @@ Compreende 12 ações voltadas para gerenciamento de arquivos no acervo, captura
   baixa "{{message.link}}"
   ```
   *(Citado de: `src/engine/templates/catalog/auto-download.lcn`)*
-
-#### 18. `recupera`
-- **Nome técnico**: `action.whatsapp.recover`
-- **O que faz**: Captura uma foto, vídeo ou áudio de visualização única da mensagem respondida e o reenvia como mídia comum permanente.
-- **Parâmetros**:
-  - `destination` (*enum: `same_chat`, `saved_messages`, `fixed`, `configured`*, opcional, rótulo: `para`, valores: `esta conversa`, `mensagens salvas`, `número fixo`, `o número configurado`): Para onde enviar a mídia recuperada.
-  - `destinationId` (*string*, opcional, rótulo: `destino`): Endereço específico ou variável quando o destino for fixo ou configurado.
-  - `caption` (*string*, opcional, rótulo: `legenda`): Legenda enviada com a mídia recuperada.
-  - `notFoundText` (*string*, opcional, rótulo: `sem mídia`): Mensagem enviada caso a mensagem respondida não seja visualização única real.
-- **Exemplo real (.lcn)**:
-  ```lcn
-  recupera
-  ```
-  *(Citado de: `src/engine/templates/catalog/x9.lcn`)*
 
 #### 19. `pega a foto de perfil`
 - **Nome técnico**: `action.whatsapp.profilePicture`
